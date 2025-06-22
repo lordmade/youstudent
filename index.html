@@ -27,10 +27,8 @@
   <div class="bg-white p-8 rounded-lg shadow-lg text-center animate-fade-in">
     <!-- Learning Icon SVG (Book with Graduation Cap) -->
     <svg class="w-24 h-24 mx-auto animate-book" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-      <!-- Book -->
       <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" stroke="#2563EB"/>
       <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" stroke="#2563EB"/>
-      <!-- Graduation Cap -->
       <path d="M12 8l-8 4 8 4 8-4-8-4z" fill="#10B981"/>
       <path d="M12 16v6" stroke="#10B981"/>
       <path d="M8 18h8" stroke="#10B981"/>
@@ -43,6 +41,7 @@
         <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path>
       </svg>
     </div>
+    <p id="error" class="text-red-500 text-sm mt-2 hidden"></p>
   </div>
 
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js"></script>
@@ -60,22 +59,51 @@
       measurementId: "G-2505EVBRWX"
     };
 
-    // Initialize Firebase
-    firebase.initializeApp(firebaseConfig);
-    const auth = firebase.auth();
+    // Initialize Firebase with error handling
+    let auth;
+    try {
+      firebase.initializeApp(firebaseConfig);
+      auth = firebase.auth();
+      console.log('Firebase initialized successfully');
+    } catch (error) {
+      console.error('Firebase initialization failed:', error);
+      document.getElementById('error').textContent = 'Failed to connect to server. Redirecting...';
+      document.getElementById('error').classList.remove('hidden');
+      // Fallback redirect to login.html after 5 seconds
+      setTimeout(() => {
+        window.location.href = 'login.html';
+      }, 5000);
+    }
 
-    // Check authentication state
-    auth.onAuthStateChanged((user) => {
-      if (user) {
-        // Redirect to dashboard if logged in
-        window.location.href = 'dashboard.html';
-      } else {
-        // Show splash screen for 5 seconds, then redirect to login
+    // Redirect logic
+    if (auth) {
+      auth.onAuthStateChanged((user) => {
+        console.log('Auth state checked:', user ? 'User logged in' : 'No user');
+        if (user) {
+          // Redirect to dashboard if logged in
+          window.location.href = 'dashboard.html';
+        } else {
+          // Redirect to login after 5 seconds if not logged in
+          setTimeout(() => {
+            window.location.href = 'login.html';
+          }, 5000);
+        }
+      }, (error) => {
+        console.error('Auth state error:', error);
+        document.getElementById('error').textContent = 'Auth error. Redirecting...';
+        document.getElementById('error').classList.remove('hidden');
+        // Fallback redirect
         setTimeout(() => {
           window.location.href = 'login.html';
         }, 5000);
-      }
-    });
+      });
+    } else {
+      // Fallback if auth initialization failed
+      console.warn('Auth not initialized. Redirecting to login...');
+      setTimeout(() => {
+        window.location.href = 'login.html';
+      }, 5000);
+    }
   </script>
 </body>
 </html>
