@@ -42,10 +42,10 @@
       background-color: rgba(0, 0, 0, 0.7);
       z-index: 9999;
     }
-    .tutor-card {
+    .tutor-card, .post-card {
       transition: transform 0.2s;
     }
-    .tutor-card:hover {
+    .tutor-card:hover, .post-card:hover {
       transform: scale(1.02);
     }
     .btn-follow {
@@ -59,6 +59,14 @@
     .btn-following {
       background-color: #666;
       color: #fff;
+    }
+    .btn-delete {
+      background-color: #666;
+      color: #fff;
+      transition: background-color 0.2s;
+    }
+    .btn-delete:hover {
+      background-color: #555;
     }
     .header-container {
       display: flex;
@@ -302,13 +310,13 @@
     </a>
     <a href="#" class="flex items-center">
       <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h4a1 1 0 00-1 1v3M4 7h16"/>
       </svg>
       <span>Subscriptions</span>
     </a>
     <a href="tutors.html" class="flex items-center">
       <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 14l9-5-9-5-9 5 9 5zm0 0l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14zm-4 6v-7.5l4-2.222"/>
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 14l9-5-9-5 9 5m0 0l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14zm-4 6v-7.5l4-2.222"/>
       </svg>
       <span>Tutors</span>
     </a>
@@ -316,18 +324,26 @@
 
   <!-- 🔹 Main Content -->
   <main class="container mx-auto mt-20 p-4">
+    <!-- Posts Section -->
+    <section id="posts-section" class="mb-8">
+      <h2 class="text-2xl font-bold mb-4">Posts</h2>
+      <div id="posts-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"></div>
+    </section>
+
+    <!-- Tutor Grid Section -->
+    <h2 class="text-2xl font-bold mb-4">Tutors</h2>
     <div id="tutor-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
       <!-- Tutor cards dynamically inserted -->
     </div>
-    <p id="error-message" class="text-sm text-red-500 text-center mt-4 hidden"></p>
+    <p id="error-message" class="text-sm text-red-600 text-center mt-4 hidden"></p>
   </main>
 
-  <!-- 🔹 Firebase and Auth Logic -->
+  <!-- 🔹 Firebase and Logic -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
-    import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
-    import { getDatabase, ref, get, set, update } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
-    import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-storage.js";
+    import { getAuth, onAuthStateChanged, signOut } from "https://www.google.com/firebasejs/9.6.11/firebase-auth.js";
+    import { getDatabase, ref, get, set, update, remove } from "https://www.google.com/firebasejs/9.6.11/firebase-database.js";
+    import { getStorage, ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.google.com/firebasejs/9.6.11/firebase-storage.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
@@ -349,32 +365,33 @@
     const signOutBtn = document.getElementById("sign-out");
     const errorMessage = document.getElementById("error-message");
     const menuBtn = document.getElementById("menu-btn");
-    const sidebar = document.getElementById("sidebar");
-    const searchBar = document.getElementById("search-bar");
-    const searchContainer = document.getElementById("search-container");
-    const logoContainer = document.getElementById("logo-container");
-    const loaderOverlay = document.getElementById("loader-overlay");
-    const tutorGrid = document.getElementById("tutor-grid");
-    const postBtn = document.getElementById("post-btn");
-    const postModal = document.getElementById("post-modal");
-    const postForm = document.getElementById("post-form");
-    const postType = document.getElementById("post-type");
-    const postUrlContainer = document.getElementById("post-url-container");
-    const postImageContainer = document.getElementById("post-image-container");
-    const postTextContainer = document.getElementById("post-text-container");
-    const postUrl = document.getElementById("post-url");
-    const postImage = document.getElementById("post-image");
-    const postText = document.getElementById("post-text");
-    const postTitle = document.getElementById("post-title");
-    const postDescription = document.getElementById("post-description");
-    const closeModal = document.getElementById("close-modal");
+    const sidebar = document.querySelector("#sidebar");
+    const searchBar = document.querySelector("#search-bar");
+    const searchContainerRef = document.querySelector("#search-container");
+    const logoContainerRef = document.querySelector("#logo-container");
+    const loaderOverlay = document.querySelector("#loader-overlay");
+    const tutorGrid = document.querySelector("#tutor-grid");
+    const postsGridRef = document.querySelector("#posts-grid");
+    const postBtn = document.querySelector("#post-btn");
+    const postModal = document.querySelector("#post-modal");
+    const postForm = document.querySelector("#post-form");
+    const postTypeRef = document.querySelector("#post-type");
+    const postUrlContainerRef = document.querySelector("#post-url-container");
+    const postImageContainerRef = document.querySelector("#post-image-container");
+    const postTextContainerRef = document.querySelector("#post-text-container");
+    const postUrlRef = document.querySelector("#post-url");
+    const postImageRef = document.querySelector("#post-image");
+    const postTextRef = document.querySelector("#post-text");
+    const postTitleRef = document.querySelector("#post-title");
+    const postDescriptionRef = document.querySelector("#post-description");
+    const closeModalRef = document.querySelector("#close-modal");
 
-    // Toggle Sidebar
-    menuBtn.addEventListener("click", () => {
+    // Toggle Sidebar Toggle
+    menuBtn.onclick = () => {
       sidebar.classList.toggle("open");
-    });
+    };
 
-    // Close Sidebar on Outside Click/Touch
+    // Close Sidebar Menu on Outside Click/Touch
     document.addEventListener("click", (event) => {
       if (sidebar.classList.contains("open") && !sidebar.contains(event.target) && !menuBtn.contains(event.target)) {
         sidebar.classList.remove("open");
@@ -394,7 +411,7 @@
     });
 
     // Sign Out
-    signOutBtn.addEventListener("click", async (e) => {
+    signOutBtn.onclick = async (e) => {
       e.preventDefault();
       loaderOverlay.style.display = "flex";
       try {
@@ -403,20 +420,20 @@
         window.location.href = "login.html";
       } catch (error) {
         console.error("Sign-out error:", error);
-        errorMessage.textContent = "Sign-out failed: " + error.message;
+        errorMessage.textContent = error.message;
         errorMessage.classList.remove("hidden");
       } finally {
         loaderOverlay.style.display = "none";
       }
-    });
+    };
 
-    // Show/Hide Modal
-    postBtn.addEventListener("click", (e) => {
+    // Show/Hide Modal Content
+    postBtn.onclick = (e) => {
       e.preventDefault();
       postModal.style.display = "flex";
-    });
+    };
 
-    closeModal.addEventListener("click", () => {
+    closeModalBtn.addEventListener("click", () => {
       postModal.style.display = "none";
       postForm.reset();
       postUrlContainer.classList.add("hidden");
@@ -424,7 +441,7 @@
       postTextContainer.classList.add("hidden");
     });
 
-    // Toggle Post Input Based on Type
+    // Toggle Post Content Input Based on Type
     postType.addEventListener("change", () => {
       postUrlContainer.classList.add("hidden");
       postImageContainer.classList.add("hidden");
@@ -438,8 +455,77 @@
       }
     });
 
-    // Handle Post Submission
-    postForm.addEventListener("submit", async (e) => {
+    // Render Posts Grid
+    async function renderPosts(currentUserId) {
+      try {
+        const postsRef = ref(db, "posts");
+        const snapshot = await get(postsRef);
+        postsGrid.innerHTML = "";
+        if (snapshot.exists()) {
+          const posts = Object.entries(snapshot.val()).sort((a, b) => b[1].timestamp - a[1].timestamp);
+          for (const [postId, postData] of posts) {
+            const userRef = ref(db, `users/${postData.userId}`);
+            const userSnapshot = await get(userRef);
+            const username = userSnapshot.exists() ? userSnapshot.val().displayName || postData.userId : "Anonymous";
+            const isOwnPost = postData.userId === currentUserId;
+            let contentPreview = "";
+            if (postData.type === "url") {
+              contentPreview = `<a href="${postData.url}" target="_blank" class="text-red-500 hover:underline">${postData.url}</a>`;
+            } else if (postData.type === "image") {
+              contentPreview = `<img src="${postData.url}" alt="${postData.title}" class="w-full h-48 object-cover" />`;
+            } else if (postData.type === "text") {
+              contentPreview = `<p class="text-gray-400">${postData.text.substring(0, 100)}${postData.text.length > 100 ? "..." : ""}</p>`;
+            }
+            const card = document.createElement("div");
+            card.className = "post-card bg-[#282828] rounded-lg overflow-hidden";
+            card.innerHTML = `
+              <div class="p-4">
+                <h3 class="text-lg font-semibold">${postData.title}</h3>
+                <p class="text-sm text-gray-400 mb-2">By ${username}</p>
+                ${contentPreview}
+                <p class="text-sm text-gray-400 mt-2">${postData.description || "No description"}</p>
+                ${isOwnPost ? `<button class="btn-delete mt-2 py-1 px-4 rounded text-sm" data-post-id="${postId}" data-file-path="${postData.filePath || ""}">Delete</button>` : ""}
+              </div>
+            `;
+            postsGrid.appendChild(card);
+          }
+
+          // Add Delete Event Listeners
+          document.querySelectorAll(".btn-delete").forEach(button => {
+            button.addEventListener("click", async (e) => {
+              const postId = e.target.dataset.postId;
+              const filePath = e.target.dataset.filePath;
+              loaderOverlay.style.display = "flex";
+              try {
+                // Remove post from Database
+                await remove(ref(db, `posts/${postId}`));
+                // Delete from Storage if image
+                if (filePath) {
+                  const fileRef = storageRef(storage, filePath);
+                  await deleteObject(fileRef);
+                }
+                await renderPosts(currentUserId); // Refresh grid
+              } catch (error) {
+                console.error("Delete error:", error);
+                errorMessage.textContent = "Error deleting post: " + error.message;
+                errorMessage.classList.remove("hidden");
+              } finally {
+                loaderOverlay.style.display = "none";
+              }
+            });
+          }
+        } else {
+          postsGrid.innerHTML = "<p class='text-gray-400 text-center'>No posts available.</p>";
+        }
+      } catch (error) {
+        console.error("Error fetching posts:", error);
+        errorMessage.textContent = "Error loading posts: " + error.message;
+        errorMessage.classList.remove("hidden");
+      }
+    }
+
+    // Handle Post Content Submission Form
+    postForm.onsubmit = async (e) => {
       e.preventDefault();
       loaderOverlay.style.display = "flex";
       try {
@@ -476,6 +562,7 @@
         postUrlContainer.classList.add("hidden");
         postImageContainer.classList.add("hidden");
         postTextContainer.classList.add("hidden");
+        await renderPosts(user.uid); // Refresh posts grid
       } catch (error) {
         console.error("Post error:", error);
         errorMessage.textContent = "Error creating post: " + error.message;
@@ -483,7 +570,7 @@
       } finally {
         loaderOverlay.style.display = "none";
       }
-    });
+    };
 
     // Render Tutor Grid
     async function renderTutorGrid(currentUser) {
@@ -498,7 +585,7 @@
             const card = document.createElement("div");
             card.className = "tutor-card bg-[#282828] rounded-lg overflow-hidden";
             card.innerHTML = `
-              <img src="${tutor.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${tutor.name} Profile" class="w-full h-48 object-cover" />
+              <img src="${tutor.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${tutor.name || 'Unknown Tutor'} Profile" class="w-full h-48 object-cover" />
               <div class="p-4">
                 <h3 class="text-lg font-semibold">${tutor.name || 'Unknown Tutor'}</h3>
                 <p class="text-sm text-gray-400">${tutor.bio || 'No bio available'}</p>
@@ -537,7 +624,7 @@
                 }
               } catch (error) {
                 console.error("Follow/Unfollow error:", error);
-                errorMessage.textContent = "Error updating follow status.";
+                errorMessage.textContent = "Error updating follow status: " + error.message;
                 errorMessage.classList.remove("hidden");
               } finally {
                 loaderOverlay.style.display = "none";
@@ -545,11 +632,11 @@
             });
           });
         } else {
-          tutorGrid.innerHTML = "<p class='text-gray-400 text-center'>No tutors available.</p>";
+          tutorGrid.innerHTML = "<p class='text-gray-600 text-center'>No tutors available.</p>";
         }
       } catch (error) {
         console.error("Error fetching tutors:", error);
-        errorMessage.textContent = "Error loading tutors.";
+        errorMessage.textContent = "Error loading tutors: " + error.message;
         errorMessage.classList.remove("hidden");
       }
     }
@@ -565,6 +652,7 @@
             const userData = snapshot.val();
             userPic.src = userData.photoURL || "https://www.gravatar.com/avatar?d=mp";
             console.log("User authenticated:", user.uid);
+            await renderPosts(user.uid);
             await renderTutorGrid({ uid: user.uid, following: userData.following || [] });
           } else {
             console.log("No user data, redirecting to login.html");
@@ -576,7 +664,7 @@
         }
       } catch (error) {
         console.error("Auth state error:", error);
-        errorMessage.textContent = "Error loading user data.";
+        errorMessage.textContent = "Error loading user data: " + error.message;
         errorMessage.classList.remove("hidden");
       } finally {
         loaderOverlay.style.display = "none";
