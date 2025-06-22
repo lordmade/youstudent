@@ -237,7 +237,7 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
     import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
-    import { getDatabase, ref, get, set, update } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
+    import { getDatabase, ref, get, set } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
@@ -301,7 +301,7 @@
         console.log("User signed out");
         window.location.href = "login.html";
       } catch (error) {
-        console.error("Sign out error:", error);
+        console.error("Sign out error:", error.code, error.message);
         errorMessage.textContent = "Sign out failed: " + error.message;
         errorMessage.classList.remove("hidden");
       } finally {
@@ -328,19 +328,21 @@
             const isFollowing = currentUser && currentUser.following && currentUser.following.includes(tutorId);
             const followerCount = tutor.followers?.length || 0;
             const card = document.createElement("div");
-            card.className = "tutor-card bg-[#282828] rounded-lg overflow-hidden";
+            card.className = "tutor-card bg-[#282828] rounded-lg overflow-hidden cursor-pointer";
             card.innerHTML = `
-              <img src="${tutor.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${tutor.name} Profile" class="w-full h-48 object-cover" />
-              <div class="p-4">
-                <h3 class="text-lg font-semibold">${tutor.name || 'Unknown Tutor'}</h3>
-                <p class="text-sm text-gray-400">${tutor.bio || 'No bio available'}</p>
-                <p class="text-sm text-gray-500 mt-1">${tutor.category || 'No category selected'}</p>
-                <div class="flex items-center mt-2">
-                  <button class="btn-follow${isFollowing ? ' btn-following' : ''} py-1 px-4 rounded-md text-sm" data-tutor-id="${tutorId}">
-                    ${isFollowing ? 'Following' : 'Follow'}
-                  </button>
-                  <span class="text-sm text-gray-500 ml-2">${followerCount} ${followerCount === 1 ? 'Follower' : 'Followers'}</span>
+              <a href="tutor-content.html?tutorId=${tutorId}" class="block">
+                <img src="${tutor.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${tutor.name} Profile" class="w-full h-48 object-cover" />
+                <div class="p-4">
+                  <h3 class="text-lg font-semibold">${tutor.name || 'Unknown Tutor'}</h3>
+                  <p class="text-sm text-gray-400">${tutor.bio || 'No bio available'}</p>
+                  <p class="text-sm text-gray-500 mt-1">${tutor.category || 'No category selected'}</p>
                 </div>
+              </a>
+              <div class="px-4 pb-4 flex items-center">
+                <button class="btn-follow${isFollowing ? ' btn-following' : ''} py-1 px-4 rounded-md text-sm" data-tutor-id="${tutorId}">
+                  ${isFollowing ? 'Following' : 'Follow'}
+                </button>
+                <span class="text-sm text-gray-500 ml-2">${followerCount} ${followerCount === 1 ? 'Follower' : 'Followers'}</span>
               </div>
             `;
             tutorGrid.appendChild(card);
@@ -349,6 +351,8 @@
           // Follow/Unfollow Event Listeners
           document.querySelectorAll(".btn-follow").forEach(button => {
             button.addEventListener("click", async (e) => {
+              e.preventDefault(); // Prevent default to avoid triggering <a> redirect
+              e.stopPropagation(); // Stop event bubbling to card
               if (!currentUser) {
                 window.location.href = "login.html";
                 return;
@@ -360,8 +364,10 @@
               try {
                 const userSnapshot = await get(userRef);
                 const tutorSnapshot = await get(tutorRef);
-                let userFollowing = userSnapshot.exists() ? userSnapshot.val() : [];
-                let tutorFollowers = tutorSnapshot.exists() ? tutorSnapshot.val() : [];
+                let userFollowing = userSnapshot.exists() ? userSnapshot.val() || [] : [];
+                let tutorFollowers = tutorSnapshot.exists() ? tutorSnapshot.val() || [] : [];
+                if (!Array.isArray(userFollowing)) userFollowing = [];
+                if (!Array.isArray(tutorFollowers)) tutorFollowers = [];
                 if (userFollowing.includes(tutorId)) {
                   userFollowing = userFollowing.filter(id => id !== tutorId);
                   tutorFollowers = tutorFollowers.filter(id => id !== currentUser.uid);
@@ -373,12 +379,14 @@
                   e.target.classList.add("btn-following");
                   e.target.textContent = "Following";
                 }
-                await set(userRef, userFollowing);
-                await set(tutorRef, tutorFollowers);
-                await renderTutorGrid(currentUser, selectedCategory); // Re-render to update follower count
+                await Promise.all([
+                  set(userRef, userFollowing.length ? userFollowing : null),
+                  set(tutorRef, tutorFollowers.length ? tutorFollowers : null)
+                ]);
+                await renderTutorGrid(currentUser, selectedCategory);
               } catch (error) {
-                console.error("Error updating follow status:", error);
-                errorMessage.textContent = "Error updating follow status.";
+                console.error("Follow error:", error.code, error.message);
+                errorMessage.textContent = "Error updating follow status: " + error.message;
                 errorMessage.classList.remove("hidden");
               } finally {
                 loaderOverlay.style.display = "none";
@@ -389,8 +397,8 @@
           tutorGrid.innerHTML = "<p class='text-gray-400 text-center'>No tutors available.</p>";
         }
       } catch (error) {
-        console.error("Error fetching tutors:", error);
-        errorMessage.textContent = "Error loading tutors.";
+        console.error("Error fetching tutors:", error.code, error.message);
+        errorMessage.textContent = "Error loading tutors: " + error.message;
         errorMessage.classList.remove("hidden");
       }
     }
@@ -408,7 +416,7 @@
         const userData = userSnapshot.exists() ? userSnapshot.val() : null;
         await renderTutorGrid(userData, selectedCategory);
       } catch (error) {
-        console.error("Error filtering tutors:", error);
+        console.error("Error filtering tutors:", error.code, error.message);
         errorMessage.textContent = "Error filtering tutors: " + error.message;
         errorMessage.classList.remove("hidden");
       } finally {
@@ -437,7 +445,7 @@
           window.location.href = "login.html";
         }
       } catch (error) {
-        console.error("Auth state error:", error);
+        console.error("Auth state error:", error.code, error.message);
         errorMessage.textContent = "Error loading user data: " + error.message;
         errorMessage.classList.remove("hidden");
       } finally {
