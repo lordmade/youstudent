@@ -42,11 +42,23 @@
       background-color: rgba(0, 0, 0, 0.7);
       z-index: 9999;
     }
-    .video-card {
+    .tutor-card {
       transition: transform 0.2s;
     }
-    .video-card:hover {
+    .tutor-card:hover {
       transform: scale(1.02);
+    }
+    .btn-follow {
+      background-color: #f00;
+      color: #fff;
+      transition: background-color 0.2s;
+    }
+    .btn-follow:hover {
+      background-color: #cc0000;
+    }
+    .btn-following {
+      background-color: #666;
+      color: #fff;
     }
     .header-container {
       display: flex;
@@ -161,6 +173,12 @@
         </svg>
         Subscriptions
       </a>
+      <a href="tutors.html" id="tutors-dashboard" class="flex items-center text-white hover:bg-[#383838] p-2 rounded-md">
+        <svg class="w-6 h-6 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 14l9-5-9-5-9 5 9 5zm0 0l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14zm-4 6v-7.5l4-2.222"/>
+        </svg>
+        Tutors Dashboard
+      </a>
       <a href="#" id="sign-out" class="flex items-center text-white hover:bg-[#383838] p-2 rounded-md">
         <svg class="w-6 h-6 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
@@ -172,36 +190,8 @@
 
   <!-- 🔹 Main Content -->
   <main class="container mx-auto mt-20 p-4">
-    <div id="video-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-      <!-- Placeholder Video Cards -->
-      <div class="video-card bg-[#282828] rounded-lg overflow-hidden">
-        <img src="https://via.placeholder.com/320x180" alt="Video Thumbnail" class="w-full h-48 object-cover" />
-        <div class="p-4">
-          <h3 class="text-lg font-semibold">Sample Video Title</h3>
-          <p class="text-sm text-gray-400">Channel Name • 1M views • 2 days ago</p>
-        </div>
-      </div>
-      <div class="video-card bg-[#282828] rounded-lg overflow-hidden">
-        <img src="https://via.placeholder.com/320x180" alt="Video Thumbnail" class="w-full h-48 object-cover" />
-        <div class="p-4">
-          <h3 class="text-lg font-semibold">Another Video Title</h3>
-          <p class="text-sm text-gray-400">Channel Name • 500K views • 1 week ago</p>
-        </div>
-      </div>
-      <div class="video-card bg-[#282828] rounded-lg overflow-hidden">
-        <img src="https://via.placeholder.com/320x180" alt="Video Thumbnail" class="w-full h-48 object-cover" />
-        <div class="p-4">
-          <h3 class="text-lg font-semibold">Tutorial Video</h3>
-          <p class="text-sm text-gray-400">Channel Name • 200K views • 3 days ago</p>
-        </div>
-      </div>
-      <div class="video-card bg-[#282828] rounded-lg overflow-hidden">
-        <img src="https://via.placeholder.com/320x180" alt="Video Thumbnail" class="w-full h-48 object-cover" />
-        <div class="p-4">
-          <h3 class="text-lg font-semibold">Gaming Stream</h3>
-          <p class="text-sm text-gray-400">Channel Name • 800K views • 5 hours ago</p>
-        </div>
-      </div>
+    <div id="tutor-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+      <!-- Tutor cards will be dynamically inserted here -->
     </div>
     <p id="error-message" class="text-sm text-red-500 text-center mt-4 hidden"></p>
   </main>
@@ -210,7 +200,7 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
     import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
-    import { getDatabase, ref, get } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
+    import { getDatabase, ref, get, set, update } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
@@ -236,6 +226,7 @@
     const searchContainer = document.getElementById("search-container");
     const logoContainer = document.getElementById("logo-container");
     const loaderOverlay = document.getElementById("loader-overlay");
+    const tutorGrid = document.getElementById("tutor-grid");
 
     // Toggle Sidebar
     menuBtn.addEventListener("click", () => {
@@ -278,6 +269,86 @@
       }
     });
 
+    // Render Tutor Cards
+    async function renderTutorGrid(currentUser) {
+      try {
+        const tutorsRef = ref(db, "tutors");
+        const snapshot = await get(tutorsRef);
+        if (snapshot.exists()) {
+          const tutors = snapshot.val();
+          tutorGrid.innerHTML = ""; // Clear existing content
+          Object.entries(tutors).forEach(([tutorId, tutor]) => {
+            const isFollowing = currentUser && currentUser.following && currentUser.following.includes(tutorId);
+            const card = document.createElement("div");
+            card.className = "tutor-card bg-[#282828] rounded-lg overflow-hidden";
+            card.innerHTML = `
+              <img src="${tutor.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${tutor.name} Profile" class="w-full h-48 object-cover" />
+              <div class="p-4">
+                <h3 class="text-lg font-semibold">${tutor.name || 'Unknown Tutor'}</h3>
+                <p class="text-sm text-gray-400">${tutor.bio || 'No bio available'}</p>
+                <button class="btn-follow${isFollowing ? ' btn-following' : ''} mt-2 py-1 px-4 rounded-md text-sm" data-tutor-id="${tutorId}">
+                  ${isFollowing ? 'Following' : 'Follow'}
+                </button>
+              </div>
+            `;
+            tutorGrid.appendChild(card);
+          });
+
+          // Add Follow/Unfollow Event Listeners
+          document.querySelectorAll(".btn-follow").forEach(button => {
+            button.addEventListener("click", async (e) => {
+              const tutorId = e.target.dataset.tutorId;
+              loaderOverlay.style.display = "flex";
+              try {
+                const userRef = ref(db, `users/${currentUser.uid}`);
+                const tutorRef = ref(db, `tutors/${tutorId}`);
+                const userSnapshot = await get(userRef);
+                const tutorSnapshot = await get(tutorRef);
+                const userData = userSnapshot.val() || {};
+                const tutorData = tutorSnapshot.val() || {};
+                const userFollowing = userData.following || [];
+                const tutorFollowers = tutorData.followers || [];
+
+                if (userFollowing.includes(tutorId)) {
+                  // Unfollow
+                  await update(userRef, {
+                    following: userFollowing.filter(id => id !== tutorId)
+                  });
+                  await update(tutorRef, {
+                    followers: tutorFollowers.filter(id => id !== currentUser.uid)
+                  });
+                  e.target.textContent = "Follow";
+                  e.target.classList.remove("btn-following");
+                } else {
+                  // Follow
+                  await update(userRef, {
+                    following: [...userFollowing, tutorId]
+                  });
+                  await update(tutorRef, {
+                    followers: [...tutorFollowers, currentUser.uid]
+                  });
+                  e.target.textContent = "Following";
+                  e.target.classList.add("btn-following");
+                }
+              } catch (error) {
+                console.error("Follow/Unfollow error:", error);
+                errorMessage.textContent = "Error updating follow status.";
+                errorMessage.classList.remove("hidden");
+              } finally {
+                loaderOverlay.style.display = "none";
+              }
+            });
+          });
+        } else {
+          tutorGrid.innerHTML = "<p class='text-gray-400 text-center'>No tutors available.</p>";
+        }
+      } catch (error) {
+        console.error("Error fetching tutors:", error);
+        errorMessage.textContent = "Error loading tutors.";
+        errorMessage.classList.remove("hidden");
+      }
+    }
+
     // Auth State Listener
     onAuthStateChanged(auth, async (user) => {
       loaderOverlay.style.display = "flex";
@@ -289,6 +360,8 @@
             const userData = snapshot.val();
             userPic.src = userData.photoURL || "https://www.gravatar.com/avatar?d=mp";
             console.log("User authenticated:", user.uid);
+            // Render tutor grid with current user's following data
+            await renderTutorGrid({ uid: user.uid, following: userData.following || [] });
           } else {
             console.log("No user data, redirecting to login.html");
             window.location.href = "login.html";
