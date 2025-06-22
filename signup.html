@@ -76,22 +76,30 @@
       projectId: "fire-b-a8878",
       storageBucket: "fire-b-a8878.firebasestorage.app",
       messagingSenderId: "658673187627",
-      appId: "1:658673187627:web:32699cbc33e85f4bafa36e",
-      measurementId: "G-2505EVBRWX"
+      appId: "1:658673187627:web:6e4c29af661785f0afa36e",
+      measurementId: "G-V4W97VMSKL"
     };
 
     // Initialize Firebase
-    firebase.initializeApp(firebaseConfig);
-    const auth = firebase.auth();
-    const database = firebase.database();
-    const googleProvider = new firebase.auth.GoogleAuthProvider();
-    const facebookProvider = new firebase.auth.FacebookAuthProvider();
+    let auth, database;
+    try {
+      firebase.initializeApp(firebaseConfig);
+      auth = firebase.auth();
+      database = firebase.database();
+      console.log('Firebase initialized successfully');
+    } catch (error) {
+      console.error('Firebase initialization failed:', error);
+      document.getElementById('error').textContent = 'Failed to connect to server.';
+      document.getElementById('error').classList.remove('hidden');
+      return;
+    }
 
     // Custom error messages
     const errorMessages = {
       'auth/email-already-in-use': 'This email is already registered.',
       'auth/invalid-email': 'Invalid email format.',
-      'auth/weak-password': 'Password is too weak.'
+      'auth/weak-password': 'Password must be at least 6 characters.',
+      'auth/too-many-requests': 'Too many attempts. Try again later.'
     };
 
     // Elements
@@ -144,7 +152,8 @@
       auth.createUserWithEmailAndPassword(email, password)
         .then((userCredential) => {
           const user = userCredential.user;
-          // Store user data in Realtime Database
+          console.log('User signed up:', user.uid);
+          // Store user data
           return database.ref('users/' + user.uid).set({
             name: name,
             email: email,
@@ -153,9 +162,11 @@
           });
         })
         .then(() => {
+          console.log('User data stored, redirecting to dashboard.html');
           window.location.href = 'dashboard.html';
         })
         .catch((error) => {
+          console.error('Signup error:', error);
           errorEl.textContent = errorMessages[error.code] || error.message;
           errorEl.classList.remove('hidden');
         })
@@ -168,10 +179,11 @@
 
     // Google Signup
     googleSignup.addEventListener('click', () => {
-      auth.signInWithPopup(googleProvider)
+      const provider = new firebase.auth.GoogleAuthProvider();
+      auth.signInWithPopup(provider)
         .then((result) => {
           const user = result.user;
-          // Store user data in Realtime Database
+          console.log('Google signup:', user.uid);
           return database.ref('users/' + user.uid).set({
             name: user.displayName || 'Student',
             email: user.email,
@@ -180,9 +192,11 @@
           });
         })
         .then(() => {
+          console.log('Google user data stored, redirecting to dashboard.html');
           window.location.href = 'dashboard.html';
         })
         .catch((error) => {
+          console.error('Google signup error:', error);
           errorEl.textContent = errorMessages[error.code] || error.message;
           errorEl.classList.remove('hidden');
         });
@@ -190,10 +204,11 @@
 
     // Facebook Signup
     facebookSignup.addEventListener('click', () => {
-      auth.signInWithPopup(facebookProvider)
+      const provider = new firebase.auth.FacebookAuthProvider();
+      auth.signInWithPopup(provider)
         .then((result) => {
           const user = result.user;
-          // Store user data in Realtime Database
+          console.log('Facebook signup:', user.uid);
           return database.ref('users/' + user.uid).set({
             name: user.displayName || 'Student',
             email: user.email || `${user.uid}@facebook.com`,
@@ -202,9 +217,11 @@
           });
         })
         .then(() => {
+          console.log('Facebook user data stored, redirecting to dashboard.html');
           window.location.href = 'dashboard.html';
         })
         .catch((error) => {
+          console.error('Facebook signup error:', error);
           errorEl.textContent = errorMessages[error.code] || error.message;
           errorEl.classList.remove('hidden');
         });
@@ -213,6 +230,7 @@
     // Redirect if already logged in
     auth.onAuthStateChanged((user) => {
       if (user) {
+        console.log('User already logged in:', user.uid);
         window.location.href = 'dashboard.html';
       }
     });
