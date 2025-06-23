@@ -528,7 +528,6 @@
       const minutes = Math.floor(seconds / 60);
       const hours = Math.floor(minutes / 60);
       const days = Math.floor(hours / 24);
-
       if (seconds < 60) return seconds === 1 ? "1 second ago" : `${seconds} seconds ago`;
       if (minutes < 60) return minutes === 1 ? "1 minute ago" : `${minutes} minutes ago`;
       if (hours < 24) return hours === 1 ? "1 hour ago" : `${hours} hours ago`;
@@ -735,7 +734,7 @@
       }
       loaderOverlay.style.display = "flex";
       try {
-        const userRef = ref(db.users/${user.uid});
+        const userRef = ref(db, `users/${user.uid}`);
         const userSnapshot = await get(userRef);
         const userData = userSnapshot.exists() ? userSnapshot.val() : {};
         const userEmail = userData.email || user.email;
@@ -789,7 +788,7 @@
         commentList.innerHTML = "";
         if (snapshot.exists()) {
           const comments = snapshot.val();
-          Object.entries(comments).forEach(([_, comment])) {
+          Object.entries(comments).forEach(([_, comment]) => {
             const commentDiv = document.createElement("div");
             commentDiv.className = "mb-3 border-b border-gray-600 pb-2";
             commentDiv.innerHTML = `
@@ -798,7 +797,7 @@
               <p class="text-xs text-gray-500">${getRelativeTime(comment.timestamp)}</p>
             `;
             commentList.appendChild(commentDiv);
-          }
+          });
         } else {
           commentList.innerHTML = "<p class='text-gray-400 text-center'>No comments yet.</p>";
         }
@@ -834,7 +833,7 @@
         const commentsRef = ref(db, `posts/${postId}/comments`);
         await push(commentsRef, {
           text,
-          authorEmail,
+          authorEmail: userEmail,
           timestamp: Date.now()
         });
         commentInput.value = "";
@@ -879,6 +878,7 @@
 
     // Render Posts
     async function renderPosts() {
+      console.log("Rendering posts...");
       try {
         const postsRef = ref(db, "posts");
         const snapshot = await get(postsRef);
@@ -886,6 +886,7 @@
         if (snapshot.exists()) {
           const posts = snapshot.val();
           const user = auth.currentUser;
+          console.log("Posts fetched:", posts);
           Object.entries(posts).reverse().forEach(([postId, post]) => {
             const likeCount = post.likes ? Object.keys(post.likes).length : 0;
             const commentCount = post.comments ? Object.keys(post.comments).length : 0;
@@ -895,7 +896,7 @@
             card.innerHTML = `
               <a href="profile.html?uid=${post.uid}" class="block">
                 <div class="flex items-center mb-3">
-                  <img src="https://www.gravatar.com/avatar?d=mp" alt="Author" class="w-10 h-10 rounded-full mr-3">
+                  <img src="${post.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="Author" class="w-10 h-10 rounded-full mr-3">
                   <div>
                     <p class="text-base font-semibold">${post.authorEmail}</p>
                     <p class="text-sm text-gray-500">${getRelativeTime(post.timestamp)}</p>
@@ -912,7 +913,7 @@
                 </button>
                 <button class="btn-comment flex items-center space-x-1 px-3 py-1 rounded-md text-sm" data-post-id="${postId}">
                   <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2-2 0 0-012-2 v8a2 2 0-01-2 2h-5l-5 5v-5z"/>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/>
                   </svg>
                   <span>${commentCount} Comment${commentCount === 1 ? '' : 's'}</span>
                 </button>
@@ -938,10 +939,11 @@
           });
         } else {
           postsList.innerHTML = "<p class='text-gray-400 text-center'>No posts available.</p>";
+          console.log("No posts found in Firebase.");
         }
       } catch (error) {
         console.error("Error fetching posts:", error.code, error.message);
-        errorMessage.textContent = "Error loading posts: " + error.message;
+        errorMessage.textContent = `Error loading posts: ${error.message}`;
         errorMessage.classList.remove("hidden");
       }
     }
@@ -1020,6 +1022,7 @@
     tabNav.addEventListener("click", async (e) => {
       const button = e.target.closest(".tab-btn");
       if (!button) return;
+      console.log("Tab clicked:", button.dataset.tab);
       loaderOverlay.style.display = "flex";
       try {
         currentTab = button.dataset.tab;
@@ -1029,14 +1032,14 @@
           tutorsSection.classList.remove("hidden");
           postsSection.classList.add("hidden");
           await renderTutorGrid();
-        } else {
+        } else if (currentTab === "posts") {
           tutorsSection.classList.add("hidden");
           postsSection.classList.remove("hidden");
           await renderPosts();
         }
       } catch (error) {
         console.error("Error switching tabs:", error.code, error.message);
-        errorMessage.textContent = "Error switching tabs: " + error.message;
+        errorMessage.textContent = `Error switching tabs: ${error.message}`;
         errorMessage.classList.remove("hidden");
       } finally {
         loaderOverlay.style.display = "none";
@@ -1045,6 +1048,7 @@
 
     // Auth State Listener
     onAuthStateChanged(auth, async (user) => {
+      console.log("Auth state changed:", user ? user.uid : "No user");
       loaderOverlay.style.display = "flex";
       try {
         if (user) {
@@ -1053,10 +1057,10 @@
           if (userSnapshot.exists()) {
             const userData = userSnapshot.val();
             userPic.src = userData.photoURL || "https://www.gravatar.com/avatar?d=mp";
-            console.log("User authenticated:", user.uid);
+            console.log("User data:", userData);
             if (currentTab === "tutors") {
               await renderTutorGrid();
-            } else {
+            } else if (currentTab === "posts") {
               await renderPosts();
             }
           } else {
@@ -1069,7 +1073,7 @@
         }
       } catch (error) {
         console.error("Auth state error:", error.code, error.message);
-        errorMessage.textContent = "Error loading user data: " + error.message;
+        errorMessage.textContent = `Error loading user data: ${error.message}`;
         errorMessage.classList.remove("hidden");
       } finally {
         loaderOverlay.style.display = "none";
