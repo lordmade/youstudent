@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chat</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      font-family: 'Roboto', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: #181818;
+    }
+    .sidebar {
+      width: 240px;
+      position: fixed;
+      top: 0;
+      left: -240px;
+      height: 100%;
+      transition: left 0.3s ease;
+      z-index: 1000;
+    }
+    .sidebar.open {
+      left: 0;
+    }
+    .animate-spin-slow {
+      animation: spin 4s linear infinite;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    .loader-container {
+      display: none;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: rgba(0, 0, 0, 0.7);
+      z-index: 9999;
+    }
+    .header-container {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+    }
+    .left-container {
+      display: flex;
+      align-items: center;
+      flex-shrink: 0;
+    }
+    .logo-container {
+      display: flex;
+      align-items: center;
+      min-width: 150px;
+      transition: visibility 0.3s ease, opacity 0.3s ease;
+    }
+    .logo-container.hidden {
+      visibility: hidden;
+      opacity: 0;
+      min-width: 0;
+    }
+    .search-container {
+      flex: 1;
+      max-width: 400px;
+      margin: 0 16px;
+      transition: max-width 0.3s ease, margin-left 0.3s ease;
+    }
+    .search-container.focused {
+      max-width: 550px;
+      margin-left: -134px;
+    }
+    .bottom-nav {
+      display: none;
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background-color: #212121;
+      z-index: 1000;
+      padding: 8px 0;
+    }
+    .bottom-nav a {
+      flex: 1;
+      text-align: center;
+      color: #fff;
+      padding: 8px;
+      transition: background-color 0.2s;
+    }
+    .bottom-nav a:hover,
+    .bottom-nav a.active {
+      background-color: #ff0000;
+    }
+    .chat-container {
+      max-height: calc(100vh - 200px);
+      overflow-y: auto;
+      padding: 16px;
+      background-color: #212121;
+      border-radius: 8px;
+    }
+    .message {
+      max-width: 70%;
+      margin-bottom: 12px;
+      padding: 8px 12px;
+      border-radius: 12px;
+      position: relative;
+    }
+    .message.own {
+      background-color: #ff0000;
+      margin-left: auto;
+      color: #fff;
+    }
+    .message.other {
+      background-color: #282828;
+      margin-right: auto;
+      color: #fff;
+    }
+    .message .sender {
+      font-size: 0.75rem;
+      color: #bbb;
+      margin-bottom: 4px;
+    }
+    .message .timestamp {
+      font-size: 0.65rem;
+      color: #888;
+      margin-top: 4px;
+    }
+    .message-input-container {
+      display: flex;
+      padding: 16px;
+      background-color: #212121;
+      border-top: 1px solid #444;
+    }
+    .message-input {
+      flex: 1;
+      background-color: #121212;
+      border: 1px solid #444;
+      color: #fff;
+      padding: 8px 12px;
+      border-radius: 20px;
+      margin-right: 8px;
+    }
+    .send-btn {
+      background-color: #ff0000;
+      color: #fff;
+      padding: 8px 16px;
+      border-radius: 20px;
+      transition: background-color 0.2s;
+    }
+    .send-btn:hover {
+      background-color: #cc0000;
+    }
+    @media (max-width: 768px) {
+      .sidebar {
+        display: none;
+      }
+      .bottom-nav {
+        display: flex;
+      }
+      .main-content {
+        margin-bottom: 64px;
+      }
+      .logo-container {
+        min-width: 100px;
+      }
+      .search-container {
+        max-width: 250px;
+        margin: 0 8px;
+      }
+      .search-container.focused {
+        max-width: 350px;
+        margin-left: -92px;
+      }
+      .header-container {
+        padding: 0 8px;
+      }
+      .chat-container {
+        max-height: calc(100vh - 250px);
+      }
+    }
+    @media (min-width: 769px) {
+      .bottom-nav {
+        display: none;
+      }
+    }
+    #search-bar {
+      width: 100%;
+      transition: width 0.3s ease;
+    }
+  </style>
+</head>
+<body class="bg-[#181818] text-white">
+  <!-- 🔹 Loader Overlay -->
+  <div id="loader-overlay" class="loader-container">
+    <svg width="80" height="80" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg" class="animate-spin-slow">
+      <circle cx="60" cy="60" r="50" stroke="#ff0000" stroke-width="6" stroke-linecap="round" stroke-dasharray="240" stroke-dashoffset="60">
+        <animate attributeName="stroke-dashoffset" values="60;300" dur="2s" repeatCount="indefinite"/>
+      </circle>
+    </svg>
+  </div>
+
+  <!-- 🔹 Header -->
+  <header class="bg-[#212121] p-4 fixed top-0 left-0 right-0 z-10">
+    <div class="header-container mx-auto max-w-7xl">
+      <div class="left-container">
+        <button id="menu-btn" class="mr-4 text-white">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7"/>
+          </svg>
+        </button>
+        <div id="logo-container" class="logo-container">
+          <svg class="w-8 h-8 mr-2" viewBox="0 0 24 24" fill="#ff0000">
+            <path d="M23.5 6.2c-.3-1.1-1.2-2-2.3-2.3C19.4 3.5 12 3.5 12 3.5s-7.4 0-9.2.4c-1.1.3-2 1.2-2.3 2.3C.1 8 0 10.6 0 12s0 4 .5 5.8c.3 1.1 1.2 2 2.3 2.3 1.8.4 9.2.4 9.2.4s7.4 0 9.2-.4c-1.1-.3 2-1.2 2.3-2.3.5-1.8.5-4.4.5-5.8s0-4-.5-5.8zM9.5 15.5V8.5l6 3.5-6 3.5z"/>
+          </svg>
+          <h1 class="text-xl font-bold">YouTube</h1>
+        </div>
+      </div>
+      <div id="search-container" class="search-container">
+        <input type="text" id="search-bar" placeholder="Search" class="px-4 py-2 bg-[#121212] border border-gray-600 rounded-full text-white focus:outline-none focus:border-red-500" />
+      </div>
+      <div id="right-container" class="right-container flex items-center space-x-4">
+        <img id="user-pic" class="w-8 h-8 rounded-full border border-gray-600" src="https://www.gravatar.com/avatar?d=mp" alt="Profile Pic" />
+      </div>
+    </div>
+  </header>
+
+  <!-- 🔹 Sidebar -->
+  <div id="sidebar" class="sidebar bg-[#212121] p-4">
+    <div class="space-y-4">
+      <a href="home.html" class="flex items-center text-white hover:bg-[#383838] p-2 rounded-md active">
+        <svg class="w-6 h-6 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
+        </svg>
+        Home
+      </a>
+      <a href="#" class="flex items-center text-white hover:bg-[#383838] p-2 rounded-md">
+        <svg class="w-6 h-6 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z"/>
+        </svg>
+        Trending
+      </a>
+      <a href="#" class="flex items-center text-white hover:bg-[#383838] p-2 rounded-md">
+        <svg class="w-6 h-6 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+        </svg>
+        Subscriptions
+      </a>
+      <a href="tutors.html" id="tutors-dashboard" class="flex items-center text-white hover:bg-[#383838] p-2 rounded-md">
+        <svg class="w-6 h-6 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 14l9-5-9-5-9 5 9 5zm0 0l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14zm-4 6v-7.5l4-2.222"/>
+        </svg>
+        Tutors Dashboard
+      </a>
+      <a href="admin-login.php" id="admin-panel" class="flex items-center text-white hover:bg-[#383838] p-2 rounded-md">
+        <svg class="w-6 h-6 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 14l9-5-9-5-9 5 9 5zm0 0l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14zm-4 6v-7.5l4-2.222"/>
+        </svg>
+        Admin Panel
+      </a>
+      <a href="#" id="sign-out" class="flex items-center text-white hover:bg-[#383838] p-2 rounded-md">
+        <svg class="w-6 h-6 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+        </svg>
+        Sign Out
+      </a>
+    </div>
+  </div>
+
+  <!-- 🔹 Bottom Navigation Bar -->
+  <nav class="bottom-nav">
+    <a href="home.html" class="active">
+      <svg class="w-6 h-6 mx-auto mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
+      </svg>
+      <span class="text-xs">Home</span>
+    </a>
+    <a href="#">
+      <svg class="w-6 h-6 mx-auto mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z"/>
+      </svg>
+      <span class="text-xs">Trending</span>
+    </a>
+    <a href="#">
+      <svg class="w-6 h-6 mx-auto mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+      </svg>
+      <span class="text-xs">Subscriptions</span>
+    </a>
+    <a href="tutors.html">
+      <svg class="w-6 h-6 mx-auto mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 14l9-5-9-5-9 5 9 5zm0 0l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14zm-4 6v-7.5l4-2.222"/>
+      </svg>
+      <span class="text-xs">Tutors</span>
+    </a>
+    <a href="admin-login.php">
+      <svg class="w-6 h-6 mx-auto mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 14l9-5-9-5-9 5 9 5zm0 0l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14zm-4 6v-7.5l4-2.222"/>
+      </svg>
+      <span class="text-xs">Admin</span>
+    </a>
+    <a href="#" id="sign-out-bottom">
+      <svg class="w-6 h-6 mx-auto mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+      </svg>
+      <span class="text-xs">Sign Out</span>
+    </a>
+  </nav>
+
+  <!-- 🔹 Main Content -->
+  <main class="container mx-auto mt-20 p-4 main-content">
+    <section class="mb-8">
+      <div class="bg-[#282828] p-6 rounded-lg">
+        <div class="flex items-center mb-4">
+          <img id="chat-user-pic" class="w-12 h-12 rounded-full mr-4 border border-gray-600" src="https://www.gravatar.com/avatar?d=mp" alt="Chat User" />
+          <h2 id="chat-user-name" class="text-xl font-bold">Loading...</h2>
+        </div>
+        <div id="chat-container" class="chat-container"></div>
+        <div class="message-input-container">
+          <input type="text" id="message-input" class="message-input" placeholder="Type a message..." />
+          <button id="send-btn" class="send-btn">Send</button>
+        </div>
+      </div>
+    </section>
+    <p id="error-message" class="text-sm text-red-500 text-center mt-4 hidden"></p>
+  </main>
+
+  <!-- 🔹 Firebase and Logic -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
+    import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
+    import { getDatabase, ref, get, push, set, onChildAdded } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
+      authDomain: "fire-b-a8878.firebaseapp.com",
+      databaseURL: "https://fire-b-a8878.firebaseio.com",
+      projectId: "fire-b-a8878",
+      storageBucket: "fire-b-a8878.appspot.com",
+      messagingSenderId: "658673187627",
+      appId: "1:658673187627:web:6e4c29af661785f0afa36e",
+      measurementId: "G-V4W97YHMSHL"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getDatabase(app);
+
+    const userPic = document.getElementById("user-pic");
+    const signOutBtn = document.getElementById("sign-out");
+    const signOutBottomBtn = document.getElementById("sign-out-bottom");
+    const errorMessage = document.getElementById("error-message");
+    const menuBtn = document.getElementById("menu-btn");
+    const sidebar = document.getElementById("sidebar");
+    const searchBar = document.getElementById("search-bar");
+    const searchContainer = document.getElementById("search-container");
+    const logoContainer = document.getElementById("logo-container");
+    const loaderOverlay = document.getElementById("loader-overlay");
+    const chatUserPic = document.getElementById("chat-user-pic");
+    const chatUserName = document.getElementById("chat-user-name");
+    const chatContainer = document.getElementById("chat-container");
+    const messageInput = document.getElementById("message-input");
+    const sendBtn = document.getElementById("send-btn");
+
+    // Get other user's UID from URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const otherUid = urlParams.get("uid");
+
+    // Relative Time Formatter
+    function getRelativeTime(timestamp) {
+      const now = Date.now();
+      const diff = now - timestamp;
+      const seconds = Math.floor(diff / 1000);
+      const minutes = Math.floor(seconds / 60);
+      const hours = Math.floor(minutes / 60);
+      const days = Math.floor(hours / 24);
+      if (seconds < 60) return seconds === 1 ? "1 second ago" : `${seconds} seconds ago`;
+      if (minutes < 60) return minutes === 1 ? "1 minute ago" : `${minutes} minutes ago`;
+      if (hours < 24) return hours === 1 ? "1 hour ago" : `${hours} hours ago`;
+      return days === 1 ? "1 day ago" : `${days} days ago`;
+    }
+
+    // Toggle Sidebar
+    menuBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      sidebar.classList.toggle("open");
+    });
+
+    // Close Sidebar on Outside Click
+    document.addEventListener("click", (event) => {
+      if (sidebar.classList.contains("open") && !sidebar.contains(event.target) && !menuBtn.contains(event.target)) {
+        sidebar.classList.remove("open");
+      }
+    });
+
+    // Expand Search Bar and Hide Logo
+    searchBar.addEventListener("focus", () => {
+      searchContainer.classList.add("focused");
+      logoContainer.classList.add("hidden");
+    });
+
+    // Restore Logo and Search Bar
+    searchBar.addEventListener("blur", () => {
+      searchContainer.classList.remove("focused");
+      logoContainer.classList.remove("hidden");
+    });
+
+    // Sign Out
+    function handleSignOut(e) {
+      e.preventDefault();
+      loaderOverlay.style.display = "flex";
+      signOut(auth)
+        .then(() => {
+          console.log("User signed out");
+          window.location.href = "login.html";
+        })
+        .catch((error) => {
+          console.error("Sign out error:", error.code, error.message);
+          errorMessage.textContent = "Sign out failed: " + error.message;
+          errorMessage.classList.remove("hidden");
+        })
+        .finally(() => {
+          loaderOverlay.style.display = "none";
+        });
+    }
+
+    signOutBtn.addEventListener("click", handleSignOut);
+    signOutBottomBtn.addEventListener("click", handleSignOut);
+
+    // Get Chat ID (consistent for both users)
+    function getChatId(uid1, uid2) {
+      return uid1 < uid2 ? `${uid1}_${uid2}` : `${uid2}_${uid1}`;
+    }
+
+    // Load Chat User Info
+    async function loadChatUserInfo() {
+      if (!otherUid) {
+        errorMessage.textContent = "No user ID provided.";
+        errorMessage.classList.remove("hidden");
+        return;
+      }
+      try {
+        const userRef = ref(db, `users/${otherUid}`);
+        const userSnapshot = await get(userRef);
+        if (userSnapshot.exists()) {
+          const userData = userSnapshot.val();
+          chatUserPic.src = userData.photoURL || "https://www.gravatar.com/avatar?d=mp";
+          chatUserName.textContent = userData.name || userData.email || "Unknown User";
+        } else {
+          errorMessage.textContent = "Chat user not found.";
+          errorMessage.classList.remove("hidden");
+        }
+      } catch (error) {
+        console.error("Error loading chat user:", error.code, error.message);
+        errorMessage.textContent = `Error loading chat user: ${error.message}`;
+        errorMessage.classList.remove("hidden");
+      }
+    }
+
+    // Render Message
+    function renderMessage(message, currentUid) {
+      const isOwnMessage = message.senderUid === currentUid;
+      const messageDiv = document.createElement("div");
+      messageDiv.className = `message ${isOwnMessage ? "own" : "other"}`;
+      messageDiv.innerHTML = `
+        <div class="sender">${message.senderEmail}</div>
+        <div>${message.text}</div>
+        <div class="timestamp">${getRelativeTime(message.timestamp)}</div>
+      `;
+      chatContainer.appendChild(messageDiv);
+      chatContainer.scrollTop = chatContainer.scrollHeight; // Auto-scroll to bottom
+    }
+
+    // Load and Listen for Messages
+    async function loadMessages(currentUid) {
+      if (!otherUid || !currentUid) return;
+      const chatId = getChatId(currentUid, otherUid);
+      const messagesRef = ref(db, `chats/${chatId}/messages`);
+      try {
+        // Initialize chat if it doesn't exist
+        const chatRef = ref(db, `chats/${chatId}`);
+        const chatSnapshot = await get(chatRef);
+        if (!chatSnapshot.exists()) {
+          await set(chatRef, {
+            participants: {
+              [currentUid]: true,
+              [otherUid]: true
+            },
+            messages: {}
+          });
+        }
+        // Listen for new messages
+        onChildAdded(messagesRef, (snapshot) => {
+          const message = snapshot.val();
+          renderMessage(message, currentUid);
+        });
+      } catch (error) {
+        console.error("Error loading messages:", error.code, error.message);
+        errorMessage.textContent = `Error loading messages: ${error.message}`;
+        errorMessage.classList.remove("hidden");
+      }
+    }
+
+    // Send Message
+    async function sendMessage(currentUid, senderEmail) {
+      const text = messageInput.value.trim();
+      if (!text) {
+        errorMessage.textContent = "Please enter a message.";
+        errorMessage.classList.remove("hidden");
+        return;
+      }
+      loaderOverlay.style.display = "flex";
+      try {
+        const chatId = getChatId(currentUid, otherUid);
+        const messagesRef = ref(db, `chats/${chatId}/messages`);
+        await push(messagesRef, {
+          text,
+          senderUid: currentUid,
+          senderEmail: senderEmail,
+          timestamp: Date.now()
+        });
+        messageInput.value = "";
+        errorMessage.classList.add("hidden");
+      } catch (error) {
+        console.error("Error sending message:", error.code, error.message);
+        errorMessage.textContent = `Error sending message: ${error.message}`;
+        errorMessage.classList.remove("hidden");
+      } finally {
+        loaderOverlay.style.display = "none";
+      }
+    }
+
+    // Send Button Listener
+    sendBtn.addEventListener("click", async () => {
+      const user = auth.currentUser;
+      if (!user) {
+        errorMessage.textContent = "Please log in to send messages.";
+        errorMessage.classList.remove("hidden");
+        return;
+      }
+      const userRef = ref(db, `users/${user.uid}`);
+      const userSnapshot = await get(userRef);
+      const userData = userSnapshot.exists() ? userSnapshot.val() : {};
+      const senderEmail = userData.email || user.email;
+      await sendMessage(user.uid, senderEmail);
+    });
+
+    // Enter Key Listener for Message Input
+    messageInput.addEventListener("keypress", async (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        const user = auth.currentUser;
+        if (!user) {
+          errorMessage.textContent = "Please log in to send messages.";
+          errorMessage.classList.remove("hidden");
+          return;
+        }
+        const userRef = ref(db, `users/${user.uid}`);
+        const userSnapshot = await get(userRef);
+        const userData = userSnapshot.exists() ? userSnapshot.val() : {};
+        const senderEmail = userData.email || user.email;
+        await sendMessage(user.uid, senderEmail);
+      }
+    });
+
+    // Auth State Listener
+    onAuthStateChanged(auth, async (user) => {
+      console.log("Auth state changed:", user ? user.uid : "No user");
+      loaderOverlay.style.display = "flex";
+      try {
+        if (user) {
+          const userRef = ref(db, `users/${user.uid}`);
+          const userSnapshot = await get(userRef);
+          if (userSnapshot.exists()) {
+            const userData = userSnapshot.val();
+            userPic.src = userData.photoURL || "https://www.gravatar.com/avatar?d=mp";
+            console.log("Current user data:", userData);
+            await loadChatUserInfo();
+            await loadMessages(user.uid);
+          } else {
+            console.log("No user data, redirecting to login.html");
+            window.location.href = "login.html";
+          }
+        } else {
+          console.log("No user, redirecting to login.html");
+          window.location.href = "login.html";
+        }
+      } catch (error) {
+        console.error("Auth state error:", error.code, error.message);
+        errorMessage.textContent = `Error loading user data: ${error.message}`;
+        errorMessage.classList.remove("hidden");
+      } finally {
+        loaderOverlay.style.display = "none";
+      }
+    });
+  </script>
+</body>
+</html>
