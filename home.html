@@ -107,12 +107,12 @@
       width: 90%;
       max-width: 400px;
     }
-    .modal-content input, .post-form input, .post-form textarea {
+    .modal-content input, .modal-content textarea {
       background-color: #121212;
       border: 1px solid #444;
       color: #fff;
     }
-    .modal-content button, .post-form button {
+    .modal-content button {
       transition: background-color 0.2s;
     }
     .bottom-nav {
@@ -149,6 +149,20 @@
     .tab-btn:hover {
       background-color: #cc0000;
     }
+    #mind-input {
+      background-color: #282828;
+      border: 1px solid #444;
+      color: #fff;
+      padding: 12px;
+      border-radius: 20px;
+      width: 100%;
+      max-width: 500px;
+      cursor: pointer;
+    }
+    #mind-input:focus {
+      border-color: #ff0000;
+      outline: none;
+    }
     @media (max-width: 768px) {
       .sidebar {
         display: none;
@@ -179,6 +193,9 @@
       .tab-btn {
         flex: 1;
         text-align: center;
+      }
+      #mind-input {
+        max-width: 100%;
       }
     }
     @media (min-width: 769px) {
@@ -228,6 +245,32 @@
       <div class="flex justify-end space-x-2">
         <button id="modal-cancel" class="bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700">Cancel</button>
         <button id="modal-submit" class="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700">Submit</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 🔹 Post Creation Modal -->
+  <div id="post-modal" class="modal">
+    <div class="modal-content">
+      <h2 class="text-xl font-bold mb-4">Create a Post</h2>
+      <div class="mb-4">
+        <label class="block mb-2">
+          <input type="radio" name="post-type" value="text" checked class="mr-2"> Text
+        </label>
+        <label class="block mb-2">
+          <input type="radio" name="post-type" value="image" class="mr-2"> Image URL
+        </label>
+      </div>
+      <div id="text-input-container" class="mb-4">
+        <textarea id="post-text" rows="4" class="w-full px-4 py-2 rounded-md focus:outline-none focus:border-red-500" placeholder="What's on your mind?"></textarea>
+      </div>
+      <div id="image-input-container" class="mb-4 hidden">
+        <input type="url" id="post-image" class="w-full px-4 py-2 rounded-md focus:outline-none focus:border-red-500" placeholder="Enter image URL" />
+      </div>
+      <p id="post-error" class="text-sm text-red-500 mb-4 hidden"></p>
+      <div class="flex justify-end space-x-2">
+        <button id="post-cancel" class="bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700">Cancel</button>
+        <button id="post-submit" class="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700">Submit</button>
       </div>
     </div>
   </div>
@@ -326,8 +369,9 @@
       <span class="text-xs">Tutors</span>
     </a>
     <a href="admin-login.html">
-      <svg class="w-6 h-6 mx-auto mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 ),
-
+      <svg class="w-6 h-6 mx-auto mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 14l9-5-9-5-9 5 9 5zm0 0l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14zm-4 6v-7.5l4-2.222"/>
+      </svg>
       <span class="text-xs">Admin</span>
     </a>
     <a href="#" id="sign-out-bottom">
@@ -372,26 +416,10 @@
 
     <!-- Posts Section -->
     <div id="posts-section" class="hidden">
-      <!-- Post Form -->
-      <form id="post-form" class="bg-[#282828] p-6 rounded-lg mb-6 max-w-md mx-auto">
-        <h3 class="text-lg font-semibold mb-4">Create a Post</h3>
-        <div class="mb-4">
-          <label class="block mb-2">
-            <input type="radio" name="post-type" value="text" checked class="mr-2"> Text
-          </label>
-          <label class="block mb-2">
-            <input type="radio" name="post-type" value="image" class="mr-2"> Image URL
-          </label>
-        </div>
-        <div id="text-input-container" class="mb-4">
-          <textarea id="post-text" rows="4" class="w-full px-4 py-2 rounded-md focus:outline-none focus:border-red-500" placeholder="Enter your post text"></textarea>
-        </div>
-        <div id="image-input-container" class="mb-4 hidden">
-          <input type="url" id="post-image" class="w-full px-4 py-2 rounded-md focus:outline-none focus:border-red-500" placeholder="Enter image URL" />
-        </div>
-        <button type="submit" class="bg-red-600 text-white px-4 py-2 rounded-md w-full hover:bg-red-700">Submit</button>
-        <p id="post-error" class="text-sm text-red-500 mt-4 text-center hidden"></p>
-      </form>
+      <!-- What's on Your Mind Input -->
+      <div class="mb-6 max-w-md mx-auto">
+        <input type="text" id="mind-input" readonly placeholder="What's on your mind?" class="w-full" />
+      </div>
 
       <!-- Posts List -->
       <section>
@@ -443,13 +471,16 @@
     const tabNav = document.getElementById("tab-nav");
     const tutorsSection = document.getElementById("tutors-section");
     const postsSection = document.getElementById("posts-section");
-    const postForm = document.getElementById("post-form");
+    const mindInput = document.getElementById("mind-input");
+    const postModal = document.getElementById("post-modal");
     const postText = document.getElementById("post-text");
     const postImage = document.getElementById("post-image");
     const postTypeRadios = document.getElementsByName("post-type");
     const textInputContainer = document.getElementById("text-input-container");
     const imageInputContainer = document.getElementById("image-input-container");
     const postError = document.getElementById("post-error");
+    const postCancel = document.getElementById("post-cancel");
+    const postSubmit = document.getElementById("post-submit");
     const postsList = document.getElementById("posts-list");
     let selectedCategory = "All";
     let currentTab = "tutors";
@@ -501,25 +532,25 @@
     signOutBtn.addEventListener("click", handleSignOut);
     signOutBottomBtn.addEventListener("click", handleSignOut);
 
-    // Modal Controls
-    function openModal(tutorId) {
+    // Code Modal Controls
+    function openCodeModal(tutorId) {
       codeModal.style.display = "flex";
       codeInput.value = "";
       modalError.classList.add("hidden");
       codeModal.dataset.tutorId = tutorId;
     }
 
-    function closeModal() {
+    function closeCodeModal() {
       codeModal.style.display = "none";
       codeInput.value = "";
       modalError.classList.add("hidden");
     }
 
-    modalCancel.addEventListener("click", closeModal);
+    modalCancel.addEventListener("click", closeCodeModal);
 
     document.addEventListener("click", (event) => {
       if (event.target === codeModal) {
-        closeModal();
+        closeCodeModal();
       }
     });
 
@@ -536,7 +567,7 @@
       try {
         const user = auth.currentUser;
         if (!user) {
-          closeModal();
+          closeCodeModal();
           window.location.href = "login.html";
           return;
         }
@@ -568,12 +599,110 @@
           return;
         }
         await set(ref(db, `codes/${code}/used`), true);
-        closeModal();
+        closeCodeModal();
         window.location.href = `tutor-content.html?tutorId=${tutorId}`;
       } catch (error) {
         console.error("Code validation error:", error.code, error.message);
         modalError.textContent = "Error validating code: " + error.message;
         modalError.classList.remove("hidden");
+      } finally {
+        loaderOverlay.style.display = "none";
+      }
+    });
+
+    // Post Modal Controls
+    function openPostModal() {
+      postModal.style.display = "flex";
+      postText.value = "";
+      postImage.value = "";
+      postError.classList.add("hidden");
+      textInputContainer.classList.remove("hidden");
+      imageInputContainer.classList.add("hidden");
+      postTypeRadios[0].checked = true;
+    }
+
+    function closePostModal() {
+      postModal.style.display = "none";
+      postText.value = "";
+      postImage.value = "";
+      postError.classList.add("hidden");
+    }
+
+    postCancel.addEventListener("click", closePostModal);
+
+    document.addEventListener("click", (e) => {
+      if (e.target === postModal) {
+        closePostModal();
+      }
+    });
+
+    // Trigger Post Modal
+    mindInput.addEventListener("click", () => {
+      const user = auth.currentUser;
+      if (!user) {
+        errorMessage.textContent = "Please log in to create a post.";
+        errorMessage.classList.remove("hidden");
+        return;
+      }
+      openPostModal();
+    });
+
+    // Post Type Toggle
+    postTypeRadios.forEach(radio => {
+      radio.addEventListener("change", () => {
+        if (radio.value === "text") {
+          textInputContainer.classList.remove("hidden");
+          imageInputContainer.classList.add("hidden");
+          postImage.value = "";
+        } else {
+          textInputContainer.classList.add("hidden");
+          imageInputContainer.classList.remove("hidden");
+          postText.value = "";
+        }
+      });
+    });
+
+    // Create Post
+    postSubmit.addEventListener("click", async () => {
+      const user = auth.currentUser;
+      if (!user) {
+        closePostModal();
+        errorMessage.textContent = "Please log in to create a post.";
+        errorMessage.classList.remove("hidden");
+        return;
+      }
+      const type = document.querySelector('input[name="post-type"]:checked').value;
+      const content = type === "text" ? postText.value.trim() : postImage.value.trim();
+      if (!content) {
+        postError.textContent = `Please enter a ${type === "text" ? "text" : "image URL"}.`;
+        postError.classList.remove("hidden");
+        return;
+      }
+      if (type === "image" && !content.match(/\.(jpeg|jpg|png|gif)$/i)) {
+        postError.textContent = "Please enter a valid image URL (jpeg, jpg, png, gif).";
+        postError.classList.remove("hidden");
+        return;
+      }
+      loaderOverlay.style.display = "flex";
+      try {
+        const userRef = ref(db, `users/${user.uid}`);
+        const userSnapshot = await get(userRef);
+        const userData = userSnapshot.exists() ? userSnapshot.val() : {};
+        const userEmail = userData.email || user.email;
+        const postsRef = ref(db, "posts");
+        await push(postsRef, {
+          content,
+          type,
+          authorEmail: userEmail,
+          timestamp: Date.now(),
+          uid: user.uid
+        });
+        closePostModal();
+        await renderPosts();
+      } catch (error) {
+        console.error("Error creating post:", error.code, error.message);
+        postError.textContent = "Error creating post: " + error.message;
+        postError.classList.remove("hidden");
       } finally {
         loaderOverlay.style.display = "none";
       }
@@ -591,38 +720,38 @@
             ? Object.entries(tutors)
             : Object.entries(tutors).filter(([_, tutor]) => tutor.category === category);
           if (filteredTutors.length === 0) {
-            tutorGrid.innerHTML = `<p class="text-gray-400 text-center">No tutors available in ${category}.</p>`;
+            tutorGrid.innerHTML = `<p class="text-gray-500 text-center">No tutors available in ${category}.</p>`;
             return;
           }
-          filteredTutors.forEach(([tutorId, tutor]) => {
-            const card = document.createElement("div");
-            card.className = "tutor-card bg-[#282828] rounded-lg overflow-hidden cursor-pointer";
-            card.innerHTML = `
-              <a href="tutor-content.html?tutorId=${tutorId}" class="block">
-                <img src="${tutor.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${tutor.name} Profile" class="w-full h-48 object-cover" />
-                <div class="p-4">
-                  <h3 class="text-lg font-semibold">${tutor.name || 'Unknown Tutor'}</h3>
-                  <p class="text-sm text-gray-400">${tutor.bio || 'No bio available'}</p>
-                  <p class="text-sm text-gray-500 mt-1">${tutor.category || 'No category selected'}</p>
-                </div>
-              </a>
-              <div class="px-4 pb-4">
-                <button class="btn-pay py-1 px-4 rounded-md text-sm" data-tutor-id="${tutorId}">Pay for Lesson</button>
+        filteredTutors.forEach(([tutorId, tutor]) => {
+          const card = document.createElement("div");
+          card.className = "tutor-card bg-[#282828] rounded-lg overflow-hidden cursor-pointer";
+          card.innerHTML = `
+            <a href="tutor-content.html?tutorId=${tutorId}" class="block">
+              <img src="${tutor.photoURL || 'https://www.gravatar.com/avatar?d=photo.jpg'}" alt="${tutor.name} Profile" class="w-full h-48 object-cover" />
+              <div class="p-4">
+                <h3 class="text-lg font-semibold">${tutor.name || 'Unknown Tutor'}</h3>
+                <p class="text-sm text-gray-400">${tutor.bio || 'No bio available'}</p>
+                <p class="text-sm text-gray-500 mt-1">${tutor.category || 'No category selected'}</p>
               </div>
-            `;
-            tutorGrid.appendChild(card);
-          });
+            </a>
+            <div class="px-4 pb-4">
+              <button class="btn-pay py-1 px-4 rounded-md text-sm" data-tutor-id="${tutorId}">Pay for Lesson</button>
+            </div>
+          `;
+          tutorGrid.appendChild(card);
+        });
 
           // Pay for Lesson Button Listeners
           document.querySelectorAll(".btn-pay").forEach(button => {
             button.addEventListener("click", (e) => {
               e.preventDefault();
               e.stopPropagation();
-              openModal(button.dataset.tutorId);
+              openCodeModal(button.dataset.tutorId);
             });
           });
         } else {
-          tutorGrid.innerHTML = "<p class='text-gray-400 text-center'>No tutors available.</p>";
+          tutorGrid.innerHTML = "<p class='text-gray-500 text-center'>No tutors available.</p>";
         }
       } catch (error) {
         console.error("Error fetching tutors:", error.code, error.message);
@@ -655,7 +784,7 @@
             postsList.appendChild(card);
           });
         } else {
-          postsList.innerHTML = "<p class='text-gray-400 text-center'>No posts available.</p>";
+          postsList.innerHTML = "<p class='text-gray-500 text-center'>No posts available.</p>";
         }
       } catch (error) {
         console.error("Error fetching posts:", error.code, error.message);
@@ -677,7 +806,7 @@
         const userData = userSnapshot.exists() ? userSnapshot.val() : null;
         await renderTutorGrid(userData, selectedCategory);
       } catch (error) {
-        console.error("Error filtering tutors:", error.code, error.message);
+        console.error("Error filtering tutors:", error.message);
         errorMessage.textContent = "Error filtering tutors: " + error.message;
         errorMessage.classList.remove("hidden");
       } finally {
@@ -706,72 +835,9 @@
           await renderPosts();
         }
       } catch (error) {
-        console.error("Error switching tabs:", error.code, error.message);
+        console.error("Error switching tabs:", error.message);
         errorMessage.textContent = "Error switching tabs: " + error.message;
         errorMessage.classList.remove("hidden");
-      } finally {
-        loaderOverlay.style.display = "none";
-      }
-    });
-
-    // Post Type Toggle
-    postTypeRadios.forEach(radio => {
-      radio.addEventListener("change", () => {
-        if (radio.value === "text") {
-          textInputContainer.classList.remove("hidden");
-          imageInputContainer.classList.add("hidden");
-          postImage.value = "";
-        } else {
-          textInputContainer.classList.add("hidden");
-          imageInputContainer.classList.remove("hidden");
-          postText.value = "";
-        }
-      });
-    });
-
-    // Create Post
-    postForm.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const user = auth.currentUser;
-      if (!user) {
-        errorMessage.textContent = "Please log in to create a post.";
-        errorMessage.classList.remove("hidden");
-        return;
-      }
-      const type = document.querySelector('input[name="post-type"]:checked').value;
-      const content = type === "text" ? postText.value.trim() : postImage.value.trim();
-      if (!content) {
-        postError.textContent = `Please enter a ${type === "text" ? "text" : "image URL"}.`;
-        postError.classList.remove("hidden");
-        return;
-      }
-      if (type === "image" && !content.match(/\.(jpeg|jpg|png|gif)$/i)) {
-        postError.textContent = "Please enter a valid image URL (jpeg, jpg, png, gif).";
-        postError.classList.remove("hidden");
-        return;
-      }
-      loaderOverlay.style.display = "flex";
-      try {
-        const userRef = ref(db, `users/${user.uid}`);
-        const userSnapshot = await get(userRef);
-        const userData = userSnapshot.exists() ? userSnapshot.val() : {};
-        const userEmail = userData.email || user.email;
-        const postsRef = ref(db, "posts");
-        await push(postsRef, {
-          content,
-          type,
-          authorEmail: userEmail,
-          timestamp: Date.now(),
-          uid: user.uid
-        });
-        postText.value = "";
-        postImage.value = "";
-        postError.classList.add("hidden");
-        await renderPosts();
-      } catch (error) {
-        console.error("Error creating post:", error.code, error.message);
-        postError.textContent = "Error creating post: " + error.message;
-        postError.classList.remove("hidden");
       } finally {
         loaderOverlay.style.display = "none";
       }
@@ -802,7 +868,7 @@
           window.location.href = "login.html";
         }
       } catch (error) {
-        console.error("Auth state error:", error.code, error.message);
+        console.error("Auth state error:", error.message);
         errorMessage.textContent = "Error loading user data: " + error.message;
         errorMessage.classList.remove("hidden");
       } finally {
