@@ -48,12 +48,12 @@
     .post-card:hover {
       transform: scale(1.02);
     }
-    .btn-like, .btn-comment {
+    .btn-like, .btn-comment, .btn-edit {
       background-color: #282828;
       color: #fff;
       transition: background-color 0.2s;
     }
-    .btn-like:hover, .btn-comment:hover {
+    .btn-like:hover, .btn-comment:hover, .btn-edit:hover {
       background-color: #ff0000;
     }
     .btn-like.liked svg {
@@ -112,7 +112,7 @@
       max-height: 80vh;
       overflow-y: auto;
     }
-    .modal-content textarea {
+    .modal-content input, .modal-content textarea {
       background-color: #121212;
       border: 1px solid #444;
       color: #fff;
@@ -214,6 +214,30 @@
       <div class="flex justify-end space-x-2">
         <button id="comment-cancel" class="bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700">Cancel</button>
         <button id="comment-submit" class="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700">Submit</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 🔹 Edit Profile Modal -->
+  <div id="edit-profile-modal" class="modal">
+    <div class="modal-content">
+      <h2 class="text-xl font-bold mb-4">Edit Profile</h2>
+      <div class="mb-4">
+        <label class="block mb-2 text-sm">Username</label>
+        <input type="text" id="edit-username" class="w-full px-4 py-2 rounded-md focus:outline-none focus:border-red-500" placeholder="Enter username" />
+      </div>
+      <div class="mb-4">
+        <label class="block mb-2 text-sm">Bio</label>
+        <textarea id="edit-bio" rows="4" class="w-full px-4 py-2 rounded-md focus:outline-none focus:border-red-500" placeholder="Tell us about yourself"></textarea>
+      </div>
+      <div class="mb-4">
+        <label class="block mb-2 text-sm">Profile Picture URL</label>
+        <input type="url" id="edit-photo-url" class="w-full px-4 py-2 rounded-md focus:outline-none focus:border-red-500" placeholder="Enter image URL (jpg, png, gif)" />
+      </div>
+      <p id="edit-error" class="text-sm text-red-500 mb-4 hidden"></p>
+      <div class="flex justify-end space-x-2">
+        <button id="edit-cancel" class="bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700">Cancel</button>
+        <button id="edit-submit" class="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700">Save</button>
       </div>
     </div>
   </div>
@@ -330,13 +354,16 @@
     <!-- Profile Section -->
     <section id="profile-section" class="mb-8">
       <div class="profile-card p-6">
-        <div class="flex items-center mb-4">
-          <img id="profile-pic" class="w-16 h-16 rounded-full mr-4 border border-gray-600" src="https://www.gravatar.com/avatar?d=mp" alt="Profile Picture" />
-          <div>
-            <h2 id="profile-name" class="text-xl font-bold">Loading...</h2>
-            <p id="profile-email" class="text-gray-400">Loading...</p>
-            <p id="profile-bio" class="text-gray-400 mt-2">No bio available</p>
+        <div class="flex items-center justify-between mb-4">
+          <div class="flex items-center">
+            <img id="profile-pic" class="w-16 h-16 rounded-full mr-4 border border-gray-600" src="https://www.gravatar.com/avatar?d=mp" alt="Profile Picture" />
+            <div>
+              <h2 id="profile-name" class="text-xl font-bold">Loading...</h2>
+              <p id="profile-email" class="text-gray-400">Loading...</p>
+              <p id="profile-bio" class="text-gray-400 mt-2">No bio available</p>
+            </div>
           </div>
+          <button id="edit-profile-btn" class="btn-edit px-4 py-2 rounded-md text-sm hidden">Edit Profile</button>
         </div>
       </div>
     </section>
@@ -385,6 +412,14 @@
     const profileName = document.getElementById("profile-name");
     const profileEmail = document.getElementById("profile-email");
     const profileBio = document.getElementById("profile-bio");
+    const editProfileBtn = document.getElementById("edit-profile-btn");
+    const editProfileModal = document.getElementById("edit-profile-modal");
+    const editUsername = document.getElementById("edit-username");
+    const editBio = document.getElementById("edit-bio");
+    const editPhotoUrl = document.getElementById("edit-photo-url");
+    const editCancel = document.getElementById("edit-cancel");
+    const editSubmit = document.getElementById("edit-submit");
+    const editError = document.getElementById("edit-error");
     const timelinePosts = document.getElementById("timeline-posts");
     const commentModal = document.getElementById("comment-modal");
     const commentList = document.getElementById("comment-list");
@@ -457,6 +492,80 @@
 
     signOutBtn.addEventListener("click", handleSignOut);
     signOutBottomBtn.addEventListener("click", handleSignOut);
+
+    // Edit Profile Modal Controls
+    function openEditProfileModal(userData) {
+      editProfileModal.style.display = "flex";
+      editUsername.value = userData.name || "";
+      editBio.value = userData.bio || "";
+      editPhotoUrl.value = userData.photoURL || "";
+      editError.classList.add("hidden");
+    }
+
+    function closeEditProfileModal() {
+      editProfileModal.style.display = "none";
+      editUsername.value = "";
+      editBio.value = "";
+      editPhotoUrl.value = "";
+      editError.classList.add("hidden");
+    }
+
+    editProfileBtn.addEventListener("click", async () => {
+      try {
+        const userRef = ref(db, `users/${profileUid}`);
+        const userSnapshot = await get(userRef);
+        if (userSnapshot.exists()) {
+          openEditProfileModal(userSnapshot.val());
+        }
+      } catch (error) {
+        console.error("Error opening edit modal:", error.code, error.message);
+        errorMessage.textContent = "Error loading profile data: " + error.message;
+        errorMessage.classList.remove("hidden");
+      }
+    });
+
+    editCancel.addEventListener("click", closeEditProfileModal);
+
+    document.addEventListener("click", (e) => {
+      if (e.target === editProfileModal) {
+        closeEditProfileModal();
+      }
+    });
+
+    // Save Profile Changes
+    editSubmit.addEventListener("click", async () => {
+      const username = editUsername.value.trim();
+      const bio = editBio.value.trim();
+      const photoUrl = editPhotoUrl.value.trim();
+      if (!username) {
+        editError.textContent = "Username is required.";
+        editError.classList.remove("hidden");
+        return;
+      }
+      if (photoUrl && !photoUrl.match(/\.(jpg|jpeg|png|gif)$/i)) {
+        editError.textContent = "Please enter a valid image URL (jpg, png, gif).";
+        editError.classList.remove("hidden");
+        return;
+      }
+      loaderOverlay.style.display = "flex";
+      try {
+        const userRef = ref(db, `users/${profileUid}`);
+        await set(userRef, {
+          name: username,
+          bio: bio,
+          photoURL: photoUrl,
+          email: profileEmail.textContent // Preserve existing email
+        });
+        closeEditProfileModal();
+        await renderProfile();
+      } catch (error) {
+        console.error("Error saving profile:", error.code, error.message);
+        editError.textContent = "Error saving profile: " + error.message;
+        editError.classList.remove("hidden");
+      } finally {
+        loaderOverlay.style.display = "none";
+      }
+    });
 
     // Comment Modal Controls
     function openCommentModal(postId) {
@@ -696,6 +805,10 @@
             const userData = userSnapshot.val();
             userPic.src = userData.photoURL || "https://www.gravatar.com/avatar?d=mp";
             console.log("Current user data:", userData);
+            // Show Edit Profile button if owner
+            if (user.uid === profileUid) {
+              editProfileBtn.classList.remove("hidden");
+            }
             await renderProfile();
             await renderTimeline();
           } else {
