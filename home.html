@@ -48,13 +48,16 @@
     .tutor-card:hover, .post-card:hover {
       transform: scale(1.02);
     }
-    .btn-pay {
-      background-color: #ff0000;
+    .btn-pay, .btn-like, .btn-comment {
+      background-color: #282828;
       color: #fff;
       transition: background-color 0.2s;
     }
-    .btn-pay:hover {
-      background-color: #cc0000;
+    .btn-pay:hover, .btn-like:hover, .btn-comment:hover {
+      background-color: #ff0000;
+    }
+    .btn-like.liked svg {
+      fill: #ff0000;
     }
     .header-container {
       display: flex;
@@ -106,6 +109,8 @@
       border-radius: 8px;
       width: 90%;
       max-width: 400px;
+      max-height: 80vh;
+      overflow-y: auto;
     }
     .modal-content input, .modal-content textarea {
       background-color: #121212;
@@ -203,6 +208,10 @@
       #mind-input {
         max-width: 100%;
       }
+      .post-actions {
+        flex-wrap: wrap;
+        gap: 8px;
+      }
     }
     @media (min-width: 769px) {
       .bottom-nav {
@@ -277,6 +286,20 @@
       <div class="flex justify-end space-x-2">
         <button id="post-cancel" class="bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700">Cancel</button>
         <button id="post-submit" class="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700">Submit</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 🔹 Comment Modal -->
+  <div id="comment-modal" class="modal">
+    <div class="modal-content">
+      <h2 class="text-xl font-bold mb-4">Comments</h2>
+      <div id="comment-list" class="mb-4"></div>
+      <textarea id="comment-input" rows="3" class="w-full px-4 py-2 rounded-md mb-4 focus:outline-none focus:border-red-500" placeholder="Add a comment..."></textarea>
+      <p id="comment-error" class="text-sm text-red-500 mb-4 hidden"></p>
+      <div class="flex justify-end space-x-2">
+        <button id="comment-cancel" class="bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700">Cancel</button>
+        <button id="comment-submit" class="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700">Submit</button>
       </div>
     </div>
   </div>
@@ -440,7 +463,7 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
     import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
-    import { getDatabase, ref, get, set, push } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
+    import { getDatabase, ref, get, set, push, remove } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
@@ -488,6 +511,12 @@
     const postCancel = document.getElementById("post-cancel");
     const postSubmit = document.getElementById("post-submit");
     const postsList = document.getElementById("posts-list");
+    const commentModal = document.getElementById("comment-modal");
+    const commentList = document.getElementById("comment-list");
+    const commentInput = document.getElementById("comment-input");
+    const commentCancel = document.getElementById("comment-cancel");
+    const commentSubmit = document.getElementById("comment-submit");
+    const commentError = document.getElementById("comment-error");
     let selectedCategory = "All";
     let currentTab = "tutors";
 
@@ -531,7 +560,7 @@
       logoContainer.classList.remove("hidden");
     });
 
-    // Sign Out (Sidebar and Bottom Nav)
+    // Sign Out
     function handleSignOut(e) {
       e.preventDefault();
       loaderOverlay.style.display = "flex";
@@ -729,6 +758,184 @@
       }
     });
 
+    // Comment Modal Controls
+    function openCommentModal(postId) {
+      commentModal.style.display = "flex";
+      commentInput.value = "";
+      commentError.classList.add("hidden");
+      commentModal.dataset.postId = postId;
+      renderComments(postId);
+    }
+
+    function closeCommentModal() {
+      commentModal.style.display = "none";
+      commentInput.value = "";
+      commentError.classList.add("hidden");
+    }
+
+    commentCancel.addEventListener("click", closeCommentModal);
+
+    document.addEventListener("click", (e) => {
+      if (e.target === commentModal) {
+        closeCommentModal();
+      }
+    });
+
+    // Render Comments
+    async function renderComments(postId) {
+      try {
+        const commentsRef = ref(db, `posts/${postId}/comments`);
+        const snapshot = await get(commentsRef);
+        commentList.innerHTML = "";
+        if (snapshot.exists()) {
+          const comments = snapshot.val();
+          Object.entries(comments).forEach(([_, comment]) => {
+            const commentDiv = document.createElement("div");
+            commentDiv.className = "mb-3 border-b border-gray-600 pb-2";
+            commentDiv.innerHTML = `
+              <p class="text-sm font-semibold">${comment.authorEmail}</p>
+              <p class="text-sm text-gray-300">${comment.text}</p>
+              <p class="text-xs text-gray-500">${getRelativeTime(comment.timestamp)}</p>
+            `;
+            commentList.appendChild(commentDiv);
+          });
+        } else {
+          commentList.innerHTML = "<p class='text-gray-400 text-sm'>No comments yet.</p>";
+        }
+      } catch (error) {
+        console.error("Error fetching comments:", error.code, error.message);
+        commentError.textContent = "Error loading comments: " + error.message;
+        commentError.classList.remove("hidden");
+      }
+    }
+
+    // Add Comment
+    commentSubmit.addEventListener("click", async () => {
+      const user = auth.currentUser;
+      if (!user) {
+        closeCommentModal();
+        errorMessage.textContent = "Please log in to comment.";
+        errorMessage.classList.remove("hidden");
+        return;
+      }
+      const postId = commentModal.dataset.postId;
+      const text = commentInput.value.trim();
+      if (!text) {
+        commentError.textContent = "Please enter a comment.";
+        commentError.classList.remove("hidden");
+        return;
+      }
+      loaderOverlay.style.display = "flex";
+      try {
+        const userRef = ref(db, `users/${user.uid}`);
+        const userSnapshot = await get(userRef);
+        const userData = userSnapshot.exists() ? userSnapshot.val() : {};
+        const userEmail = userData.email || user.email;
+        const commentsRef = ref(db, `posts/${postId}/comments`);
+        await push(commentsRef, {
+          text,
+          authorEmail: userEmail,
+          timestamp: Date.now()
+        });
+        commentInput.value = "";
+        await renderComments(postId);
+      } catch (error) {
+        console.error("Error adding comment:", error.code, error.message);
+        commentError.textContent = "Error adding comment: " + error.message;
+        commentError.classList.remove("hidden");
+      } finally {
+        loaderOverlay.style.display = "none";
+      }
+    });
+
+    // Toggle Like
+    async function toggleLike(postId, button) {
+      const user = auth.currentUser;
+      if (!user) {
+        errorMessage.textContent = "Please log in to like a post.";
+        errorMessage.classList.remove("hidden");
+        return;
+      }
+      loaderOverlay.style.display = "flex";
+      try {
+        const likeRef = ref(db, `posts/${postId}/likes/${user.uid}`);
+        const likeSnapshot = await get(likeRef);
+        if (likeSnapshot.exists()) {
+          await remove(likeRef);
+          button.classList.remove("liked");
+        } else {
+          await set(likeRef, true);
+          button.classList.add("liked");
+        }
+        await renderPosts();
+      } catch (error) {
+        console.error("Error toggling like:", error.code, error.message);
+        errorMessage.textContent = "Error liking post: " + error.message;
+        errorMessage.classList.remove("hidden");
+      } finally {
+        loaderOverlay.style.display = "none";
+      }
+    }
+
+    // Render Posts
+    async function renderPosts() {
+      try {
+        const postsRef = ref(db, "posts");
+        const snapshot = await get(postsRef);
+        postsList.innerHTML = "";
+        if (snapshot.exists()) {
+          const posts = snapshot.val();
+          const user = auth.currentUser;
+          Object.entries(posts).reverse().forEach(([postId, post]) => {
+            const likeCount = post.likes ? Object.keys(post.likes).length : 0;
+            const commentCount = post.comments ? Object.keys(post.comments).length : 0;
+            const isLiked = user && post.likes && post.likes[user.uid];
+            const card = document.createElement("div");
+            card.className = "post-card bg-[#282828] rounded-lg";
+            card.innerHTML = `
+              <div class="flex items-center mb-3">
+                <img src="https://www.gravatar.com/avatar?d=mp" alt="Author" class="w-10 h-10 rounded-full mr-3">
+                <div>
+                  <p class="text-base font-semibold">${post.authorEmail}</p>
+                  <p class="text-sm text-gray-500">${getRelativeTime(post.timestamp)}</p>
+                </div>
+              </div>
+              ${post.type === "image" ? `<img src="${post.content}" alt="Post Image" class="post-image w-full object-cover rounded-md mb-3" onerror="this.src='https://via.placeholder.com/300?text=Invalid+Image+URL';"` : `<p class="text-base text-gray-300">${post.content}</p>`}
+              <div class="post-actions flex justify-between mt-3">
+                <button class="btn-like flex items-center space-x-1 px-3 py-1 rounded-md text-sm ${isLiked ? 'liked' : ''}" data-post-id="${postId}">
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/>
+                  </svg>
+                  <span>${likeCount} Like${likeCount === 1 ? '' : 's'}</span>
+                </button>
+                <button class="btn-comment flex items-center space-x-1 px-3 py-1 rounded-md text-sm" data-post-id="${postId}">
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/>
+                  </svg>
+                  <span>${commentCount} Comment${commentCount === 1 ? '' : 's'}</span>
+                </button>
+              </div>
+            `;
+            postsList.appendChild(card);
+          });
+
+          // Add Like and Comment Listeners
+          document.querySelectorAll(".btn-like").forEach(button => {
+            button.addEventListener("click", () => toggleLike(button.dataset.postId, button));
+          });
+          document.querySelectorAll(".btn-comment").forEach(button => {
+            button.addEventListener("click", () => openCommentModal(button.dataset.postId));
+          });
+        } else {
+          postsList.innerHTML = "<p class='text-gray-400 text-center'>No posts available.</p>";
+        }
+      } catch (error) {
+        console.error("Error fetching posts:", error.code, error.message);
+        errorMessage.textContent = "Error loading posts: " + error.message;
+        errorMessage.classList.remove("hidden");
+      }
+    }
+
     // Render Tutor Grid
     async function renderTutorGrid(currentUser, category = "All") {
       try {
@@ -753,17 +960,16 @@
                 <div class="p-4">
                   <h3 class="text-lg font-semibold">${tutor.name || 'Unknown Tutor'}</h3>
                   <p class="text-sm text-gray-400">${tutor.bio || 'No bio available'}</p>
-                  <p class="text-sm text-gray-500 mt-1">${tutor.category || 'No category selected'}</p>
+                  <p class="text-sm text-gray-500 mt-1">${tutor.category || 'No category'}</p>
                 </div>
               </a>
               <div class="px-4 pb-4">
-                <button class="btn-pay py-1 px-4 rounded-md text-sm" data-tutor-id="${tutorId}">Pay for Lesson</button>
+                <button class="btn-pay py-2 px-4 rounded-md text-sm w-full" data-tutor-id="${tutorId}">Pay for Lesson</button>
               </div>
             `;
             tutorGrid.appendChild(card);
           });
 
-          // Pay for Lesson Button Listeners
           document.querySelectorAll(".btn-pay").forEach(button => {
             button.addEventListener("click", (e) => {
               e.preventDefault();
@@ -777,39 +983,6 @@
       } catch (error) {
         console.error("Error fetching tutors:", error.code, error.message);
         errorMessage.textContent = "Error loading tutors: " + error.message;
-        errorMessage.classList.remove("hidden");
-      }
-    }
-
-    // Render Posts
-    async function renderPosts() {
-      try {
-        const postsRef = ref(db, "posts");
-        const snapshot = await get(postsRef);
-        postsList.innerHTML = "";
-        if (snapshot.exists()) {
-          const posts = snapshot.val();
-          Object.entries(posts).reverse().forEach(([postId, post]) => {
-            const card = document.createElement("div");
-            card.className = "post-card bg-[#282828] rounded-lg";
-            card.innerHTML = `
-              <div class="flex items-center mb-3">
-                <img src="https://www.gravatar.com/avatar?d=mp" alt="Author" class="w-10 h-10 rounded-full mr-3">
-                <div>
-                  <p class="text-base font-semibold">${post.authorEmail}</p>
-                  <p class="text-sm text-gray-500">${getRelativeTime(post.timestamp)}</p>
-                </div>
-              </div>
-              ${post.type === "image" ? `<img src="${post.content}" alt="Post Image" class="post-image w-full object-cover rounded-md mb-3" onerror="this.src='https://via.placeholder.com/300?text=Invalid+Image+URL';"` : `<p class="text-base text-gray-300">${post.content}</p>`}
-            `;
-            postsList.appendChild(card);
-          });
-        } else {
-          postsList.innerHTML = "<p class='text-gray-400 text-center'>No posts available.</p>";
-        }
-      } catch (error) {
-        console.error("Error fetching posts:", error.code, error.message);
-        errorMessage.textContent = "Error loading posts: " + error.message;
         errorMessage.classList.remove("hidden");
       }
     }
