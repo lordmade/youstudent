@@ -204,6 +204,40 @@
     .comment-dropdown {
       position: relative;
     }
+    /* Love Overlay Animation */
+    #love-overlay {
+      opacity: 0;
+      transition: opacity 0.5s ease;
+    }
+    #love-overlay.show {
+      opacity: 1;
+    }
+    #love-svg {
+      transform: scale(1);
+      animation: heartPulse 3s ease-in-out forwards;
+    }
+    @keyframes heartPulse {
+      0% {
+        transform: scale(1);
+        opacity: 0;
+      }
+      10% {
+        transform: scale(1.5);
+        opacity: 1;
+      }
+      50% {
+        transform: scale(2);
+        opacity: 1;
+      }
+      90% {
+        transform: scale(1.5);
+        opacity: 1;
+      }
+      100% {
+        transform: scale(1);
+        opacity: 0;
+      }
+    }
     @media (max-width: 768px) {
       .sidebar {
         display: none;
@@ -261,6 +295,13 @@
       <circle cx="60" cy="60" r="50" stroke="#ff0000" stroke-width="6" stroke-linecap="round" stroke-dasharray="240" stroke-dashoffset="60">
         <animate attributeName="stroke-dashoffset" values="60;300" dur="2s" repeatCount="indefinite"/>
       </circle>
+    </svg>
+  </div>
+
+  <!-- 🔹 Love Overlay -->
+  <div id="love-overlay" class="fixed inset-0 flex justify-center items-center bg-black bg-opacity-50 z-[10000] hidden">
+    <svg id="love-svg" class="w-24 h-24 text-red-500" fill="currentColor" viewBox="0 0 24 24">
+      <path d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/>
     </svg>
   </div>
 
@@ -824,12 +865,23 @@
       try {
         const likeRef = ref(db, `${isFindMe ? "findme_posts" : "posts"}/${postId}/likes/${user.uid}`);
         const likeSnapshot = await get(likeRef);
-        if (likeSnapshot.exists()) {
+        const wasLiked = likeSnapshot.exists();
+        if (wasLiked) {
           await remove(likeRef);
           button.classList.remove("liked");
         } else {
           await set(likeRef, true);
           button.classList.add("liked");
+          // Show love overlay only for liking (not unliking) on Find Me tab
+          if (isFindMe && currentTab === "findme") {
+            const loveOverlay = document.getElementById("love-overlay");
+            loveOverlay.classList.remove("hidden");
+            loveOverlay.classList.add("show");
+            setTimeout(() => {
+              loveOverlay.classList.remove("show");
+              loveOverlay.classList.add("hidden");
+            }, 3000); // Hide after 3 seconds
+          }
         }
         if (isFindMe) {
           await renderFindMePosts();
@@ -988,7 +1040,8 @@
                     <p class="text-sm text-gray-500">${getRelativeTime(post.timestamp)}</p>
                   </div>
                 </div>
-                ${post.type === "image" ? `<img src="${post.content}" alt="Post Image" class="post-image w-full object-cover rounded-md mb-3" onerror="this.src='https://via.placeholder.com/300?text=Invalid+Image+URL';"` : `<p class="text-base text-gray-300">${post.content}</p>`}
+                ${post.imageUrl ? `<img src="${post.imageUrl}" alt="Post Image" class="post-image w-full object-cover rounded-md mb-3" onerror="this.src='https://via.placeholder.com/300?text=Invalid+Image+URL';"` : ''}
+                <p class="text-base text-gray-300">${post.text}</p>
               </a>
               ${user ? `
                 <div class="dropdown absolute top-2 right-2">
