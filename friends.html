@@ -138,6 +138,44 @@
       text-overflow: ellipsis;
       max-width: 200px;
     }
+    .unread-badge {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background-color: #ff0000; /* Tailwind red-600 */
+      color: #fff;
+      font-size: 0.75rem;
+      font-weight: bold;
+      padding: 2px 8px;
+      border-radius: 12px;
+      min-width: 20px;
+      text-align: center;
+    }
+    .notification {
+      position: fixed;
+      top: 80px;
+      right: 20px;
+      background-color: #282828;
+      color: #fff;
+      padding: 16px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+      z-index: 10000;
+      display: none;
+      max-width: 300px;
+    }
+    .notification.show {
+      display: block;
+      animation: slideIn 0.3s ease-in-out, slideOut 0.3s ease-in-out 4.7s forwards;
+    }
+    @keyframes slideIn {
+      from { transform: translateX(100%); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+    @keyframes slideOut {
+      from { transform: translateX(0); opacity: 1; }
+      to { transform: translateX(100%); opacity: 0; }
+    }
     @media (max-width: 768px) {
       .sidebar {
         display: none;
@@ -165,6 +203,11 @@
       .last-message {
         max-width: 150px;
       }
+      .notification {
+        top: 70px;
+        right: 10px;
+        max-width: 80%;
+      }
     }
     @media (min-width: 769px) {
       .bottom-nav {
@@ -185,6 +228,11 @@
         <animate attributeName="stroke-dashoffset" values="60;300" dur="2s" repeatCount="indefinite"/>
       </circle>
     </svg>
+  </div>
+
+  <!-- 🔹 Notification Container -->
+  <div id="notification" class="notification">
+    <p id="notification-message"></p>
   </div>
 
   <!-- 🔹 Header -->
@@ -337,9 +385,41 @@
     const logoContainer = document.getElementById("logo-container");
     const loaderOverlay = document.getElementById("loader-overlay");
     const friendsList = document.getElementById("friends-list");
+    const notification = document.getElementById("notification");
+    const notificationMessage = document.getElementById("notification-message");
 
     // Username and photo cache
     const userCache = {};
+
+    // Request Notification Permission
+    function requestNotificationPermission() {
+      if ("Notification" in window) {
+        Notification.requestPermission().then(permission => {
+          if (permission !== "granted") {
+            console.log("Notification permission denied");
+          }
+        });
+      } else {
+        console.log("Notifications not supported in this browser");
+      }
+    }
+
+    // Show Notification (Browser or Fallback)
+    function showNotification(senderName, message) {
+      if ("Notification" in window && Notification.permission === "granted") {
+        new Notification(`${senderName} sent a message`, {
+          body: message.length > 50 ? message.substring(0, 47) + "..." : message,
+          icon: "https://www.gravatar.com/avatar?d=mp"
+        });
+      } else {
+        // Fallback: Show in-page notification
+        notificationMessage.textContent = `${senderName}: ${message.length > 50 ? message.substring(0, 47) + "..." : message}`;
+        notification.classList.add("show");
+        setTimeout(() => {
+          notification.classList.remove("show");
+        }, 5000); // Hide after 5 seconds
+      }
+    }
 
     // Fetch User Data
     async function getUserData(uid) {
@@ -364,21 +444,30 @@
       }
     }
 
-    // Get Last Message for a Chat
-    async function getLastMessage(chatId) {
+    // Get Last Message and Unread Count for a Chat
+    async function getChatInfo(chatId, currentUid) {
       try {
         const messagesRef = ref(db, `chats/${chatId}/messages`);
-        const snapshot = await get(messagesRef);
-        if (snapshot.exists()) {
-          const messages = snapshot.val();
+        const lastReadRef = ref(db, `chats/${chatId}/lastRead/${currentUid}`);
+        const [messagesSnapshot, lastReadSnapshot] = await Promise.all([
+          get(messagesRef),
+          get(lastReadRef)
+        ]);
+        let lastMessage = "No messages yet";
+        let unreadCount = 0;
+        const lastReadTime = lastReadSnapshot.exists() ? lastReadSnapshot.val() : 0;
+
+        if (messagesSnapshot.exists()) {
+          const messages = messagesSnapshot.val();
           const messageArray = Object.entries(messages).map(([id, msg]) => ({ id, ...msg }));
-          messageArray.sort((a, b) => b.timestamp - a.timestamp); // Sort by timestamp descending
-          return messageArray[0]?.text || "No messages yet";
+          messageArray.sort((a, b) => b.timestamp - a.timestamp);
+          lastMessage = messageArray[0]?.text || "No messages yet";
+          unreadCount = messageArray.filter(msg => msg.timestamp > lastReadTime && msg.sender !== currentUid).length;
         }
-        return "No messages yet";
+        return { lastMessage, unreadCount };
       } catch (error) {
-        console.error("Error fetching last message:", error.code, error.message);
-        return "Error loading message";
+        console.error("Error fetching chat info:", error.code, error.message);
+        return { lastMessage: "Error loading message", unreadCount: 0 };
       }
     }
 
@@ -387,6 +476,7 @@
       if (uid === currentUid) return; // Skip self
       const userData = await getUserData(uid);
       let lastMessage = "No messages yet";
+      let unreadCount = 0;
       let isOnline = false;
 
       // Find chat ID for the two users
@@ -397,13 +487,15 @@
         for (const chatId in chats) {
           const participants = chats[chatId].participants || {};
           if (participants[currentUid] && participants[uid]) {
-            lastMessage = await getLastMessage(chatId);
+            const chatInfo = await getChatInfo(chatId, currentUid);
+            lastMessage = chatInfo.lastMessage;
+            unreadCount = chatInfo.unreadCount;
             break;
           }
         }
       }
 
-      // Check presence
+      // Listen for presence
       const presenceRef = ref(db, `users/${uid}/presence`);
       onValue(presenceRef, (snapshot) => {
         const friendCard = document.getElementById(`friend-${uid}`);
@@ -427,14 +519,28 @@
           <p class="last-message">${lastMessage}</p>
         </div>
         <span class="status-indicator ${isOnline ? "status-online" : "status-offline"}"></span>
+        ${unreadCount > 0 ? `<span class="unread-badge">${unreadCount}</span>` : ""}
       `;
       friendCard.addEventListener("click", () => {
+        // Update lastRead timestamp when clicking to view chat
+        const chatRef = ref(db, `chats`);
+        get(chatRef).then(snapshot => {
+          if (snapshot.exists()) {
+            const chats = snapshot.val();
+            for (const chatId in chats) {
+              if (chats[chatId].participants?.[currentUid] && chats[chatId].participants?.[uid]) {
+                set(ref(db, `chats/${chatId}/lastRead/${currentUid}`), Date.now());
+                break;
+              }
+            }
+          }
+        });
         window.location.href = `chat.html?uid=${uid}`;
       });
       friendsList.appendChild(friendCard);
     }
 
-    // Load Friends
+    // Load Friends and Set Up Notifications
     async function loadFriends(currentUid) {
       try {
         const chatsRef = ref(db, "chats");
@@ -463,6 +569,30 @@
           noFriendsMessage.classList.add("hidden");
           for (const uid of friendUids) {
             await renderFriend(uid, currentUid);
+          }
+
+          // Listen for new messages
+          for (const chatId in chats) {
+            if (chats[chatId].participants?.[currentUid]) {
+              const messagesRef = ref(db, `chats/${chatId}/messages`);
+              onValue(messagesRef, async (msgSnapshot) => {
+                if (msgSnapshot.exists()) {
+                  const messages = msgSnapshot.val();
+                  const lastReadRef = ref(db, `chats/${chatId}/lastRead/${currentUid}`);
+                  const lastReadSnapshot = await get(lastReadRef);
+                  const lastReadTime = lastReadSnapshot.exists() ? lastReadSnapshot.val() : 0;
+                  const messageArray = Object.entries(messages).map(([id, msg]) => ({ id, ...msg }));
+                  messageArray.sort((a, b) => b.timestamp - a.timestamp);
+                  const latestMessage = messageArray[0];
+                  if (latestMessage.sender !== currentUid && latestMessage.timestamp > lastReadTime) {
+                    const senderData = await getUserData(latestMessage.sender);
+                    showNotification(senderData.name, latestMessage.text);
+                    // Refresh friend list to update unread count
+                    await loadFriends(currentUid);
+                  }
+                }
+              });
+            }
           }
         }, (error) => {
           console.error("Error listening to chats:", error.code, error.message);
@@ -547,7 +677,8 @@
             const userData = userSnapshot.val();
             userPic.src = userData.photoURL || "https://www.gravatar.com/avatar?d=mp";
             console.log("Current user data:", userData);
-            setupPresence(user.uid); // Set up presence
+            setupPresence(user.uid);
+            requestNotificationPermission();
             await loadFriends(user.uid);
           } else {
             console.log("No user data, redirecting to login.html");
