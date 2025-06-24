@@ -571,20 +571,21 @@
     });
 
     // Close Sidebar on Outside Click
-    document.addEventListener("click", (event) => {
+    document.addEventListener("mousedown", (event) => {
       if (sidebar.classList.contains("open") && !sidebar.contains(event.target) && !menuBtn.contains(event.target)) {
         sidebar.classList.remove("open");
+      );
       }
     });
 
     // Expand Search Bar and Hide Logo
-    searchBar.addEventListener("focus", () => {
+    searchBar .addEventListener("focus", () => {
       searchContainer.classList.add("focused");
       logoContainer.classList.add("hidden");
     });
 
     // Restore Logo and Search Bar
-    searchBar.addEventListener("blur", () => {
+    Bar.search.addEventListener("blur", () => {
       searchContainer.classList.remove("focused");
       logoContainer.classList.remove("hidden");
     });
@@ -687,7 +688,7 @@
       } finally {
         loaderOverlay.style.display = "none";
       }
-    })));
+    });
 
     // Post Modal Controls
     function openPostModal() {
@@ -701,10 +702,10 @@
     }
 
     function closePostModal() {
-      postModal.close();
+      postModal.style.display = "none";
       postText.value = "";
       postImage.value = "";
-      postError.classList.add("error");
+      postError.classList.add("hidden");
     }
 
     postCancel.addEventListener("click", closePostModal);
@@ -739,7 +740,6 @@
           postText.value = "";
         }
       });
-    });
 
     // Create Post
     postSubmit.addEventListener("click", async () => {
@@ -757,7 +757,7 @@
         postError.classList.remove("hidden");
         return;
       }
-      if (type === "image" && !content.match(/\.(jpg|image|png|gif)$/i)) {
+      if (type === "image" && !content.match(/\.(jpg|jpeg|png|gif)$/i)) {
         postError.textContent = "Please enter a valid image URL (jpg, png, gif).";
         postError.classList.remove("hidden");
         return;
@@ -774,17 +774,17 @@
           type,
           authorEmail: userEmail,
           authorName: userData.name || "Anonymous",
-          verified: userData.verified || true,
+          verified: userData.verified || false,
           uid: user.uid,
           photoURL: userData.photoURL || "https://www.gravatar.com/avatar?d=mp",
-          timestamp: Date.now(),
+          timestamp: Date.now()
         });
         closePostModal();
         await renderPosts();
       } catch (error) {
         console.error("Error creating post:", error.code, error.message);
         postError.textContent = "Error creating post: " + error.message;
-        errorPost.classList.remove("hidden");
+        postError.classList.remove("hidden");
       } finally {
         loaderOverlay.style.display = "none";
       }
@@ -802,7 +802,7 @@
     function closeCommentModal() {
       commentModal.style.display = "none";
       commentInput.value = "";
-      commentError.commentList.add("hidden");
+      commentError.classList.add("hidden");
     }
 
     commentCancel.addEventListener("click", closeCommentModal);
@@ -848,7 +848,7 @@
     // Subscribe (Placeholder)
     function subscribeToUser(userId) {
       console.log(`Subscribed to user: ${userId}`);
-      // Implement subscription logic here (e.g., save to Firebase)
+      // Implement subscription logic here
     }
 
     // Toggle Dropdown Menu
@@ -891,8 +891,8 @@
                   <div class="dropdown comment-dropdown">
                     <button class="dropdown-toggle text-gray-400 hover:text-white" data-comment-id="${commentId}" data-post-id="${postId}">
                       <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 110-2 1 0 010 2z"/>
-</svg>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"/>
+                      </svg>
                     </button>
                     <div class="dropdown-menu">
                       ${isOwnComment ? `<button class="delete-comment" data-comment-id="${commentId}" data-post-id="${postId}">Delete</button>` : ''}
@@ -923,7 +923,7 @@
             });
           });
         } else {
-          commentList.innerHTML = "<p class='text-gray-400 text-center'>No comments yet.</p>";
+          commentList.innerHTML = "<p class='text-gray-500 text-center'>No comments yet.</p>";
         }
       } catch (error) {
         console.error("Error fetching comments:", error.code, error.message);
@@ -938,7 +938,7 @@
       if (!user) {
         closeCommentModal();
         errorMessage.textContent = "Please log in to comment.";
-        commentError.classList.remove("hidden");
+        errorMessage.classList.remove("hidden");
         return;
       }
       const postId = commentModal.dataset.postId;
@@ -1003,15 +1003,21 @@
 
     // Render Posts
     async function renderPosts() {
-      console.log("Rendering posts...");
+      console.log("Starting renderPosts...");
+      postsList.innerHTML = "<p class='text-gray-500 text-center'>Loading posts...</p>";
       try {
         const postsRef = ref(db, "posts");
         const snapshot = await get(postsRef);
         postsList.innerHTML = "";
         if (snapshot.exists()) {
           const posts = snapshot.val();
+          if (!posts || typeof posts !== "object") {
+            console.warn("Posts data is invalid or empty:", posts);
+            postsList.innerHTML = "<p class='text-gray-500 text-center'>No posts available.</p>";
+            return;
+          }
+          console.log("Posts fetched:", Object.keys(posts).length, "posts");
           const user = auth.currentUser;
-          console.log("Posts fetched:", posts);
           Object.entries(posts).reverse().forEach(([postId, post]) => {
             const likeCount = post.likes ? Object.keys(post.likes).length : 0;
             const commentCount = post.comments ? Object.keys(post.comments).length : 0;
@@ -1026,12 +1032,12 @@
                   <div>
                     <p class="text-base font-semibold">
                       ${post.authorName || 'Anonymous'}
-                      ${post.verified ? `<svg class="w-4 h-4 ml-1 inline-block" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="10" fill="#ff0000"/><path d="M10 14.586l-3.293-3.293a1 1 0 00-1.414 1.414l4 4a1 1 0 001.414 0l8-8a1 1 0 00-1.414-1.414L10 14.586z" fill="#fff"/></svg>` : ''}
+                      ${post.verified ? `<svg class="w-4 h-4 ml-1 inline-block" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="10" fill="#ff0000"/><path d="M10 14.586-3.293-3.293 a1 1 0 0-1.414-1.414 l4 4 a1 1 0 0 1.414 0 l8-8 a1 1 0 0-1.414-1.414 l4-4 z8" fill="#fff"/>0</svg>` : ''}
                     </p>
                     <p class="text-sm text-gray-500">${getRelativeTime(post.timestamp)}</p>
                   </div>
                 </div>
-                ${post.type === "image" ? `<img src="${post.content}" alt="Post Image" class="post-image w-full object-cover rounded-md mb-3" onerror="this.src='https://via.placeholder.com/300?text=Invalid+Image+URL';"` : `<p class="text-base text-gray-300">${post.content}</p>`}
+                ${post.type === "image" ? `<img src="${post.content}" alt="Post Image" class="post-image w-full object-cover rounded-md mb-3" onerror="this.src='https://via.placeholder.com/300?text=Invalid+Image+URL';"` : `<p class="text-base text-gray-400">${post.content}</p>`}
               </a>
               ${user ? `
                 <div class="dropdown absolute top-2 right-2">
@@ -1103,12 +1109,12 @@
             });
           });
         } else {
-          postsList.innerHTML = "<p class='text-gray-400 text-center'>No posts available.</p>";
           console.log("No posts found in Firebase.");
+          postsList.innerHTML = "<p class='text-gray-500 text-center'>No posts available.</p>";
         }
       } catch (error) {
         console.error("Error fetching posts:", error.code, error.message);
-        errorMessage.textContent = `Error loading posts: ${error.message}`;
+        errorMessage.textContent = `Failed to load posts: ${error.message || 'Unknown error'}`;
         errorMessage.classList.remove("hidden");
       }
     }
@@ -1123,27 +1129,27 @@
           const tutors = snapshot.val();
           const filteredTutors = selectedCategory === "All"
             ? Object.entries(tutors)
-            : Object.entries(tutors).filter([_, tutor]) => tutor.category === selectedCategory);
+            : Object.entries(tutors).filter(([_, tutor]) => tutor.category === selectedCategory);
           if (filteredTutors.length === 0) {
-            tutorGrid.innerHTML = `<p class="text-gray-400 text-center">No tutors available in ${selectedCategory}.</p>`;
+            tutorGrid.innerHTML = `<p class="text-gray-500 text-center">No tutors available for ${selectedCategory}.</p>`;
             return;
           }
           filteredTutors.forEach(([tutorId, tutor]) => {
             const card = document.createElement("div");
-            card.className = "tutor-card bg-[#282828] rounded-lg overflow-hidden";
+            card.className = "tutor-card bg-[#282828] rounded-lg p-2";
             card.innerHTML = `
               <a href="tutor-content.html?tutorId=${tutorId}" class="block">
-                <img src="${tutor.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${tutor.name} Profile" class="w-full h-48 object-cover" />
-                <div class="p-4">
-                  <h3 class="text-lg font-semibold">${tutor.name || 'Unknown Tutor'}</h3>
-                  <p class="text-sm text-gray-400">${tutor.bio || 'No bio available'}</p>
-                  <p class="text-sm text-gray-500 mt-1">${tutor.category || 'No category'}</p>
+                <img src="${tutor.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${tutor.name || 'Tutor'} Profile" : class="w-full h-48 object-cover rounded-md">
+                  <div class="p-4">
+                    <h3 class="text-lg font-semibold">${tutor.name || 'Unknown Tutor'}</h3>
+                    <p class="text-sm text-gray-400">${tutor.bio || 'No bio available'}</p>
+                    <p class="text-sm text-gray-500 mt-1">${tutor.category || 'No category'}</p>
+                  </div>
+                </a>
+                <div class="px-4 pb-4">
+                  <button class="btn-pay py-2 px-4 rounded-md text-sm w-full" data-tutor-id="${tutorId}">Pay for Lesson</button>
                 </div>
-              </a>
-              <div class="px-4 pb-4">
-                <button class="btn-pay py-2 px-4 rounded-md text-sm w-full" data-tutor-id="${tutorId}">Pay for Lesson</button>
-              </div>
-            `;
+              `;
             tutorGrid.appendChild(card);
           });
 
@@ -1155,7 +1161,7 @@
             });
           });
         } else {
-          tutorGrid.innerHTML = "<p class='text-gray-400 text-center'>No tutors available.</p>";
+          tutorGrid.innerHTML = "<p class='text-gray-500 text-center'>No tutors available.</p>";
         }
       } catch (error) {
         console.error("Error fetching tutors:", error.code, error.message);
@@ -1194,10 +1200,12 @@
         document.querySelectorAll(".tab-btn").forEach(btn => btn.classList.remove("active"));
         button.classList.add("active");
         if (currentTab === "tutors") {
+          console.log("Switching to Tutors tab");
           tutorsSection.classList.remove("hidden");
           postsSection.classList.add("hidden");
           await renderTutorGrid();
         } else if (currentTab === "posts") {
+          console.log("Switching to Posts tab");
           tutorsSection.classList.add("hidden");
           postsSection.classList.remove("hidden");
           await renderPosts();
@@ -1222,18 +1230,18 @@
           if (userSnapshot.exists()) {
             const userData = userSnapshot.val();
             userPic.src = userData.photoURL || "https://www.gravatar.com/avatar?d=mp";
-            console.log("User data:", userData);
+            console.log("User data loaded:", userData.email);
             if (currentTab === "tutors") {
               await renderTutorGrid();
             } else if (currentTab === "posts") {
               await renderPosts();
             }
           } else {
-            console.log("No user data, redirecting to login.html");
+            console.log("No user data found, redirecting to login.html");
             window.location.href = "login.html";
           }
         } else {
-          console.log("No user, redirecting to login.html");
+          console.log("No user authenticated, redirecting to login.html");
           window.location.href = "login.html";
         }
       } catch (error) {
