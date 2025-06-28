@@ -17,7 +17,9 @@
     }
     header {
       position: fixed;
-      top: 0; left: 0; right: 0;
+      top: 0;
+      left: 0;
+      right: 0;
       background: white;
       box-shadow: 0 2px 5px rgba(0,0,0,0.1);
       padding: 1rem;
@@ -48,6 +50,9 @@
       box-shadow: 0 1px 2px rgba(0,0,0,0.1);
       white-space: pre-wrap;
       position: relative;
+      user-select: none;
+      -webkit-user-select: none;
+      -ms-user-select: none;
     }
     .message.self {
       background: #ef4444;
@@ -235,8 +240,11 @@
     }
 
     div.append(msg.text);
+
     const time = document.createElement("small");
-    time.textContent = formatTime(msg.timestamp || Date.now());
+    time.innerHTML = isSelf
+      ? `${formatTime(msg.timestamp || Date.now())} ${msg.seen ? "✅" : "✔️"}`
+      : formatTime(msg.timestamp || Date.now());
     div.appendChild(time);
 
     if (msg.reaction) {
@@ -246,7 +254,6 @@
       div.appendChild(reaction);
     }
 
-    // Swipe to reply
     let startX = 0;
     div.addEventListener("touchstart", e => startX = e.touches[0].clientX);
     div.addEventListener("touchend", e => {
@@ -258,12 +265,9 @@
       }
     });
 
-    // Long press to react
     let pressTimer;
     div.addEventListener("touchstart", () => {
-      pressTimer = setTimeout(() => {
-        showEmojiPicker(div, key);
-      }, 500);
+      pressTimer = setTimeout(() => showEmojiPicker(div, key), 500);
     });
     div.addEventListener("touchend", () => clearTimeout(pressTimer));
     div.addEventListener("touchmove", () => clearTimeout(pressTimer));
@@ -311,7 +315,14 @@
       messagesEl.innerHTML = "";
       if (!snap.exists()) return;
       const messages = Object.entries(snap.val()).sort((a, b) => a[1].timestamp - b[1].timestamp);
-      messages.forEach(([key, m]) => renderMessage(key, m, m.sender === currentUser.uid));
+      const updates = {};
+      messages.forEach(([key, m]) => {
+        renderMessage(key, m, m.sender === currentUser.uid);
+        if (m.sender !== currentUser.uid && !m.seen) {
+          updates[`/messages/${chatId}/${key}/seen`] = true;
+        }
+      });
+      if (Object.keys(updates).length > 0) update(ref(db), updates);
     });
   });
 
@@ -327,7 +338,7 @@
       sender: currentUser.uid,
       text,
       timestamp: Date.now(),
-      read: false
+      seen: false
     };
     if (replyingTo) msg.replyTo = replyingTo;
     await push(ref(db, `messages/${chatId}`), msg);
