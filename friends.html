@@ -28,6 +28,16 @@
     .modal-box { background: white; padding: 1.5rem; border-radius: 8px; width: 90%; max-width: 400px; }
     .last-message { font-size: 0.9rem; color: #555; margin-top: 4px; }
     .last-seen { font-size: 0.8rem; color: #888; margin-top: 2px; }
+    .group-avatar {
+      width: 48px; height: 48px; border-radius: 9999px; margin-right: 1rem; flex-shrink: 0;
+      background-color: #eee; object-fit: cover;
+    }
+    .group-info {
+      flex-grow: 1;
+    }
+    .member-count {
+      font-size: 0.85rem; color: #777; margin-top: 2px;
+    }
   </style>
 </head>
 <body>
@@ -47,6 +57,8 @@
 </div>
 <div class="tab-panel" id="tab-groups">
   <h2 class="text-lg font-semibold mt-4 mb-2">Your Groups</h2>
+  <div id="groups-list" aria-live="polite" aria-relevant="additions"></div>
+  <p id="no-groups-message" class="text-center text-gray-500 hidden">You haven’t joined any groups yet.</p>
 </div>
 <div class="tab-panel" id="tab-statuses"><p class="p-4">Statuses section</p></div>
 <div class="tab-panel" id="tab-calls"><p class="p-4">Calls section</p></div>
@@ -102,7 +114,7 @@
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
   import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
-  import { getDatabase, ref, get, onValue, set } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
+  import { getDatabase, ref, onValue, set, push } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
@@ -124,24 +136,24 @@
   const floatingBtnText = document.getElementById("floating-btn-text");
   const friendsList = document.getElementById("friends-list");
   const noFriendsMessage = document.getElementById("no-friends-message");
+  const groupsList = document.getElementById("groups-list");
+  const noGroupsMessage = document.getElementById("no-groups-message");
   const loadingOverlay = document.getElementById("loading-overlay");
 
-  const modal = document.getElementById("add-friend-modal");
-  const openBtn = floatingBtn;
-  const form = document.getElementById("add-friend-form");
-  const result = document.getElementById("add-result");
+  const addFriendModal = document.getElementById("add-friend-modal");
+  const addFriendForm = document.getElementById("add-friend-form");
+  const addFriendResult = document.getElementById("add-result");
 
-  const groupModal = document.getElementById("add-group-modal");
-  const groupForm = document.getElementById("add-group-form");
-  const groupResult = document.getElementById("group-result");
-  const groupListContainer = document.getElementById("tab-groups");
+  const addGroupModal = document.getElementById("add-group-modal");
+  const addGroupForm = document.getElementById("add-group-form");
+  const addGroupResult = document.getElementById("group-result");
 
   function showLoading() { loadingOverlay.classList.remove("hidden"); }
   function hideLoading() { loadingOverlay.classList.add("hidden"); }
 
   tabBtns.forEach((btn) => {
     btn.addEventListener("click", () => {
-      tabBtns.forEach((b) => {
+      tabBtns.forEach(b => {
         b.classList.remove("active");
         b.setAttribute("aria-selected", "false");
       });
@@ -155,17 +167,17 @@
         floatingBtn.classList.remove("hidden");
         floatingBtnText.textContent = "Add Friend";
         floatingBtn.onclick = () => {
-          modal.classList.remove("hidden");
-          result.textContent = "";
-          form.reset();
+          addFriendModal.classList.remove("hidden");
+          addFriendResult.textContent = "";
+          addFriendForm.reset();
         };
       } else if (btn.dataset.tab === "groups") {
         floatingBtn.classList.remove("hidden");
         floatingBtnText.textContent = "Add Group";
         floatingBtn.onclick = () => {
-          groupModal.classList.remove("hidden");
-          groupResult.textContent = "";
-          groupForm.reset();
+          addGroupModal.classList.remove("hidden");
+          addGroupResult.textContent = "";
+          addGroupForm.reset();
         };
       } else {
         floatingBtn.classList.add("hidden");
@@ -173,8 +185,8 @@
     });
   });
 
-  modal.onclick = (e) => { if (e.target === modal) modal.classList.add("hidden"); };
-  groupModal.onclick = (e) => { if (e.target === groupModal) groupModal.classList.add("hidden"); };
+  addFriendModal.onclick = e => { if (e.target === addFriendModal) addFriendModal.classList.add("hidden"); };
+  addGroupModal.onclick = e => { if (e.target === addGroupModal) addGroupModal.classList.add("hidden"); };
 
   function timeAgo(timestamp) {
     if (!timestamp) return "";
@@ -208,98 +220,138 @@
     showLoading();
     friendsList.innerHTML = "";
     noFriendsMessage.classList.add("hidden");
-    const chatsSnap = await get(ref(db, "chats"));
-    const usersSnap = await get(ref(db, "users"));
 
-    if (!chatsSnap.exists() || !usersSnap.exists()) {
-      noFriendsMessage.classList.remove("hidden");
-      return;
-    }
+    const chatsRef = ref(db, "chats");
+    const usersRef = ref(db, "users");
 
-    const chats = chatsSnap.val();
-    const users = usersSnap.val();
-    const friendUids = new Set();
-
-    for (const chatId in chats) {
-      const participants = chats[chatId].participants || {};
-      if (participants[uid]) {
-        for (const friendUid in participants) {
-          if (friendUid !== uid) friendUids.add(friendUid);
-        }
+    onValue(chatsRef, async (chatsSnap) => {
+      if (!chatsSnap.exists()) {
+        noFriendsMessage.classList.remove("hidden");
+        hideLoading();
+        return;
       }
-    }
+      onValue(usersRef, (usersSnap) => {
+        if (!usersSnap.exists()) {
+          noFriendsMessage.classList.remove("hidden");
+          hideLoading();
+          return;
+        }
 
-    if (friendUids.size === 0) {
-      noFriendsMessage.classList.remove("hidden");
-      return;
-    }
+        friendsList.innerHTML = "";
+        const chats = chatsSnap.val();
+        const users = usersSnap.val();
+        const friendUids = new Set();
 
-    friendUids.forEach(friendUid => {
-      const userRef = ref(db, `users/${friendUid}`);
-      onValue(userRef, userSnap => {
-        const userData = userSnap.exists() ? userSnap.val() : {};
-        const chatId = uid < friendUid ? `${uid}_${friendUid}` : `${friendUid}_${uid}`;
-        const messagesRefChat = ref(db, `messages/${chatId}`);
-
-        onValue(messagesRefChat, msgSnap => {
-          const msgs = msgSnap.val() || {};
-          let lastMsg = null, lastMsgTime = null, unreadCount = 0;
-
-          for (const mid in msgs) {
-            const m = msgs[mid];
-            if (!lastMsgTime || m.timestamp > lastMsgTime) {
-              lastMsg = m.text || (m.image ? "[Image]" : "[Media]");
-              lastMsgTime = m.timestamp;
+        for (const chatId in chats) {
+          const participants = chats[chatId].participants || {};
+          if (participants[uid]) {
+            for (const friendUid in participants) {
+              if (friendUid !== uid) friendUids.add(friendUid);
             }
-            if (m.sender === friendUid && !m.read) unreadCount++;
           }
+        }
 
-          const existing = [...friendsList.children].find(c =>
-            c.onclick && c.onclick.toString().includes(`chat.html?uid=${friendUid}`));
-          if (existing) friendsList.removeChild(existing);
-          renderFriend(friendUid, userData, lastMsg, lastMsgTime, unreadCount);
+        if (friendUids.size === 0) {
+          noFriendsMessage.classList.remove("hidden");
+          hideLoading();
+          return;
+        }
+
+        friendUids.forEach(friendUid => {
+          const userData = users[friendUid] || {};
+          const chatId = uid < friendUid ? `${uid}_${friendUid}` : `${friendUid}_${uid}`;
+          const messagesRefChat = ref(db, `messages/${chatId}`);
+
+          onValue(messagesRefChat, (msgSnap) => {
+            const msgs = msgSnap.val() || {};
+            let lastMsg = null, lastMsgTime = null, unreadCount = 0;
+
+            for (const mid in msgs) {
+              const m = msgs[mid];
+              if (!lastMsgTime || m.timestamp > lastMsgTime) {
+                lastMsg = m.text || (m.image ? "[Image]" : "[Media]");
+                lastMsgTime = m.timestamp;
+              }
+              if (m.sender === friendUid && !m.read) unreadCount++;
+            }
+
+            // Remove existing friend card if exists
+            const existing = [...friendsList.children].find(c =>
+              c.onclick && c.onclick.toString().includes(`chat.html?uid=${friendUid}`));
+            if (existing) friendsList.removeChild(existing);
+
+            renderFriend(friendUid, userData, lastMsg, lastMsgTime, unreadCount);
+          });
         });
-      });
-    });
-    hideLoading();
+        hideLoading();
+      }, { onlyOnce: true });
+    }, { onlyOnce: true });
+  }
+
+  function renderGroupCard(gid, group) {
+    const memberCount = group.members ? Object.keys(group.members).length : 0;
+    const avatarUrl = group.avatar || `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(group.name)}`;
+
+    const div = document.createElement("div");
+    div.className = "friend-card";
+    div.innerHTML = `
+      <img src="${avatarUrl}" alt="${group.name} avatar" class="group-avatar" />
+      <div class="group-info">
+        <h4 class="font-bold">${group.name}</h4>
+        <p class="member-count">${memberCount} member${memberCount !== 1 ? 's' : ''}</p>
+        <p class="last-seen">Created: ${timeAgo(group.createdAt)}</p>
+      </div>
+    `;
+    div.onclick = () => window.location.href = `group.html?gid=${gid}`;
+    return div;
   }
 
   async function loadGroups(uid) {
-    const groupsSnap = await get(ref(db, "groups"));
-    groupListContainer.innerHTML = '<h2 class="text-lg font-semibold mt-4 mb-2">Your Groups</h2>';
+    showLoading();
+    groupsList.innerHTML = "";
+    noGroupsMessage.classList.add("hidden");
 
-    if (!groupsSnap.exists()) {
-      groupListContainer.innerHTML += '<p class="text-center text-gray-500">No groups found.</p>';
-      return;
-    }
-
-    const groups = groupsSnap.val();
-    let hasGroups = false;
-
-    for (const gid in groups) {
-      const group = groups[gid];
-      if (group.members && group.members[uid]) {
-        hasGroups = true;
-        const div = document.createElement("div");
-        div.className = "friend-card";
-        div.innerHTML = `<div><h4 class="font-bold">${group.name}</h4><p class="last-seen">Created: ${timeAgo(group.createdAt)}</p></div>`;
-        div.onclick = () => window.location.href = `group.html?gid=${gid}`;
-        groupListContainer.appendChild(div);
+    const groupsRef = ref(db, "groups");
+    onValue(groupsRef, (groupsSnap) => {
+      if (!groupsSnap.exists()) {
+        noGroupsMessage.classList.remove("hidden");
+        hideLoading();
+        return;
       }
-    }
 
-    if (!hasGroups) {
-      groupListContainer.innerHTML += '<p class="text-center text-gray-500">You haven’t joined any groups yet.</p>';
-    }
+      const groups = groupsSnap.val();
+      groupsList.innerHTML = "";
+
+      let hasGroups = false;
+      for (const gid in groups) {
+        const group = groups[gid];
+        if (group.members && group.members[uid]) {
+          hasGroups = true;
+          const groupCard = renderGroupCard(gid, group);
+          groupsList.appendChild(groupCard);
+        }
+      }
+
+      if (!hasGroups) {
+        noGroupsMessage.classList.remove("hidden");
+      }
+      hideLoading();
+    });
   }
 
-  form.onsubmit = async (e) => {
+  addFriendForm.onsubmit = async (e) => {
     e.preventDefault();
-    result.textContent = "Searching...";
+    addFriendResult.textContent = "Searching...";
     const email = document.getElementById("friend-email").value.toLowerCase();
-    const usersSnap = await get(ref(db, "users"));
-    const users = usersSnap.val();
+    const usersRef = ref(db, "users");
     const current = auth.currentUser.uid;
+
+    const usersSnap = await get(usersRef);
+    if (!usersSnap.exists()) {
+      addFriendResult.textContent = "User not found.";
+      return;
+    }
+    const users = usersSnap.val();
     let target = null;
 
     for (let uid in users) {
@@ -312,33 +364,40 @@
     if (target) {
       const chatId = current < target ? `${current}_${target}` : `${target}_${current}`;
       await set(ref(db, `chats/${chatId}`), { participants: { [current]: true, [target]: true } });
-      result.textContent = "Friend added!";
-      modal.classList.add("hidden");
+      addFriendResult.textContent = "Friend added!";
+      addFriendModal.classList.add("hidden");
       await loadFriends(current);
     } else {
-      result.textContent = "User not found.";
+      addFriendResult.textContent = "User not found.";
     }
   };
 
-  groupForm.onsubmit = async (e) => {
+  addGroupForm.onsubmit = async (e) => {
     e.preventDefault();
     const groupName = document.getElementById("group-name").value.trim();
     if (!groupName) return;
+
     const currentUser = auth.currentUser;
     const groupId = `group_${Date.now()}`;
+    const avatarUrl = `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(groupName)}`;
+
     await set(ref(db, `groups/${groupId}`), {
       name: groupName,
       createdBy: currentUser.uid,
       members: { [currentUser.uid]: true },
-      createdAt: Date.now()
+      createdAt: Date.now(),
+      avatar: avatarUrl
     });
-    groupResult.textContent = "Group created!";
-    groupModal.classList.add("hidden");
-    await loadGroups(currentUser.uid);
+
+    addGroupResult.textContent = "Group created!";
+    addGroupModal.classList.add("hidden");
   };
 
   onAuthStateChanged(auth, async user => {
-    if (!user) return (location.href = "login.html");
+    if (!user) {
+      location.href = "login.html";
+      return;
+    }
     document.getElementById("profile-link").href = `profile.html?uid=${user.uid}&owner=true`;
     await loadFriends(user.uid);
     await loadGroups(user.uid);
