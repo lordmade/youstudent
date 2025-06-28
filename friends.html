@@ -12,15 +12,30 @@
     .tab-nav button.active { color: #ef4444; border-color: #ef4444; }
     .tab-panel { display: none; padding: 1rem; }
     .tab-panel.active { display: block; }
-    .friend-card { display: flex; align-items: center; background: white; padding: 1rem; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); margin-bottom: 1rem; cursor: pointer; }
+    .friend-card {
+      display: flex; align-items: center; background: white; padding: 1rem; border-radius: 8px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05); margin-bottom: 1rem; cursor: pointer; border: 2px solid transparent;
+      transition: box-shadow 0.3s, border-color 0.3s;
+    }
+    .friend-card.unread {
+      border-color: #ef4444;
+      box-shadow: 0 4px 10px rgba(239,68,68,0.5);
+    }
     .friend-card:hover { background: #f3f4f6; }
     .status-indicator { width: 10px; height: 10px; border-radius: 9999px; margin-left: auto; }
     .status-online { background: #22c55e; }
     .status-offline { background: #9ca3af; }
-    #add-friend-btn { position: fixed; bottom: 80px; right: 16px; background: #ef4444; color: white; font-weight: bold; padding: 10px 16px; border-radius: 9999px; display: flex; align-items: center; gap: 8px; z-index: 20; }
-    #add-friend-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: none; justify-content: center; align-items: center; z-index: 30; }
+    #add-friend-btn {
+      position: fixed; bottom: 80px; right: 16px; background: #ef4444; color: white; font-weight: bold;
+      padding: 10px 16px; border-radius: 9999px; display: flex; align-items: center; gap: 8px; z-index: 20;
+    }
+    #add-friend-modal {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: none; justify-content: center; align-items: center; z-index: 30;
+    }
     #add-friend-modal.active { display: flex; }
     .modal-box { background: white; padding: 1.5rem; border-radius: 8px; width: 90%; max-width: 400px; }
+    .last-message { font-size: 0.9rem; color: #555; margin-top: 4px; }
+    .last-seen { font-size: 0.8rem; color: #888; margin-top: 2px; }
   </style>
 </head>
 <body>
@@ -30,7 +45,7 @@
 <!-- Tabs -->
 <div class="tab-panel active" id="tab-chat">
   <h2 class="text-lg font-semibold mt-4 mb-2">Your Friends</h2>
-  <div id="friends-list"></div>
+  <div id="friends-list" aria-live="polite" aria-relevant="additions"></div>
   <p id="no-friends-message" class="text-center text-gray-500 hidden">No friends yet.</p>
 </div>
 <div class="tab-panel" id="tab-groups"><p class="p-4">Groups section</p></div>
@@ -38,37 +53,37 @@
 <div class="tab-panel" id="tab-calls"><p class="p-4">Calls section</p></div>
 
 <!-- Add Friend Button -->
-<button id="add-friend-btn">
+<button id="add-friend-btn" aria-label="Add Friend">
   <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
   Add Friend
 </button>
 
 <!-- Add Friend Modal -->
-<div id="add-friend-modal">
+<div id="add-friend-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title" tabindex="-1">
   <div class="modal-box">
-    <h3 class="text-lg font-bold mb-2">Add Friend by Email</h3>
+    <h3 id="modal-title" class="text-lg font-bold mb-2">Add Friend by Email</h3>
     <form id="add-friend-form">
-      <input type="email" id="friend-email" class="w-full border p-2 rounded mb-3" placeholder="example@mail.com" required />
+      <input type="email" id="friend-email" class="w-full border p-2 rounded mb-3" placeholder="example@mail.com" required autocomplete="email" />
       <button type="submit" class="w-full bg-red-500 text-white font-bold py-2 rounded">Add</button>
     </form>
-    <p id="add-result" class="mt-2 text-sm text-center"></p>
+    <p id="add-result" class="mt-2 text-sm text-center" role="alert" aria-live="assertive"></p>
   </div>
 </div>
 
 <!-- Bottom Tab Nav -->
-<div class="tab-nav">
-  <button class="active" data-tab="chat">Chat</button>
-  <button data-tab="groups">Groups</button>
-  <button data-tab="statuses">Statuses</button>
-  <button data-tab="calls">Calls</button>
+<div class="tab-nav" role="tablist">
+  <button class="active" data-tab="chat" role="tab" aria-selected="true" tabindex="0">Chat</button>
+  <button data-tab="groups" role="tab" aria-selected="false" tabindex="-1">Groups</button>
+  <button data-tab="statuses" role="tab" aria-selected="false" tabindex="-1">Statuses</button>
+  <button data-tab="calls" role="tab" aria-selected="false" tabindex="-1">Calls</button>
 </div>
 
-<!-- Firebase & Logic -->
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
   import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
-  import { getDatabase, ref, get, set } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
+  import { getDatabase, ref, get, onValue, set, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
 
+  // Firebase config
   const firebaseConfig = {
     apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
     authDomain: "fire-b-a8878.firebaseapp.com",
@@ -85,72 +100,162 @@
 
   const tabBtns = document.querySelectorAll(".tab-nav button");
   const tabPanels = document.querySelectorAll(".tab-panel");
+  const friendsList = document.getElementById("friends-list");
+  const noFriendsMessage = document.getElementById("no-friends-message");
 
-  tabBtns.forEach(btn => {
+  // Tab nav accessibility & switching
+  tabBtns.forEach((btn, i) => {
     btn.addEventListener("click", () => {
-      tabBtns.forEach(b => b.classList.remove("active"));
+      tabBtns.forEach((b) => {
+        b.classList.remove("active");
+        b.setAttribute("aria-selected", "false");
+        b.tabIndex = -1;
+      });
       tabPanels.forEach(p => p.classList.remove("active"));
+
       btn.classList.add("active");
+      btn.setAttribute("aria-selected", "true");
+      btn.tabIndex = 0;
+
       document.getElementById(`tab-${btn.dataset.tab}`).classList.add("active");
+      document.getElementById(`tab-${btn.dataset.tab}`).focus();
     });
   });
 
+  // Modal controls
   const modal = document.getElementById("add-friend-modal");
   const openBtn = document.getElementById("add-friend-btn");
   const form = document.getElementById("add-friend-form");
   const result = document.getElementById("add-result");
-  const list = document.getElementById("friends-list");
 
   openBtn.onclick = () => {
     modal.classList.add("active");
     result.textContent = "";
     form.reset();
+    document.getElementById("friend-email").focus();
   };
 
-  modal.onclick = (e) => {
+  modal.onclick = e => {
     if (e.target === modal) modal.classList.remove("active");
   };
 
-  function renderFriend(uid, data) {
-    const card = document.createElement("div");
-    card.className = "friend-card";
-    card.innerHTML = `
-      <img src="${data.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" class="w-12 h-12 rounded-full mr-4" />
-      <div>
-        <h4 class="font-bold">${data.name || "Friend"}</h4>
-        <p class="text-sm text-gray-500">${data.email}</p>
-      </div>
-      <div class="status-indicator ${data.presence === 'online' ? 'status-online' : 'status-offline'}"></div>
-    `;
-    card.addEventListener("click", () => {
-      window.location.href = `chat.html?uid=${uid}`;
-    });
-    list.appendChild(card);
+  window.addEventListener("keydown", e => {
+    if (e.key === "Escape" && modal.classList.contains("active")) {
+      modal.classList.remove("active");
+    }
+  });
+
+  // Utility: format last seen time
+  function timeAgo(timestamp) {
+    if (!timestamp) return "";
+    const now = Date.now();
+    const diff = (now - timestamp);
+    if (diff < 60 * 1000) return "just now";
+    if (diff < 3600 * 1000) return Math.floor(diff / 60000) + "m ago";
+    if (diff < 86400 * 1000) return Math.floor(diff / 3600000) + "h ago";
+    return Math.floor(diff / 86400000) + "d ago";
   }
 
+  // Render a friend card with unread highlight
+  function renderFriend(uid, data, lastMsg, lastMsgTime, unreadCount) {
+    const card = document.createElement("div");
+    card.className = "friend-card";
+    if (unreadCount > 0) card.classList.add("unread");
+    card.setAttribute("tabindex", "0");
+    card.setAttribute("role", "button");
+    card.setAttribute("aria-pressed", "false");
+    card.setAttribute("aria-label", `Chat with ${data.name || "Friend"}. ${unreadCount} unread messages.`);
+
+    card.innerHTML = `
+      <img src="${data.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${data.name || 'Friend'} profile picture" class="w-12 h-12 rounded-full mr-4" />
+      <div>
+        <h4 class="font-bold">${data.name || "Friend"}</h4>
+        <p class="last-message">${lastMsg || "No messages yet"}</p>
+        <p class="last-seen">${data.presence === 'online' ? 'Online' : 'Last seen: ' + timeAgo(data.lastSeen)}</p>
+      </div>
+      <div class="status-indicator ${data.presence === 'online' ? 'status-online' : 'status-offline'}" aria-label="${data.presence === 'online' ? 'Online' : 'Offline'}"></div>
+    `;
+
+    card.onclick = () => {
+      window.location.href = `chat.html?uid=${uid}`;
+    };
+    card.onkeypress = e => {
+      if (e.key === "Enter" || e.key === " ") card.click();
+    };
+
+    friendsList.appendChild(card);
+  }
+
+  // Load friends list, their presence, last message, and unread count
   async function loadFriends(uid) {
-    const chatRef = ref(db, "chats");
-    const snap = await get(chatRef);
-    list.innerHTML = "";
-    let found = false;
-    if (snap.exists()) {
-      const chats = snap.val();
-      for (let chatId in chats) {
-        const members = chats[chatId].participants;
-        if (members && members[uid]) {
-          for (let fid in members) {
-            if (fid === uid) continue;
-            const userSnap = await get(ref(db, `users/${fid}`));
-            const user = userSnap.exists() ? userSnap.val() : {};
-            const presSnap = await get(ref(db, `users/${fid}/presence`));
-            user.presence = presSnap.exists() ? presSnap.val() : "offline";
-            renderFriend(fid, user);
-            found = true;
-          }
+    friendsList.innerHTML = "";
+    noFriendsMessage.classList.add("hidden");
+
+    const chatsRef = ref(db, "chats");
+    const usersRef = ref(db, "users");
+    const messagesRef = ref(db, "messages");
+
+    const chatsSnap = await get(chatsRef);
+    const usersSnap = await get(usersRef);
+
+    if (!chatsSnap.exists() || !usersSnap.exists()) {
+      noFriendsMessage.classList.remove("hidden");
+      return;
+    }
+
+    const chats = chatsSnap.val();
+    const users = usersSnap.val();
+
+    // Find all friends uids from chats involving current user
+    const friendUids = new Set();
+    for (const chatId in chats) {
+      const participants = chats[chatId].participants || {};
+      if (participants[uid]) {
+        for (const friendUid in participants) {
+          if (friendUid !== uid) friendUids.add(friendUid);
         }
       }
     }
-    document.getElementById("no-friends-message").classList.toggle("hidden", found);
+    if (friendUids.size === 0) {
+      noFriendsMessage.classList.remove("hidden");
+      return;
+    }
+
+    // For each friend, listen to presence, messages, and unread count in real-time
+    friendUids.forEach(friendUid => {
+      // Listen to friend's presence & lastSeen
+      const userRef = ref(db, `users/${friendUid}`);
+      onValue(userRef, userSnap => {
+        const userData = userSnap.exists() ? userSnap.val() : {};
+        // Listen for last messages & unread count
+        const chatId = uid < friendUid ? `${uid}_${friendUid}` : `${friendUid}_${uid}`;
+        const messagesRefChat = ref(db, `messages/${chatId}`);
+
+        onValue(messagesRefChat, msgSnap => {
+          const msgs = msgSnap.val() || {};
+          let lastMsg = null;
+          let lastMsgTime = null;
+          let unreadCount = 0;
+          for (const mid in msgs) {
+            const m = msgs[mid];
+            // last message - find latest by timestamp
+            if (!lastMsgTime || m.timestamp > lastMsgTime) {
+              lastMsg = m.text || (m.image ? "[Image]" : "[Media]");
+              lastMsgTime = m.timestamp;
+            }
+            // Count unread messages sent by friend
+            if (m.sender === friendUid && !m.read) unreadCount++;
+          }
+
+          // Clear previous friend card before re-render to avoid duplicates
+          const existing = [...friendsList.children].find(c =>
+            c.onclick && c.onclick.toString().includes(`chat.html?uid=${friendUid}`));
+          if (existing) friendsList.removeChild(existing);
+
+          renderFriend(friendUid, userData, lastMsg, lastMsgTime, unreadCount);
+        });
+      });
+    });
   }
 
   form.onsubmit = async (e) => {
