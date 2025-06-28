@@ -6,6 +6,7 @@
   <title>Chaxo - Chat</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
+    * { -webkit-user-select: none; user-select: none; }
     body {
       font-family: 'Segoe UI', sans-serif;
       background: #f9f9f9;
@@ -17,9 +18,7 @@
     }
     header {
       position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
+      top: 0; left: 0; right: 0;
       background: white;
       box-shadow: 0 2px 5px rgba(0,0,0,0.1);
       padding: 1rem;
@@ -50,9 +49,6 @@
       box-shadow: 0 1px 2px rgba(0,0,0,0.1);
       white-space: pre-wrap;
       position: relative;
-      user-select: none;
-      -webkit-user-select: none;
-      -ms-user-select: none;
     }
     .message.self {
       background: #ef4444;
@@ -186,7 +182,7 @@
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
   import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
-  import { getDatabase, ref, onValue, push, get, update } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
+  import { getDatabase, ref, onValue, push, update, get, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
@@ -242,9 +238,11 @@
     div.append(msg.text);
 
     const time = document.createElement("small");
-    time.innerHTML = isSelf
-      ? `${formatTime(msg.timestamp || Date.now())} ${msg.seen ? "✅" : "✔️"}`
-      : formatTime(msg.timestamp || Date.now());
+    if (isSelf) {
+      time.textContent = `${formatTime(msg.timestamp)} • ${msg.read ? 'Delivered' : 'Sent'}`;
+    } else {
+      time.textContent = formatTime(msg.timestamp);
+    }
     div.appendChild(time);
 
     if (msg.reaction) {
@@ -309,20 +307,42 @@
     const data = userSnap.val();
     document.getElementById("friend-name").textContent = data.name || "Friend";
     document.getElementById("friend-photo").src = data.photoURL || "https://www.gravatar.com/avatar?d=mp";
-    document.getElementById("friend-presence").textContent = data.presence === "online" ? "Online" : "Offline";
 
-    onValue(ref(db, `messages/${chatId}`), snap => {
+    const presence = data.presence;
+    if (presence === "online") {
+      document.getElementById("friend-presence").textContent = "Online";
+    } else if (data.lastSeen) {
+      const lastSeen = new Date(data.lastSeen);
+      const timeString = lastSeen.toLocaleString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+      document.getElementById("friend-presence").textContent = `Last seen at ${timeString}`;
+    } else {
+      document.getElementById("friend-presence").textContent = "Offline";
+    }
+
+    const msgRef = ref(db, `messages/${chatId}`);
+    onValue(msgRef, snap => {
       messagesEl.innerHTML = "";
       if (!snap.exists()) return;
       const messages = Object.entries(snap.val()).sort((a, b) => a[1].timestamp - b[1].timestamp);
-      const updates = {};
       messages.forEach(([key, m]) => {
-        renderMessage(key, m, m.sender === currentUser.uid);
-        if (m.sender !== currentUser.uid && !m.seen) {
-          updates[`/messages/${chatId}/${key}/seen`] = true;
+        const isSelf = m.sender === currentUser.uid;
+        renderMessage(key, m, isSelf);
+        if (!isSelf && !m.read) {
+          update(ref(db, `messages/${chatId}/${key}`), { read: true });
         }
       });
-      if (Object.keys(updates).length > 0) update(ref(db), updates);
+    });
+
+    // Update presence
+    update(ref(db, `users/${currentUser.uid}`), {
+      presence: "online",
+      lastSeen: Date.now()
+    });
+    window.addEventListener("beforeunload", () => {
+      update(ref(db, `users/${currentUser.uid}`), {
+        presence: "offline",
+        lastSeen: Date.now()
+      });
     });
   });
 
@@ -338,7 +358,7 @@
       sender: currentUser.uid,
       text,
       timestamp: Date.now(),
-      seen: false
+      read: false
     };
     if (replyingTo) msg.replyTo = replyingTo;
     await push(ref(db, `messages/${chatId}`), msg);
