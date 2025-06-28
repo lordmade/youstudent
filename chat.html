@@ -2,668 +2,272 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Chat</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Chaxo - Chat</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     body {
-      font-family: 'Roboto', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      background-color: #181818;
-    }
-    .sidebar {
-      width: 240px;
-      position: fixed;
-      top: 0;
-      left: -240px;
-      height: 100%;
-      transition: left 0.3s ease;
-      z-index: 1000;
-    }
-    .sidebar.open {
-      left: 0;
-    }
-    .animate-spin-slow {
-      animation: spin 4s linear infinite;
-    }
-    @keyframes spin {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
-    }
-    .loader-container {
-      display: none;
-      justify-content: center;
-      align-items: center;
+      font-family: 'Segoe UI', sans-serif;
+      background: #f9f9f9;
+      margin: 0;
       height: 100vh;
-      position: fixed;
+      display: flex;
+      flex-direction: column;
+    }
+    header {
+      background: white;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      padding: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      position: sticky;
       top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background-color: rgba(0, 0, 0, 0.7);
-      z-index: 9999;
+      z-index: 10;
     }
-    .header-container {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      width: 100%;
-    }
-    .left-container {
-      display: flex;
-      align-items: center;
-      flex-shrink: 0;
-    }
-    .logo-container {
-      display: flex;
-      align-items: center;
-      min-width: 150px;
-      transition: visibility 0.3s ease, opacity 0.3s ease;
-    }
-    .logo-container.hidden {
-      visibility: hidden;
-      opacity: 0;
-      min-width: 0;
-    }
-    .search-container {
+    #messages {
       flex: 1;
-      max-width: 400px;
-      margin: 0 16px;
-      transition: max-width 0.3s ease, margin-left 0.3s ease;
-    }
-    .search-container.focused {
-      max-width: 550px;
-      margin-left: -134px;
-    }
-    .bottom-nav {
-      display: none;
-      position: fixed;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      background-color: #212121;
-      z-index: 1000;
-      padding: 8px 0;
-    }
-    .bottom-nav a {
-      flex: 1;
-      text-align: center;
-      color: #fff;
-      padding: 8px;
-      transition: background-color 0.2s;
-    }
-    .bottom-nav a:hover,
-    .bottom-nav a.active {
-      background-color: #ff0000;
-    }
-    .chat-container {
-      max-height: calc(100vh - 200px);
       overflow-y: auto;
-      padding: 16px;
+      padding: 1rem;
+      background: white;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
     }
     .message {
       max-width: 70%;
-      margin-bottom: 12px;
-      padding: 8px 12px;
-      border-radius: 12px;
-      position: relative;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2); /* Subtle shadow for depth */
+      padding: 0.5rem 0.75rem;
+      border-radius: 9999px;
+      word-wrap: break-word;
+      font-size: 0.95rem;
+      line-height: 1.2;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.1);
     }
-    .message.own {
-      background-color: #ffffff;
-      margin-left: auto;
-      color: #000000;
+    .message.self {
+      background: #ef4444;
+      color: white;
+      align-self: flex-end;
+      border-bottom-right-radius: 4px;
+      border-bottom-left-radius: 9999px;
+      border-top-left-radius: 9999px;
+      border-top-right-radius: 9999px;
     }
-    .message.other {
-      background-color: #4B5563; /* Tailwind gray-600 */
-      margin-right: auto;
-      color: #ffffff;
+    .message.friend {
+      background: #e5e7eb;
+      color: #111827;
+      align-self: flex-start;
+      border-bottom-left-radius: 4px;
+      border-bottom-right-radius: 9999px;
+      border-top-right-radius: 9999px;
+      border-top-left-radius: 9999px;
     }
-    .message .sender {
-      font-size: 0.75rem;
-      color: #bbb;
-      margin-bottom: 4px;
-    }
-    .message .timestamp {
-      font-size: 0.65rem;
-      color: #888;
-      margin-top: 4px;
-    }
-    .message .content img {
-      max-width: 100%;
-      max-height: 200px;
-      border-radius: 8px;
-      margin-top: 8px;
-      display: block;
-    }
-    .message-input-container {
-      position: fixed;
-      bottom: 70px; /* Above bottom nav (~64px) */
-      left: 0;
-      right: 0;
+    #input-area {
+      background: white;
+      padding: 0.75rem 1rem;
+      box-shadow: 0 -1px 4px rgba(0,0,0,0.1);
       display: flex;
-      padding: 16px;
-      background-color: rgba(33, 33, 33, 0.9); /* Semi-transparent */
-      z-index: 1001; /* Above content, below loader/modal */
+      gap: 0.5rem;
     }
-    .message-input {
+    #message-input {
       flex: 1;
-      background-color: #121212;
-      border: 1px solid #444;
-      color: #fff;
-      padding: 8px 12px;
-      border-radius: 20px;
-      margin-right: 8px;
+      padding: 0.5rem 1rem;
+      border-radius: 9999px;
+      border: 1px solid #ddd;
+      font-size: 1rem;
     }
-    .send-btn {
-      background-color: #ff0000;
-      color: #fff;
-      padding: 8px;
-      border-radius: 20px;
+    #send-btn {
+      background: #ef4444;
+      color: white;
+      padding: 0 1rem;
+      border-radius: 9999px;
+      font-weight: bold;
+      border: none;
+      cursor: pointer;
       transition: background-color 0.2s;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      width: 40px; /* Fixed width for icon */
-      height: 40px; /* Fixed height for icon */
     }
-    .send-btn:hover {
-      background-color: #cc0000;
+    #send-btn:disabled {
+      background: #fca5a5;
+      cursor: not-allowed;
     }
-    @media (max-width: 768px) {
-      .sidebar {
-        display: none;
-      }
-      .bottom-nav {
-        display: flex;
-      }
-      .main-content {
-        margin-bottom: 64px;
-      }
-      .logo-container {
-        min-width: 100px;
-      }
-      .search-container {
-        max-width: 250px;
-        margin: 0 8px;
-      }
-      .search-container.focused {
-        max-width: 350px;
-        margin-left: -92px;
-      }
-      .header-container {
-        padding: 0 8px;
-      }
-      .chat-container {
-        max-height: calc(100vh - 250px);
-      }
-      .message-input-container {
-        bottom: 64px; /* Adjust for bottom nav */
-      }
+    #friend-presence {
+      width: 10px;
+      height: 10px;
+      border-radius: 9999px;
+      margin-left: 0.5rem;
+      background: #9ca3af;
     }
-    @media (min-width: 769px) {
-      .bottom-nav {
-        display: none;
-      }
-      .message-input-container {
-        bottom: 16px; /* Space from bottom on desktop */
-      }
-    }
-    #search-bar {
-      width: 100%;
-      transition: width 0.3s ease;
+    #friend-presence.online {
+      background: #22c55e;
     }
   </style>
 </head>
-<body class="bg-[#181818] text-white">
-  <!-- 🔹 Loader Overlay -->
-  <div id="loader-overlay" class="loader-container">
-    <svg width="80" height="80" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg" class="animate-spin-slow">
-      <circle cx="60" cy="60" r="50" stroke="#ff0000" stroke-width="6" stroke-linecap="round" stroke-dasharray="240" stroke-dashoffset="60">
-        <animate attributeName="stroke-dashoffset" values="60;300" dur="2s" repeatCount="indefinite"/>
-      </circle>
-    </svg>
+<body>
+
+<header>
+  <button id="back-btn" aria-label="Back to Friends" title="Back to Friends" class="text-red-500 font-bold hover:underline">← Back</button>
+  <img id="friend-photo" src="https://www.gravatar.com/avatar?d=mp" alt="Friend's profile picture" class="w-10 h-10 rounded-full" />
+  <div>
+    <h1 id="friend-name" class="font-bold text-lg">Friend</h1>
+    <span id="friend-presence" aria-live="polite" aria-atomic="true"></span>
   </div>
+</header>
 
-  <!-- 🔹 Header -->
-  <header class="bg-[#212121] p-4 fixed top-0 left-0 right-0 z-10">
-    <div class="header-container mx-auto max-w-7xl">
-      <div class="left-container">
-        <button id="menu-btn" class="mr-4 text-white">
-          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7"/>
-          </svg>
-        </button>
-        <div id="logo-container" class="logo-container">
-          <svg class="w-8 h-8 mr-2" viewBox="0 0 24 24" fill="#ff0000">
-            <path d="M23.5 6.2c-.3-1.1-1.2-2-2.3-2.3C19.4 3.5 12 3.5 12 3.5s-7.4 0-9.2.4c-1.1.3-2 1.2-2.3 2.3C.1 8 0 10.6 0 12s0 4 .5 5.8c.3 1.1 1.2 2 2.3 2.3 1.8.4 9.2.4 9.2.4s7.4 0 9.2-.4c-1.1-.3 2-1.2 2.3-2.3.5-1.8.5-4.4.5-5.8s0-4-.5-5.8zM9.5 15.5V8.5l6 3.5-6 3.5z"/>
-          </svg>
-          <h1 class="text-xl font-bold">YouTube</h1>
-        </div>
-      </div>
-      <div id="search-container" class="search-container">
-        <input type="text" id="search-bar" placeholder="Search" class="px-4 py-2 bg-[#121212] border border-gray-600 rounded-full text-white focus:outline-none focus:border-red-500" />
-      </div>
-      <div id="right-container" class="right-container flex items-center space-x-4">
-        <img id="user-pic" class="w-8 h-8 rounded-full border border-gray-600" src="https://www.gravatar.com/avatar?d=mp" alt="Profile Pic" />
-      </div>
-    </div>
-  </header>
+<div id="messages" role="log" aria-live="polite" aria-relevant="additions"></div>
 
-  <!-- 🔹 Sidebar -->
-  <div id="sidebar" class="sidebar bg-[#212121] p-4">
-    <div class="space-y-4">
-      <a href="home.html" class="flex items-center text-white hover:bg-[#383838] p-2 rounded-md active">
-        <svg class="w-6 h-6 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
-        </svg>
-        Home
-      </a>
-      <a href="#" class="flex items-center text-white hover:bg-[#383838] p-2 rounded-md">
-        <svg class="w-6 h-6 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z"/>
-        </svg>
-        Trending
-      </a>
-      <a href="#" class="flex items-center text-white hover:bg-[#383838] p-2 rounded-md">
-        <svg class="w-6 h-6 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-        </svg>
-        Subscriptions
-      </a>
-      <a href="tutors.html" id="tutors-dashboard" class="flex items-center text-white hover:bg-[#383838] p-2 rounded-md">
-        <svg class="w-6 h-6 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 14l9-5-9-5-9 5 9 5zm0 0l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14zm-4 6v-7.5l4-2.222"/>
-        </svg>
-        Tutors Dashboard
-      </a>
-      <a href="admin-login.php" id="admin-panel" class="flex items-center text-white hover:bg-[#383838] p-2 rounded-md">
-        <svg class="w-6 h-6 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 14l9-5-9-5-9 5 9 5zm0 0l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14zm-4 6v-7.5l4-2.222"/>
-        </svg>
-        Admin Panel
-      </a>
-      <a href="#" id="sign-out" class="flex items-center text-white hover:bg-[#383838] p-2 rounded-md">
-        <svg class="w-6 h-6 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
-        </svg>
-        Sign Out
-      </a>
-    </div>
-  </div>
+<form id="input-area" aria-label="Send message form">
+  <input type="text" id="message-input" placeholder="Type a message..." autocomplete="off" required />
+  <button id="send-btn" type="submit" disabled>Send</button>
+</form>
 
-  <!-- 🔹 Bottom Navigation Bar -->
-  <nav class="bottom-nav">
-    <a href="home.html" class="active">
-      <svg class="w-6 h-6 mx-auto mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
-      </svg>
-      <span class="text-xs">Home</span>
-    </a>
-    <a href="#">
-      <svg class="w-6 h-6 mx-auto mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z"/>
-      </svg>
-      <span class="text-xs">Trending</span>
-    </a>
-    <a href="#">
-      <svg class="w-6 h-6 mx-auto mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-      </svg>
-      <span class="text-xs">Subscriptions</span>
-    </a>
-    <a href="tutors.html">
-      <svg class="w-6 h-6 mx-auto mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 14l9-5-9-5-9 5 9 5zm0 0l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14zm-4 6v-7.5l4-2.222"/>
-      </svg>
-      <span class="text-xs">Tutors</span>
-    </a>
-    <a href="admin-login.php">
-      <svg class="w-6 h-6 mx-auto mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 14l9-5-9-5-9 5 9 5zm0 0l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14zm-4 6v-7.5l4-2.222"/>
-      </svg>
-      <span class="text-xs">Admin</span>
-    </a>
-    <a href="#" id="sign-out-bottom">
-      <svg class="w-6 h-6 mx-auto mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
-      </svg>
-      <span class="text-xs">Sign Out</span>
-    </a>
-  </nav>
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
+  import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
+  import { getDatabase, ref, onValue, push, serverTimestamp, update, get } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
 
-  <!-- 🔹 Main Content -->
-  <main class="container mx-auto mt-20 p-4 main-content">
-    <section class="mb-8">
-      <div class="flex items-center mb-4">
-        <img id="chat-user-pic" class="w-12 h-12 rounded-full mr-4 border border-gray-600" src="https://www.gravatar.com/avatar?d=mp" alt="Chat User" />
-        <h2 id="chat-user-name" class="text-xl font-bold">Loading...</h2>
-      </div>
-      <div id="chat-container" class="chat-container"></div>
-      <div class="message-input-container">
-        <input type="text" id="message-input" class="message-input" placeholder="Type a message..." />
-        <button id="send-btn" class="send-btn" aria-label="Send message">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
-          </svg>
-        </button>
-      </div>
-    </section>
-    <p id="error-message" class="text-sm text-red-500 text-center mt-4 hidden"></p>
-  </main>
+  // Firebase config (use your own config here)
+  const firebaseConfig = {
+    apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
+    authDomain: "fire-b-a8878.firebaseapp.com",
+    databaseURL: "https://fire-b-a8878.firebaseio.com",
+    projectId: "fire-b-a8878",
+    storageBucket: "fire-b-a8878.appspot.com",
+    messagingSenderId: "658673187627",
+    appId: "1:658673187627:web:6e4c29af661785f0afa36e"
+  };
 
-  <!-- 🔹 Firebase and Logic -->
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
-    import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
-    import { getDatabase, ref, get, push, set, onChildAdded } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth();
+  const db = getDatabase();
 
-    const firebaseConfig = {
-      apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
-      authDomain: "fire-b-a8878.firebaseapp.com",
-      databaseURL: "https://fire-b-a8878.firebaseio.com",
-      projectId: "fire-b-a8878",
-      storageBucket: "fire-b-a8878.appspot.com",
-      messagingSenderId: "658673187627",
-      appId: "1:658673187627:web:6e4c29af661785f0afa36e",
-      measurementId: "G-V4W97YHMSHL"
-    };
+  // Elements
+  const friendNameEl = document.getElementById("friend-name");
+  const friendPhotoEl = document.getElementById("friend-photo");
+  const friendPresenceEl = document.getElementById("friend-presence");
+  const messagesEl = document.getElementById("messages");
+  const messageInput = document.getElementById("message-input");
+  const sendBtn = document.getElementById("send-btn");
+  const backBtn = document.getElementById("back-btn");
 
-    const app = initializeApp(firebaseConfig);
-    const auth = getAuth(app);
-    const db = getDatabase(app);
-
-    const userPic = document.getElementById("user-pic");
-    const signOutBtn = document.getElementById("sign-out");
-    const signOutBottomBtn = document.getElementById("sign-out-bottom");
-    const errorMessage = document.getElementById("error-message");
-    const menuBtn = document.getElementById("menu-btn");
-    const sidebar = document.getElementById("sidebar");
-    const searchBar = document.getElementById("search-bar");
-    const searchContainer = document.getElementById("search-container");
-    const logoContainer = document.getElementById("logo-container");
-    const loaderOverlay = document.getElementById("loader-overlay");
-    const chatUserPic = document.getElementById("chat-user-pic");
-    const chatUserName = document.getElementById("chat-user-name");
-    const chatContainer = document.getElementById("chat-container");
-    const messageInput = document.getElementById("message-input");
-    const sendBtn = document.getElementById("send-btn");
-
-    // Get other user's UID from URL
+  // Helper: get URL param
+  function getQueryParam(param) {
     const urlParams = new URLSearchParams(window.location.search);
-    const otherUid = urlParams.get("uid");
+    return urlParams.get(param);
+  }
 
-    // Username cache
-    const usernameCache = {};
+  let currentUser, friendUid, chatId;
 
-    // Relative Time Formatter
-    function getRelativeTime(timestamp) {
-      const now = Date.now();
-      const diff = now - timestamp;
-      const seconds = Math.floor(diff / 1000);
-      const minutes = Math.floor(seconds / 60);
-      const hours = Math.floor(minutes / 60);
-      const days = Math.floor(hours / 24);
-      if (seconds < 60) return seconds === 1 ? "1 second ago" : `${seconds} seconds ago`;
-      if (minutes < 60) return minutes === 1 ? "1 minute ago" : `${minutes} minutes ago`;
-      if (hours < 24) return hours === 1 ? "1 hour ago" : `${hours} hours ago`;
-      return days === 1 ? "1 day ago" : `${days} days ago`;
+  // Scroll messages to bottom
+  function scrollToBottom() {
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+  }
+
+  // Render single message
+  function renderMessage(msg, isSelf) {
+    const div = document.createElement("div");
+    div.className = "message " + (isSelf ? "self" : "friend");
+    div.textContent = msg.text || "[Media]";
+    messagesEl.appendChild(div);
+  }
+
+  // Update friend presence UI
+  function updatePresence(presence) {
+    if (presence === "online") {
+      friendPresenceEl.textContent = "Online";
+      friendPresenceEl.classList.add("online");
+    } else {
+      friendPresenceEl.textContent = "Offline";
+      friendPresenceEl.classList.remove("online");
     }
+  }
 
-    // Toggle Sidebar
-    menuBtn.addEventListener("click", (e) => {
-      e.preventDefault();
-      sidebar.classList.toggle("open");
-    });
+  // Mark all unread messages as read (for current user)
+  async function markMessagesRead(chatId, currentUid, friendUid) {
+    const messagesRef = ref(db, `messages/${chatId}`);
+    const snapshot = await get(messagesRef);
+    if (!snapshot.exists()) return;
 
-    // Close Sidebar on Outside Click
-    document.addEventListener("click", (event) => {
-      if (sidebar.classList.contains("open") && !sidebar.contains(event.target) && !menuBtn.contains(event.target)) {
-        sidebar.classList.remove("open");
-      }
-    });
-
-    // Expand Search Bar and Hide Logo
-    searchBar.addEventListener("focus", () => {
-      searchContainer.classList.add("focused");
-      logoContainer.classList.add("hidden");
-    });
-
-    // Restore Logo and Search Bar
-    searchBar.addEventListener("blur", () => {
-      searchContainer.classList.remove("focused");
-      logoContainer.classList.remove("hidden");
-    });
-
-    // Sign Out
-    function handleSignOut(e) {
-      e.preventDefault();
-      loaderOverlay.style.display = "flex";
-      signOut(auth)
-        .then(() => {
-          console.log("User signed out");
-          window.location.href = "login.html";
-        })
-        .catch((error) => {
-          console.error("Sign out error:", error.code, error.message);
-          errorMessage.textContent = "Sign out failed: " + error.message;
-          errorMessage.classList.remove("hidden");
-        })
-        .finally(() => {
-          loaderOverlay.style.display = "none";
-        });
-    }
-
-    signOutBtn.addEventListener("click", handleSignOut);
-    signOutBottomBtn.addEventListener("click", handleSignOut);
-
-    // Get Chat ID
-    function getChatId(uid1, uid2) {
-      return uid1 < uid2 ? `${uid1}_${uid2}` : `${uid2}_${uid1}`;
-    }
-
-    // Fetch Username
-    async function getUsername(uid) {
-      if (usernameCache[uid]) {
-        return usernameCache[uid];
-      }
-      try {
-        const userRef = ref(db, `users/${uid}`);
-        const userSnapshot = await get(userRef);
-        if (userSnapshot.exists()) {
-          const userData = userSnapshot.val();
-          const username = userData.name || userData.email || "Unknown User";
-          usernameCache[uid] = username;
-          return username;
-        }
-        return "Unknown User";
-      } catch (error) {
-        console.error("Error fetching username:", error.code, error.message);
-        return "Unknown User";
+    const updates = {};
+    const msgs = snapshot.val();
+    for (const mid in msgs) {
+      const m = msgs[mid];
+      if (m.sender === friendUid && !m.read) {
+        updates[`${mid}/read`] = true;
       }
     }
+    if (Object.keys(updates).length > 0) {
+      await update(messagesRef, updates);
+    }
+  }
 
-    // Load Chat User Info
-    async function loadChatUserInfo() {
-      if (!otherUid) {
-        errorMessage.textContent = "No user ID provided.";
-        errorMessage.classList.remove("hidden");
+  onAuthStateChanged(auth, async (user) => {
+    if (!user) return (location.href = "login.html");
+    currentUser = user;
+    friendUid = getQueryParam("uid");
+    if (!friendUid) {
+      alert("No friend specified.");
+      return location.href = "index.html";
+    }
+
+    // Compute chatId
+    chatId = currentUser.uid < friendUid ? `${currentUser.uid}_${friendUid}` : `${friendUid}_${currentUser.uid}`;
+
+    // Load friend info
+    const friendRef = ref(db, `users/${friendUid}`);
+    onValue(friendRef, (snap) => {
+      if (!snap.exists()) {
+        friendNameEl.textContent = "Unknown User";
+        friendPhotoEl.src = "https://www.gravatar.com/avatar?d=mp";
+        updatePresence("offline");
         return;
       }
-      try {
-        const userRef = ref(db, `users/${otherUid}`);
-        const userSnapshot = await get(userRef);
-        if (userSnapshot.exists()) {
-          const userData = userSnapshot.val();
-          chatUserPic.src = userData.photoURL || "https://www.gravatar.com/avatar?d=mp";
-          chatUserName.textContent = userData.name || userData.email || "Unknown User";
-        } else {
-          errorMessage.textContent = "Chat user not found.";
-          errorMessage.classList.remove("hidden");
-        }
-      } catch (error) {
-        console.error("Error loading chat user:", error.code, error.message);
-        errorMessage.textContent = `Error loading chat user: ${error.message}`;
-        errorMessage.classList.remove("hidden");
-      }
-    }
-
-    // Render Message Content
-    function renderMessageContent(text) {
-      const imageUrlRegex = /(https?:\/\/[^\s]+\.(jpg|jpeg|png|gif))/gi;
-      let content = text.replace(/</g, "&lt;").replace(/>/g, "&gt;"); // Basic XSS prevention
-      const matches = text.match(imageUrlRegex);
-      let html = `<div class="content">`;
-      if (matches) {
-        const parts = content.split(imageUrlRegex);
-        parts.forEach(part => {
-          if (part.match(/\.(jpg|jpeg|png|gif)$/i)) {
-            html += `<img src="${part}" alt="Shared Image" onerror="this.style.display='none';this.nextSibling.style.display='block';" /><span style="display:none;color:#ff0000;">Invalid image URL</span>`;
-          } else {
-            html += part;
-          }
-        });
-      } else {
-        html += content;
-      }
-      html += `</div>`;
-      return html;
-    }
-
-    // Render Message
-    async function renderMessage(message, currentUid) {
-      const isOwnMessage = message.senderUid === currentUid;
-      const username = await getUsername(message.senderUid);
-      const messageDiv = document.createElement("div");
-      messageDiv.className = `message ${isOwnMessage ? "own" : "other"}`;
-      messageDiv.innerHTML = `
-        <div class="sender">${username}</div>
-        ${renderMessageContent(message.text)}
-        <div class="timestamp">${getRelativeTime(message.timestamp)}</div>
-      `;
-      chatContainer.appendChild(messageDiv);
-      chatContainer.scrollTop = chatContainer.scrollHeight; // Auto-scroll
-    }
-
-    // Load and Listen for Messages
-    async function loadMessages(currentUid) {
-      if (!otherUid || !currentUid) return;
-      const chatId = getChatId(currentUid, otherUid);
-      const messagesRef = ref(db, `chats/${chatId}/messages`);
-      try {
-        const chatRef = ref(db, `chats/${chatId}`);
-        const chatSnapshot = await get(chatRef);
-        if (!chatSnapshot.exists()) {
-          await set(chatRef, {
-            participants: {
-              [currentUid]: true,
-              [otherUid]: true
-            },
-            messages: {}
-          });
-        }
-        onChildAdded(messagesRef, (snapshot) => {
-          const message = snapshot.val();
-          renderMessage(message, currentUid);
-        });
-      } catch (error) {
-        console.error("Error loading messages:", error.code, error.message);
-        errorMessage.textContent = `Error loading messages: ${error.message}`;
-        errorMessage.classList.remove("hidden");
-      }
-    }
-
-    // Send Message
-    async function sendMessage(currentUid, senderEmail) {
-      const text = messageInput.value.trim();
-      if (!text) {
-        errorMessage.textContent = "Please enter a message.";
-        errorMessage.classList.remove("hidden");
-        return;
-      }
-      loaderOverlay.style.display = "flex";
-      try {
-        const chatId = getChatId(currentUid, otherUid);
-        const messagesRef = ref(db, `chats/${chatId}/messages`);
-        await push(messagesRef, {
-          text,
-          senderUid: currentUid,
-          senderEmail: senderEmail,
-          timestamp: Date.now()
-        });
-        messageInput.value = "";
-        errorMessage.classList.add("hidden");
-      } catch (error) {
-        console.error("Error sending message:", error.code, error.message);
-        errorMessage.textContent = `Error sending message: ${error.message}`;
-        errorMessage.classList.remove("hidden");
-      } finally {
-        loaderOverlay.style.display = "none";
-      }
-    }
-
-    // Send Button Listener
-    sendBtn.addEventListener("click", async () => {
-      const user = auth.currentUser;
-      if (!user) {
-        errorMessage.textContent = "Please log in to send messages.";
-        errorMessage.classList.remove("hidden");
-        return;
-      }
-      const userRef = ref(db, `users/${user.uid}`);
-      const userSnapshot = await get(userRef);
-      const userData = userSnapshot.exists() ? userSnapshot.val() : {};
-      const senderEmail = userData.email || user.email;
-      await sendMessage(user.uid, senderEmail);
+      const friendData = snap.val();
+      friendNameEl.textContent = friendData.name || "Friend";
+      friendPhotoEl.src = friendData.photoURL || "https://www.gravatar.com/avatar?d=mp";
+      updatePresence(friendData.presence || "offline");
     });
 
-    // Enter Key Listener
-    messageInput.addEventListener("keypress", async (e) => {
-      if (e.key === "Enter" && !e.shiftKey) {
-        e.preventDefault();
-        const user = auth.currentUser;
-        if (!user) {
-          errorMessage.textContent = "Please log in to send messages.";
-          errorMessage.classList.remove("hidden");
-          return;
-        }
-        const userRef = ref(db, `users/${user.uid}`);
-        const userSnapshot = await get(userRef);
-        const userData = userSnapshot.exists() ? userSnapshot.val() : {};
-        const senderEmail = userData.email || user.email;
-        await sendMessage(user.uid, senderEmail);
+    // Listen for messages in chat
+    const messagesRef = ref(db, `messages/${chatId}`);
+    onValue(messagesRef, (snap) => {
+      messagesEl.innerHTML = "";
+      if (!snap.exists()) return;
+      const msgs = snap.val();
+      // Sort messages by timestamp ascending
+      const sorted = Object.values(msgs).sort((a, b) => a.timestamp - b.timestamp);
+      for (const m of sorted) {
+        renderMessage(m, m.sender === currentUser.uid);
       }
+      scrollToBottom();
+      // Mark incoming unread messages as read
+      markMessagesRead(chatId, currentUser.uid, friendUid);
     });
 
-    // Auth State Listener
-    onAuthStateChanged(auth, async (user) => {
-      console.log("Auth state changed:", user ? user.uid : "No user");
-      loaderOverlay.style.display = "flex";
-      try {
-        if (user) {
-          const userRef = ref(db, `users/${user.uid}`);
-          const userSnapshot = await get(userRef);
-          if (userSnapshot.exists()) {
-            const userData = userSnapshot.val();
-            userPic.src = userData.photoURL || "https://www.gravatar.com/avatar?d=mp";
-            console.log("Current user data:", userData);
-            await loadChatUserInfo();
-            await loadMessages(user.uid);
-          } else {
-            console.log("No user data, redirecting to login.html");
-            window.location.href = "login.html";
-          }
-        } else {
-          console.log("No user, redirecting to login.html");
-          window.location.href = "login.html";
-        }
-      } catch (error) {
-        console.error("Auth state error:", error.code, error.message);
-        errorMessage.textContent = `Error loading user data: ${error.message}`;
-        errorMessage.classList.remove("hidden");
-      } finally {
-        loaderOverlay.style.display = "none";
-      }
+    // Enable send button when input not empty
+    messageInput.addEventListener("input", () => {
+      sendBtn.disabled = messageInput.value.trim() === "";
     });
-  </script>
+  });
+
+  // Send message handler
+  document.getElementById("input-area").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (!messageInput.value.trim()) return;
+    const newMsg = {
+      sender: currentUser.uid,
+      text: messageInput.value.trim(),
+      timestamp: Date.now(),
+      read: false
+    };
+    const messagesRef = ref(db, `messages/${chatId}`);
+    await push(messagesRef, newMsg);
+    messageInput.value = "";
+    sendBtn.disabled = true;
+  });
+
+  backBtn.onclick = () => {
+    window.location.href = "index.html"; // Or friends.html, whatever your main page is
+  };
+</script>
+
 </body>
 </html>
