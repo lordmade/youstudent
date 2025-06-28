@@ -42,11 +42,10 @@
 
 <header class="p-4 bg-white shadow text-xl font-bold text-red-500 flex justify-between items-center">
   <span>Chaxo</span>
-  <a href="profile.html" class="text-sm bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600 transition">
+  <a id="profile-link" href="#" class="text-sm bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600 transition">
     View Profile
   </a>
 </header>
-
 
 <!-- Tabs -->
 <div class="tab-panel active" id="tab-chat">
@@ -60,7 +59,9 @@
 
 <!-- Add Friend Button -->
 <button id="add-friend-btn" aria-label="Add Friend">
-  <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+  <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+  </svg>
   Add Friend
 </button>
 
@@ -76,6 +77,15 @@
   </div>
 </div>
 
+<!-- Loading Spinner Overlay -->
+<div id="loading-overlay" class="fixed inset-0 bg-white bg-opacity-70 flex items-center justify-center z-50 hidden">
+  <svg class="animate-spin h-10 w-10 text-red-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+    <path class="opacity-75" fill="currentColor"
+      d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4z"></path>
+  </svg>
+</div>
+
 <!-- Bottom Tab Nav -->
 <div class="tab-nav" role="tablist">
   <button class="active" data-tab="chat" role="tab" aria-selected="true" tabindex="0">Chat</button>
@@ -87,9 +97,8 @@
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
   import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
-  import { getDatabase, ref, get, onValue, set, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
+  import { getDatabase, ref, get, onValue, set } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
 
-  // Firebase config
   const firebaseConfig = {
     apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
     authDomain: "fire-b-a8878.firebaseapp.com",
@@ -108,9 +117,16 @@
   const tabPanels = document.querySelectorAll(".tab-panel");
   const friendsList = document.getElementById("friends-list");
   const noFriendsMessage = document.getElementById("no-friends-message");
+  const loadingOverlay = document.getElementById("loading-overlay");
 
-  // Tab nav accessibility & switching
-  tabBtns.forEach((btn, i) => {
+  function showLoading() {
+    loadingOverlay.classList.remove("hidden");
+  }
+  function hideLoading() {
+    loadingOverlay.classList.add("hidden");
+  }
+
+  tabBtns.forEach((btn) => {
     btn.addEventListener("click", () => {
       tabBtns.forEach((b) => {
         b.classList.remove("active");
@@ -124,11 +140,9 @@
       btn.tabIndex = 0;
 
       document.getElementById(`tab-${btn.dataset.tab}`).classList.add("active");
-      document.getElementById(`tab-${btn.dataset.tab}`).focus();
     });
   });
 
-  // Modal controls
   const modal = document.getElementById("add-friend-modal");
   const openBtn = document.getElementById("add-friend-btn");
   const form = document.getElementById("add-friend-form");
@@ -151,117 +165,102 @@
     }
   });
 
-  // Utility: format last seen time
   function timeAgo(timestamp) {
     if (!timestamp) return "";
     const now = Date.now();
-    const diff = (now - timestamp);
-    if (diff < 60 * 1000) return "just now";
-    if (diff < 3600 * 1000) return Math.floor(diff / 60000) + "m ago";
-    if (diff < 86400 * 1000) return Math.floor(diff / 3600000) + "h ago";
+    const diff = now - timestamp;
+    if (diff < 60000) return "just now";
+    if (diff < 3600000) return Math.floor(diff / 60000) + "m ago";
+    if (diff < 86400000) return Math.floor(diff / 3600000) + "h ago";
     return Math.floor(diff / 86400000) + "d ago";
   }
 
-  // Render a friend card with unread highlight
   function renderFriend(uid, data, lastMsg, lastMsgTime, unreadCount) {
     const card = document.createElement("div");
     card.className = "friend-card";
     if (unreadCount > 0) card.classList.add("unread");
-    card.setAttribute("tabindex", "0");
-    card.setAttribute("role", "button");
-    card.setAttribute("aria-pressed", "false");
-    card.setAttribute("aria-label", `Chat with ${data.name || "Friend"}. ${unreadCount} unread messages.`);
 
     card.innerHTML = `
-      <img src="${data.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${data.name || 'Friend'} profile picture" class="w-12 h-12 rounded-full mr-4" />
+      <img src="${data.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${data.name || 'Friend'} profile" class="w-12 h-12 rounded-full mr-4" />
       <div>
         <h4 class="font-bold">${data.name || "Friend"}</h4>
         <p class="last-message">${lastMsg || "No messages yet"}</p>
         <p class="last-seen">${data.presence === 'online' ? 'Online' : 'Last seen: ' + timeAgo(data.lastSeen)}</p>
       </div>
-      <div class="status-indicator ${data.presence === 'online' ? 'status-online' : 'status-offline'}" aria-label="${data.presence === 'online' ? 'Online' : 'Offline'}"></div>
+      <div class="status-indicator ${data.presence === 'online' ? 'status-online' : 'status-offline'}"></div>
     `;
 
     card.onclick = () => {
       window.location.href = `chat.html?uid=${uid}`;
     };
-    card.onkeypress = e => {
-      if (e.key === "Enter" || e.key === " ") card.click();
-    };
-
     friendsList.appendChild(card);
   }
 
-  // Load friends list, their presence, last message, and unread count
   async function loadFriends(uid) {
+    showLoading();
     friendsList.innerHTML = "";
     noFriendsMessage.classList.add("hidden");
 
-    const chatsRef = ref(db, "chats");
-    const usersRef = ref(db, "users");
-    const messagesRef = ref(db, "messages");
+    try {
+      const chatsSnap = await get(ref(db, "chats"));
+      const usersSnap = await get(ref(db, "users"));
 
-    const chatsSnap = await get(chatsRef);
-    const usersSnap = await get(usersRef);
+      if (!chatsSnap.exists() || !usersSnap.exists()) {
+        noFriendsMessage.classList.remove("hidden");
+        return;
+      }
 
-    if (!chatsSnap.exists() || !usersSnap.exists()) {
-      noFriendsMessage.classList.remove("hidden");
-      return;
-    }
+      const chats = chatsSnap.val();
+      const users = usersSnap.val();
+      const friendUids = new Set();
 
-    const chats = chatsSnap.val();
-    const users = usersSnap.val();
-
-    // Find all friends uids from chats involving current user
-    const friendUids = new Set();
-    for (const chatId in chats) {
-      const participants = chats[chatId].participants || {};
-      if (participants[uid]) {
-        for (const friendUid in participants) {
-          if (friendUid !== uid) friendUids.add(friendUid);
+      for (const chatId in chats) {
+        const participants = chats[chatId].participants || {};
+        if (participants[uid]) {
+          for (const friendUid in participants) {
+            if (friendUid !== uid) friendUids.add(friendUid);
+          }
         }
       }
-    }
-    if (friendUids.size === 0) {
-      noFriendsMessage.classList.remove("hidden");
-      return;
-    }
 
-    // For each friend, listen to presence, messages, and unread count in real-time
-    friendUids.forEach(friendUid => {
-      // Listen to friend's presence & lastSeen
-      const userRef = ref(db, `users/${friendUid}`);
-      onValue(userRef, userSnap => {
-        const userData = userSnap.exists() ? userSnap.val() : {};
-        // Listen for last messages & unread count
-        const chatId = uid < friendUid ? `${uid}_${friendUid}` : `${friendUid}_${uid}`;
-        const messagesRefChat = ref(db, `messages/${chatId}`);
+      if (friendUids.size === 0) {
+        noFriendsMessage.classList.remove("hidden");
+        return;
+      }
 
-        onValue(messagesRefChat, msgSnap => {
-          const msgs = msgSnap.val() || {};
-          let lastMsg = null;
-          let lastMsgTime = null;
-          let unreadCount = 0;
-          for (const mid in msgs) {
-            const m = msgs[mid];
-            // last message - find latest by timestamp
-            if (!lastMsgTime || m.timestamp > lastMsgTime) {
-              lastMsg = m.text || (m.image ? "[Image]" : "[Media]");
-              lastMsgTime = m.timestamp;
+      friendUids.forEach(friendUid => {
+        const userRef = ref(db, `users/${friendUid}`);
+        onValue(userRef, userSnap => {
+          const userData = userSnap.exists() ? userSnap.val() : {};
+          const chatId = uid < friendUid ? `${uid}_${friendUid}` : `${friendUid}_${uid}`;
+          const messagesRefChat = ref(db, `messages/${chatId}`);
+
+          onValue(messagesRefChat, msgSnap => {
+            const msgs = msgSnap.val() || {};
+            let lastMsg = null;
+            let lastMsgTime = null;
+            let unreadCount = 0;
+
+            for (const mid in msgs) {
+              const m = msgs[mid];
+              if (!lastMsgTime || m.timestamp > lastMsgTime) {
+                lastMsg = m.text || (m.image ? "[Image]" : "[Media]");
+                lastMsgTime = m.timestamp;
+              }
+              if (m.sender === friendUid && !m.read) unreadCount++;
             }
-            // Count unread messages sent by friend
-            if (m.sender === friendUid && !m.read) unreadCount++;
-          }
 
-          // Clear previous friend card before re-render to avoid duplicates
-          const existing = [...friendsList.children].find(c =>
-            c.onclick && c.onclick.toString().includes(`chat.html?uid=${friendUid}`));
-          if (existing) friendsList.removeChild(existing);
+            const existing = [...friendsList.children].find(c =>
+              c.onclick && c.onclick.toString().includes(`chat.html?uid=${friendUid}`));
+            if (existing) friendsList.removeChild(existing);
 
-          renderFriend(friendUid, userData, lastMsg, lastMsgTime, unreadCount);
+            renderFriend(friendUid, userData, lastMsg, lastMsgTime, unreadCount);
+          });
         });
       });
-    });
+    } finally {
+      hideLoading();
+    }
   }
 
   form.onsubmit = async (e) => {
@@ -272,12 +271,14 @@
     const users = usersSnap.val();
     const current = auth.currentUser.uid;
     let target = null;
+
     for (let uid in users) {
       if (users[uid].email?.toLowerCase() === email && uid !== current) {
         target = uid;
         break;
       }
     }
+
     if (target) {
       const chatId = current < target ? `${current}_${target}` : `${target}_${current}`;
       await set(ref(db, `chats/${chatId}`), { participants: { [current]: true, [target]: true } });
@@ -290,15 +291,13 @@
   };
 
   onAuthStateChanged(auth, async user => {
-  if (!user) return (location.href = "login.html");
+    if (!user) return (location.href = "login.html");
 
-  // ✅ Set profile link with user ID
-  const profileLink = document.getElementById("profile-link");
-  profileLink.href = `profile.html?uid=${user.uid}`;
+    // Set profile link with owner param
+    document.getElementById("profile-link").href = `profile.html?uid=${user.uid}&owner=true`;
 
-  await loadFriends(user.uid);
-});
-
+    await loadFriends(user.uid);
+  });
 </script>
 
 </body>
