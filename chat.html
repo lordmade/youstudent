@@ -6,7 +6,6 @@
   <title>Chaxo - Chat</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    * { -webkit-user-select: none; user-select: none; }
     body {
       font-family: 'Segoe UI', sans-serif;
       background: #f9f9f9;
@@ -130,24 +129,14 @@
       font-weight: bold;
       cursor: pointer;
     }
-    .reaction {
-      font-size: 1.25rem;
-      margin-top: 4px;
-      text-align: right;
+    .mic-anim {
+      animation: pulse 1s infinite;
+      background-color: #dc2626 !important;
     }
-    .emoji-picker {
-      position: absolute;
-      background: white;
-      border-radius: 12px;
-      box-shadow: 0 0 10px rgba(0,0,0,0.15);
-      padding: 4px 8px;
-      z-index: 999;
-      display: none;
-    }
-    .emoji-picker span {
-      cursor: pointer;
-      padding: 4px;
-      font-size: 1.2rem;
+    @keyframes pulse {
+      0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.5); }
+      70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
     }
   </style>
 </head>
@@ -171,18 +160,14 @@
   </div>
   <div id="input-form">
     <input type="text" id="message-input" placeholder="Type a message..." required />
-    <button id="send-btn" type="submit" disabled>Send</button>
+    <button id="send-btn" type="button">Voice</button>
   </div>
 </form>
-
-<div id="emoji-picker" class="emoji-picker">
-  <span>👍</span><span>😂</span><span>🔥</span><span>❤️</span><span>😢</span><span>😡</span>
-</div>
 
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
   import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
-  import { getDatabase, ref, onValue, push, update, get, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
+  import { getDatabase, ref, onValue, push, get } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
@@ -203,11 +188,10 @@
   const sendBtn = document.getElementById("send-btn");
   const replyBox = document.getElementById("reply-box");
   const replyText = document.getElementById("reply-text");
-  const emojiPicker = document.getElementById("emoji-picker");
 
   let currentUser, friendUid, chatId;
   let replyingTo = null;
-  let reactingKey = null;
+  let recognition = null;
 
   function getParam(name) {
     return new URLSearchParams(location.search).get(name);
@@ -224,7 +208,7 @@
     replyText.textContent = "";
   }
 
-  function renderMessage(key, msg, isSelf) {
+  function renderMessage(msg, isSelf) {
     const div = document.createElement("div");
     div.className = `message ${isSelf ? "self" : "friend"}`;
 
@@ -236,65 +220,27 @@
     }
 
     div.append(msg.text);
-
     const time = document.createElement("small");
-    if (isSelf) {
-      time.textContent = `${formatTime(msg.timestamp)} • ${msg.read ? 'Delivered' : 'Sent'}`;
-    } else {
-      time.textContent = formatTime(msg.timestamp);
-    }
+    time.textContent = formatTime(msg.timestamp || Date.now());
     div.appendChild(time);
-
-    if (msg.reaction) {
-      const reaction = document.createElement("div");
-      reaction.className = "reaction";
-      reaction.textContent = msg.reaction;
-      div.appendChild(reaction);
-    }
-
-    let startX = 0;
-    div.addEventListener("touchstart", e => startX = e.touches[0].clientX);
-    div.addEventListener("touchend", e => {
-      const dx = e.changedTouches[0].clientX - startX;
-      if (dx > 60) {
-        replyingTo = msg.text;
-        replyText.textContent = msg.text;
-        replyBox.classList.remove("hidden");
-      }
-    });
-
-    let pressTimer;
-    div.addEventListener("touchstart", () => {
-      pressTimer = setTimeout(() => showEmojiPicker(div, key), 500);
-    });
-    div.addEventListener("touchend", () => clearTimeout(pressTimer));
-    div.addEventListener("touchmove", () => clearTimeout(pressTimer));
 
     messagesEl.appendChild(div);
     messagesEl.scrollTop = messagesEl.scrollHeight;
   }
 
-  function showEmojiPicker(target, key) {
-    const rect = target.getBoundingClientRect();
-    emojiPicker.style.top = (rect.top - 50 + window.scrollY) + "px";
-    emojiPicker.style.left = rect.left + "px";
-    emojiPicker.style.display = "flex";
-    reactingKey = key;
+  function updateSendButton() {
+    const hasText = messageInput.value.trim() !== "";
+    sendBtn.textContent = hasText ? "Send" : "Voice";
+    sendBtn.classList.remove("mic-anim");
   }
 
-  document.addEventListener("click", (e) => {
-    if (!emojiPicker.contains(e.target)) emojiPicker.style.display = "none";
-  });
-
-  emojiPicker.querySelectorAll("span").forEach(span => {
-    span.onclick = () => {
-      if (reactingKey) {
-        update(ref(db, `messages/${chatId}/${reactingKey}`), {
-          reaction: span.textContent
-        });
-        emojiPicker.style.display = "none";
-      }
-    };
+  messageInput.addEventListener("input", updateSendButton);
+  messageInput.addEventListener("focus", updateSendButton);
+  messageInput.addEventListener("blur", () => {
+    if (!messageInput.value.trim()) {
+      sendBtn.textContent = "Voice";
+      sendBtn.classList.remove("mic-anim");
+    }
   });
 
   onAuthStateChanged(auth, async (user) => {
@@ -307,65 +253,80 @@
     const data = userSnap.val();
     document.getElementById("friend-name").textContent = data.name || "Friend";
     document.getElementById("friend-photo").src = data.photoURL || "https://www.gravatar.com/avatar?d=mp";
+    document.getElementById("friend-presence").textContent = data.presence === "online"
+      ? "Online"
+      : data.lastSeen
+        ? "Last seen: " + new Date(data.lastSeen).toLocaleString()
+        : "Offline";
 
-    const presence = data.presence;
-    if (presence === "online") {
-      document.getElementById("friend-presence").textContent = "Online";
-    } else if (data.lastSeen) {
-      const lastSeen = new Date(data.lastSeen);
-      const timeString = lastSeen.toLocaleString([], { hour: '2-digit', minute: '2-digit', hour12: true });
-      document.getElementById("friend-presence").textContent = `Last seen at ${timeString}`;
-    } else {
-      document.getElementById("friend-presence").textContent = "Offline";
-    }
-
-    const msgRef = ref(db, `messages/${chatId}`);
-    onValue(msgRef, snap => {
+    onValue(ref(db, `messages/${chatId}`), snap => {
       messagesEl.innerHTML = "";
       if (!snap.exists()) return;
-      const messages = Object.entries(snap.val()).sort((a, b) => a[1].timestamp - b[1].timestamp);
-      messages.forEach(([key, m]) => {
-        const isSelf = m.sender === currentUser.uid;
-        renderMessage(key, m, isSelf);
-        if (!isSelf && !m.read) {
-          update(ref(db, `messages/${chatId}/${key}`), { read: true });
-        }
-      });
-    });
-
-    // Update presence
-    update(ref(db, `users/${currentUser.uid}`), {
-      presence: "online",
-      lastSeen: Date.now()
-    });
-    window.addEventListener("beforeunload", () => {
-      update(ref(db, `users/${currentUser.uid}`), {
-        presence: "offline",
-        lastSeen: Date.now()
-      });
+      const messages = Object.values(snap.val()).sort((a, b) => a.timestamp - b.timestamp);
+      messages.forEach(m => renderMessage(m, m.sender === currentUser.uid));
     });
   });
 
-  messageInput.addEventListener("input", () => {
-    sendBtn.disabled = messageInput.value.trim() === "";
-  });
+  if ('webkitSpeechRecognition' in window) {
+    recognition = new webkitSpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.lang = 'en-US';
 
-  document.getElementById("input-area").addEventListener("submit", async e => {
-    e.preventDefault();
-    const text = messageInput.value.trim();
-    if (!text) return;
-    const msg = {
-      sender: currentUser.uid,
-      text,
-      timestamp: Date.now(),
-      read: false
+    recognition.onstart = () => {
+      sendBtn.textContent = "Listening...";
+      sendBtn.classList.add("mic-anim");
     };
-    if (replyingTo) msg.replyTo = replyingTo;
-    await push(ref(db, `messages/${chatId}`), msg);
-    messageInput.value = "";
-    sendBtn.disabled = true;
-    cancelReply();
-  });
+
+    recognition.onresult = async (event) => {
+      const transcript = event.results[0][0].transcript.trim();
+      if (transcript) {
+        const msg = {
+          sender: currentUser.uid,
+          text: transcript,
+          timestamp: Date.now(),
+          read: false
+        };
+        await push(ref(db, `messages/${chatId}`), msg);
+      }
+      resetVoiceButton();
+    };
+
+    recognition.onerror = () => {
+      alert("Speech recognition error.");
+      resetVoiceButton();
+    };
+
+    recognition.onend = resetVoiceButton;
+  }
+
+  function resetVoiceButton() {
+    sendBtn.textContent = "Voice";
+    sendBtn.classList.remove("mic-anim");
+  }
+
+  sendBtn.onclick = async () => {
+    const text = messageInput.value.trim();
+    if (text) {
+      const msg = {
+        sender: currentUser.uid,
+        text,
+        timestamp: Date.now(),
+        read: false
+      };
+      if (replyingTo) msg.replyTo = replyingTo;
+      await push(ref(db, `messages/${chatId}`), msg);
+      messageInput.value = "";
+      updateSendButton();
+      cancelReply();
+    } else {
+      if (recognition) {
+        recognition.start();
+      } else {
+        alert("Voice input not supported in this browser.");
+      }
+    }
+  };
 </script>
 
 </body>
