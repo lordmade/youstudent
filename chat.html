@@ -49,6 +49,9 @@
       box-shadow: 0 1px 2px rgba(0,0,0,0.1);
       white-space: pre-wrap;
       position: relative;
+      touch-action: pan-y; /* enable vertical scroll */
+      user-select: text;
+      background-clip: padding-box;
     }
     .message.self {
       background: #ef4444;
@@ -121,6 +124,7 @@
       border: none;
       cursor: pointer;
       height: 40px;
+      user-select: none;
     }
     .cancel-reply {
       position: absolute;
@@ -143,11 +147,14 @@
       padding: 4px 8px;
       z-index: 999;
       display: none;
+      gap: 6px;
+      user-select: none;
     }
     .emoji-picker span {
       cursor: pointer;
       padding: 4px;
       font-size: 1.2rem;
+      user-select: none;
     }
     .mic-anim {
       animation: pulse 1s infinite;
@@ -184,8 +191,13 @@
   </div>
 </form>
 
-<div id="emoji-picker" class="emoji-picker">
-  <span>👍</span><span>😂</span><span>🔥</span><span>❤️</span><span>😢</span><span>😡</span>
+<div id="emoji-picker" class="emoji-picker" aria-label="Emoji picker" role="list">
+  <span role="button" tabindex="0" aria-label="Thumbs up emoji">👍</span>
+  <span role="button" tabindex="0" aria-label="Laughing emoji">😂</span>
+  <span role="button" tabindex="0" aria-label="Fire emoji">🔥</span>
+  <span role="button" tabindex="0" aria-label="Heart emoji">❤️</span>
+  <span role="button" tabindex="0" aria-label="Crying emoji">😢</span>
+  <span role="button" tabindex="0" aria-label="Angry emoji">😡</span>
 </div>
 
 <script type="module">
@@ -218,21 +230,25 @@
   let replyingTo = null;
   let reactingKey = null;
 
+  // Helper to get URL param
   function getParam(name) {
     return new URLSearchParams(location.search).get(name);
   }
 
+  // Format timestamp
   function formatTime(ms) {
     const d = new Date(ms);
     return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   }
 
+  // Cancel reply UI
   function cancelReply() {
     replyingTo = null;
     replyBox.classList.add("hidden");
     replyText.textContent = "";
   }
 
+  // Render message bubbles with swipe & long press
   function renderMessage(key, msg, isSelf) {
     const div = document.createElement("div");
     div.className = `message ${isSelf ? "self" : "friend"}`;
@@ -243,15 +259,51 @@
       div.appendChild(quote);
     }
     div.append(msg.text);
+
     const time = document.createElement("small");
     time.textContent = isSelf
       ? `${formatTime(msg.timestamp)} • ${msg.read ? "Delivered" : "Sent"}`
       : formatTime(msg.timestamp);
     div.appendChild(time);
+
+    // Long press for emoji picker
+    let pressTimer = null;
+    div.addEventListener("touchstart", (e) => {
+      pressTimer = setTimeout(() => {
+        showEmojiPicker(div, key);
+      }, 600);
+    });
+    div.addEventListener("touchend", (e) => {
+      if (pressTimer) clearTimeout(pressTimer);
+    });
+    div.addEventListener("touchmove", () => {
+      if (pressTimer) clearTimeout(pressTimer);
+    });
+
+    // Swipe right for reply
+    let startX = null;
+    div.addEventListener("touchstart", (e) => {
+      startX = e.touches[0].clientX;
+    });
+    div.addEventListener("touchend", (e) => {
+      if (startX === null) return;
+      const endX = e.changedTouches[0].clientX;
+      const deltaX = endX - startX;
+      if (deltaX > 60) { // swipe right threshold
+        replyingTo = msg.text;
+        replyText.textContent = msg.text;
+        replyBox.classList.remove("hidden");
+        // Scroll input into view
+        messageInput.focus();
+      }
+      startX = null;
+    });
+
     messagesEl.appendChild(div);
     messagesEl.scrollTop = messagesEl.scrollHeight;
   }
 
+  // Show emoji picker near tapped message
   function showEmojiPicker(target, key) {
     const rect = target.getBoundingClientRect();
     emojiPicker.style.top = (rect.top - 50 + window.scrollY) + "px";
@@ -260,10 +312,12 @@
     reactingKey = key;
   }
 
+  // Hide emoji picker when clicking outside
   document.addEventListener("click", (e) => {
     if (!emojiPicker.contains(e.target)) emojiPicker.style.display = "none";
   });
 
+  // Add reaction on emoji click
   emojiPicker.querySelectorAll("span").forEach(span => {
     span.onclick = () => {
       if (reactingKey) {
@@ -292,6 +346,8 @@
     } else if (data.lastSeen) {
       const lastSeen = new Date(data.lastSeen);
       document.getElementById("friend-presence").textContent = `Last seen at ${lastSeen.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+    } else {
+      document.getElementById("friend-presence").textContent = "Offline";
     }
 
     onValue(ref(db, `messages/${chatId}`), snap => {
@@ -307,6 +363,7 @@
       });
     });
 
+    // Update presence on unload
     update(ref(db, `users/${currentUser.uid}`), {
       presence: "online",
       lastSeen: Date.now()
@@ -319,7 +376,7 @@
     });
   });
 
-  // Handle Voice/Send toggle and recognition
+  // Voice/Send button logic and speech recognition
   function updateSendButton() {
     const hasText = messageInput.value.trim() !== "";
     sendBtn.textContent = hasText ? "Send" : "Voice";
@@ -347,17 +404,12 @@
       sendBtn.classList.add("mic-anim");
     };
 
-    recognition.onresult = async (event) => {
+    recognition.onresult = (event) => {
       const transcript = event.results[0][0].transcript.trim();
       if (transcript) {
-        const msg = {
-          sender: currentUser.uid,
-          text: transcript,
-          timestamp: Date.now(),
-          read: false
-        };
-        if (replyingTo) msg.replyTo = replyingTo;
-        await push(ref(db, `messages/${chatId}`), msg);
+        messageInput.value = transcript;
+        messageInput.focus();
+        updateSendButton();
         cancelReply();
       }
       resetVoiceButton();
@@ -368,7 +420,11 @@
   }
 
   function resetVoiceButton() {
-    sendBtn.textContent = "Voice";
+    if (!messageInput.value.trim()) {
+      sendBtn.textContent = "Voice";
+    } else {
+      sendBtn.textContent = "Send";
+    }
     sendBtn.classList.remove("mic-anim");
   }
 
