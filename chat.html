@@ -6,6 +6,7 @@
   <title>Chaxo - Chat</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
+    * { -webkit-user-select: none; user-select: none; }
     body {
       font-family: 'Segoe UI', sans-serif;
       background: #f9f9f9;
@@ -129,6 +130,25 @@
       font-weight: bold;
       cursor: pointer;
     }
+    .reaction {
+      font-size: 1.25rem;
+      margin-top: 4px;
+      text-align: right;
+    }
+    .emoji-picker {
+      position: absolute;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.15);
+      padding: 4px 8px;
+      z-index: 999;
+      display: none;
+    }
+    .emoji-picker span {
+      cursor: pointer;
+      padding: 4px;
+      font-size: 1.2rem;
+    }
     .mic-anim {
       animation: pulse 1s infinite;
       background-color: #dc2626 !important;
@@ -159,15 +179,19 @@
     <span class="cancel-reply" onclick="cancelReply()">×</span>
   </div>
   <div id="input-form">
-    <input type="text" id="message-input" placeholder="Type a message..." required />
+    <input type="text" id="message-input" placeholder="Type a message..." />
     <button id="send-btn" type="button">Voice</button>
   </div>
 </form>
 
+<div id="emoji-picker" class="emoji-picker">
+  <span>👍</span><span>😂</span><span>🔥</span><span>❤️</span><span>😢</span><span>😡</span>
+</div>
+
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
   import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
-  import { getDatabase, ref, onValue, push, get } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
+  import { getDatabase, ref, onValue, push, update, get } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
@@ -188,10 +212,11 @@
   const sendBtn = document.getElementById("send-btn");
   const replyBox = document.getElementById("reply-box");
   const replyText = document.getElementById("reply-text");
+  const emojiPicker = document.getElementById("emoji-picker");
 
   let currentUser, friendUid, chatId;
   let replyingTo = null;
-  let recognition = null;
+  let reactingKey = null;
 
   function getParam(name) {
     return new URLSearchParams(location.search).get(name);
@@ -208,26 +233,93 @@
     replyText.textContent = "";
   }
 
-  function renderMessage(msg, isSelf) {
+  function renderMessage(key, msg, isSelf) {
     const div = document.createElement("div");
     div.className = `message ${isSelf ? "self" : "friend"}`;
-
     if (msg.replyTo) {
       const quote = document.createElement("div");
       quote.className = "quoted-text";
       quote.textContent = msg.replyTo;
       div.appendChild(quote);
     }
-
     div.append(msg.text);
     const time = document.createElement("small");
-    time.textContent = formatTime(msg.timestamp || Date.now());
+    time.textContent = isSelf
+      ? `${formatTime(msg.timestamp)} • ${msg.read ? "Delivered" : "Sent"}`
+      : formatTime(msg.timestamp);
     div.appendChild(time);
-
     messagesEl.appendChild(div);
     messagesEl.scrollTop = messagesEl.scrollHeight;
   }
 
+  function showEmojiPicker(target, key) {
+    const rect = target.getBoundingClientRect();
+    emojiPicker.style.top = (rect.top - 50 + window.scrollY) + "px";
+    emojiPicker.style.left = rect.left + "px";
+    emojiPicker.style.display = "flex";
+    reactingKey = key;
+  }
+
+  document.addEventListener("click", (e) => {
+    if (!emojiPicker.contains(e.target)) emojiPicker.style.display = "none";
+  });
+
+  emojiPicker.querySelectorAll("span").forEach(span => {
+    span.onclick = () => {
+      if (reactingKey) {
+        update(ref(db, `messages/${chatId}/${reactingKey}`), {
+          reaction: span.textContent
+        });
+        emojiPicker.style.display = "none";
+      }
+    };
+  });
+
+  onAuthStateChanged(auth, async (user) => {
+    if (!user) return location.href = "login.html";
+    currentUser = user;
+    friendUid = getParam("uid");
+    chatId = currentUser.uid < friendUid ? `${currentUser.uid}_${friendUid}` : `${friendUid}_${currentUser.uid}`;
+
+    const userSnap = await get(ref(db, `users/${friendUid}`));
+    const data = userSnap.val();
+    document.getElementById("friend-name").textContent = data.name || "Friend";
+    document.getElementById("friend-photo").src = data.photoURL || "https://www.gravatar.com/avatar?d=mp";
+
+    const presence = data.presence;
+    if (presence === "online") {
+      document.getElementById("friend-presence").textContent = "Online";
+    } else if (data.lastSeen) {
+      const lastSeen = new Date(data.lastSeen);
+      document.getElementById("friend-presence").textContent = `Last seen at ${lastSeen.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+    }
+
+    onValue(ref(db, `messages/${chatId}`), snap => {
+      messagesEl.innerHTML = "";
+      if (!snap.exists()) return;
+      const messages = Object.entries(snap.val()).sort((a, b) => a[1].timestamp - b[1].timestamp);
+      messages.forEach(([key, m]) => {
+        const isSelf = m.sender === currentUser.uid;
+        renderMessage(key, m, isSelf);
+        if (!isSelf && !m.read) {
+          update(ref(db, `messages/${chatId}/${key}`), { read: true });
+        }
+      });
+    });
+
+    update(ref(db, `users/${currentUser.uid}`), {
+      presence: "online",
+      lastSeen: Date.now()
+    });
+    window.addEventListener("beforeunload", () => {
+      update(ref(db, `users/${currentUser.uid}`), {
+        presence: "offline",
+        lastSeen: Date.now()
+      });
+    });
+  });
+
+  // Handle Voice/Send toggle and recognition
   function updateSendButton() {
     const hasText = messageInput.value.trim() !== "";
     sendBtn.textContent = hasText ? "Send" : "Voice";
@@ -243,30 +335,7 @@
     }
   });
 
-  onAuthStateChanged(auth, async (user) => {
-    if (!user) return location.href = "login.html";
-    currentUser = user;
-    friendUid = getParam("uid");
-    chatId = currentUser.uid < friendUid ? `${currentUser.uid}_${friendUid}` : `${friendUid}_${currentUser.uid}`;
-
-    const userSnap = await get(ref(db, `users/${friendUid}`));
-    const data = userSnap.val();
-    document.getElementById("friend-name").textContent = data.name || "Friend";
-    document.getElementById("friend-photo").src = data.photoURL || "https://www.gravatar.com/avatar?d=mp";
-    document.getElementById("friend-presence").textContent = data.presence === "online"
-      ? "Online"
-      : data.lastSeen
-        ? "Last seen: " + new Date(data.lastSeen).toLocaleString()
-        : "Offline";
-
-    onValue(ref(db, `messages/${chatId}`), snap => {
-      messagesEl.innerHTML = "";
-      if (!snap.exists()) return;
-      const messages = Object.values(snap.val()).sort((a, b) => a.timestamp - b.timestamp);
-      messages.forEach(m => renderMessage(m, m.sender === currentUser.uid));
-    });
-  });
-
+  let recognition;
   if ('webkitSpeechRecognition' in window) {
     recognition = new webkitSpeechRecognition();
     recognition.continuous = false;
@@ -287,16 +356,14 @@
           timestamp: Date.now(),
           read: false
         };
+        if (replyingTo) msg.replyTo = replyingTo;
         await push(ref(db, `messages/${chatId}`), msg);
+        cancelReply();
       }
       resetVoiceButton();
     };
 
-    recognition.onerror = () => {
-      alert("Speech recognition error.");
-      resetVoiceButton();
-    };
-
+    recognition.onerror = resetVoiceButton;
     recognition.onend = resetVoiceButton;
   }
 
@@ -323,7 +390,7 @@
       if (recognition) {
         recognition.start();
       } else {
-        alert("Voice input not supported in this browser.");
+        alert("Voice input not supported on this browser.");
       }
     }
   };
