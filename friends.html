@@ -6,400 +6,145 @@
   <title>Chaxo - Friends</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    body { font-family: 'Segoe UI', sans-serif; background: #f9f9f9; padding-bottom: 80px; }
+    body { font-family: 'Segoe UI', sans-serif; background: #f9f9f9; padding-bottom: 100px; }
     .tab-nav { position: fixed; bottom: 0; left: 0; right: 0; background: white; display: flex; border-top: 1px solid #ddd; z-index: 10; }
     .tab-nav button { flex: 1; text-align: center; padding: 10px 0; font-weight: bold; color: #555; border-top: 3px solid transparent; }
     .tab-nav button.active { color: #ef4444; border-color: #ef4444; }
     .tab-panel { display: none; padding: 1rem; }
     .tab-panel.active { display: block; }
-    .friend-card {
-      display: flex; align-items: center; background: white; padding: 1rem; border-radius: 8px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.05); margin-bottom: 1rem; cursor: pointer; border: 2px solid transparent;
-      transition: box-shadow 0.3s, border-color 0.3s;
-    }
-    .friend-card.unread {
-      border-color: #ef4444;
-      box-shadow: 0 4px 10px rgba(239,68,68,0.5);
-    }
-    .friend-card:hover { background: #f3f4f6; }
-    .status-indicator { width: 10px; height: 10px; border-radius: 9999px; margin-left: auto; }
-    .status-online { background: #22c55e; }
-    .status-offline { background: #9ca3af; }
-    #add-friend-btn {
-      position: fixed; bottom: 80px; right: 16px; background: #ef4444; color: white; font-weight: bold;
-      padding: 10px 16px; border-radius: 9999px; display: flex; align-items: center; gap: 8px; z-index: 20;
-    }
-    #add-friend-modal {
-      position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: none; justify-content: center; align-items: center; z-index: 30;
-    }
-    #add-friend-modal.active { display: flex; }
+    .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: none; justify-content: center; align-items: center; z-index: 50; }
+    .modal.active { display: flex; }
     .modal-box { background: white; padding: 1.5rem; border-radius: 8px; width: 90%; max-width: 400px; }
-    .last-message { font-size: 0.9rem; color: #555; margin-top: 4px; }
-    .last-seen { font-size: 0.8rem; color: #888; margin-top: 2px; }
-    .profile-container {
-      max-width: 400px; margin: 2rem auto; background: white; padding: 1.5rem; border-radius: 1rem;
-      box-shadow: 0 0 10px rgba(0,0,0,0.1);
-    }
-    img.avatar {
-      width: 120px; height: 120px; border-radius: 9999px; object-fit: cover; margin-bottom: 1rem;
-    }
-    label {
-      display: block; font-weight: 600; margin-top: 1rem; margin-bottom: 0.25rem;
-    }
-    input[type=text], textarea {
-      width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 0.5rem; font-size: 1rem; resize: vertical;
-    }
-    .readonly {
-      background: #f3f4f6; padding: 0.5rem; border-radius: 0.5rem; user-select: none; white-space: pre-wrap; min-height: 1.5rem;
-    }
   </style>
 </head>
 <body>
-  <header class="p-4 bg-white shadow text-xl font-bold text-red-500">Chaxo</header>
 
-  <!-- Tabs -->
-  <div class="tab-panel active" id="tab-chat">
-    <h2 class="text-lg font-semibold mt-4 mb-2">Your Friends</h2>
-    <div id="friends-list" aria-live="polite" aria-relevant="additions"></div>
-    <p id="no-friends-message" class="text-center text-gray-500 hidden">No friends yet.</p>
+<header class="p-4 bg-white shadow text-xl font-bold text-red-500">Chaxo</header>
+
+<!-- Tabs -->
+<div class="tab-panel active" id="tab-chat">
+  <h2 class="text-lg font-semibold mt-4 mb-2">Your Friends</h2>
+  <div id="friends-list"></div>
+  <p id="no-friends-message" class="text-center text-gray-500 hidden">No friends yet.</p>
+</div>
+<div class="tab-panel" id="tab-groups"><p class="p-4">Groups section</p></div>
+<div class="tab-panel" id="tab-statuses"><p class="p-4">Statuses section</p></div>
+<div class="tab-panel" id="tab-profile">
+  <div class="p-4 space-y-4">
+    <h2 class="text-lg font-semibold">Profile</h2>
+    <input id="profile-name" type="text" class="w-full border p-2 rounded" placeholder="Your name" />
+    <button id="save-profile" class="w-full bg-blue-500 text-white py-2 rounded">Save</button>
+    <button id="signout-btn" class="w-full bg-gray-700 text-white py-2 rounded">Sign Out</button>
+    <button id="delete-btn" class="w-full bg-red-600 text-white py-2 rounded">Delete Account</button>
   </div>
-  <div class="tab-panel" id="tab-groups"><p class="p-4">Groups section</p></div>
-  <div class="tab-panel" id="tab-statuses"><p class="p-4">Statuses section</p></div>
-  <div class="tab-panel" id="tab-profile">
-    <div class="profile-container">
-      <img id="profile-photo" class="avatar" src="https://www.gravatar.com/avatar?d=mp" alt="User Avatar" />
-      <div>
-        <label for="name">Name</label>
-        <input type="text" id="name" />
-      </div>
-      <div>
-        <label for="bio">Bio</label>
-        <textarea id="bio" rows="4"></textarea>
-      </div>
-      <div class="flex flex-col gap-2 mt-4">
-        <button id="save-btn" class="bg-red-500 hover:bg-red-600" style="display:none;">Save Profile</button>
-        <button id="signout-btn" class="bg-gray-500 hover:bg-gray-600" style="display:none;">Sign Out</button>
-        <button id="delete-account-btn" class="bg-red-700 hover:bg-red-800" style="display:none;">Delete Account</button>
-      </div>
+</div>
+
+<!-- Bottom Tab Nav -->
+<div class="tab-nav">
+  <button class="active" data-tab="chat">Chat</button>
+  <button data-tab="groups">Groups</button>
+  <button data-tab="statuses">Statuses</button>
+  <button data-tab="profile">Profile</button>
+</div>
+
+<!-- Confirmation Modal -->
+<div id="confirm-modal" class="modal">
+  <div class="modal-box">
+    <h3 class="text-lg font-semibold mb-4">Confirm Deletion</h3>
+    <p class="mb-4 text-sm">Are you sure you want to delete your account? This cannot be undone.</p>
+    <div class="flex justify-end gap-4">
+      <button id="cancel-delete" class="bg-gray-300 px-4 py-2 rounded">Cancel</button>
+      <button id="confirm-delete" class="bg-red-600 text-white px-4 py-2 rounded">Delete</button>
     </div>
   </div>
+</div>
 
-  <!-- Add Friend Button -->
-  <button id="add-friend-btn" aria-label="Add Friend">
-    <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-    Add Friend
-  </button>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
+import { getAuth, onAuthStateChanged, signOut, deleteUser } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
+import { getDatabase, ref, get, set, remove } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
 
-  <!-- Add Friend Modal -->
-  <div id="add-friend-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title" tabindex="-1">
-    <div class="modal-box">
-      <h3 id="modal-title" class="text-lg font-bold mb-2">Add Friend by Email</h3>
-      <form id="add-friend-form">
-        <input type="email" id="friend-email" class="w-full border p-2 rounded mb-3" placeholder="example@mail.com" required autocomplete="email" />
-        <button type="submit" class="w-full bg-red-500 text-white font-bold py-2 rounded">Add</button>
-      </form MPG
-      <p id="add-result" class="mt-2 text-sm text-center" role="alert" aria-live="assertive"></p>
-    </div>
-  </div>
+// Firebase config
+const firebaseConfig = {
+  apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
+  authDomain: "fire-b-a8878.firebaseapp.com",
+  databaseURL: "https://fire-b-a8878.firebaseio.com",
+  projectId: "fire-b-a8878",
+  storageBucket: "fire-b-a8878.appspot.com",
+  messagingSenderId: "658673187627",
+  appId: "1:658673187627:web:6e4c29af661785f0afa36e"
+};
+const app = initializeApp(firebaseConfig);
+const auth = getAuth();
+const db = getDatabase();
 
-  <!-- Bottom Tab Nav -->
-  <div class="tab-nav" role="tablist">
-    <button class="active" data-tab="chat" role="tab" aria-selected="true" tabindex="0">Chat</button>
-    <button data-tab="groups" role="tab" aria-selected="false" tabindex="-1">Groups</button>
-    <button data-tab="statuses" role="tab" aria-selected="false" tabindex="-1">Statuses</button>
-    <button data-tab="profile" role="tab" aria-selected="false" tabindex="-1">Profile</button>
-  </div>
+const tabBtns = document.querySelectorAll(".tab-nav button");
+const tabPanels = document.querySelectorAll(".tab-panel");
+tabBtns.forEach(btn => {
+  btn.addEventListener("click", () => {
+    tabBtns.forEach(b => b.classList.remove("active"));
+    tabPanels.forEach(p => p.classList.remove("active"));
+    btn.classList.add("active");
+    document.getElementById(`tab-${btn.dataset.tab}`).classList.add("active");
+  });
+});
 
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
-    import { getAuth, onAuthStateChanged, signOut, deleteUser } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
-    import { getDatabase, ref, get, onValue, set, update, remove } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
+// Profile Tab Actions
+const nameInput = document.getElementById("profile-name");
+const saveBtn = document.getElementById("save-profile");
+const signoutBtn = document.getElementById("signout-btn");
+const deleteBtn = document.getElementById("delete-btn");
+const confirmModal = document.getElementById("confirm-modal");
+const confirmDelete = document.getElementById("confirm-delete");
+const cancelDelete = document.getElementById("cancel-delete");
 
-    const firebaseConfig = {
-      apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
-      authDomain: "fire-b-a8878.firebaseapp.com",
-      databaseURL: "https://fire-b-a8878.firebaseio.com",
-      projectId: "fire-b-a8878",
-      storageBucket: "fire-b-a8878.appspot.com",
-      messagingSenderId: "658673187627",
-      appId: "1:658673187627:web:6e4c29af661785f0afa36e"
-    };
+let currentUserId = null;
 
-    const app = initializeApp(firebaseConfig);
-    const auth = getAuth();
-    const db = getDatabase();
+// Load and bind profile
+onAuthStateChanged(auth, async user => {
+  if (!user) return location.href = "login.html";
+  currentUserId = user.uid;
 
-    const tabBtns = document.querySelectorAll(".tab-nav button");
-    const tabPanels = document.querySelectorAll(".tab-panel");
-    const friendsList = document.getElementById("friends-list");
-    const noFriendsMessage = document.getElementById("no-friends-message");
+  const userRef = ref(db, `users/${currentUserId}`);
+  const snap = await get(userRef);
+  if (snap.exists()) {
+    const data = snap.val();
+    nameInput.value = data.name || "";
+  }
+});
 
-    // Profile elements
-    const nameInput = document.getElementById("name");
-    const bioInput = document.getElementById("bio");
-    const photoImg = document.getElementById("profile-photo");
-    const saveBtn = document.getElementById("save-btn Ecclesias
-      tes-btn");
-    const signoutBtn = document.getElementById("signout-btn");
-    const deleteAccountBtn = document.getElementById("delete-account-btn");
+// Save Profile
+saveBtn.onclick = () => {
+  if (!currentUserId) return;
+  const name = nameInput.value.trim();
+  set(ref(db, `users/${currentUserId}/name`), name);
+  alert("Profile updated!");
+};
 
-    // Tab nav accessibility & switching
-    tabBtns.forEach((btn, i) => {
-      btn.addEventListener("click", () => {
-        tabBtns.forEach((b) => {
-          b.classList.remove("active");
-          b.setAttribute("aria-selected", "false");
-          b.tabIndex = -1;
-        });
-        tabPanels.forEach(p => p.classList.remove("active"));
+// Sign Out
+signoutBtn.onclick = () => {
+  signOut(auth).then(() => location.href = "login.html");
+};
 
-        btn.classList.add("active");
-        btn.setAttribute("aria-selected", "true");
-        btn.tabIndex = 0;
+// Delete Account
+deleteBtn.onclick = () => confirmModal.classList.add("active");
 
-        document.getElementById(`tab-${btn.dataset.tab}`).classList.add("active");
-        document.getElementById(`tab-${btn.dataset.tab}`).focus();
-      });
-    });
+cancelDelete.onclick = () => confirmModal.classList.remove("active");
 
-    // Modal controls
-    const modal = document.getElementById("add-friend-modal");
-    const openBtn = document.getElementById("add-friend-btn");
-    const form = document.getElementById("add-friend-form");
-    const result = document.getElementById("add-result");
+confirmDelete.onclick = async () => {
+  if (!currentUserId) return;
+  try {
+    await remove(ref(db, `users/${currentUserId}`));
+    const user = auth.currentUser;
+    await deleteUser(user);
+    alert("Account deleted.");
+    location.href = "signup.html";
+  } catch (err) {
+    alert("Error deleting account. You may need to reauthenticate.");
+    console.error(err);
+  }
+};
+</script>
 
-    openBtn.onclick = () => {
-      modal.classList.add("active");
-      result.textContent = "";
-      form.reset();
-      document.getElementById("friend-email").focus();
-    };
-
-    modal.onclick = e => {
-      if (e.target === modal) modal.classList.remove("active");
-    };
-
-    window.addEventListener("keydown", e => {
-      if (e.key === "Escape" && modal.classList.contains("active")) {
-        modal.classList.remove("active");
-      }
-    });
-
-    // Utility: format last seen time
-    function timeAgo(timestamp) {
-      if (!timestamp) return "";
-      const now = Date.now();
-      const diff = (now - timestamp);
-      if (diff < 60 * 1000) return "just now";
-      if (diff < 3600 * 1000) return Math.floor(diff / 60000) + "m ago";
-      if (diff < 86400 * 1000) return Math.floor(diff / 3600000) + "h ago";
-      return Math.floor(diff / 86400000) + "d ago";
-    }
-
-    // Render a friend card with unread highlight
-    function renderFriend(uid, data, lastMsg, lastMsgTime, unreadCount) {
-      const card = document.createElement("div");
-      card.className = "friend-card";
-      if (unreadCount > 0) card.classList.add("unread");
-      card.setAttribute("tabindex", "0");
-      card.setAttribute("role", "button");
-      card.setAttribute("aria-label", `Chat with ${data.name || "Friend"}. ${unreadCount} unread messages.`);
-
-      card.innerHTML = `
-        <img src="${data.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${data.name || 'Friend'} profile picture" class="w-12 h-12 rounded-full mr-4" />
-        <div>
-          <h4 class="font-bold">${data.name || "Friend"}</h4>
-          <p class="last-message">${lastMsg || "No messages yet"}</p>
-          <p class="last-seen">${data.presence === 'online' ? 'Online' : 'Last seen: ' + timeAgo(data.lastSeen)}</p>
-        </div>
-        <div class="status-indicator ${data.presence === 'online' ? 'status-online' : 'status-offline'}" aria-label="${data.presence === 'online' ? 'Online' : 'Offline'}"></div>
-      `;
-
-      card.onclick = () => {
-        window.location.href = `chat.html?uid=${uid}`;
-      };
-      card.onkeypress = e => {
-        if (e.key === "Enter" || e.key === " ") card.click();
-      };
-
-      friendsList.appendChild(card);
-    }
-
-    // Load friends list, their presence, last message, and unread count
-    async function loadFriends(uid) {
-      friendsList.innerHTML = "";
-      noFriendsMessage.classList.add("hidden");
-
-      const chatsRef = ref(db, "chats");
-      const usersRef = ref(db, "users");
-      const messagesRef = ref(db, "messages");
-
-      const chatsSnap = await get(chatsRef);
-      const usersSnap = await get(usersRef);
-
-      if (!chatsSnap.exists() || !usersSnap.exists()) {
-        noFriendsMessage.classList.remove("hidden");
-        return;
-      }
-
-      const chats = chatsSnap.val();
-      const users = usersSnap.val();
-
-      // Find all friends uids from chats involving current user
-      const friendUids = new Set();
-      for (const chatId in chats) {
-        const participants = chats[chatId].participants || {};
-        if (participants[uid]) {
-          for (const friendUid in participants) {
-            if (friendUid !== uid) friendUids.add(friendUid);
-          }
-        }
-      }
-      if (friendUids.size === 0) {
-        noFriendsMessage.classList.remove("hidden");
-        return;
-      }
-
-      // For each friend, listen to presence, messages, and unread count in real-time
-      friendUids.forEach(friendUid => {
-        // Listen to friend's presence & lastSeen
-        const userRef = ref(db, `users/${friendUid}`);
-        onValue(userRef, userSnap => {
-          const userData = userSnap.exists() ? userSnap.val() : {};
-          // Listen for last messages & unread count
-          const chatId = uid < friendUid ? `${uid}_${friendUid}` : `${friendUid}_${uid}`;
-          const messagesRefChat = ref(db, `messages/${chatId}`);
-
-          onValue(messagesRefChat, msgSnap => {
-            const msgs = msgSnap.val() || {};
-            let lastMsg = null;
-            let lastMsgTime = null;
-            let unreadCount = 0;
-            for (const mid in msgs) {
-              const m = msgs[mid];
-              // last message - find latest by timestamp
-              if (!lastMsgTime || m.timestamp > lastMsgTime) {
-                lastMsg = m.text || (m.image ? "[Image]" : "[Media]");
-                lastMsgTime = m.timestamp;
-              }
-              // Count unread messages sent by friend
-              if (m.sender === friendUid && !m.read) unreadCount++;
-            }
-
-            // Clear previous friend card before re-render to avoid duplicates
-            const existing = [...friendsList.children].find(c =>
-              c.onclick && c.onclick.toString().includes(`chat.html?uid=${friendUid}`));
-            if (existing) friendsList.removeChild(existing);
-
-            renderFriend(friendUid, userData, lastMsg, lastMsgTime, unreadCount);
-          });
-        });
-      });
-    }
-
-    // Load profile data
-    async function loadProfile(uid) {
-      const userSnap = await get(ref(db, `users/${uid}`));
-      if (!userSnap.exists()) {
-        alert("User profile not found");
-        return;
-      }
-      const data = userSnap.val();
-
-      photoImg.src = data.photoURL || "https://www.gravatar.com/avatar?d=mp";
-      nameInput.value = data.name || "";
-      bioInput.value = data.bio || "";
-
-      // Enable editing and show buttons for the current user
-      nameInput.disabled = false;
-      bioInput.disabled = false;
-      saveBtn.style.display = "inline-block";
-      signoutBtn.style.display = "inline-block";
-      deleteAccountBtn.style.display = "inline-block";
-    }
-
-    // Save profile
-    saveBtn.onclick = async () => {
-      const newName = nameInput.value.trim();
-      const newBio = bioInput.value.trim();
-
-      if (!newName) {
-        alert("Name cannot be empty");
-        return;
-      }
-
-      await update(ref(db, `users/${auth.currentUser.uid}`), {
-        name: newName,
-        bio: newBio
-      });
-
-      alert("Profile saved!");
-    };
-
-    // Sign out
-    signoutBtn.onclick = async () => {
-      try {
-        await signOut(auth);
-        alert("Successfully signed out");
-        location.href = "login.html";
-      } catch (error) {
-        alert("Error signing out: " + error.message);
-      }
-    };
-
-    // Delete account
-    deleteAccountBtn.onclick = async () => {
-      if (!confirm("Are you sure you want to delete your account? This action cannot be undone.")) {
-        return;
-      }
-
-      try {
-        // Delete user data from Realtime Database
-        await remove(ref(db, `users/${auth.currentUser.uid}`));
-        
-        // Delete user authentication account
-        const user = auth.currentUser;
-        await deleteUser(user);
-        
-        alert("Account deleted successfully");
-        location.href = "login.html";
-      } catch (error) {
-        alert("Error deleting account: " + error.message);
-      }
-    };
-
-    // Add friend form submission
-    form.onsubmit = async (e) => {
-      e.preventDefault();
-      result.textContent = "Searching...";
-      const email = document.getElementById("friend-email").value.toLowerCase();
-      const usersSnap = await get(ref(db, "users"));
-      const users = usersSnap.val();
-      const current = auth.currentUser.uid;
-      let target = null;
-      for (let uid in users) {
-        if (users[uid].email?.toLowerCase() === email && uid !== current) {
-          target = uid;
-          break;
-        }
-      }
-      if (target) {
-        const chatId = current < target ? `${current}_${target}` : `${target}_${current}`;
-        await set(ref(db, `chats/${chatId}`), { participants: { [current]: true, [target]: true } });
-        result.textContent = "Friend added!";
-        modal.classList.remove("active");
-        await loadFriends(current);
-      } else {
-        result.textContent = "User not found.";
-      }
-    };
-
-    // Auth state listener
-    onAuthStateChanged(auth, async user => {
-      if (!user) return (location.href = "login.html");
-      await loadFriends(user.uid);
-      await loadProfile(user.uid);
-    });
-  </script>
 </body>
 </html>
