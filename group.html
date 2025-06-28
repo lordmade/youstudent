@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Group Chat</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100">
+
+<header class="bg-white p-4 flex justify-between items-center shadow">
+  <h1 class="text-xl font-bold text-red-500">Group Chat</h1>
+  <button id="add-member-btn" class="bg-red-500 text-white px-4 py-2 rounded hidden">Add Members</button>
+</header>
+
+<main class="p-4">
+  <div id="messages" class="space-y-3 mb-20"></div>
+</main>
+
+<!-- Message Input -->
+<footer class="fixed bottom-0 left-0 right-0 bg-white p-4 flex items-center border-t">
+  <input id="message-input" type="text" placeholder="Type a message..." class="flex-1 border p-2 rounded mr-2" />
+  <button id="send-btn" class="bg-red-500 text-white px-4 py-2 rounded">Send</button>
+</footer>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
+  import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
+  import { getDatabase, ref, onChildAdded, push, set, get } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
+    authDomain: "fire-b-a8878.firebaseapp.com",
+    databaseURL: "https://fire-b-a8878.firebaseio.com",
+    projectId: "fire-b-a8878",
+    storageBucket: "fire-b-a8878.appspot.com",
+    messagingSenderId: "658673187627",
+    appId: "1:658673187627:web:6e4c29af661785f0afa36e"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth();
+  const db = getDatabase();
+
+  const messagesEl = document.getElementById('messages');
+  const input = document.getElementById('message-input');
+  const sendBtn = document.getElementById('send-btn');
+  const addBtn = document.getElementById('add-member-btn');
+
+  const urlParams = new URLSearchParams(window.location.search);
+  const groupId = urlParams.get("id");
+
+  let currentUser = null;
+  let groupOwner = null;
+
+  onAuthStateChanged(auth, async user => {
+    if (!user) return location.href = "login.html";
+    currentUser = user;
+
+    const groupSnap = await get(ref(db, `groups/${groupId}`));
+    if (!groupSnap.exists()) {
+      alert("Group not found"); return;
+    }
+
+    const groupData = groupSnap.val();
+    groupOwner = groupData.owner;
+
+    if (currentUser.uid === groupOwner) {
+      addBtn.classList.remove("hidden");
+      addBtn.onclick = () => {
+        const email = prompt("Enter user's email to add:");
+        if (email) addUserByEmail(email);
+      };
+    }
+
+    // Load messages
+    const msgRef = ref(db, `group_messages/${groupId}`);
+    onChildAdded(msgRef, snapshot => {
+      const msg = snapshot.val();
+      const isOwn = msg.sender === currentUser.uid;
+      const msgDiv = document.createElement("div");
+      msgDiv.className = `p-2 rounded max-w-[70%] ${isOwn ? 'ml-auto bg-red-500 text-white' : 'bg-gray-200 text-black'}`;
+      msgDiv.textContent = msg.text;
+      messagesEl.appendChild(msgDiv);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    });
+
+    sendBtn.onclick = async () => {
+      const text = input.value.trim();
+      if (!text) return;
+      const newMsgRef = push(ref(db, `group_messages/${groupId}`));
+      await set(newMsgRef, {
+        text,
+        sender: currentUser.uid,
+        timestamp: Date.now()
+      });
+      input.value = "";
+    };
+  });
+
+  async function addUserByEmail(email) {
+    const usersSnap = await get(ref(db, "users"));
+    const users = usersSnap.val();
+    let targetId = null;
+    for (let uid in users) {
+      if (users[uid].email?.toLowerCase() === email.toLowerCase()) {
+        targetId = uid; break;
+      }
+    }
+    if (!targetId) return alert("User not found");
+
+    const groupRef = ref(db, `groups/${groupId}/members/${targetId}`);
+    await set(groupRef, true);
+    alert("User added to group!");
+  }
+</script>
+
+</body>
+</html>
