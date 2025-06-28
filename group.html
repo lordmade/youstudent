@@ -3,30 +3,43 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Group Chat</title>
+  <title>Chaxo - Group</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family: 'Segoe UI', sans-serif; background: #f9f9f9; }
+    .chat-bubble { max-width: 70%; padding: 10px 14px; border-radius: 16px; margin: 5px 0; }
+    .me { background-color: #ef4444; color: white; align-self: flex-end; border-bottom-right-radius: 0; }
+    .other { background-color: #e5e7eb; color: #111; align-self: flex-start; border-bottom-left-radius: 0; }
+  </style>
 </head>
-<body class="bg-gray-100">
+<body class="flex flex-col min-h-screen">
 
-<header class="bg-white p-4 flex justify-between items-center shadow">
-  <h1 class="text-xl font-bold text-red-500">Group Chat</h1>
-  <button id="add-member-btn" class="bg-red-500 text-white px-4 py-2 rounded hidden">Add Members</button>
+<!-- Header -->
+<header class="p-4 bg-white shadow flex items-center justify-between">
+  <div class="flex items-center gap-3">
+    <img id="group-avatar" src="https://www.gravatar.com/avatar?d=mp" class="w-10 h-10 rounded-full" alt="Group Avatar" />
+    <h1 id="group-name" class="text-lg font-bold text-red-500">Group</h1>
+  </div>
+  <button id="add-member-btn" class="hidden bg-red-500 text-white px-3 py-1 rounded text-sm">Add Members</button>
 </header>
 
-<main class="p-4">
-  <div id="messages" class="space-y-3 mb-20"></div>
-</main>
+<!-- Members List -->
+<div id="members-list" class="px-4 py-2 text-sm text-gray-700"></div>
+
+<!-- Chat Messages -->
+<div id="chat-box" class="flex-1 overflow-y-auto px-4 py-2 flex flex-col gap-2"></div>
 
 <!-- Message Input -->
-<footer class="fixed bottom-0 left-0 right-0 bg-white p-4 flex items-center border-t">
-  <input id="message-input" type="text" placeholder="Type a message..." class="flex-1 border p-2 rounded mr-2" />
-  <button id="send-btn" class="bg-red-500 text-white px-4 py-2 rounded">Send</button>
-</footer>
+<form id="chat-form" class="flex items-center border-t p-2 bg-white">
+  <input id="message-input" type="text" placeholder="Type a message..." required class="flex-1 p-2 border rounded-full outline-none"/>
+  <button type="submit" class="ml-2 px-4 py-2 bg-red-500 text-white rounded-full">Send</button>
+</form>
 
+<!-- Firebase & Script -->
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
   import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
-  import { getDatabase, ref, onChildAdded, push, set, get } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
+  import { getDatabase, ref, onValue, push, set, get, child } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
@@ -42,78 +55,87 @@
   const auth = getAuth();
   const db = getDatabase();
 
-  const messagesEl = document.getElementById('messages');
-  const input = document.getElementById('message-input');
-  const sendBtn = document.getElementById('send-btn');
+  const gid = new URLSearchParams(location.search).get('gid');
+  const chatBox = document.getElementById('chat-box');
+  const chatForm = document.getElementById('chat-form');
+  const messageInput = document.getElementById('message-input');
+  const groupName = document.getElementById('group-name');
+  const groupAvatar = document.getElementById('group-avatar');
   const addBtn = document.getElementById('add-member-btn');
-
-  const urlParams = new URLSearchParams(window.location.search);
-  const groupId = urlParams.get("id");
+  const membersList = document.getElementById('members-list');
 
   let currentUser = null;
-  let groupOwner = null;
 
   onAuthStateChanged(auth, async user => {
-    if (!user) return location.href = "login.html";
+    if (!user) return (location.href = "login.html");
     currentUser = user;
 
-    const groupSnap = await get(ref(db, `groups/${groupId}`));
-    if (!groupSnap.exists()) {
-      alert("Group not found"); return;
-    }
+    const groupRef = ref(db, `groups/${gid}`);
+    onValue(groupRef, snapshot => {
+      if (!snapshot.exists()) return;
 
-    const groupData = groupSnap.val();
-    groupOwner = groupData.owner;
+      const group = snapshot.val();
+      groupName.textContent = group.name || "Group";
+      if (group.avatarURL) groupAvatar.src = group.avatarURL;
 
-    if (currentUser.uid === groupOwner) {
-      addBtn.classList.remove("hidden");
-      addBtn.onclick = () => {
-        const email = prompt("Enter user's email to add:");
-        if (email) addUserByEmail(email);
-      };
-    }
+      // Show Add Members if creator
+      if (group.createdBy === user.uid) {
+        addBtn.classList.remove("hidden");
+        addBtn.onclick = () => {
+          const email = prompt("Enter email of member to add:");
+          if (email) addMemberByEmail(email);
+        };
+      }
 
-    // Load messages
-    const msgRef = ref(db, `group_messages/${groupId}`);
-    onChildAdded(msgRef, snapshot => {
-      const msg = snapshot.val();
-      const isOwn = msg.sender === currentUser.uid;
-      const msgDiv = document.createElement("div");
-      msgDiv.className = `p-2 rounded max-w-[70%] ${isOwn ? 'ml-auto bg-red-500 text-white' : 'bg-gray-200 text-black'}`;
-      msgDiv.textContent = msg.text;
-      messagesEl.appendChild(msgDiv);
-      messagesEl.scrollTop = messagesEl.scrollHeight;
+      // Display members
+      if (group.members) {
+        let names = Object.keys(group.members).map(uid => group.members[uid].name || "Member");
+        membersList.textContent = `Members (${names.length}): ${names.join(", ")}`;
+      }
     });
 
-    sendBtn.onclick = async () => {
-      const text = input.value.trim();
-      if (!text) return;
-      const newMsgRef = push(ref(db, `group_messages/${groupId}`));
-      await set(newMsgRef, {
-        text,
-        sender: currentUser.uid,
-        timestamp: Date.now()
-      });
-      input.value = "";
-    };
+    // Real-time chat messages
+    const messagesRef = ref(db, `groupMessages/${gid}`);
+    onValue(messagesRef, snapshot => {
+      chatBox.innerHTML = "";
+      const messages = snapshot.val();
+      for (let mid in messages) {
+        const msg = messages[mid];
+        const bubble = document.createElement("div");
+        bubble.className = `chat-bubble ${msg.sender === user.uid ? "me self-end" : "other self-start"}`;
+        bubble.textContent = msg.text;
+        chatBox.appendChild(bubble);
+      }
+      chatBox.scrollTop = chatBox.scrollHeight;
+    });
   });
 
-  async function addUserByEmail(email) {
+  chatForm.onsubmit = async (e) => {
+    e.preventDefault();
+    const text = messageInput.value.trim();
+    if (!text || !currentUser) return;
+    const msgRef = push(ref(db, `groupMessages/${gid}`));
+    await set(msgRef, {
+      sender: currentUser.uid,
+      text,
+      timestamp: Date.now()
+    });
+    messageInput.value = "";
+  };
+
+  async function addMemberByEmail(email) {
     const usersSnap = await get(ref(db, "users"));
     const users = usersSnap.val();
-    let targetId = null;
     for (let uid in users) {
       if (users[uid].email?.toLowerCase() === email.toLowerCase()) {
-        targetId = uid; break;
+        const memberRef = ref(db, `groups/${gid}/members/${uid}`);
+        await set(memberRef, { name: users[uid].name || email });
+        alert("Member added!");
+        return;
       }
     }
-    if (!targetId) return alert("User not found");
-
-    const groupRef = ref(db, `groups/${groupId}/members/${targetId}`);
-    await set(groupRef, true);
-    alert("User added to group!");
+    alert("User not found.");
   }
 </script>
-
 </body>
 </html>
