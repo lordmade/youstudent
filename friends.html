@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Chaxo - Friends</title>
+  <title>Chaxo - Friends & Groups</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     body { font-family: 'Segoe UI', sans-serif; background: #f9f9f9; padding-bottom: 80px; }
@@ -12,87 +12,99 @@
     .tab-nav button.active { color: #ef4444; border-color: #ef4444; }
     .tab-panel { display: none; padding: 1rem; }
     .tab-panel.active { display: block; }
-    .friend-card, .group-card {
+    .friend-card {
       display: flex; align-items: center; background: white; padding: 1rem; border-radius: 8px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.05); margin-bottom: 1rem; cursor: pointer;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05); margin-bottom: 1rem; cursor: pointer; border: 2px solid transparent;
       transition: box-shadow 0.3s, border-color 0.3s;
     }
-    .friend-card.unread { border: 2px solid #ef4444; box-shadow: 0 4px 10px rgba(239,68,68,0.5); }
-    #floating-btn {
-      position: fixed; bottom: 80px; right: 16px; background: #ef4444; color: white; font-weight: bold;
-      padding: 10px 16px; border-radius: 9999px; display: flex; align-items: center; gap: 8px; z-index: 20;
+    .friend-card.unread {
+      border-color: #ef4444;
+      box-shadow: 0 4px 10px rgba(239,68,68,0.5);
     }
-    .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: none; justify-content: center; align-items: center; z-index: 30; }
-    .modal.active { display: flex; }
+    .friend-card:hover { background: #f3f4f6; }
+    .status-indicator { width: 10px; height: 10px; border-radius: 9999px; margin-left: auto; }
+    .status-online { background: #22c55e; }
+    .status-offline { background: #9ca3af; }
     .modal-box { background: white; padding: 1.5rem; border-radius: 8px; width: 90%; max-width: 400px; }
+    .last-message { font-size: 0.9rem; color: #555; margin-top: 4px; }
+    .last-seen { font-size: 0.8rem; color: #888; margin-top: 2px; }
   </style>
 </head>
 <body>
 
 <header class="p-4 bg-white shadow text-xl font-bold text-red-500 flex justify-between items-center">
   <span>Chaxo</span>
-  <a id="profile-link" href="#" class="text-sm bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600 transition">View Profile</a>
+  <a id="profile-link" href="#" class="text-sm bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600 transition">
+    View Profile
+  </a>
 </header>
 
-<!-- Chat Tab -->
+<!-- Tabs -->
 <div class="tab-panel active" id="tab-chat">
   <h2 class="text-lg font-semibold mt-4 mb-2">Your Friends</h2>
-  <div id="friends-list"></div>
+  <div id="friends-list" aria-live="polite" aria-relevant="additions"></div>
   <p id="no-friends-message" class="text-center text-gray-500 hidden">No friends yet.</p>
 </div>
-
-<!-- Group Tab -->
 <div class="tab-panel" id="tab-groups">
-  <h2 class="text-lg font-semibold mt-4 mb-2">Groups</h2>
-  <div id="groups-list"></div>
+  <h2 class="text-lg font-semibold mt-4 mb-2">Your Groups</h2>
 </div>
+<div class="tab-panel" id="tab-statuses"><p class="p-4">Statuses section</p></div>
+<div class="tab-panel" id="tab-calls"><p class="p-4">Calls section</p></div>
 
-<!-- Status and Call Tabs -->
-<div class="tab-panel" id="tab-statuses"><p class="p-4 text-gray-500">No statuses yet.</p></div>
-<div class="tab-panel" id="tab-calls"><p class="p-4 text-gray-500">Call history will appear here.</p></div>
-
-<!-- Floating Button -->
-<button id="floating-btn"></button>
+<!-- Reusable Floating Button -->
+<button id="floating-btn" class="fixed bottom-20 right-4 bg-red-500 text-white font-bold px-4 py-2 rounded-full flex items-center gap-2 z-20">
+  <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+  </svg>
+  <span id="floating-btn-text">Add Friend</span>
+</button>
 
 <!-- Add Friend Modal -->
-<div id="modal-add-friend" class="modal">
+<div id="add-friend-modal" role="dialog" aria-modal="true" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-30">
   <div class="modal-box">
     <h3 class="text-lg font-bold mb-2">Add Friend by Email</h3>
     <form id="add-friend-form">
       <input type="email" id="friend-email" class="w-full border p-2 rounded mb-3" placeholder="example@mail.com" required />
       <button type="submit" class="w-full bg-red-500 text-white font-bold py-2 rounded">Add</button>
     </form>
-    <p id="add-result" class="mt-2 text-sm text-center text-red-500"></p>
+    <p id="add-result" class="mt-2 text-sm text-center text-green-600" role="alert"></p>
   </div>
 </div>
 
-<!-- Create Group Modal -->
-<div id="modal-create-group" class="modal">
+<!-- Add Group Modal -->
+<div id="add-group-modal" role="dialog" aria-modal="true" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-30">
   <div class="modal-box">
-    <h3 class="text-lg font-bold mb-2">Create Group</h3>
-    <form id="create-group-form">
+    <h3 class="text-lg font-bold mb-2">Create New Group</h3>
+    <form id="add-group-form">
       <input type="text" id="group-name" class="w-full border p-2 rounded mb-3" placeholder="Group Name" required />
-      <textarea id="group-members" class="w-full border p-2 rounded mb-3" placeholder="Enter user emails, comma-separated" required></textarea>
       <button type="submit" class="w-full bg-red-500 text-white font-bold py-2 rounded">Create Group</button>
     </form>
-    <p id="group-result" class="mt-2 text-sm text-center text-red-500"></p>
+    <p id="group-result" class="mt-2 text-sm text-center text-green-600" role="alert"></p>
   </div>
 </div>
 
-<!-- Tab Navigation -->
-<div class="tab-nav">
-  <button class="active" data-tab="chat">Chat</button>
-  <button data-tab="groups">Groups</button>
-  <button data-tab="statuses">Statuses</button>
-  <button data-tab="calls">Calls</button>
+<!-- Loading Overlay -->
+<div id="loading-overlay" class="fixed inset-0 bg-white bg-opacity-70 flex items-center justify-center z-50 hidden">
+  <svg class="animate-spin h-10 w-10 text-red-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4z"/>
+  </svg>
+</div>
+
+<!-- Bottom Navigation -->
+<div class="tab-nav" role="tablist">
+  <button class="active" data-tab="chat" role="tab" aria-selected="true">Chat</button>
+  <button data-tab="groups" role="tab" aria-selected="false">Groups</button>
+  <button data-tab="statuses" role="tab" aria-selected="false">Statuses</button>
+  <button data-tab="calls" role="tab" aria-selected="false">Calls</button>
 </div>
 
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
   import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
-  import { getDatabase, ref, get, set } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
+  import { getDatabase, ref, get, onValue, set } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
 
-  const config = {
+  const firebaseConfig = {
     apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
     authDomain: "fire-b-a8878.firebaseapp.com",
     databaseURL: "https://fire-b-a8878.firebaseio.com",
@@ -102,94 +114,235 @@
     appId: "1:658673187627:web:6e4c29af661785f0afa36e"
   };
 
-  const app = initializeApp(config);
+  const app = initializeApp(firebaseConfig);
   const auth = getAuth();
   const db = getDatabase();
 
-  const tabs = document.querySelectorAll(".tab-nav button");
-  const panels = document.querySelectorAll(".tab-panel");
+  const tabBtns = document.querySelectorAll(".tab-nav button");
+  const tabPanels = document.querySelectorAll(".tab-panel");
   const floatingBtn = document.getElementById("floating-btn");
-  const modalAddFriend = document.getElementById("modal-add-friend");
-  const modalCreateGroup = document.getElementById("modal-create-group");
+  const floatingBtnText = document.getElementById("floating-btn-text");
+  const friendsList = document.getElementById("friends-list");
+  const noFriendsMessage = document.getElementById("no-friends-message");
+  const loadingOverlay = document.getElementById("loading-overlay");
 
-  const openModal = (modal) => modal.classList.add("active");
-  const closeModal = (modal) => modal.classList.remove("active");
+  const modal = document.getElementById("add-friend-modal");
+  const openBtn = floatingBtn;
+  const form = document.getElementById("add-friend-form");
+  const result = document.getElementById("add-result");
 
-  tabs.forEach(tab => {
-    tab.onclick = () => {
-      tabs.forEach(t => t.classList.remove("active"));
-      panels.forEach(p => p.classList.remove("active"));
-      tab.classList.add("active");
-      document.getElementById("tab-" + tab.dataset.tab).classList.add("active");
+  const groupModal = document.getElementById("add-group-modal");
+  const groupForm = document.getElementById("add-group-form");
+  const groupResult = document.getElementById("group-result");
+  const groupListContainer = document.getElementById("tab-groups");
 
-      // Change floating button
-      if (tab.dataset.tab === "chat") {
-        floatingBtn.textContent = "Add Friend";
-        floatingBtn.onclick = () => openModal(modalAddFriend);
-      } else if (tab.dataset.tab === "groups") {
-        floatingBtn.textContent = "Create Group";
-        floatingBtn.onclick = () => openModal(modalCreateGroup);
+  function showLoading() { loadingOverlay.classList.remove("hidden"); }
+  function hideLoading() { loadingOverlay.classList.add("hidden"); }
+
+  tabBtns.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      tabBtns.forEach((b) => {
+        b.classList.remove("active");
+        b.setAttribute("aria-selected", "false");
+      });
+      tabPanels.forEach(p => p.classList.remove("active"));
+
+      btn.classList.add("active");
+      btn.setAttribute("aria-selected", "true");
+      document.getElementById(`tab-${btn.dataset.tab}`).classList.add("active");
+
+      if (btn.dataset.tab === "chat") {
+        floatingBtn.classList.remove("hidden");
+        floatingBtnText.textContent = "Add Friend";
+        floatingBtn.onclick = () => {
+          modal.classList.remove("hidden");
+          result.textContent = "";
+          form.reset();
+        };
+      } else if (btn.dataset.tab === "groups") {
+        floatingBtn.classList.remove("hidden");
+        floatingBtnText.textContent = "Add Group";
+        floatingBtn.onclick = () => {
+          groupModal.classList.remove("hidden");
+          groupResult.textContent = "";
+          groupForm.reset();
+        };
       } else {
-        floatingBtn.style.display = "none";
-        return;
+        floatingBtn.classList.add("hidden");
       }
-      floatingBtn.style.display = "flex";
-    };
+    });
   });
 
-  document.onclick = e => {
-    if (e.target.classList.contains("modal")) closeModal(e.target);
-  };
+  modal.onclick = (e) => { if (e.target === modal) modal.classList.add("hidden"); };
+  groupModal.onclick = (e) => { if (e.target === groupModal) groupModal.classList.add("hidden"); };
 
-  let currentUserId = "";
+  function timeAgo(timestamp) {
+    if (!timestamp) return "";
+    const now = Date.now();
+    const diff = now - timestamp;
+    if (diff < 60000) return "just now";
+    if (diff < 3600000) return Math.floor(diff / 60000) + "m ago";
+    if (diff < 86400000) return Math.floor(diff / 3600000) + "h ago";
+    return Math.floor(diff / 86400000) + "d ago";
+  }
 
-  onAuthStateChanged(auth, async user => {
-    if (!user) return location.href = "login.html";
-    currentUserId = user.uid;
-    document.getElementById("profile-link").href = `profile.html?uid=${user.uid}&owner=true`;
-  });
+  function renderFriend(uid, data, lastMsg, lastMsgTime, unreadCount) {
+    const card = document.createElement("div");
+    card.className = "friend-card";
+    if (unreadCount > 0) card.classList.add("unread");
 
-  // Add Friend
-  document.getElementById("add-friend-form").onsubmit = async e => {
-    e.preventDefault();
-    const email = document.getElementById("friend-email").value.toLowerCase();
-    const result = document.getElementById("add-result");
-    result.textContent = "Adding...";
+    card.innerHTML = `
+      <img src="${data.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${data.name || 'Friend'}" class="w-12 h-12 rounded-full mr-4" />
+      <div>
+        <h4 class="font-bold">${data.name || "Friend"}</h4>
+        <p class="last-message">${lastMsg || "No messages yet"}</p>
+        <p class="last-seen">${data.presence === 'online' ? 'Online' : 'Last seen: ' + timeAgo(data.lastSeen)}</p>
+      </div>
+      <div class="status-indicator ${data.presence === 'online' ? 'status-online' : 'status-offline'}"></div>
+    `;
+    card.onclick = () => { window.location.href = `chat.html?uid=${uid}`; };
+    friendsList.appendChild(card);
+  }
 
+  async function loadFriends(uid) {
+    showLoading();
+    friendsList.innerHTML = "";
+    noFriendsMessage.classList.add("hidden");
+    const chatsSnap = await get(ref(db, "chats"));
     const usersSnap = await get(ref(db, "users"));
+
+    if (!chatsSnap.exists() || !usersSnap.exists()) {
+      noFriendsMessage.classList.remove("hidden");
+      return;
+    }
+
+    const chats = chatsSnap.val();
     const users = usersSnap.val();
-    let targetId = Object.keys(users).find(uid => users[uid].email?.toLowerCase() === email && uid !== currentUserId);
-    if (!targetId) return result.textContent = "User not found.";
+    const friendUids = new Set();
 
-    const chatId = currentUserId < targetId ? `${currentUserId}_${targetId}` : `${targetId}_${currentUserId}`;
-    await set(ref(db, "chats/" + chatId), { participants: { [currentUserId]: true, [targetId]: true } });
-    result.textContent = "Friend added!";
-    setTimeout(() => closeModal(modalAddFriend), 1000);
-  };
-
-  // Create Group
-  document.getElementById("create-group-form").onsubmit = async e => {
-    e.preventDefault();
-    const name = document.getElementById("group-name").value.trim();
-    const emails = document.getElementById("group-members").value.split(",").map(e => e.trim().toLowerCase());
-    const result = document.getElementById("group-result");
-
-    const usersSnap = await get(ref(db, "users"));
-    const users = usersSnap.val();
-    const memberIds = [currentUserId];
-
-    for (let uid in users) {
-      if (emails.includes(users[uid].email?.toLowerCase()) && uid !== currentUserId) {
-        memberIds.push(uid);
+    for (const chatId in chats) {
+      const participants = chats[chatId].participants || {};
+      if (participants[uid]) {
+        for (const friendUid in participants) {
+          if (friendUid !== uid) friendUids.add(friendUid);
+        }
       }
     }
 
-    if (memberIds.length <= 1) return result.textContent = "No valid users found.";
-    const groupId = `group_${Date.now()}`;
-    await set(ref(db, "groups/" + groupId), { name, members: memberIds });
-    result.textContent = "Group created!";
-    setTimeout(() => closeModal(modalCreateGroup), 1000);
+    if (friendUids.size === 0) {
+      noFriendsMessage.classList.remove("hidden");
+      return;
+    }
+
+    friendUids.forEach(friendUid => {
+      const userRef = ref(db, `users/${friendUid}`);
+      onValue(userRef, userSnap => {
+        const userData = userSnap.exists() ? userSnap.val() : {};
+        const chatId = uid < friendUid ? `${uid}_${friendUid}` : `${friendUid}_${uid}`;
+        const messagesRefChat = ref(db, `messages/${chatId}`);
+
+        onValue(messagesRefChat, msgSnap => {
+          const msgs = msgSnap.val() || {};
+          let lastMsg = null, lastMsgTime = null, unreadCount = 0;
+
+          for (const mid in msgs) {
+            const m = msgs[mid];
+            if (!lastMsgTime || m.timestamp > lastMsgTime) {
+              lastMsg = m.text || (m.image ? "[Image]" : "[Media]");
+              lastMsgTime = m.timestamp;
+            }
+            if (m.sender === friendUid && !m.read) unreadCount++;
+          }
+
+          const existing = [...friendsList.children].find(c =>
+            c.onclick && c.onclick.toString().includes(`chat.html?uid=${friendUid}`));
+          if (existing) friendsList.removeChild(existing);
+          renderFriend(friendUid, userData, lastMsg, lastMsgTime, unreadCount);
+        });
+      });
+    });
+    hideLoading();
+  }
+
+  async function loadGroups(uid) {
+    const groupsSnap = await get(ref(db, "groups"));
+    groupListContainer.innerHTML = '<h2 class="text-lg font-semibold mt-4 mb-2">Your Groups</h2>';
+
+    if (!groupsSnap.exists()) {
+      groupListContainer.innerHTML += '<p class="text-center text-gray-500">No groups found.</p>';
+      return;
+    }
+
+    const groups = groupsSnap.val();
+    let hasGroups = false;
+
+    for (const gid in groups) {
+      const group = groups[gid];
+      if (group.members && group.members[uid]) {
+        hasGroups = true;
+        const div = document.createElement("div");
+        div.className = "friend-card";
+        div.innerHTML = `<div><h4 class="font-bold">${group.name}</h4><p class="last-seen">Created: ${timeAgo(group.createdAt)}</p></div>`;
+        div.onclick = () => window.location.href = `group.html?gid=${gid}`;
+        groupListContainer.appendChild(div);
+      }
+    }
+
+    if (!hasGroups) {
+      groupListContainer.innerHTML += '<p class="text-center text-gray-500">You haven’t joined any groups yet.</p>';
+    }
+  }
+
+  form.onsubmit = async (e) => {
+    e.preventDefault();
+    result.textContent = "Searching...";
+    const email = document.getElementById("friend-email").value.toLowerCase();
+    const usersSnap = await get(ref(db, "users"));
+    const users = usersSnap.val();
+    const current = auth.currentUser.uid;
+    let target = null;
+
+    for (let uid in users) {
+      if (users[uid].email?.toLowerCase() === email && uid !== current) {
+        target = uid;
+        break;
+      }
+    }
+
+    if (target) {
+      const chatId = current < target ? `${current}_${target}` : `${target}_${current}`;
+      await set(ref(db, `chats/${chatId}`), { participants: { [current]: true, [target]: true } });
+      result.textContent = "Friend added!";
+      modal.classList.add("hidden");
+      await loadFriends(current);
+    } else {
+      result.textContent = "User not found.";
+    }
   };
+
+  groupForm.onsubmit = async (e) => {
+    e.preventDefault();
+    const groupName = document.getElementById("group-name").value.trim();
+    if (!groupName) return;
+    const currentUser = auth.currentUser;
+    const groupId = `group_${Date.now()}`;
+    await set(ref(db, `groups/${groupId}`), {
+      name: groupName,
+      createdBy: currentUser.uid,
+      members: { [currentUser.uid]: true },
+      createdAt: Date.now()
+    });
+    groupResult.textContent = "Group created!";
+    groupModal.classList.add("hidden");
+    await loadGroups(currentUser.uid);
+  };
+
+  onAuthStateChanged(auth, async user => {
+    if (!user) return (location.href = "login.html");
+    document.getElementById("profile-link").href = `profile.html?uid=${user.uid}&owner=true`;
+    await loadFriends(user.uid);
+    await loadGroups(user.uid);
+  });
 </script>
 
 </body>
