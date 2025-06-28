@@ -49,9 +49,14 @@
       box-shadow: 0 1px 2px rgba(0,0,0,0.1);
       white-space: pre-wrap;
       position: relative;
-      touch-action: pan-y; /* enable vertical scroll */
+      -webkit-user-select: text;
       user-select: text;
-      background-clip: padding-box;
+      -webkit-touch-callout: default;
+    }
+    .message.long-press-disable-select {
+      user-select: none !important;
+      -webkit-user-select: none !important;
+      -webkit-touch-callout: none !important;
     }
     .message.self {
       background: #ef4444;
@@ -147,14 +152,12 @@
       padding: 4px 8px;
       z-index: 999;
       display: none;
-      gap: 6px;
       user-select: none;
     }
     .emoji-picker span {
       cursor: pointer;
       padding: 4px;
       font-size: 1.2rem;
-      user-select: none;
     }
     .mic-anim {
       animation: pulse 1s infinite;
@@ -180,24 +183,19 @@
 
 <div id="messages"></div>
 
-<form id="input-area">
+<form id="input-area" onsubmit="return false;">
   <div id="reply-box" class="reply-preview hidden">
     <span id="reply-text"></span>
     <span class="cancel-reply" onclick="cancelReply()">×</span>
   </div>
   <div id="input-form">
-    <input type="text" id="message-input" placeholder="Type a message..." />
+    <input type="text" id="message-input" placeholder="Type a message..." autocomplete="off" />
     <button id="send-btn" type="button">Voice</button>
   </div>
 </form>
 
-<div id="emoji-picker" class="emoji-picker" aria-label="Emoji picker" role="list">
-  <span role="button" tabindex="0" aria-label="Thumbs up emoji">👍</span>
-  <span role="button" tabindex="0" aria-label="Laughing emoji">😂</span>
-  <span role="button" tabindex="0" aria-label="Fire emoji">🔥</span>
-  <span role="button" tabindex="0" aria-label="Heart emoji">❤️</span>
-  <span role="button" tabindex="0" aria-label="Crying emoji">😢</span>
-  <span role="button" tabindex="0" aria-label="Angry emoji">😡</span>
+<div id="emoji-picker" class="emoji-picker">
+  <span>👍</span><span>😂</span><span>🔥</span><span>❤️</span><span>😢</span><span>😡</span>
 </div>
 
 <script type="module">
@@ -230,28 +228,70 @@
   let replyingTo = null;
   let reactingKey = null;
 
-  // Helper to get URL param
   function getParam(name) {
     return new URLSearchParams(location.search).get(name);
   }
 
-  // Format timestamp
   function formatTime(ms) {
     const d = new Date(ms);
     return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   }
 
-  // Cancel reply UI
   function cancelReply() {
     replyingTo = null;
     replyBox.classList.add("hidden");
     replyText.textContent = "";
   }
 
-  // Render message bubbles with swipe & long press
   function renderMessage(key, msg, isSelf) {
     const div = document.createElement("div");
     div.className = `message ${isSelf ? "self" : "friend"}`;
+
+    // Prevent text highlight during long press
+    let pressTimer = null;
+    let startX = null;
+    let longPressActive = false;
+
+    div.addEventListener("touchstart", (e) => {
+      // Disable user-select on long press start
+      div.classList.add("long-press-disable-select");
+
+      startX = e.touches[0].clientX;
+
+      pressTimer = setTimeout(() => {
+        longPressActive = true;
+        showEmojiPicker(div, key);
+      }, 600);
+    });
+
+    div.addEventListener("touchend", (e) => {
+      if (pressTimer) clearTimeout(pressTimer);
+
+      // Restore user-select
+      div.classList.remove("long-press-disable-select");
+
+      if (!longPressActive) {
+        // Check swipe right
+        const endX = e.changedTouches[0].clientX;
+        const deltaX = endX - startX;
+        if (deltaX > 60) { // swipe right threshold
+          replyingTo = msg.text;
+          replyText.textContent = msg.text;
+          replyBox.classList.remove("hidden");
+          messageInput.focus();
+        }
+      }
+      longPressActive = false;
+      startX = null;
+    });
+
+    div.addEventListener("touchmove", () => {
+      if (pressTimer) clearTimeout(pressTimer);
+      // Cancel long press and restore user-select on move
+      div.classList.remove("long-press-disable-select");
+      longPressActive = false;
+    });
+
     if (msg.replyTo) {
       const quote = document.createElement("div");
       quote.className = "quoted-text";
@@ -266,44 +306,17 @@
       : formatTime(msg.timestamp);
     div.appendChild(time);
 
-    // Long press for emoji picker
-    let pressTimer = null;
-    div.addEventListener("touchstart", (e) => {
-      pressTimer = setTimeout(() => {
-        showEmojiPicker(div, key);
-      }, 600);
-    });
-    div.addEventListener("touchend", (e) => {
-      if (pressTimer) clearTimeout(pressTimer);
-    });
-    div.addEventListener("touchmove", () => {
-      if (pressTimer) clearTimeout(pressTimer);
-    });
-
-    // Swipe right for reply
-    let startX = null;
-    div.addEventListener("touchstart", (e) => {
-      startX = e.touches[0].clientX;
-    });
-    div.addEventListener("touchend", (e) => {
-      if (startX === null) return;
-      const endX = e.changedTouches[0].clientX;
-      const deltaX = endX - startX;
-      if (deltaX > 60) { // swipe right threshold
-        replyingTo = msg.text;
-        replyText.textContent = msg.text;
-        replyBox.classList.remove("hidden");
-        // Scroll input into view
-        messageInput.focus();
-      }
-      startX = null;
-    });
+    if (msg.reaction) {
+      const reaction = document.createElement("div");
+      reaction.className = "reaction";
+      reaction.textContent = msg.reaction;
+      div.appendChild(reaction);
+    }
 
     messagesEl.appendChild(div);
     messagesEl.scrollTop = messagesEl.scrollHeight;
   }
 
-  // Show emoji picker near tapped message
   function showEmojiPicker(target, key) {
     const rect = target.getBoundingClientRect();
     emojiPicker.style.top = (rect.top - 50 + window.scrollY) + "px";
@@ -312,12 +325,10 @@
     reactingKey = key;
   }
 
-  // Hide emoji picker when clicking outside
   document.addEventListener("click", (e) => {
     if (!emojiPicker.contains(e.target)) emojiPicker.style.display = "none";
   });
 
-  // Add reaction on emoji click
   emojiPicker.querySelectorAll("span").forEach(span => {
     span.onclick = () => {
       if (reactingKey) {
@@ -346,8 +357,6 @@
     } else if (data.lastSeen) {
       const lastSeen = new Date(data.lastSeen);
       document.getElementById("friend-presence").textContent = `Last seen at ${lastSeen.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
-    } else {
-      document.getElementById("friend-presence").textContent = "Offline";
     }
 
     onValue(ref(db, `messages/${chatId}`), snap => {
@@ -363,7 +372,6 @@
       });
     });
 
-    // Update presence on unload
     update(ref(db, `users/${currentUser.uid}`), {
       presence: "online",
       lastSeen: Date.now()
@@ -376,7 +384,7 @@
     });
   });
 
-  // Voice/Send button logic and speech recognition
+  // Handle Voice/Send toggle and recognition
   function updateSendButton() {
     const hasText = messageInput.value.trim() !== "";
     sendBtn.textContent = hasText ? "Send" : "Voice";
@@ -393,6 +401,7 @@
   });
 
   let recognition;
+  let isRecording = false;
   if ('webkitSpeechRecognition' in window) {
     recognition = new webkitSpeechRecognition();
     recognition.continuous = false;
@@ -400,35 +409,45 @@
     recognition.lang = 'en-US';
 
     recognition.onstart = () => {
+      isRecording = true;
       sendBtn.textContent = "Listening...";
       sendBtn.classList.add("mic-anim");
     };
 
     recognition.onresult = (event) => {
       const transcript = event.results[0][0].transcript.trim();
-      if (transcript) {
-        messageInput.value = transcript;
-        messageInput.focus();
-        updateSendButton();
-        cancelReply();
-      }
+      messageInput.value = transcript;
+      updateSendButton();
+    };
+
+    recognition.onerror = (event) => {
+      console.error("Speech recognition error:", event.error);
       resetVoiceButton();
     };
 
-    recognition.onerror = resetVoiceButton;
-    recognition.onend = resetVoiceButton;
+    recognition.onend = () => {
+      isRecording = false;
+      if (messageInput.value.trim()) {
+        sendBtn.textContent = "Send";
+      } else {
+        resetVoiceButton();
+      }
+      sendBtn.classList.remove("mic-anim");
+    };
   }
 
   function resetVoiceButton() {
-    if (!messageInput.value.trim()) {
-      sendBtn.textContent = "Voice";
-    } else {
-      sendBtn.textContent = "Send";
-    }
+    isRecording = false;
+    sendBtn.textContent = "Voice";
     sendBtn.classList.remove("mic-anim");
   }
 
   sendBtn.onclick = async () => {
+    if (isRecording) {
+      recognition.stop();
+      return;
+    }
+
     const text = messageInput.value.trim();
     if (text) {
       const msg = {
