@@ -63,107 +63,144 @@
   </style>
 </head>
 <body>
+  <div class="profile-container">
+    <button onclick="location.href='chat.html?uid=' + profileUid" class="mb-4 text-red-500 font-semibold">← Back to Chat</button>
 
-<div class="profile-container">
-  <button onclick="location.href='chat.html?uid=' + profileUid" class="mb-4 text-red-500 font-semibold">← Back to Chat</button>
+    <img id="profile-photo" class="avatar" src="https://www.gravatar.com/avatar?d=mp" alt="User Avatar" />
+    
+    <div>
+      <label for="name">Name</label>
+      <input type="text" id="name" />
+    </div>
 
-  <img id="profile-photo" class="avatar" src="https://www.gravatar.com/avatar?d=mp" alt="User Avatar" />
-  
-  <div>
-    <label for="name">Name</label>
-    <input type="text" id="name" />
+    <div>
+      <label for="bio">Bio</label>
+      <textarea id="bio" rows="4"></textarea>
+    </div>
+
+    <div class="flex flex-col gap-2 mt-4">
+      <button id="save-btn" class="bg-red-500 hover:bg-red-600" style="display:none;">Save Profile</button>
+      <button id="signout-btn" class="bg-gray-500 hover:bg-gray-600" style="display:none;">Sign Out</button>
+      <button id="delete-account-btn" class="bg-red-700 hover:bg-red-800" style="display:none;">Delete Account</button>
+    </div>
   </div>
 
-  <div>
-    <label for="bio">Bio</label>
-    <textarea id="bio" rows="4"></textarea>
-  </div>
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
+    import { getAuth, onAuthStateChanged, signOut, deleteUser } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
+    import { getDatabase, ref, get, update, remove } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
 
-  <button id="save-btn" style="display:none;">Save Profile</button>
-</div>
+    const firebaseConfig = {
+      apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
+      authDomain: "fire-b-a8878.firebaseapp.com",
+      databaseURL: "https://fire-b-a8878.firebaseio.com",
+      projectId: "fire-b-a8878",
+      storageBucket: "fire-b-a8878.appspot.com",
+      messagingSenderId: "658673187627",
+      appId: "1:658673187627:web:6e4c29af661785f0afa36e"
+    };
 
-<script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
-  import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
-  import { getDatabase, ref, get, update } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth();
+    const db = getDatabase();
 
-  const firebaseConfig = {
-    apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
-    authDomain: "fire-b-a8878.firebaseapp.com",
-    databaseURL: "https://fire-b-a8878.firebaseio.com",
-    projectId: "fire-b-a8878",
-    storageBucket: "fire-b-a8878.appspot.com",
-    messagingSenderId: "658673187627",
-    appId: "1:658673187627:web:6e4c29af661785f0afa36e"
-  };
+    const urlParams = new URLSearchParams(window.location.search);
+    const profileUid = urlParams.get("uid");
 
-  const app = initializeApp(firebaseConfig);
-  const auth = getAuth();
-  const db = getDatabase();
-
-  const urlParams = new URLSearchParams(window.location.search);
-  const profileUid = urlParams.get("uid");
-
-  if (!profileUid) {
-    alert("No user specified");
-    location.href = "index.html";
-  }
-
-  const nameInput = document.getElementById("name");
-  const bioInput = document.getElementById("bio");
-  const photoImg = document.getElementById("profile-photo");
-  const saveBtn = document.getElementById("save-btn");
-
-  let currentUserUid;
-
-  onAuthStateChanged(auth, async (user) => {
-    if (!user) return location.href = "login.html";
-    currentUserUid = user.uid;
-
-    const userSnap = await get(ref(db, `users/${profileUid}`));
-    if (!userSnap.exists()) {
-      alert("User profile not found");
-      return;
-    }
-    const data = userSnap.val();
-
-    photoImg.src = data.photoURL || "https://www.gravatar.com/avatar?d=mp";
-    nameInput.value = data.name || "";
-    bioInput.value = data.bio || "";
-
-    if (currentUserUid === profileUid) {
-      // Owner: editable fields
-      nameInput.disabled = false;
-      bioInput.disabled = false;
-      saveBtn.style.display = "inline-block";
-    } else {
-      // Not owner: readonly mode
-      nameInput.disabled = true;
-      bioInput.disabled = true;
-
-      nameInput.classList.add("readonly");
-      bioInput.classList.add("readonly");
-      saveBtn.style.display = "none";
-    }
-  });
-
-  saveBtn.onclick = async () => {
-    const newName = nameInput.value.trim();
-    const newBio = bioInput.value.trim();
-
-    if (!newName) {
-      alert("Name cannot be empty");
-      return;
+    if (!profileUid) {
+      alert("No user specified");
+      location.href = "index.html";
     }
 
-    await update(ref(db, `users/${profileUid}`), {
-      name: newName,
-      bio: newBio
+    const nameInput = document.getElementById("name");
+    const bioInput = document.getElementById("bio");
+    const photoImg = document.getElementById("profile-photo");
+    const saveBtn = document.getElementById("save-btn");
+    const signoutBtn = document.getElementById("signout-btn");
+    const deleteAccountBtn = document.getElementById("delete-account-btn");
+
+    let currentUserUid;
+
+    onAuthStateChanged(auth, async (user) => {
+      if (!user) return location.href = "login.html";
+      currentUserUid = user.uid;
+
+      const userSnap = await get(ref(db, `users/${profileUid}`));
+      if (!userSnap.exists()) {
+        alert("User profile not found");
+        return;
+      }
+      const data = userSnap.val();
+
+      photoImg.src = data.photoURL || "https://www.gravatar.com/avatar?d=mp";
+      nameInput.value = data.name || "";
+      bioInput.value = data.bio || "";
+
+      if (currentUserUid === profileUid) {
+        // Owner: editable fields and show all buttons
+        nameInput.disabled = false;
+        bioInput.disabled = false;
+        saveBtn.style.display = "inline-block";
+        signoutBtn.style.display = "inline-block";
+        deleteAccountBtn.style.display = "inline-block";
+      } else {
+        // Not owner: readonly mode, hide all buttons
+        nameInput.disabled = true;
+        bioInput.disabled = true;
+        nameInput.classList.add("readonly");
+        bioInput.classList.add("readonly");
+        saveBtn.style.display = "none";
+        signoutBtn.style.display = "none";
+        deleteAccountBtn.style.display = "none";
+      }
     });
 
-    alert("Profile saved!");
-  };
-</script>
+    saveBtn.onclick = async () => {
+      const newName = nameInput.value.trim();
+      const newBio = bioInput.value.trim();
 
+      if (!newName) {
+        alert("Name cannot be empty");
+        return;
+      }
+
+      await update(ref(db, `users/${profileUid}`), {
+        name: newName,
+        bio: newBio
+      });
+
+      alert("Profile saved!");
+    };
+
+    signoutBtn.onclick = async () => {
+      try {
+        await signOut(auth);
+        alert("Successfully signed out");
+        location.href = "login.html";
+      } catch (error) {
+        alert("Error signing out: " + error.message);
+      }
+    };
+
+    deleteAccountBtn.onclick = async () => {
+      if (!confirm("Are you sure you want to delete your account? This action cannot be undone.")) {
+        return;
+      }
+
+      try {
+        // Delete user data from Realtime Database
+        await remove(ref(db, `users/${currentUserUid}`));
+        
+        // Delete user authentication account
+        const user = auth.currentUser;
+        await deleteUser(user);
+        
+        alert("Account deleted successfully");
+        location.href = "login.html";
+      } catch (error) {
+        alert("Error deleting account: " + error.message);
+      }
+    };
+  </script>
 </body>
 </html>
