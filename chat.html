@@ -32,7 +32,7 @@
     #messages {
       flex: 1;
       overflow-y: auto;
-      padding: 72px 1rem 72px; /* top + bottom space for header and input */
+      padding: 72px 1rem 120px;
       background: white;
       display: flex;
       flex-direction: column;
@@ -44,30 +44,48 @@
     .message {
       max-width: 70%;
       padding: 0.5rem 0.9rem;
-      border-radius: 9999px;
+      border-radius: 1rem;
       word-wrap: break-word;
       font-size: 0.95rem;
       line-height: 1.3;
       box-shadow: 0 1px 2px rgba(0,0,0,0.1);
       white-space: pre-wrap;
+      position: relative;
     }
     .message.self {
       background: #ef4444;
       color: white;
       align-self: flex-end;
       border-bottom-right-radius: 6px;
-      border-bottom-left-radius: 9999px;
-      border-top-left-radius: 9999px;
-      border-top-right-radius: 9999px;
     }
     .message.friend {
       background: #e5e7eb;
       color: #111827;
       align-self: flex-start;
       border-bottom-left-radius: 6px;
-      border-bottom-right-radius: 9999px;
-      border-top-right-radius: 9999px;
-      border-top-left-radius: 9999px;
+    }
+    .message small {
+      display: block;
+      font-size: 0.7rem;
+      color: #bbb;
+      margin-top: 4px;
+      text-align: right;
+    }
+    .reply-preview {
+      background: #f3f4f6;
+      border-left: 4px solid #ef4444;
+      padding: 0.5rem;
+      margin-bottom: 0.5rem;
+      border-radius: 0.5rem;
+      font-size: 0.85rem;
+      color: #374151;
+    }
+    .quoted-text {
+      font-size: 0.8rem;
+      color: #6b7280;
+      margin-bottom: 0.25rem;
+      border-left: 2px solid #d1d5db;
+      padding-left: 6px;
     }
     #input-area {
       position: fixed;
@@ -78,11 +96,13 @@
       padding: 0.75rem 1rem;
       box-shadow: 0 -2px 5px rgba(0,0,0,0.1);
       display: flex;
+      flex-direction: column;
       gap: 0.5rem;
-      align-items: center;
       z-index: 10;
-      height: 56px;
-      box-sizing: border-box;
+    }
+    #input-form {
+      display: flex;
+      gap: 0.5rem;
     }
     #message-input {
       flex: 1;
@@ -91,8 +111,7 @@
       border: 1px solid #ddd;
       font-size: 1rem;
       line-height: 1.2;
-      height: 36px;
-      outline-offset: 2px;
+      height: 40px;
     }
     #send-btn {
       background: #ef4444;
@@ -102,60 +121,35 @@
       font-weight: bold;
       border: none;
       cursor: pointer;
-      transition: background-color 0.2s;
-      height: 36px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-    #send-btn:disabled {
-      background: #fca5a5;
-      cursor: not-allowed;
-    }
-    #friend-presence {
-      width: 10px;
-      height: 10px;
-      border-radius: 9999px;
-      margin-left: 0.5rem;
-      background: #9ca3af;
-    }
-    #friend-presence.online {
-      background: #22c55e;
-    }
-    button#back-btn {
-      background: transparent;
-      border: none;
-      color: #ef4444;
-      font-weight: 700;
-      font-size: 1.2rem;
-      cursor: pointer;
-      padding: 0;
-      margin: 0;
+      height: 40px;
     }
   </style>
 </head>
 <body>
 
 <header>
-  <button id="back-btn" aria-label="Back to Friends" title="Back to Friends">←</button>
-  <img id="friend-photo" src="https://www.gravatar.com/avatar?d=mp" alt="Friend's profile picture" class="w-10 h-10 rounded-full" />
+  <button onclick="location.href='friends.html'" class="text-red-500 font-bold">←</button>
+  <img id="friend-photo" src="https://www.gravatar.com/avatar?d=mp" class="w-10 h-10 rounded-full" />
   <div>
-    <h1 id="friend-name" class="font-bold text-lg leading-tight">Friend</h1>
-    <span id="friend-presence" aria-live="polite" aria-atomic="true"></span>
+    <h1 id="friend-name" class="font-bold text-lg">Friend</h1>
+    <span id="friend-presence" class="text-sm text-gray-500">Offline</span>
   </div>
 </header>
 
-<div id="messages" role="log" aria-live="polite" aria-relevant="additions"></div>
+<div id="messages"></div>
 
-<form id="input-area" aria-label="Send message form">
-  <input type="text" id="message-input" placeholder="Type a message..." autocomplete="off" required />
-  <button id="send-btn" type="submit" disabled>Send</button>
+<form id="input-area">
+  <div id="reply-box" class="reply-preview hidden"></div>
+  <div id="input-form">
+    <input type="text" id="message-input" placeholder="Type a message..." required />
+    <button id="send-btn" type="submit" disabled>Send</button>
+  </div>
 </form>
 
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
   import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
-  import { getDatabase, ref, onValue, push, serverTimestamp, update, get } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
+  import { getDatabase, ref, onValue, push, serverTimestamp, get, update } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
@@ -171,20 +165,23 @@
   const auth = getAuth();
   const db = getDatabase();
 
-  const friendNameEl = document.getElementById("friend-name");
-  const friendPhotoEl = document.getElementById("friend-photo");
-  const friendPresenceEl = document.getElementById("friend-presence");
   const messagesEl = document.getElementById("messages");
   const messageInput = document.getElementById("message-input");
   const sendBtn = document.getElementById("send-btn");
-  const backBtn = document.getElementById("back-btn");
-
-  function getQueryParam(param) {
-    const urlParams = new URLSearchParams(window.location.search);
-    return urlParams.get(param);
-  }
+  const replyBox = document.getElementById("reply-box");
 
   let currentUser, friendUid, chatId;
+  let replyingTo = null;
+
+  function getParam(name) {
+    const params = new URLSearchParams(location.search);
+    return params.get(name);
+  }
+
+  function formatTime(ms) {
+    const d = new Date(ms);
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
 
   function scrollToBottom() {
     messagesEl.scrollTop = messagesEl.scrollHeight;
@@ -192,100 +189,79 @@
 
   function renderMessage(msg, isSelf) {
     const div = document.createElement("div");
-    div.className = "message " + (isSelf ? "self" : "friend");
-    div.textContent = msg.text || "[Media]";
+    div.className = `message ${isSelf ? "self" : "friend"}`;
+
+    if (msg.replyTo) {
+      const quote = document.createElement("div");
+      quote.className = "quoted-text";
+      quote.textContent = msg.replyTo;
+      div.appendChild(quote);
+    }
+
+    div.append(msg.text);
+    const time = document.createElement("small");
+    time.textContent = formatTime(msg.timestamp || Date.now());
+    div.appendChild(time);
+
+    // Swipe to reply (touch only)
+    let startX = 0;
+    div.addEventListener("touchstart", e => startX = e.touches[0].clientX);
+    div.addEventListener("touchend", e => {
+      const deltaX = e.changedTouches[0].clientX - startX;
+      if (deltaX > 60) {
+        replyingTo = msg.text;
+        replyBox.textContent = `"${msg.text}"`;
+        replyBox.classList.remove("hidden");
+      }
+    });
+
     messagesEl.appendChild(div);
   }
 
-  function updatePresence(presence) {
-    if (presence === "online") {
-      friendPresenceEl.textContent = "Online";
-      friendPresenceEl.classList.add("online");
-    } else {
-      friendPresenceEl.textContent = "Offline";
-      friendPresenceEl.classList.remove("online");
-    }
-  }
-
-  async function markMessagesRead(chatId, currentUid, friendUid) {
-    const messagesRef = ref(db, `messages/${chatId}`);
-    const snapshot = await get(messagesRef);
-    if (!snapshot.exists()) return;
-
-    const updates = {};
-    const msgs = snapshot.val();
-    for (const mid in msgs) {
-      const m = msgs[mid];
-      if (m.sender === friendUid && !m.read) {
-        updates[`${mid}/read`] = true;
-      }
-    }
-    if (Object.keys(updates).length > 0) {
-      await update(messagesRef, updates);
-    }
-  }
-
   onAuthStateChanged(auth, async (user) => {
-    if (!user) return (location.href = "login.html");
+    if (!user) return location.href = "login.html";
     currentUser = user;
-    friendUid = getQueryParam("uid");
-    if (!friendUid) {
-      alert("No friend specified.");
-      return location.href = "index.html";
-    }
-
+    friendUid = getParam("uid");
     chatId = currentUser.uid < friendUid ? `${currentUser.uid}_${friendUid}` : `${friendUid}_${currentUser.uid}`;
 
-    const friendRef = ref(db, `users/${friendUid}`);
-    onValue(friendRef, (snap) => {
-      if (!snap.exists()) {
-        friendNameEl.textContent = "Unknown User";
-        friendPhotoEl.src = "https://www.gravatar.com/avatar?d=mp";
-        updatePresence("offline");
-        return;
-      }
-      const friendData = snap.val();
-      friendNameEl.textContent = friendData.name || "Friend";
-      friendPhotoEl.src = friendData.photoURL || "https://www.gravatar.com/avatar?d=mp";
-      updatePresence(friendData.presence || "offline");
-    });
+    const userSnap = await get(ref(db, `users/${friendUid}`));
+    const data = userSnap.val();
+    document.getElementById("friend-name").textContent = data.name || "Friend";
+    document.getElementById("friend-photo").src = data.photoURL || "https://www.gravatar.com/avatar?d=mp";
+    document.getElementById("friend-presence").textContent = data.presence === "online" ? "Online" : "Offline";
 
-    const messagesRef = ref(db, `messages/${chatId}`);
-    onValue(messagesRef, (snap) => {
+    onValue(ref(db, `messages/${chatId}`), snap => {
       messagesEl.innerHTML = "";
       if (!snap.exists()) return;
-      const msgs = snap.val();
-      const sorted = Object.values(msgs).sort((a, b) => a.timestamp - b.timestamp);
-      for (const m of sorted) {
-        renderMessage(m, m.sender === currentUser.uid);
-      }
+      const messages = Object.values(snap.val()).sort((a, b) => a.timestamp - b.timestamp);
+      messages.forEach(m => renderMessage(m, m.sender === currentUser.uid));
       scrollToBottom();
-      markMessagesRead(chatId, currentUser.uid, friendUid);
-    });
-
-    messageInput.addEventListener("input", () => {
-      sendBtn.disabled = messageInput.value.trim() === "";
     });
   });
 
-  document.getElementById("input-area").addEventListener("submit", async (e) => {
+  messageInput.addEventListener("input", () => {
+    sendBtn.disabled = messageInput.value.trim() === "";
+  });
+
+  document.getElementById("input-area").addEventListener("submit", async e => {
     e.preventDefault();
-    if (!messageInput.value.trim()) return;
-    const newMsg = {
+    const text = messageInput.value.trim();
+    if (!text) return;
+    const msg = {
       sender: currentUser.uid,
-      text: messageInput.value.trim(),
+      text,
       timestamp: Date.now(),
       read: false
     };
-    const messagesRef = ref(db, `messages/${chatId}`);
-    await push(messagesRef, newMsg);
+    if (replyingTo) {
+      msg.replyTo = replyingTo;
+    }
+    await push(ref(db, `messages/${chatId}`), msg);
     messageInput.value = "";
     sendBtn.disabled = true;
+    replyingTo = null;
+    replyBox.classList.add("hidden");
   });
-
-  backBtn.onclick = () => {
-    window.location.href = "index.html";
-  };
 </script>
 
 </body>
