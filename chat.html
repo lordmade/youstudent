@@ -17,9 +17,7 @@
     }
     header {
       position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
+      top: 0; left: 0; right: 0;
       background: white;
       box-shadow: 0 2px 5px rgba(0,0,0,0.1);
       padding: 1rem;
@@ -38,11 +36,10 @@
       flex-direction: column;
       gap: 0.75rem;
       scroll-behavior: smooth;
-      height: 100vh;
       box-sizing: border-box;
     }
     .message {
-      max-width: 70%;
+      max-width: 75%;
       padding: 0.5rem 0.9rem;
       border-radius: 1rem;
       word-wrap: break-word;
@@ -74,11 +71,12 @@
     .reply-preview {
       background: #f3f4f6;
       border-left: 4px solid #ef4444;
-      padding: 0.5rem;
+      padding: 0.5rem 2.5rem 0.5rem 1rem;
       margin-bottom: 0.5rem;
       border-radius: 0.5rem;
       font-size: 0.85rem;
       color: #374151;
+      position: relative;
     }
     .quoted-text {
       font-size: 0.8rem;
@@ -123,12 +121,39 @@
       cursor: pointer;
       height: 40px;
     }
+    .cancel-reply {
+      position: absolute;
+      top: 6px;
+      right: 10px;
+      color: #ef4444;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    .reaction {
+      font-size: 1.25rem;
+      margin-top: 4px;
+      text-align: right;
+    }
+    .emoji-picker {
+      position: absolute;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.15);
+      padding: 4px 8px;
+      z-index: 999;
+      display: none;
+    }
+    .emoji-picker span {
+      cursor: pointer;
+      padding: 4px;
+      font-size: 1.2rem;
+    }
   </style>
 </head>
 <body>
 
 <header>
-  <button onclick="location.href='friends.html'" class="text-red-500 font-bold">←</button>
+  <button onclick="location.href='index.html'" class="text-red-500 font-bold">←</button>
   <img id="friend-photo" src="https://www.gravatar.com/avatar?d=mp" class="w-10 h-10 rounded-full" />
   <div>
     <h1 id="friend-name" class="font-bold text-lg">Friend</h1>
@@ -139,17 +164,24 @@
 <div id="messages"></div>
 
 <form id="input-area">
-  <div id="reply-box" class="reply-preview hidden"></div>
+  <div id="reply-box" class="reply-preview hidden">
+    <span id="reply-text"></span>
+    <span class="cancel-reply" onclick="cancelReply()">×</span>
+  </div>
   <div id="input-form">
     <input type="text" id="message-input" placeholder="Type a message..." required />
     <button id="send-btn" type="submit" disabled>Send</button>
   </div>
 </form>
 
+<div id="emoji-picker" class="emoji-picker">
+  <span>👍</span><span>😂</span><span>🔥</span><span>❤️</span><span>😢</span><span>😡</span>
+</div>
+
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
   import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
-  import { getDatabase, ref, onValue, push, serverTimestamp, get, update } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
+  import { getDatabase, ref, onValue, push, get, update } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
@@ -169,13 +201,15 @@
   const messageInput = document.getElementById("message-input");
   const sendBtn = document.getElementById("send-btn");
   const replyBox = document.getElementById("reply-box");
+  const replyText = document.getElementById("reply-text");
+  const emojiPicker = document.getElementById("emoji-picker");
 
   let currentUser, friendUid, chatId;
   let replyingTo = null;
+  let reactingKey = null;
 
   function getParam(name) {
-    const params = new URLSearchParams(location.search);
-    return params.get(name);
+    return new URLSearchParams(location.search).get(name);
   }
 
   function formatTime(ms) {
@@ -183,11 +217,13 @@
     return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   }
 
-  function scrollToBottom() {
-    messagesEl.scrollTop = messagesEl.scrollHeight;
+  function cancelReply() {
+    replyingTo = null;
+    replyBox.classList.add("hidden");
+    replyText.textContent = "";
   }
 
-  function renderMessage(msg, isSelf) {
+  function renderMessage(key, msg, isSelf) {
     const div = document.createElement("div");
     div.className = `message ${isSelf ? "self" : "friend"}`;
 
@@ -203,20 +239,61 @@
     time.textContent = formatTime(msg.timestamp || Date.now());
     div.appendChild(time);
 
-    // Swipe to reply (touch only)
+    if (msg.reaction) {
+      const reaction = document.createElement("div");
+      reaction.className = "reaction";
+      reaction.textContent = msg.reaction;
+      div.appendChild(reaction);
+    }
+
+    // Swipe to reply
     let startX = 0;
     div.addEventListener("touchstart", e => startX = e.touches[0].clientX);
     div.addEventListener("touchend", e => {
-      const deltaX = e.changedTouches[0].clientX - startX;
-      if (deltaX > 60) {
+      const dx = e.changedTouches[0].clientX - startX;
+      if (dx > 60) {
         replyingTo = msg.text;
-        replyBox.textContent = `"${msg.text}"`;
+        replyText.textContent = msg.text;
         replyBox.classList.remove("hidden");
       }
     });
 
+    // Long press to react
+    let pressTimer;
+    div.addEventListener("touchstart", () => {
+      pressTimer = setTimeout(() => {
+        showEmojiPicker(div, key);
+      }, 500);
+    });
+    div.addEventListener("touchend", () => clearTimeout(pressTimer));
+    div.addEventListener("touchmove", () => clearTimeout(pressTimer));
+
     messagesEl.appendChild(div);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
   }
+
+  function showEmojiPicker(target, key) {
+    const rect = target.getBoundingClientRect();
+    emojiPicker.style.top = (rect.top - 50 + window.scrollY) + "px";
+    emojiPicker.style.left = rect.left + "px";
+    emojiPicker.style.display = "flex";
+    reactingKey = key;
+  }
+
+  document.addEventListener("click", (e) => {
+    if (!emojiPicker.contains(e.target)) emojiPicker.style.display = "none";
+  });
+
+  emojiPicker.querySelectorAll("span").forEach(span => {
+    span.onclick = () => {
+      if (reactingKey) {
+        update(ref(db, `messages/${chatId}/${reactingKey}`), {
+          reaction: span.textContent
+        });
+        emojiPicker.style.display = "none";
+      }
+    };
+  });
 
   onAuthStateChanged(auth, async (user) => {
     if (!user) return location.href = "login.html";
@@ -233,9 +310,8 @@
     onValue(ref(db, `messages/${chatId}`), snap => {
       messagesEl.innerHTML = "";
       if (!snap.exists()) return;
-      const messages = Object.values(snap.val()).sort((a, b) => a.timestamp - b.timestamp);
-      messages.forEach(m => renderMessage(m, m.sender === currentUser.uid));
-      scrollToBottom();
+      const messages = Object.entries(snap.val()).sort((a, b) => a[1].timestamp - b[1].timestamp);
+      messages.forEach(([key, m]) => renderMessage(key, m, m.sender === currentUser.uid));
     });
   });
 
@@ -253,14 +329,11 @@
       timestamp: Date.now(),
       read: false
     };
-    if (replyingTo) {
-      msg.replyTo = replyingTo;
-    }
+    if (replyingTo) msg.replyTo = replyingTo;
     await push(ref(db, `messages/${chatId}`), msg);
     messageInput.value = "";
     sendBtn.disabled = true;
-    replyingTo = null;
-    replyBox.classList.add("hidden");
+    cancelReply();
   });
 </script>
 
