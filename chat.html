@@ -28,6 +28,12 @@
       z-index: 10;
       height: 56px;
     }
+    #friend-profile-link {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      cursor: pointer;
+    }
     #messages {
       flex: 1;
       overflow-y: auto;
@@ -49,14 +55,6 @@
       box-shadow: 0 1px 2px rgba(0,0,0,0.1);
       white-space: pre-wrap;
       position: relative;
-      -webkit-user-select: text;
-      user-select: text;
-      -webkit-touch-callout: default;
-    }
-    .message.long-press-disable-select {
-      user-select: none !important;
-      -webkit-user-select: none !important;
-      -webkit-touch-callout: none !important;
     }
     .message.self {
       background: #ef4444;
@@ -129,7 +127,6 @@
       border: none;
       cursor: pointer;
       height: 40px;
-      user-select: none;
     }
     .cancel-reply {
       position: absolute;
@@ -152,7 +149,6 @@
       padding: 4px 8px;
       z-index: 999;
       display: none;
-      user-select: none;
     }
     .emoji-picker span {
       cursor: pointer;
@@ -174,22 +170,24 @@
 
 <header>
   <button onclick="location.href='index.html'" class="text-red-500 font-bold">←</button>
-  <img id="friend-photo" src="https://www.gravatar.com/avatar?d=mp" class="w-10 h-10 rounded-full" />
-  <div>
-    <h1 id="friend-name" class="font-bold text-lg">Friend</h1>
-    <span id="friend-presence" class="text-sm text-gray-500">Offline</span>
+  <div id="friend-profile-link">
+    <img id="friend-photo" src="https://www.gravatar.com/avatar?d=mp" class="w-10 h-10 rounded-full" />
+    <div>
+      <h1 id="friend-name" class="font-bold text-lg">Friend</h1>
+      <span id="friend-presence" class="text-sm text-gray-500">Offline</span>
+    </div>
   </div>
 </header>
 
 <div id="messages"></div>
 
-<form id="input-area" onsubmit="return false;">
+<form id="input-area">
   <div id="reply-box" class="reply-preview hidden">
     <span id="reply-text"></span>
     <span class="cancel-reply" onclick="cancelReply()">×</span>
   </div>
   <div id="input-form">
-    <input type="text" id="message-input" placeholder="Type a message..." autocomplete="off" />
+    <input type="text" id="message-input" placeholder="Type a message..." />
     <button id="send-btn" type="button">Voice</button>
   </div>
 </form>
@@ -246,52 +244,6 @@
   function renderMessage(key, msg, isSelf) {
     const div = document.createElement("div");
     div.className = `message ${isSelf ? "self" : "friend"}`;
-
-    // Prevent text highlight during long press
-    let pressTimer = null;
-    let startX = null;
-    let longPressActive = false;
-
-    div.addEventListener("touchstart", (e) => {
-      // Disable user-select on long press start
-      div.classList.add("long-press-disable-select");
-
-      startX = e.touches[0].clientX;
-
-      pressTimer = setTimeout(() => {
-        longPressActive = true;
-        showEmojiPicker(div, key);
-      }, 600);
-    });
-
-    div.addEventListener("touchend", (e) => {
-      if (pressTimer) clearTimeout(pressTimer);
-
-      // Restore user-select
-      div.classList.remove("long-press-disable-select");
-
-      if (!longPressActive) {
-        // Check swipe right
-        const endX = e.changedTouches[0].clientX;
-        const deltaX = endX - startX;
-        if (deltaX > 60) { // swipe right threshold
-          replyingTo = msg.text;
-          replyText.textContent = msg.text;
-          replyBox.classList.remove("hidden");
-          messageInput.focus();
-        }
-      }
-      longPressActive = false;
-      startX = null;
-    });
-
-    div.addEventListener("touchmove", () => {
-      if (pressTimer) clearTimeout(pressTimer);
-      // Cancel long press and restore user-select on move
-      div.classList.remove("long-press-disable-select");
-      longPressActive = false;
-    });
-
     if (msg.replyTo) {
       const quote = document.createElement("div");
       quote.className = "quoted-text";
@@ -299,20 +251,11 @@
       div.appendChild(quote);
     }
     div.append(msg.text);
-
     const time = document.createElement("small");
     time.textContent = isSelf
       ? `${formatTime(msg.timestamp)} • ${msg.read ? "Delivered" : "Sent"}`
       : formatTime(msg.timestamp);
     div.appendChild(time);
-
-    if (msg.reaction) {
-      const reaction = document.createElement("div");
-      reaction.className = "reaction";
-      reaction.textContent = msg.reaction;
-      div.appendChild(reaction);
-    }
-
     messagesEl.appendChild(div);
     messagesEl.scrollTop = messagesEl.scrollHeight;
   }
@@ -351,12 +294,19 @@
     document.getElementById("friend-name").textContent = data.name || "Friend";
     document.getElementById("friend-photo").src = data.photoURL || "https://www.gravatar.com/avatar?d=mp";
 
+    // Add click listener on friend photo + name
+    document.getElementById('friend-profile-link').onclick = () => {
+      location.href = `profile.html?uid=${friendUid}`;
+    };
+
     const presence = data.presence;
     if (presence === "online") {
       document.getElementById("friend-presence").textContent = "Online";
     } else if (data.lastSeen) {
       const lastSeen = new Date(data.lastSeen);
       document.getElementById("friend-presence").textContent = `Last seen at ${lastSeen.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+    } else {
+      document.getElementById("friend-presence").textContent = "Offline";
     }
 
     onValue(ref(db, `messages/${chatId}`), snap => {
@@ -401,7 +351,6 @@
   });
 
   let recognition;
-  let isRecording = false;
   if ('webkitSpeechRecognition' in window) {
     recognition = new webkitSpeechRecognition();
     recognition.continuous = false;
@@ -409,45 +358,34 @@
     recognition.lang = 'en-US';
 
     recognition.onstart = () => {
-      isRecording = true;
       sendBtn.textContent = "Listening...";
       sendBtn.classList.add("mic-anim");
     };
 
-    recognition.onresult = (event) => {
+    recognition.onresult = async (event) => {
       const transcript = event.results[0][0].transcript.trim();
-      messageInput.value = transcript;
-      updateSendButton();
-    };
-
-    recognition.onerror = (event) => {
-      console.error("Speech recognition error:", event.error);
+      if (transcript) {
+        messageInput.value = transcript;  // Put the converted text inside input field
+        updateSendButton();
+      }
       resetVoiceButton();
     };
 
-    recognition.onend = () => {
-      isRecording = false;
-      if (messageInput.value.trim()) {
-        sendBtn.textContent = "Send";
-      } else {
-        resetVoiceButton();
-      }
-      sendBtn.classList.remove("mic-anim");
-    };
+    recognition.onerror = resetVoiceButton;
+    recognition.onend = resetVoiceButton;
   }
 
   function resetVoiceButton() {
-    isRecording = false;
-    sendBtn.textContent = "Voice";
-    sendBtn.classList.remove("mic-anim");
+    if (!messageInput.value.trim()) {
+      sendBtn.textContent = "Voice";
+      sendBtn.classList.remove("mic-anim");
+    } else {
+      sendBtn.textContent = "Send";
+      sendBtn.classList.remove("mic-anim");
+    }
   }
 
   sendBtn.onclick = async () => {
-    if (isRecording) {
-      recognition.stop();
-      return;
-    }
-
     const text = messageInput.value.trim();
     if (text) {
       const msg = {
@@ -469,6 +407,13 @@
       }
     }
   };
+
+  // Cancel reply function
+  function cancelReply() {
+    replyingTo = null;
+    replyBox.classList.add("hidden");
+    replyText.textContent = "";
+  }
 </script>
 
 </body>
