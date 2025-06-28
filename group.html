@@ -20,11 +20,14 @@
     <img id="group-avatar" src="https://www.gravatar.com/avatar?d=mp" class="w-10 h-10 rounded-full" alt="Group Avatar" />
     <h1 id="group-name" class="text-lg font-bold text-red-500">Group</h1>
   </div>
-  <button id="add-member-btn" class="hidden bg-red-500 text-white px-3 py-1 rounded text-sm">Add Members</button>
+  <div class="flex gap-2">
+    <button id="chat-scroll-btn" class="bg-gray-200 text-gray-700 px-3 py-1 rounded text-sm">Chat</button>
+    <button id="add-member-btn" class="hidden bg-red-500 text-white px-3 py-1 rounded text-sm">Add Members</button>
+  </div>
 </header>
 
 <!-- Members List -->
-<div id="members-list" class="px-4 py-2 text-sm text-gray-700"></div>
+<div id="members-list" class="px-4 py-2 grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3"></div>
 
 <!-- Chat Messages -->
 <div id="chat-box" class="flex-1 overflow-y-auto px-4 py-2 flex flex-col gap-2"></div>
@@ -35,11 +38,11 @@
   <button type="submit" class="ml-2 px-4 py-2 bg-red-500 text-white rounded-full">Send</button>
 </form>
 
-<!-- Firebase & Script -->
+<!-- Firebase -->
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
   import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
-  import { getDatabase, ref, onValue, push, set, get, child } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
+  import { getDatabase, ref, onValue, push, set, remove, get } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
@@ -63,8 +66,10 @@
   const groupAvatar = document.getElementById('group-avatar');
   const addBtn = document.getElementById('add-member-btn');
   const membersList = document.getElementById('members-list');
+  const chatScrollBtn = document.getElementById('chat-scroll-btn');
 
   let currentUser = null;
+  let groupData = null;
 
   onAuthStateChanged(auth, async user => {
     if (!user) return (location.href = "login.html");
@@ -73,28 +78,41 @@
     const groupRef = ref(db, `groups/${gid}`);
     onValue(groupRef, snapshot => {
       if (!snapshot.exists()) return;
+      groupData = snapshot.val();
 
-      const group = snapshot.val();
-      groupName.textContent = group.name || "Group";
-      if (group.avatarURL) groupAvatar.src = group.avatarURL;
+      groupName.textContent = groupData.name || "Group";
+      if (groupData.avatarURL) groupAvatar.src = groupData.avatarURL;
 
-      // Show Add Members if creator
-      if (group.createdBy === user.uid) {
+      if (groupData.createdBy === currentUser.uid) {
         addBtn.classList.remove("hidden");
         addBtn.onclick = () => {
-          const email = prompt("Enter email of member to add:");
+          const email = prompt("Enter email to invite:");
           if (email) addMemberByEmail(email);
         };
       }
 
-      // Display members
-      if (group.members) {
-        let names = Object.keys(group.members).map(uid => group.members[uid].name || "Member");
-        membersList.textContent = `Members (${names.length}): ${names.join(", ")}`;
+      // Render Members
+      membersList.innerHTML = "";
+      if (groupData.members) {
+        for (const uid in groupData.members) {
+          const m = groupData.members[uid];
+          const card = document.createElement('div');
+          card.className = "bg-white p-3 shadow rounded flex items-center justify-between gap-4";
+          card.innerHTML = `
+            <div class="flex items-center gap-3">
+              <img src="${m.avatarURL || 'https://www.gravatar.com/avatar?d=mp'}" class="w-10 h-10 rounded-full" />
+              <div>
+                <p class="font-semibold">${m.name || 'Member'}</p>
+              </div>
+            </div>
+            ${uid === currentUser.uid ? `<button class="text-sm bg-gray-200 px-2 py-1 rounded" onclick="exitGroup('${uid}')">Exit</button>` : ""}
+          `;
+          membersList.appendChild(card);
+        }
       }
     });
 
-    // Real-time chat messages
+    // Chat Messages
     const messagesRef = ref(db, `groupMessages/${gid}`);
     onValue(messagesRef, snapshot => {
       chatBox.innerHTML = "";
@@ -102,7 +120,7 @@
       for (let mid in messages) {
         const msg = messages[mid];
         const bubble = document.createElement("div");
-        bubble.className = `chat-bubble ${msg.sender === user.uid ? "me self-end" : "other self-start"}`;
+        bubble.className = `chat-bubble ${msg.sender === currentUser.uid ? "me self-end" : "other self-start"}`;
         bubble.textContent = msg.text;
         chatBox.appendChild(bubble);
       }
@@ -123,19 +141,33 @@
     messageInput.value = "";
   };
 
+  window.exitGroup = async (uid) => {
+    if (confirm("Are you sure you want to exit this group?")) {
+      await remove(ref(db, `groups/${gid}/members/${uid}`));
+      alert("You have left the group.");
+      location.href = "index.html";
+    }
+  };
+
   async function addMemberByEmail(email) {
     const usersSnap = await get(ref(db, "users"));
     const users = usersSnap.val();
     for (let uid in users) {
       if (users[uid].email?.toLowerCase() === email.toLowerCase()) {
-        const memberRef = ref(db, `groups/${gid}/members/${uid}`);
-        await set(memberRef, { name: users[uid].name || email });
+        await set(ref(db, `groups/${gid}/members/${uid}`), {
+          name: users[uid].name || email,
+          avatarURL: users[uid].photoURL || ''
+        });
         alert("Member added!");
         return;
       }
     }
     alert("User not found.");
   }
+
+  chatScrollBtn.onclick = () => {
+    chatBox.scrollIntoView({ behavior: 'smooth' });
+  };
 </script>
 </body>
 </html>
