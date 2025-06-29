@@ -203,10 +203,11 @@
     #input-form {
       display: flex;
       gap: 0.5rem;
+      align-items: center;
     }
     #message-input {
       flex: 1;
-      padding: 0.5rem 1rem;
+      padding: 0.5rem 2.5rem 0.5rem 1rem;
       border-radius: 9999px;
       border: 1px solid #ddd;
       font-size: 1rem;
@@ -219,6 +220,20 @@
       border-color: #4b5563;
       background: #4b5563;
       color: #e5e7eb;
+    }
+    #emoji-btn {
+      position: absolute;
+      right: 60px;
+      height: 40px;
+      width: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      color: #6b7280;
+    }
+    #emoji-btn.dark {
+      color: #9ca3af;
     }
     #send-btn {
       background: #ef4444;
@@ -263,6 +278,79 @@
       cursor: pointer;
       padding: 4px;
       font-size: 1.2rem;
+    }
+    .bottom-sheet {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: white;
+      border-top-left-radius: 16px;
+      border-top-right-radius: 16px;
+      box-shadow: 0 -4px 20px rgba(0,0,0,0.2);
+      max-height: 50vh;
+      overflow-y: auto;
+      z-index: 1000;
+      transform: translateY(100%);
+      transition: transform 0.3s ease;
+      display: none;
+    }
+    .bottom-sheet.open {
+      transform: translateY(0);
+      display: block;
+    }
+    .bottom-sheet.dark {
+      background: #374151;
+    }
+    .bottom-sheet-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid #e5e7eb;
+    }
+    .bottom-sheet-header.dark {
+      border-bottom: 1px solid #4b5563;
+    }
+    .bottom-sheet-tabs {
+      display: flex;
+      gap: 1rem;
+    }
+    .bottom-sheet-tab {
+      padding: 0.5rem 1rem;
+      font-weight: bold;
+      color: #6b7280;
+      cursor: pointer;
+    }
+    .bottom-sheet-tab.active {
+      color: #ef4444;
+      border-bottom: 2px solid #ef4444;
+    }
+    .bottom-sheet-tab.dark {
+      color: #9ca3af;
+    }
+    .bottom-sheet-tab.active.dark {
+      color: #dc2626;
+      border-bottom-color: #dc2626;
+    }
+    .bottom-sheet-content {
+      padding: 1rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .bottom-sheet-content span {
+      cursor: pointer;
+      padding: 4px;
+      font-size: 1.5rem;
+    }
+    .close-btn {
+      color: #ef4444;
+      font-size: 1.2rem;
+      cursor: pointer;
+    }
+    .close-btn.dark {
+      color: #dc2626;
     }
     .mic-anim {
       animation: pulse 1s infinite;
@@ -347,13 +435,32 @@
     <span class="cancel-reply dark:cancel-reply" onclick="cancelReply()">×</span>
   </div>
   <div id="input-form">
-    <input type="text" id="message-input" placeholder="Type a message..." autocomplete="off" />
+    <div class="relative flex-1">
+      <input type="text" id="message-input" placeholder="Type a message..." autocomplete="off" />
+      <span id="emoji-btn" class="emoji-btn dark:emoji-btn" onclick="toggleBottomSheet()">😊</span>
+    </div>
     <button id="send-btn" type="button">Voice</button>
   </div>
 </form>
 
 <div id="emoji-picker" class="emoji-picker">
   <span>👍</span><span>😂</span><span>🔥</span><span>❤️</span><span>😢</span><span>😡</span>
+</div>
+
+<div id="bottom-sheet" class="bottom-sheet">
+  <div class="bottom-sheet-header dark:bottom-sheet-header">
+    <div class="bottom-sheet-tabs">
+      <div class="bottom-sheet-tab active" data-tab="emojis">Emojis</div>
+      <div class="bottom-sheet-tab" data-tab="stickers">Stickers</div>
+    </div>
+    <span class="close-btn dark:close-btn" onclick="toggleBottomSheet()">×</span>
+  </div>
+  <div id="emoji-content" class="bottom-sheet-content">
+    <span>👍</span><span>😂</span><span>🔥</span><span>❤️</span><span>😢</span><span>😡</span>
+  </div>
+  <div id="sticker-content" class="bottom-sheet-content" style="display: none;">
+    <span>🐱</span><span>🐶</span><span>🌟</span><span>🎉</span><span>🍎</span><span>🚀</span>
+  </div>
 </div>
 
 <div id="delete-message-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
@@ -397,6 +504,10 @@
   const modalConfirm = document.getElementById("modal-confirm");
   const modalCancel = document.getElementById("modal-cancel");
   const notificationEl = document.getElementById("notification");
+  const bottomSheet = document.getElementById("bottom-sheet");
+  const emojiContent = document.getElementById("emoji-content");
+  const stickerContent = document.getElementById("sticker-content");
+  const emojiBtn = document.getElementById("emoji-btn");
 
   let currentUser, friendUid, chatId, friendName;
   let replyingTo = null;
@@ -415,7 +526,6 @@
   }
 
   function cancelReply() {
-    console.log("cancelReply called");
     replyingTo = null;
     replyBox.classList.add("hidden");
     replyText.textContent = "";
@@ -454,6 +564,16 @@
         notificationEl.style.display = 'none';
         messagesEl.scrollTop = messagesEl.scrollHeight;
       };
+    }
+  }
+
+  function toggleBottomSheet() {
+    bottomSheet.classList.toggle("open");
+    if (!bottomSheet.classList.contains("open")) {
+      emojiContent.style.display = "flex";
+      stickerContent.style.display = "none";
+      document.querySelector(".bottom-sheet-tab[data-tab='emojis']").classList.add("active");
+      document.querySelector(".bottom-sheet-tab[data-tab='stickers']").classList.remove("active");
     }
   }
 
@@ -563,12 +683,21 @@
     document.querySelector('#message-input').classList.toggle('dark', theme === 'dark');
     sendBtn.classList.toggle('dark', theme === 'dark');
     emojiPicker.classList.toggle('dark', theme === 'dark');
+    emojiBtn.classList.toggle('dark', theme === 'dark');
+    bottomSheet.classList.toggle('dark', theme === 'dark');
+    document.querySelector('.bottom-sheet-header').classList.toggle('dark', theme === 'dark');
+    document.querySelectorAll('.bottom-sheet-tab').forEach(el => el.classList.toggle('dark', theme === 'dark'));
+    document.querySelectorAll('.bottom-sheet-tab.active').forEach(el => el.classList.toggle('dark', theme === 'dark'));
+    document.querySelector('.close-btn').classList.toggle('dark', theme === 'dark');
     deleteMessageModal.classList.toggle('dark', theme === 'dark');
     document.querySelectorAll('.modal-btn-cancel').forEach(el => el.classList.toggle('dark', theme === 'dark'));
   }
 
   document.addEventListener("click", (e) => {
-    if (!emojiPicker.contains(e.target)) emojiPicker.style.display = "none";
+    if (!emojiPicker.contains(e.target) && e.target !== emojiBtn) emojiPicker.style.display = "none";
+    if (!bottomSheet.contains(e.target) && e.target !== emojiBtn && !bottomSheet.classList.contains("open")) {
+      bottomSheet.classList.remove("open");
+    }
     if (!deleteMessageModal.contains(e.target) && e.target !== modalConfirm && e.target !== modalCancel) {
       deleteMessageModal.classList.add("hidden");
       deletingKey = null;
@@ -602,7 +731,6 @@
     }
     chatId = currentUser.uid < friendUid ? `${currentUser.uid}_${friendUid}` : `${friendUid}_${currentUser.uid}`;
 
-    // Parallelize initial data fetching
     try {
       const [settingsSnap, userSnap, presenceSnap, lastSeenSnap] = await Promise.all([
         get(ref(db, `users/${user.uid}/settings`)),
@@ -611,11 +739,9 @@
         get(ref(db, `users/${friendUid}/lastSeen`))
       ]);
 
-      // Theme
       theme = settingsSnap.val()?.theme || 'light';
       applyTheme(theme);
 
-      // Friend data
       if (!userSnap.exists()) {
         alert("Friend not found.");
         return location.href = "index.html";
@@ -625,7 +751,6 @@
       document.getElementById("friend-name").textContent = friendName;
       document.getElementById("friend-photo").src = data.photoURL || "https://www.gravatar.com/avatar?d=mp";
 
-      // Presence
       if (presenceSnap.val() === "online") {
         document.getElementById("friend-presence").textContent = "Online";
       } else if (lastSeenSnap.val()) {
@@ -642,12 +767,10 @@
       location.href = `profile.html?uid=${friendUid}`;
     };
 
-    // Check blocked status
     checkBlockedStatus();
     onValue(ref(db, `users/${currentUser.uid}/blockedUsers/${friendUid}`), () => checkBlockedStatus());
     onValue(ref(db, `users/${friendUid}/blockedUsers/${currentUser.uid}`), () => checkBlockedStatus());
 
-    // Load initial messages (last 50)
     const messagesQuery = query(ref(db, `messages/${chatId}`), limitToLast(50));
     onValue(messagesQuery, snap => {
       messagesEl.innerHTML = "";
@@ -663,7 +786,6 @@
       });
     });
 
-    // Listen for new messages
     onChildAdded(ref(db, `messages/${chatId}`), snap => {
       const msg = snap.val();
       const isSelf = msg.sender === currentUser.uid;
@@ -691,7 +813,6 @@
     });
   });
 
-  // Handle Voice/Send toggle and recognition
   function updateSendButton() {
     const hasText = messageInput.value.trim() !== "";
     sendBtn.textContent = hasText ? "Send" : "Voice";
@@ -786,10 +907,8 @@
     }
   };
 
-  // Handle reply cancellation
   document.querySelector('.cancel-reply').addEventListener('click', cancelReply);
 
-  // Load more messages on scroll to top
   let isLoadingMore = false;
   messagesEl.addEventListener('scroll', async () => {
     if (messagesEl.scrollTop < 50 && !isLoadingMore) {
@@ -900,6 +1019,28 @@
         reactingKey = null;
       }
     };
+  });
+
+  // Bottom sheet tab switching
+  document.querySelectorAll(".bottom-sheet-tab").forEach(tab => {
+    tab.addEventListener("click", () => {
+      document.querySelectorAll(".bottom-sheet-tab").forEach(t => t.classList.remove("active"));
+      tab.classList.add("active");
+      emojiContent.style.display = tab.dataset.tab === "emojis" ? "flex" : "none";
+      stickerContent.style.display = tab.dataset.tab === "stickers" ? "flex" : "none";
+    });
+  });
+
+  // Emoji and sticker selection
+  [emojiContent, stickerContent].forEach(content => {
+    content.querySelectorAll("span").forEach(item => {
+      item.onclick = () => {
+        messageInput.value += item.textContent;
+        messageInput.focus();
+        updateSendButton();
+        toggleBottomSheet();
+      };
+    });
   });
 </script>
 </body>
