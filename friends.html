@@ -25,19 +25,22 @@
     .status-indicator { width: 10px; height: 10px; border-radius: 9999px; margin-left: auto; }
     .status-online { background: #22c55e; }
     .status-offline { background: #9ca3af; }
-    .modal-box { background: white; padding: 1.5rem; border-radius: 8px; width: 90%; max-width: 400px; }
     .last-message { font-size: 0.9rem; color: #555; margin-top: 4px; }
     .last-seen { font-size: 0.8rem; color: #888; margin-top: 2px; }
-    .group-avatar {
+    .group-avatar, .status-avatar {
       width: 48px; height: 48px; border-radius: 9999px; margin-right: 1rem; flex-shrink: 0;
       background-color: #eee; object-fit: cover;
     }
-    .group-info {
-      flex-grow: 1;
+    .group-info { flex-grow: 1; }
+    .member-count { font-size: 0.85rem; color: #777; margin-top: 2px; }
+    .status-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; }
+    .status-card {
+      background: white; padding: 1rem; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+      display: flex; align-items: center;
     }
-    .member-count {
-      font-size: 0.85rem; color: #777; margin-top: 2px;
-    }
+    .status-card:hover { background: #f3f4f6; }
+    .status-text { font-size: 0.9rem; color: #555; margin-top: 4px; }
+    .status-time { font-size: 0.8rem; color: #888; margin-top: 2px; }
   </style>
 </head>
 <body>
@@ -60,38 +63,20 @@
   <div id="groups-list" aria-live="polite" aria-relevant="additions"></div>
   <p id="no-groups-message" class="text-center text-gray-500 hidden">You haven’t joined any groups yet.</p>
 </div>
-<div class="tab-panel" id="tab-statuses"><p class="p-4">Statuses section</p></div>
+<div class="tab-panel" id="tab-statuses">
+  <h2 class="text-lg font-semibold mt-4 mb-2">Statuses</h2>
+  <div id="statuses-list" class="status-grid" aria-live="polite" aria-relevant="additions"></div>
+  <p id="no-statuses-message" class="text-center text-gray-500 hidden">No statuses yet.</p>
+</div>
 <div class="tab-panel" id="tab-calls"><p class="p-4">Calls section</p></div>
 
 <!-- Reusable Floating Button -->
-<button id="floating-btn" class="fixed bottom-20 right-4 bg-red-500 text-white font-bold px-4 py-2 rounded-full flex items-center gap-2 z-20">
+<button id="floating-btn" class="fixed bottom-20 right-4 bg-red-500 text-white font-bold px-4 py-2 rounded-full flex items-center gap-2 z--20">
   <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
   </svg>
   <span id="floating-btn-text">Add Friend</span>
 </button>
-
-<!-- Add Group Modal -->
-<div id="add-group-modal" role="dialog" aria-modal="true" class="fixed top-0 inset-x-0 bg-black bg-opacity-50 hidden items-start justify-center pt-10 z-30">
-  <div class="modal-box">
-    <h3 class="text-lg font-bold mb-2 flex items-center gap-2">
-      <svg class="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4" />
-      </svg>
-      Create New Group
-    </h3>
-    <form id="add-group-form">
-      <input type="text" id="group-name" class="w-full border p-2 rounded mb-3" placeholder="Group Name" required />
-      <button type="submit" class="w-full bg-red-500 text-white font-bold py-2 rounded flex items-center justify-center gap-2">
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4" />
-        </svg>
-        Create Group
-      </button>
-    </form>
-    <p id="group-result" class="mt-2 text-sm text-center text-green-600" role="alert"></p>
-  </div>
-</div>
 
 <!-- Loading Overlay -->
 <div id="loading-overlay" class="fixed inset-0 bg-white bg-opacity-70 flex items-center justify-center z-50 hidden">
@@ -136,10 +121,9 @@
   const noFriendsMessage = document.getElementById("no-friends-message");
   const groupsList = document.getElementById("groups-list");
   const noGroupsMessage = document.getElementById("no-groups-message");
+  const statusesList = document.getElementById("statuses-list");
+  const noStatusesMessage = document.getElementById("no-statuses-message");
   const loadingOverlay = document.getElementById("loading-overlay");
-  const addGroupModal = document.getElementById("add-group-modal");
-  const addGroupForm = document.getElementById("add-group-form");
-  const addGroupResult = document.getElementById("group-result");
 
   function showLoading() { loadingOverlay.classList.remove("hidden"); }
   function hideLoading() { loadingOverlay.classList.add("hidden"); }
@@ -173,17 +157,19 @@
         floatingBtn.classList.remove("hidden");
         floatingBtnText.textContent = "Add Group";
         floatingBtn.onclick = () => {
-          addGroupModal.classList.remove("hidden");
-          addGroupResult.textContent = "";
-          addGroupForm.reset();
+          window.location.href = "add-group.html";
+        };
+      } else if (btn.dataset.tab === "statuses") {
+        floatingBtn.classList.remove("hidden");
+        floatingBtnText.textContent = "Add Status";
+        floatingBtn.onclick = () => {
+          window.location.href = "add-status.html";
         };
       } else {
         floatingBtn.classList.add("hidden");
       }
     });
   });
-
-  addGroupModal.onclick = e => { if (e.target === addGroupModal) addGroupModal.classList.add("hidden"); };
 
   function timeAgo(timestamp) {
     if (!timestamp) return "";
@@ -335,26 +321,71 @@
     });
   }
 
-  addGroupForm.onsubmit = async (e) => {
-    e.preventDefault();
-    const groupName = document.getElementById("group-name").value.trim();
-    if (!groupName) return;
+  function renderStatusCard(statusId, status, userData) {
+    const card = document.createElement("div");
+    card.className = "status-card";
+    card.innerHTML = `
+      <img src="${userData.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${userData.name || 'User'} avatar" class="status-avatar" />
+      <div>
+        <h4 class="font-bold">${userData.name || "User"}</h4>
+        <p class="status-text">${status.text || "No status text"}</p>
+        <p class="status-time">${timeAgo(status.timestamp)}</p>
+      </div>
+    `;
+    statusesList.appendChild(card);
+  }
 
-    const currentUser = auth.currentUser;
-    const groupId = `group_${Date.now()}`;
-    const avatarUrl = `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(groupName)}`;
+  async function loadStatuses(uid) {
+    showLoading();
+    statusesList.innerHTML = "";
+    noStatusesMessage.classList.add("hidden");
 
-    await set(ref(db, `groups/${groupId}`), {
-      name: groupName,
-      createdBy: currentUser.uid,
-      members: { [currentUser.uid]: true },
-      createdAt: Date.now(),
-      avatar: avatarUrl
+    const statusesRef = ref(db, "statuses");
+    const usersRef = ref(db, "users");
+
+    onValue(statusesRef, async (statusesSnap) => {
+      if (!statusesSnap.exists()) {
+        noStatusesMessage.classList.remove("hidden");
+        hideLoading();
+        return;
+      }
+
+      const usersSnap = await get(usersRef);
+      const users = usersSnap.exists() ? usersSnap.val() : {};
+      const statuses = statusesSnap.val();
+      const friendUids = new Set();
+
+      const chatsRef = ref(db, "chats");
+      const chatsSnap = await get(chatsRef);
+      if (chatsSnap.exists()) {
+        const chats = chatsSnap.val();
+        for (const chatId in chats) {
+          const participants = chats[chatId].participants || {};
+          if (participants[uid]) {
+            for (const friendUid in participants) {
+              if (friendUid !== uid) friendUids.add(friendUid);
+            }
+          }
+        }
+      }
+      friendUids.add(uid); // Include current user's statuses
+
+      let hasStatuses = false;
+      for (const statusId in statuses) {
+        const status = statuses[statusId];
+        if (friendUids.has(status.userId)) {
+          hasStatuses = true;
+          const userData = users[status.userId] || {};
+          renderStatusCard(statusId, status, userData);
+        }
+      }
+
+      if (!hasStatuses) {
+        noStatusesMessage.classList.remove("hidden");
+      }
+      hideLoading();
     });
-
-    addGroupResult.textContent = "Group created!";
-    addGroupModal.classList.add("hidden");
-  };
+  }
 
   onAuthStateChanged(auth, async user => {
     if (!user) {
@@ -364,8 +395,8 @@
     document.getElementById("profile-link").href = `profile.html?uid=${user.uid}&owner=true`;
     await loadFriends(user.uid);
     await loadGroups(user.uid);
+    await loadStatuses(user.uid);
   });
 </script>
-
 </body>
 </html>
