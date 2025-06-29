@@ -157,6 +157,14 @@
     .own-statuses.dark::-webkit-scrollbar-thumb {
       background: #dc2626;
     }
+    .delete-status {
+      color: #ef4444;
+      cursor: pointer;
+      transition: color 0.2s ease;
+    }
+    .delete-status:hover {
+      color: #dc2626;
+    }
     #no-friends-message, #no-groups-message, #no-statuses-message, #no-own-statuses-message {
       color: #555;
     }
@@ -229,7 +237,7 @@
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
   import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
-  import { getDatabase, ref, onValue, set, push, get } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
+  import { getDatabase, ref, onValue, set, push, get, remove } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
@@ -490,15 +498,30 @@
 
   function renderStatusCard(statusId, status, userData, isOwnStatus = false) {
     const card = document.createElement("div");
-    card.className = `status-card ${isOwnStatus ? 'flex-none w-64' : ''}`; // Fixed width for horizontal scroll
+    card.className = `status-card ${isOwnStatus ? 'flex-none w-64' : ''}`;
     card.innerHTML = `
       <img src="${userData.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${userData.name || 'User'} avatar" class="status-avatar" />
-      <div>
+      <div class="flex-grow">
         <h4 class="font-bold dark:text-gray-100">${userData.name || "User"}</h4>
         <p class="status-text">${status.text || "No status text"}</p>
         <p class="status-time">${timeAgo(status.timestamp)}</p>
       </div>
+      ${isOwnStatus ? `<span class="delete-status ml-auto self-start" data-status-id="${statusId}">&#10005;</span>` : ''}
     `;
+    if (isOwnStatus) {
+      card.querySelector(".delete-status").addEventListener("click", async (e) => {
+        e.stopPropagation();
+        showLoading();
+        try {
+          await remove(ref(db, `statuses/${statusId}`));
+          // Status will be removed in real-time due to onValue listener
+        } catch (error) {
+          console.error("Error deleting status:", error);
+          alert("Failed to delete status.");
+        }
+        hideLoading();
+      });
+    }
     return card;
   }
 
