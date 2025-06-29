@@ -42,40 +42,6 @@
       gap: 0.75rem;
       cursor: pointer;
     }
-    #kebab-menu-btn {
-      cursor: pointer;
-      font-size: 1.5rem;
-      color: #ef4444;
-    }
-    #kebab-menu-btn.dark {
-      color: #dc2626;
-    }
-    #kebab-menu {
-      position: absolute;
-      top: 60px;
-      right: 1rem;
-      background: white;
-      border-radius: 8px;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.2);
-      z-index: 30;
-      display: none;
-      min-width: 150px;
-    }
-    #kebab-menu.dark {
-      background: #374151;
-      color: #e5e7eb;
-    }
-    #kebab-menu div {
-      padding: 0.75rem 1rem;
-      cursor: pointer;
-      font-size: 0.9rem;
-    }
-    #kebab-menu div:hover {
-      background: #f3f4f6;
-    }
-    #kebab-menu div:hover.dark {
-      background: #4b5563;
-    }
     #notification {
       position: fixed;
       top: 56px;
@@ -369,13 +335,7 @@
       <span id="friend-presence" class="text-sm text-gray-500 dark:text-gray-400">Offline</span>
     </div>
   </div>
-  <div id="kebab-menu-btn" class="dark:kebab-menu-btn">⋮</div>
 </header>
-
-<div id="kebab-menu" class="dark:kebab-menu">
-  <div id="delete-chats">Delete All Chats</div>
-  <div id="block-user">Block User</div>
-</div>
 
 <div id="notification" aria-live="polite"></div>
 
@@ -407,32 +367,10 @@
   </div>
 </div>
 
-<div id="delete-chats-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
-  <div class="modal dark:modal">
-    <p class="text-lg font-semibold dark:text-gray-100">Delete All Chats</p>
-    <p class="mt-2 text-gray-600 dark:text-gray-300">Are you sure you want to delete all your chats? This will delete them for both users.</p>
-    <div class="modal-buttons">
-      <button id="delete-chats-confirm" class="modal-btn modal-btn-confirm">Delete</button>
-      <button id="delete-chats-cancel" class="modal-btn modal-btn-cancel dark:modal-btn-cancel">Cancel</button>
-    </div>
-  </div>
-</div>
-
-<div id="block-user-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
-  <div class="modal dark:modal">
-    <p class="text-lg font-semibold dark:text-gray-100">Block User</p>
-    <p class="mt-2 text-gray-600 dark:text-gray-300">Are you sure you want to block this user? You will not be able to send or receive messages.</p>
-    <div class="modal-buttons">
-      <button id="block-user-confirm" class="modal-btn modal-btn-confirm">Block</button>
-      <button id="block-user-cancel" class="modal-btn modal-btn-cancel dark:modal-btn-cancel">Cancel</button>
-    </div>
-  </div>
-</div>
-
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
   import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
-  import { getDatabase, ref, onValue, push, update, get, remove, onChildAdded } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
+  import { getDatabase, ref, onValue, push, update, get, remove, onChildAdded, query, limitToLast } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
@@ -459,20 +397,13 @@
   const modalConfirm = document.getElementById("modal-confirm");
   const modalCancel = document.getElementById("modal-cancel");
   const notificationEl = document.getElementById("notification");
-  const kebabMenuBtn = document.getElementById("kebab-menu-btn");
-  const kebabMenu = document.getElementById("kebab-menu");
-  const deleteChatsModal = document.getElementById("delete-chats-modal");
-  const deleteChatsConfirm = document.getElementById("delete-chats-confirm");
-  const deleteChatsCancel = document.getElementById("delete-chats-cancel");
-  const blockUserModal = document.getElementById("block-user-modal");
-  const blockUserConfirm = document.getElementById("block-user-confirm");
-  const blockUserCancel = document.getElementById("block-user-cancel");
 
   let currentUser, friendUid, chatId, friendName;
   let replyingTo = null;
   let reactingKey = null;
   let deletingKey = null;
   let theme = 'light';
+  let lastMessageKey = null;
 
   function getParam(name) {
     return new URLSearchParams(location.search).get(name);
@@ -484,6 +415,7 @@
   }
 
   function cancelReply() {
+    console.log("cancelReply called");
     replyingTo = null;
     replyBox.classList.add("hidden");
     replyText.textContent = "";
@@ -500,7 +432,7 @@
         deletingKey = null;
       } catch (error) {
         console.error("Error deleting message:", error);
-        alert("Failed to delete message.");
+        alert("Failed to delete message: " + error.message);
       }
     };
     modalCancel.onclick = () => {
@@ -525,80 +457,86 @@
     }
   }
 
-  function renderMessage(key, msg, isSelf) {
-    const container = document.createElement("div");
-    container.className = `message-container ${isSelf ? "self" : "friend"}`;
+  function renderMessages(messages) {
+    const fragment = document.createDocumentFragment();
+    messages.forEach(([key, m]) => {
+      const isSelf = m.sender === currentUser.uid;
+      const container = document.createElement("div");
+      container.className = `message-container ${isSelf ? "self" : "friend"}`;
 
-    const div = document.createElement("div");
-    div.className = `message ${isSelf ? "self" : "friend"} ${theme === 'dark' ? 'dark' : ''}`;
+      const div = document.createElement("div");
+      div.className = `message ${isSelf ? "self" : "friend"} ${theme === 'dark' ? 'dark' : ''}`;
 
-    let pressTimer = null;
-    let startX = null;
-    let longPressActive = false;
+      let pressTimer = null;
+      let startX = null;
+      let longPressActive = false;
 
-    div.addEventListener("touchstart", (e) => {
-      div.classList.add("long-press-disable-select");
-      startX = e.touches[0].clientX;
-      pressTimer = setTimeout(() => {
-        longPressActive = true;
-        if (isSelf) {
-          showDeleteMessageModal(key);
-        } else {
-          showEmojiPicker(div, key);
+      div.addEventListener("touchstart", (e) => {
+        div.classList.add("long-press-disable-select");
+        startX = e.touches[0].clientX;
+        pressTimer = setTimeout(() => {
+          longPressActive = true;
+          if (isSelf) {
+            showDeleteMessageModal(key);
+          } else {
+            showEmojiPicker(div, key);
+          }
+        }, 600);
+      });
+
+      div.addEventListener("touchend", (e) => {
+        if (pressTimer) clearTimeout(pressTimer);
+        div.classList.remove("long-press-disable-select");
+
+        if (!longPressActive) {
+          const endX = e.changedTouches[0].clientX;
+          const deltaX = endX - startX;
+          if (deltaX > 60) {
+            replyingTo = m.text;
+            replyText.textContent = m.text;
+            replyBox.classList.remove("hidden");
+            messageInput.focus();
+          } else if (deltaX < -60 && isSelf) {
+            showDeleteMessageModal(key);
+          }
         }
-      }, 600);
-    });
+        longPressActive = false;
+        startX = null;
+      });
 
-    div.addEventListener("touchend", (e) => {
-      if (pressTimer) clearTimeout(pressTimer);
-      div.classList.remove("long-press-disable-select");
+      div.addEventListener("touchmove", () => {
+        if (pressTimer) clearTimeout(pressTimer);
+        div.classList.remove("long-press-disable-select");
+        longPressActive = false;
+      });
 
-      if (!longPressActive) {
-        const endX = e.changedTouches[0].clientX;
-        const deltaX = endX - startX;
-        if (deltaX > 60) {
-          replyingTo = msg.text;
-          replyText.textContent = msg.text;
-          replyBox.classList.remove("hidden");
-          messageInput.focus();
-        } else if (deltaX < -60 && isSelf) {
-          showDeleteMessageModal(key);
-        }
+      if (m.replyTo) {
+        const quote = document.createElement("div");
+        quote.className = `quoted-text ${theme === 'dark' ? 'dark' : ''}`;
+        quote.textContent = m.replyTo;
+        div.appendChild(quote);
       }
-      longPressActive = false;
-      startX = null;
+      div.append(m.text);
+
+      const time = document.createElement("small");
+      time.textContent = isSelf
+        ? `${formatTime(m.timestamp)} • ${m.read ? "Delivered" : "Sent"}`
+        : formatTime(m.timestamp);
+      div.appendChild(time);
+
+      container.appendChild(div);
+
+      if (m.reaction) {
+        const reaction = document.createElement("div");
+        reaction.className = "reaction";
+        reaction.textContent = m.reaction;
+        container.appendChild(reaction);
+      }
+
+      fragment.appendChild(container);
+      if (!lastMessageKey || key > lastMessageKey) lastMessageKey = key;
     });
-
-    div.addEventListener("touchmove", () => {
-      if (pressTimer) clearTimeout(pressTimer);
-      div.classList.remove("long-press-disable-select");
-      longPressActive = false;
-    });
-
-    if (msg.replyTo) {
-      const quote = document.createElement("div");
-      quote.className = `quoted-text ${theme === 'dark' ? 'dark' : ''}`;
-      quote.textContent = msg.replyTo;
-      div.appendChild(quote);
-    }
-    div.append(msg.text);
-
-    const time = document.createElement("small");
-    time.textContent = isSelf
-      ? `${formatTime(msg.timestamp)} • ${msg.read ? "Delivered" : "Sent"}`
-      : formatTime(msg.timestamp);
-    div.appendChild(time);
-
-    container.appendChild(div);
-
-    if (msg.reaction) {
-      const reaction = document.createElement("div");
-      reaction.className = "reaction";
-      reaction.textContent = msg.reaction;
-      container.appendChild(reaction);
-    }
-
-    messagesEl.appendChild(container);
+    messagesEl.appendChild(fragment);
     messagesEl.scrollTop = messagesEl.scrollHeight;
   }
 
@@ -614,8 +552,6 @@
     theme = themeValue;
     document.body.classList.toggle('dark', theme === 'dark');
     document.querySelector('header').classList.toggle('dark', theme === 'dark');
-    kebabMenuBtn.classList.toggle('dark', theme === 'dark');
-    kebabMenu.classList.toggle('dark', theme === 'dark');
     messagesEl.classList.toggle('dark', theme === 'dark');
     document.querySelectorAll('.message').forEach(el => el.classList.toggle('dark', theme === 'dark'));
     document.querySelectorAll('.message.friend').forEach(el => el.classList.toggle('dark', theme === 'dark'));
@@ -628,100 +564,24 @@
     sendBtn.classList.toggle('dark', theme === 'dark');
     emojiPicker.classList.toggle('dark', theme === 'dark');
     deleteMessageModal.classList.toggle('dark', theme === 'dark');
-    deleteChatsModal.classList.toggle('dark', theme === 'dark');
-    blockUserModal.classList.toggle('dark', theme === 'dark');
     document.querySelectorAll('.modal-btn-cancel').forEach(el => el.classList.toggle('dark', theme === 'dark'));
   }
 
   document.addEventListener("click", (e) => {
     if (!emojiPicker.contains(e.target)) emojiPicker.style.display = "none";
-    if (!kebabMenu.contains(e.target) && e.target !== kebabMenuBtn) kebabMenu.style.display = "none";
     if (!deleteMessageModal.contains(e.target) && e.target !== modalConfirm && e.target !== modalCancel) {
       deleteMessageModal.classList.add("hidden");
       deletingKey = null;
     }
-    if (!deleteChatsModal.contains(e.target) && e.target !== deleteChatsConfirm && e.target !== deleteChatsCancel) {
-      deleteChatsModal.classList.add("hidden");
-    }
-    if (!blockUserModal.contains(e.target) && e.target !== blockUserConfirm && e.target !== blockUserCancel) {
-      blockUserModal.classList.add("hidden");
-    }
-  });
-
-  kebabMenuBtn.onclick = () => {
-    kebabMenu.style.display = kebabMenu.style.display === "none" ? "block" : "none";
-  };
-
-  document.getElementById("delete-chats").onclick = async () => {
-    if (!currentUser) return alert("User not authenticated.");
-    kebabMenu.style.display = "none";
-    deleteChatsModal.classList.remove("hidden");
-    deleteChatsConfirm.onclick = async () => {
-      try {
-        const messagesSnap = await get(ref(db, "messages"));
-        if (messagesSnap.exists()) {
-          const updates = {};
-          messagesSnap.forEach(child => {
-            const chatId = child.key;
-            if (chatId.includes(currentUser.uid)) {
-              updates[`messages/${chatId}`] = null;
-            }
-          });
-          await update(ref(db), updates);
-        }
-        deleteChatsModal.classList.add("hidden");
-        location.href = "index.html";
-      } catch (error) {
-        console.error("Error deleting all chats:", error);
-        alert("Failed to delete chats: " + error.message);
-      }
-    };
-    deleteChatsCancel.onclick = () => {
-      deleteChatsModal.classList.add("hidden");
-    };
-  };
-
-  document.getElementById("block-user").onclick = () => {
-    if (!currentUser || !friendUid) return alert("User or friend not defined.");
-    kebabMenu.style.display = "none";
-    blockUserModal.classList.remove("hidden");
-    blockUserConfirm.onclick = async () => {
-      try {
-        await update(ref(db, `users/${currentUser.uid}/blockedUsers`), {
-          [friendUid]: true
-        });
-        blockUserModal.classList.add("hidden");
-        checkBlockedStatus();
-      } catch (error) {
-        console.error("Error blocking user:", error);
-        alert("Failed to block user: " + error.message);
-      }
-    };
-    blockUserCancel.onclick = () => {
-      blockUserModal.classList.add("hidden");
-    };
-  };
-
-  emojiPicker.querySelectorAll("span").forEach(span => {
-    span.onclick = () => {
-      if (reactingKey) {
-        update(ref(db, `messages/${chatId}/${reactingKey}`), {
-          reaction: span.textContent
-        }).catch(error => {
-          console.error("Error adding reaction:", error);
-          alert("Failed to add reaction.");
-        });
-        emojiPicker.style.display = "none";
-        reactingKey = null;
-      }
-    };
   });
 
   async function checkBlockedStatus() {
     if (!currentUser || !friendUid) return;
     try {
-      const blockedByMe = await get(ref(db, `users/${currentUser.uid}/blockedUsers/${friendUid}`));
-      const blockedByFriend = await get(ref(db, `users/${friendUid}/blockedUsers/${currentUser.uid}`));
+      const [blockedByMe, blockedByFriend] = await Promise.all([
+        get(ref(db, `users/${currentUser.uid}/blockedUsers/${friendUid}`)),
+        get(ref(db, `users/${friendUid}/blockedUsers/${currentUser.uid}`))
+      ]);
       if (blockedByMe.exists() || blockedByFriend.exists()) {
         document.getElementById("input-area").style.display = "none";
       } else {
@@ -742,17 +602,20 @@
     }
     chatId = currentUser.uid < friendUid ? `${currentUser.uid}_${friendUid}` : `${friendUid}_${currentUser.uid}`;
 
-    // Load theme
+    // Parallelize initial data fetching
     try {
-      const settingsSnap = await get(ref(db, `users/${user.uid}/settings`));
+      const [settingsSnap, userSnap, presenceSnap, lastSeenSnap] = await Promise.all([
+        get(ref(db, `users/${user.uid}/settings`)),
+        get(ref(db, `users/${friendUid}`)),
+        get(ref(db, `users/${friendUid}/presence`)),
+        get(ref(db, `users/${friendUid}/lastSeen`))
+      ]);
+
+      // Theme
       theme = settingsSnap.val()?.theme || 'light';
       applyTheme(theme);
-    } catch (error) {
-      console.error("Error loading settings:", error);
-    }
 
-    try {
-      const userSnap = await get(ref(db, `users/${friendUid}`));
+      // Friend data
       if (!userSnap.exists()) {
         alert("Friend not found.");
         return location.href = "index.html";
@@ -761,9 +624,17 @@
       friendName = data.name || "Friend";
       document.getElementById("friend-name").textContent = friendName;
       document.getElementById("friend-photo").src = data.photoURL || "https://www.gravatar.com/avatar?d=mp";
+
+      // Presence
+      if (presenceSnap.val() === "online") {
+        document.getElementById("friend-presence").textContent = "Online";
+      } else if (lastSeenSnap.val()) {
+        const lastSeenDate = new Date(lastSeenSnap.val());
+        document.getElementById("friend-presence").textContent = `Last seen at ${lastSeenDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+      }
     } catch (error) {
-      console.error("Error loading friend data:", error);
-      alert("Failed to load friend data.");
+      console.error("Error loading initial data:", error);
+      alert("Failed to load chat data: " + error.message);
       return location.href = "index.html";
     }
 
@@ -771,32 +642,20 @@
       location.href = `profile.html?uid=${friendUid}`;
     };
 
-    try {
-      const presence = (await get(ref(db, `users/${friendUid}/presence`))).val();
-      const lastSeen = (await get(ref(db, `users/${friendUid}/lastSeen`))).val();
-      if (presence === "online") {
-        document.getElementById("friend-presence").textContent = "Online";
-      } else if (lastSeen) {
-        const lastSeenDate = new Date(lastSeen);
-        document.getElementById("friend-presence").textContent = `Last seen at ${lastSeenDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
-      }
-    } catch (error) {
-      console.error("Error loading presence:", error);
-    }
-
     // Check blocked status
     checkBlockedStatus();
     onValue(ref(db, `users/${currentUser.uid}/blockedUsers/${friendUid}`), () => checkBlockedStatus());
     onValue(ref(db, `users/${friendUid}/blockedUsers/${currentUser.uid}`), () => checkBlockedStatus());
 
-    onValue(ref(db, `messages/${chatId}`), snap => {
+    // Load initial messages (last 50)
+    const messagesQuery = query(ref(db, `messages/${chatId}`), limitToLast(50));
+    onValue(messagesQuery, snap => {
       messagesEl.innerHTML = "";
       if (!snap.exists()) return;
       const messages = Object.entries(snap.val()).sort((a, b) => a[1].timestamp - b[1].timestamp);
+      renderMessages(messages);
       messages.forEach(([key, m]) => {
-        const isSelf = m.sender === currentUser.uid;
-        renderMessage(key, m, isSelf);
-        if (!isSelf && !m.read) {
+        if (m.sender !== currentUser.uid && !m.read) {
           update(ref(db, `messages/${chatId}/${key}`), { read: true }).catch(error => {
             console.error("Error marking message as read:", error);
           });
@@ -805,11 +664,12 @@
     });
 
     // Listen for new messages
-    onChildAdded(ref(db, `messages/${chatId}`), async snap => {
+    onChildAdded(ref(db, `messages/${chatId}`), snap => {
       const msg = snap.val();
       const isSelf = msg.sender === currentUser.uid;
       if (!isSelf) {
         showNotification(friendName, msg.text);
+        renderMessages([[snap.key, msg]]);
       }
     });
 
@@ -925,6 +785,122 @@
       alert("Voice input not supported on this browser.");
     }
   };
+
+  // Handle reply cancellation
+  document.querySelector('.cancel-reply').addEventListener('click', cancelReply);
+
+  // Load more messages on scroll to top
+  let isLoadingMore = false;
+  messagesEl.addEventListener('scroll', async () => {
+    if (messagesEl.scrollTop < 50 && !isLoadingMore) {
+      isLoadingMore = true;
+      try {
+        const olderMessagesQuery = query(ref(db, `messages/${chatId}`), limitToLast(50), endBefore(lastMessageKey));
+        const snap = await get(olderMessagesQuery);
+        if (snap.exists()) {
+          const messages = Object.entries(snap.val()).sort((a, b) => a[1].timestamp - b[1].timestamp);
+          const fragment = document.createDocumentFragment();
+          messages.forEach(([key, m]) => {
+            const isSelf = m.sender === currentUser.uid;
+            const container = document.createElement("div");
+            container.className = `message-container ${isSelf ? "self" : "friend"}`;
+
+            const div = document.createElement("div");
+            div.className = `message ${isSelf ? "self" : "friend"} ${theme === 'dark' ? 'dark' : ''}`;
+
+            let pressTimer = null;
+            let startX = null;
+            let longPressActive = false;
+
+            div.addEventListener("touchstart", (e) => {
+              div.classList.add("long-press-disable-select");
+              startX = e.touches[0].clientX;
+              pressTimer = setTimeout(() => {
+                longPressActive = true;
+                if (isSelf) {
+                  showDeleteMessageModal(key);
+                } else {
+                  showEmojiPicker(div, key);
+                }
+              }, 600);
+            });
+
+            div.addEventListener("touchend", (e) => {
+              if (pressTimer) clearTimeout(pressTimer);
+              div.classList.remove("long-press-disable-select");
+
+              if (!longPressActive) {
+                const endX = e.changedTouches[0].clientX;
+                const deltaX = endX - startX;
+                if (deltaX > 60) {
+                  replyingTo = m.text;
+                  replyText.textContent = m.text;
+                  replyBox.classList.remove("hidden");
+                  messageInput.focus();
+                } else if (deltaX < -60 && isSelf) {
+                  showDeleteMessageModal(key);
+                }
+              }
+              longPressActive = false;
+              startX = null;
+            });
+
+            div.addEventListener("touchmove", () => {
+              if (pressTimer) clearTimeout(pressTimer);
+              div.classList.remove("long-press-disable-select");
+              longPressActive = false;
+            });
+
+            if (m.replyTo) {
+              const quote = document.createElement("div");
+              quote.className = `quoted-text ${theme === 'dark' ? 'dark' : ''}`;
+              quote.textContent = m.replyTo;
+              div.appendChild(quote);
+            }
+            div.append(m.text);
+
+            const time = document.createElement("small");
+            time.textContent = isSelf
+              ? `${formatTime(m.timestamp)} • ${m.read ? "Delivered" : "Sent"}`
+              : formatTime(m.timestamp);
+            div.appendChild(time);
+
+            container.appendChild(div);
+
+            if (m.reaction) {
+              const reaction = document.createElement("div");
+              reaction.className = "reaction";
+              reaction.textContent = m.reaction;
+              container.appendChild(reaction);
+            }
+
+            fragment.appendChild(container);
+            if (!lastMessageKey || key < lastMessageKey) lastMessageKey = key;
+          });
+          messagesEl.prepend(fragment);
+        }
+      } catch (error) {
+        console.error("Error loading more messages:", error);
+      } finally {
+        isLoadingMore = false;
+      }
+    }
+  });
+
+  emojiPicker.querySelectorAll("span").forEach(span => {
+    span.onclick = () => {
+      if (reactingKey) {
+        update(ref(db, `messages/${chatId}/${reactingKey}`), {
+          reaction: span.textContent
+        }).catch(error => {
+          console.error("Error adding reaction:", error);
+          alert("Failed to add reaction: " + error.message);
+        });
+        emojiPicker.style.display = "none";
+        reactingKey = null;
+      }
+    };
+  });
 </script>
 </body>
 </html>
