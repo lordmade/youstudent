@@ -486,47 +486,101 @@
     return card;
   }
 
-  async function loadFriends(uid, chatsSnap) {
+  async function loadFriends(uid, chatsSnap, settings) {
+    console.log('loadFriends called for uid:', uid);
     noFriendsMessage.classList.add("hidden");
     const fragment = document.createDocumentFragment();
 
-    if (!chatsSnap.exists()) {
+    let friendUids = new Set();
+    let users = {};
+
+    // Check users/$uid/chats first
+    if (chatsSnap.exists()) {
+      console.log('Chats found in users/$uid/chats:', chatsSnap.val());
+      friendUids = new Set(Object.keys(chatsSnap.val() || {}));
+    } else {
+      console.log('No chats in users/$uid/chats, falling back to chats node');
+      // Fallback to chats node
+      try {
+        const chatsRef = ref(db, "chats");
+        const chatsFallbackSnap = await get(chatsRef);
+        if (chatsFallbackSnap.exists()) {
+          const chats = chatsFallbackSnap.val();
+          console.log('Chats node data:', chats);
+          for (const chatId in chats) {
+            const participants = chats[chatId].participants || {};
+            if (participants[uid]) {
+              for (const friendUid in participants) {
+                if (friendUid !== uid) friendUids.add(friendUid);
+              }
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching chats node:', error);
+      }
+    }
+
+    if (friendUids.size === 0) {
+      console.log('No friends found for uid:', uid);
       noFriendsMessage.classList.remove("hidden");
+      friendsList.innerHTML = "";
       return;
     }
 
-    const chats = chatsSnap.val() || {};
-    const friendUids = new Set(Object.keys(chats));
+    console.log('Friend UIDs:', Array.from(friendUids));
+
+    // Fetch blocked users
+    const blockedUsers = settings.blockedUsers || {};
+    console.log('Blocked users:', blockedUsers);
+
+    // Filter out blocked users
+    friendUids = new Set([...friendUids].filter(friendUid => !blockedUsers[friendUid]));
+    console.log('Filtered friend UIDs (excluding blocked):', Array.from(friendUids));
+
     if (friendUids.size === 0) {
+      console.log('All friends are blocked');
       noFriendsMessage.classList.remove("hidden");
+      friendsList.innerHTML = "";
       return;
     }
 
     // Fetch user data for friends
-    const usersSnap = await get(ref(db, "users"));
-    const users = usersSnap.exists() ? usersSnap.val() : {};
+    try {
+      const usersSnap = await get(ref(db, "users"));
+      users = usersSnap.exists() ? usersSnap.val() : {};
+      console.log('Users data:', users);
+    } catch (error) {
+      console.error('Error fetching users:', error);
+    }
 
     // Fetch messages for each chat
     const messagePromises = Array.from(friendUids).map(async friendUid => {
       const chatId = uid < friendUid ? `${uid}_${friendUid}` : `${friendUid}_${uid}`;
-      const messagesRef = ref(db, `messages/${chatId}`);
-      const msgSnap = await get(messagesRef);
-      let lastMsg = null, lastMsgTime = null, unreadCount = 0;
-      if (msgSnap.exists()) {
-        const msgs = msgSnap.val();
-        for (const mid in msgs) {
-          const m = msgs[mid];
-          if (!lastMsgTime || m.timestamp > lastMsgTime) {
-            lastMsg = m.text || (m.image ? "[Image]" : "[Media]");
-            lastMsgTime = m.timestamp;
+      try {
+        const messagesRef = ref(db, `messages/${chatId}`);
+        const msgSnap = await get(messagesRef);
+        let lastMsg = null, lastMsgTime = null, unreadCount = 0;
+        if (msgSnap.exists()) {
+          const msgs = msgSnap.val();
+          for (const mid in msgs) {
+            const m = msgs[mid];
+            if (!lastMsgTime || m.timestamp > lastMsgTime) {
+              lastMsg = m.text || (m.image ? "[Image]" : "[Media]");
+              lastMsgTime = m.timestamp;
+            }
+            if (m.sender === friendUid && !m.read) unreadCount++;
           }
-          if (m.sender === friendUid && !m.read) unreadCount++;
         }
+        return { friendUid, lastMsg, lastMsgTime, unreadCount };
+      } catch (error) {
+        console.error(`Error fetching messages for chat ${chatId}:`, error);
+        return { friendUid, lastMsg: null, lastMsgTime: null, unreadCount: 0 };
       }
-      return { friendUid, lastMsg, lastMsgTime, unreadCount };
     });
 
     const messageData = await Promise.all(messagePromises);
+    console.log('Message data:', messageData);
 
     // Render friends
     messageData.forEach(({ friendUid, lastMsg, lastMsgTime, unreadCount }) => {
@@ -558,6 +612,8 @@
         const userData = users[friendUid] || {};
         const card = renderFriend(friendUid, userData, lastMsg, lastMsgTime, unreadCount);
         friendsList.appendChild(card);
+      }, (error) => {
+        console.error(`Error in messages/${chatId} listener:`, error);
       });
 
       onValue(ref(db, `users/${friendUid}`), (userSnap) => {
@@ -573,7 +629,32 @@
             existing.querySelector('.last-seen').textContent = userData.presence === 'online' ? 'Online' : `Last seen: ${timeAgo(userData.lastSeen)}`;
           }
         }
+      }, (error) => {
+        console.error(`Error in users/${friendUid} listener:`, error);
       });
+    });
+
+    // Real-time listener for chats to detect new friends
+    onValue(ref(db, `users/${uid}/chats`), (snap) => {
+      console.log('Chats real-time update for uid:', uid, snap.val());
+      if (!snap.exists()) {
+        friendsList.innerHTML = "";
+        noFriendsMessage.classList.remove("hidden");
+        return;
+      }
+      const chats = snap.val() || {};
+      const newFriendUids = new Set(Object.keys(chats));
+      if (newFriendUids.size === 0) {
+        friendsList.innerHTML = "";
+        noFriendsMessage.classList.remove("hidden");
+        return;
+      }
+      // Reload friends if new UIDs are detected
+      if ([...newFriendUids].some(uid => !friendUids.has(uid))) {
+        loadFriends(uid, snap, settings);
+      }
+    }, (error) => {
+      console.error('Error in chats listener:', error);
     });
   }
 
@@ -626,10 +707,12 @@
   }
 
   async function loadGroups(uid, groupsSnap) {
+    console.log('loadGroups called for uid:', uid);
     noGroupsMessage.classList.add("hidden");
     const fragment = document.createDocumentFragment();
 
     if (!groupsSnap.exists()) {
+      console.log('No groups found');
       noGroupsMessage.classList.remove("hidden");
       return;
     }
@@ -648,11 +731,13 @@
     groupsList.innerHTML = "";
     groupsList.appendChild(fragment);
     if (!hasGroups) {
+      console.log('No groups for user');
       noGroupsMessage.classList.remove("hidden");
     }
 
     // Real-time updates
     onValue(ref(db, "groups"), (snap) => {
+      console.log('Groups real-time update:', snap.val());
       if (!snap.exists()) {
         groupsList.innerHTML = "";
         noGroupsMessage.classList.remove("hidden");
@@ -674,6 +759,8 @@
       if (!hasGroups) {
         noGroupsMessage.classList.remove("hidden");
       }
+    }, (error) => {
+      console.error('Error in groups listener:', error);
     });
   }
 
@@ -695,6 +782,7 @@
   }
 
   async function loadStatuses(uid, chatsSnap, statusesSnap, settings) {
+    console.log('loadStatuses called for uid:', uid);
     noOwnStatusesMessage.classList.add("hidden");
     noStatusesMessage.classList.add("hidden");
     const ownFragment = document.createDocumentFragment();
@@ -702,6 +790,7 @@
 
     const usersSnap = await get(ref(db, "users"));
     const users = usersSnap.exists() ? usersSnap.val() : {};
+    console.log('Users for statuses:', users);
     const friendUids = new Set();
 
     if (chatsSnap.exists()) {
@@ -710,19 +799,30 @@
         if (friendUid !== uid) friendUids.add(friendUid);
       }
     }
+    console.log('Friend UIDs for statuses:', Array.from(friendUids));
+
+    // Fetch blocked users
+    const blockedUsers = settings.blockedUsers || {};
+    console.log('Blocked users for statuses:', blockedUsers);
+
+    // Filter friendUids for statuses
+    const filteredFriendUids = new Set([...friendUids].filter(friendUid => !blockedUsers[friendUid]));
+    console.log('Filtered friend UIDs for statuses:', Array.from(filteredFriendUids));
 
     // Fetch status visibility settings
-    const visibilityPromises = [uid, ...friendUids].map(async userId => {
+    const visibilityPromises = [uid, ...filteredFriendUids].map(async userId => {
       const settingsSnap = await get(ref(db, `users/${userId}/settings`));
       return { userId, visibility: settingsSnap.val()?.statusVisibility || 'everyone' };
     });
     const statusVisibilities = Object.fromEntries((await Promise.all(visibilityPromises)).map(({ userId, visibility }) => [userId, visibility]));
+    console.log('Status visibilities:', statusVisibilities);
 
     let hasOwnStatuses = false;
     let hasFriendStatuses = false;
 
     if (statusesSnap.exists()) {
       const statuses = statusesSnap.val();
+      console.log('Statuses data:', statuses);
       for (const statusId in statuses) {
         const status = statuses[statusId];
         const userId = status.userId;
@@ -731,10 +831,10 @@
           const userData = users[uid] || {};
           const card = renderStatusCard(statusId, status, userData, true);
           ownFragment.appendChild(card);
-        } else if (friendUids.has(userId)) {
+        } else if (filteredFriendUids.has(userId)) {
           const visibility = statusVisibilities[userId];
           if (visibility === 'nobody') continue;
-          if (visibility === 'friends' && !friendUids.has(userId)) continue;
+          if (visibility === 'friends' && !filteredFriendUids.has(userId)) continue;
           hasFriendStatuses = true;
           const userData = users[userId] || {};
           const card = renderStatusCard(statusId, status, userData, false);
@@ -749,14 +849,17 @@
     statusesList.appendChild(friendFragment);
 
     if (!hasOwnStatuses) {
+      console.log('No own statuses');
       noOwnStatusesMessage.classList.remove("hidden");
     }
     if (!hasFriendStatuses) {
+      console.log('No friend statuses');
       noStatusesMessage.classList.remove("hidden");
     }
 
     // Real-time updates
     onValue(ref(db, "statuses"), (snap) => {
+      console.log('Statuses real-time update:', snap.val());
       ownStatusesList.innerHTML = "";
       statusesList.innerHTML = "";
       const ownFragment = document.createDocumentFragment();
@@ -774,10 +877,10 @@
             const userData = users[uid] || {};
             const card = renderStatusCard(statusId, status, userData, true);
             ownFragment.appendChild(card);
-          } else if (friendUids.has(userId)) {
+          } else if (filteredFriendUids.has(userId)) {
             const visibility = statusVisibilities[userId];
             if (visibility === 'nobody') continue;
-            if (visibility === 'friends' && !friendUids.has(userId)) continue;
+            if (visibility === 'friends' && !filteredFriendUids.has(userId)) continue;
             hasFriendStatuses = true;
             const userData = users[userId] || {};
             const card = renderStatusCard(statusId, status, userData, false);
@@ -794,6 +897,8 @@
       if (!hasFriendStatuses) {
         noStatusesMessage.classList.remove("hidden");
       }
+    }, (error) => {
+      console.error('Error in statuses listener:', error);
     });
   }
 
@@ -815,22 +920,26 @@
   }
 
   async function loadServices(uid, servicesSnap) {
+    console.log('loadServices called for uid:', uid);
     noServicesMessage.classList.add("hidden");
     const fragment = document.createDocumentFragment();
 
     if (!servicesSnap.exists()) {
+      console.log('No services selected');
       noServicesMessage.classList.remove("hidden");
       return;
     }
 
     const selectedServices = servicesSnap.val() || [];
     if (selectedServices.length === 0) {
+      console.log('Empty services list');
       noServicesMessage.classList.remove("hidden");
       return;
     }
 
     const servicesRef = await get(ref(db, "services"));
     const services = servicesRef.exists() ? servicesRef.val() : {};
+    console.log('Services data:', services);
 
     selectedServices.forEach(serviceId => {
       const service = services[serviceId] || {};
@@ -845,6 +954,7 @@
 
     // Real-time updates
     onValue(ref(db, `users/${uid}/settings/services`), async (snap) => {
+      console.log('Services real-time update:', snap.val());
       servicesList.innerHTML = "";
       const fragment = document.createDocumentFragment();
       if (!snap.exists()) {
@@ -869,6 +979,8 @@
       });
 
       servicesList.appendChild(fragment);
+    }, (error) => {
+      console.error('Error in services listener:', error);
     });
   }
 </script>
