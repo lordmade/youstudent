@@ -56,6 +56,14 @@
     #messages.dark {
       background: #1f2937;
     }
+    .message-container {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+    }
+    .message-container.friend {
+      align-items: flex-start;
+    }
     .message {
       max-width: 75%;
       padding: 0.5rem 0.9rem;
@@ -79,16 +87,18 @@
       -webkit-touch-callout: none !important;
     }
     .message.self {
-      background: #ef4444;
-      color: white;
-      align-self: flex-end;
+      background: #fee2e2;
+      color: #111827;
       border-bottom-right-radius: 6px;
     }
     .message.friend {
       background: #e5e7eb;
       color: #111827;
-      align-self: flex-start;
       border-bottom-left-radius: 6px;
+    }
+    .message.self.dark {
+      background: #7f1d1d;
+      color: #e5e7eb;
     }
     .message.friend.dark {
       background: #4b5563;
@@ -97,15 +107,32 @@
     .message small {
       display: block;
       font-size: 0.7rem;
-      color: #bbb;
       margin-top: 4px;
       text-align: right;
     }
     .message.self small {
-      color: #e5e7eb;
+      color: #4b5563;
+    }
+    .message.friend small {
+      color: #6b7280;
+    }
+    .message.self.dark small {
+      color: #d1d5db;
     }
     .message.friend.dark small {
       color: #9ca3af;
+    }
+    .reaction {
+      font-size: 1rem;
+      margin-top: 4px;
+      display: flex;
+      gap: 4px;
+    }
+    .message-container.self .reaction {
+      justify-content: flex-end;
+    }
+    .message-container.friend .reaction {
+      justify-content: flex-start;
     }
     .reply-preview {
       background: #f3f4f6;
@@ -194,11 +221,6 @@
     .cancel-reply.dark {
       color: #dc2626;
     }
-    .reaction {
-      font-size: 1.25rem;
-      margin-top: 4px;
-      text-align: right;
-    }
     .emoji-picker {
       position: absolute;
       background: white;
@@ -226,6 +248,54 @@
       0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.5); }
       70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
       100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+    }
+    .modal {
+      background: white;
+      padding: 1.5rem;
+      border-radius: 8px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+      max-width: 400px;
+      width: 100%;
+      text-align: center;
+    }
+    .modal.dark {
+      background: #374151;
+      color: #e5e7eb;
+    }
+    .modal-buttons {
+      display: flex;
+      gap: 1rem;
+      justify-content: center;
+      margin-top: 1.5rem;
+    }
+    .modal-btn {
+      padding: 0.5rem 1rem;
+      border-radius: 8px;
+      font-weight: 600;
+      transition: background-color 0.3s ease, transform 0.2s ease;
+    }
+    .modal-btn-confirm {
+      background: #ef4444;
+      color: white;
+    }
+    .modal-btn-confirm:hover {
+      background: #dc2626;
+      transform: translateY(-2px);
+    }
+    .modal-btn-cancel {
+      background: #e5e7eb;
+      color: #374151;
+    }
+    .modal-btn-cancel:hover {
+      background: #d1d5db;
+      transform: translateY(-2px);
+    }
+    .modal-btn-cancel.dark {
+      background: #4b5563;
+      color: #e5e7eb;
+    }
+    .modal-btn-cancel.dark:hover {
+      background: #6b7280;
     }
   </style>
 </head>
@@ -259,10 +329,21 @@
   <span>👍</span><span>😂</span><span>🔥</span><span>❤️</span><span>😢</span><span>😡</span>
 </div>
 
+<div id="delete-message-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+  <div class="modal dark:modal">
+    <p class="text-lg font-semibold dark:text-gray-100">Delete Message</p>
+    <p class="mt-2 text-gray-600 dark:text-gray-300">Are you sure you want to delete this message?</p>
+    <div class="modal-buttons">
+      <button id="modal-confirm" class="modal-btn modal-btn-confirm">Delete</button>
+      <button id="modal-cancel" class="modal-btn modal-btn-cancel dark:modal-btn-cancel">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
   import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
-  import { getDatabase, ref, onValue, push, update, get } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
+  import { getDatabase, ref, onValue, push, update, get, remove } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
@@ -285,10 +366,15 @@
   const replyText = document.getElementById("reply-text");
   const emojiPicker = document.getElementById("emoji-picker");
   const friendProfileLink = document.getElementById("friend-profile-link");
+  const deleteMessageModal = document.getElementById("delete-message-modal");
+  const modalConfirm = document.getElementById("modal-confirm");
+  const modalCancel = document.getElementById("modal-cancel");
 
   let currentUser, friendUid, chatId;
   let replyingTo = null;
   let reactingKey = null;
+  let deletingKey = null;
+  let theme = 'light';
 
   function getParam(name) {
     return new URLSearchParams(location.search).get(name);
@@ -306,7 +392,29 @@
     messageInput.focus();
   }
 
+  function showDeleteMessageModal(key) {
+    deletingKey = key;
+    deleteMessageModal.classList.remove("hidden");
+    modalConfirm.onclick = async () => {
+      try {
+        await remove(ref(db, `messages/${chatId}/${key}`));
+        deleteMessageModal.classList.add("hidden");
+        deletingKey = null;
+      } catch (error) {
+        console.error("Error deleting message:", error);
+        alert("Failed to delete message.");
+      }
+    };
+    modalCancel.onclick = () => {
+      deleteMessageModal.classList.add("hidden");
+      deletingKey = null;
+    };
+  }
+
   function renderMessage(key, msg, isSelf) {
+    const container = document.createElement("div");
+    container.className = `message-container ${isSelf ? "self" : "friend"}`;
+
     const div = document.createElement("div");
     div.className = `message ${isSelf ? "self" : "friend"} ${theme === 'dark' ? 'dark' : ''}`;
 
@@ -319,7 +427,11 @@
       startX = e.touches[0].clientX;
       pressTimer = setTimeout(() => {
         longPressActive = true;
-        showEmojiPicker(div, key);
+        if (isSelf) {
+          showDeleteMessageModal(key);
+        } else {
+          showEmojiPicker(div, key);
+        }
       }, 600);
     });
 
@@ -335,6 +447,8 @@
           replyText.textContent = msg.text;
           replyBox.classList.remove("hidden");
           messageInput.focus();
+        } else if (deltaX < -60 && isSelf) {
+          showDeleteMessageModal(key);
         }
       }
       longPressActive = false;
@@ -361,14 +475,16 @@
       : formatTime(msg.timestamp);
     div.appendChild(time);
 
+    container.appendChild(div);
+
     if (msg.reaction) {
       const reaction = document.createElement("div");
       reaction.className = "reaction";
       reaction.textContent = msg.reaction;
-      div.appendChild(reaction);
+      container.appendChild(reaction);
     }
 
-    messagesEl.appendChild(div);
+    messagesEl.appendChild(container);
     messagesEl.scrollTop = messagesEl.scrollHeight;
   }
 
@@ -391,11 +507,11 @@
           reaction: span.textContent
         });
         emojiPicker.style.display = "none";
+        reactingKey = null;
       }
     };
   });
 
-  let theme = 'light';
   onAuthStateChanged(auth, async (user) => {
     if (!user) return location.href = "login.html";
     currentUser = user;
@@ -464,6 +580,8 @@
     document.querySelector('#message-input').classList.toggle('dark', theme === 'dark');
     sendBtn.classList.toggle('dark', theme === 'dark');
     emojiPicker.classList.toggle('dark', theme === 'dark');
+    deleteMessageModal.classList.toggle('dark', theme === 'dark');
+    document.querySelectorAll('.modal-btn-cancel').forEach(el => el.classList.toggle('dark', theme === 'dark'));
   }
 
   // Handle Voice/Send toggle and recognition
@@ -499,7 +617,7 @@
     recognition.onresult = (event) => {
       const transcript = event.results[0][0].transcript.trim();
       messageInput.value = transcript;
-      messageInput.focus(); // Focus input for immediate editing
+      messageInput.focus();
       updateSendButton();
     };
 
