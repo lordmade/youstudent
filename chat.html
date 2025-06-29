@@ -42,6 +42,30 @@
       gap: 0.75rem;
       cursor: pointer;
     }
+    #notification {
+      position: fixed;
+      top: 56px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #ef4444;
+      color: white;
+      padding: 0.75rem 1.5rem;
+      border-radius: 8px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+      z-index: 20;
+      display: none;
+      max-width: 90%;
+      font-size: 0.9rem;
+      cursor: pointer;
+      animation: slideIn 0.3s ease;
+    }
+    #notification.dark {
+      background: #dc2626;
+    }
+    @keyframes slideIn {
+      from { transform: translate(-50%, -100%); opacity: 0; }
+      to { transform: translate(-50%, 0); opacity: 1; }
+    }
     #messages {
       flex: 1;
       overflow-y: auto;
@@ -312,6 +336,8 @@
   </div>
 </header>
 
+<div id="notification" aria-live="polite"></div>
+
 <div id="messages"></div>
 
 <form id="input-area" onsubmit="return false;">
@@ -343,7 +369,7 @@
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
   import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
-  import { getDatabase, ref, onValue, push, update, get, remove } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
+  import { getDatabase, ref, onValue, push, update, get, remove, onChildAdded } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
@@ -369,8 +395,9 @@
   const deleteMessageModal = document.getElementById("delete-message-modal");
   const modalConfirm = document.getElementById("modal-confirm");
   const modalCancel = document.getElementById("modal-cancel");
+  const notificationEl = document.getElementById("notification");
 
-  let currentUser, friendUid, chatId;
+  let currentUser, friendUid, chatId, friendName;
   let replyingTo = null;
   let reactingKey = null;
   let deletingKey = null;
@@ -409,6 +436,23 @@
       deleteMessageModal.classList.add("hidden");
       deletingKey = null;
     };
+  }
+
+  function showNotification(senderName, text) {
+    // Only show if user is not at the bottom of the chat
+    if (messagesEl.scrollTop + messagesEl.clientHeight < messagesEl.scrollHeight - 50) {
+      notificationEl.textContent = `${senderName}: ${text.length > 30 ? text.substring(0, 30) + '...' : text}`;
+      notificationEl.classList.add(theme === 'dark' ? 'dark' : '');
+      notificationEl.style.display = 'block';
+      setTimeout(() => {
+        notificationEl.style.display = 'none';
+        notificationEl.classList.remove('dark');
+      }, 3000);
+      notificationEl.onclick = () => {
+        notificationEl.style.display = 'none';
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+      };
+    }
   }
 
   function renderMessage(key, msg, isSelf) {
@@ -498,6 +542,10 @@
 
   document.addEventListener("click", (e) => {
     if (!emojiPicker.contains(e.target)) emojiPicker.style.display = "none";
+    if (!deleteMessageModal.contains(e.target) && e.target !== modalConfirm && e.target !== modalCancel) {
+      deleteMessageModal.classList.add("hidden");
+      deletingKey = null;
+    }
   });
 
   emojiPicker.querySelectorAll("span").forEach(span => {
@@ -525,7 +573,8 @@
 
     const userSnap = await get(ref(db, `users/${friendUid}`));
     const data = userSnap.val();
-    document.getElementById("friend-name").textContent = data.name || "Friend";
+    friendName = data.name || "Friend";
+    document.getElementById("friend-name").textContent = friendName;
     document.getElementById("friend-photo").src = data.photoURL || "https://www.gravatar.com/avatar?d=mp";
 
     friendProfileLink.onclick = () => {
@@ -551,6 +600,15 @@
           update(ref(db, `messages/${chatId}/${key}`), { read: true });
         }
       });
+    });
+
+    // Listen for new messages
+    onChildAdded(ref(db, `messages/${chatId}`), async snap => {
+      const msg = snap.val();
+      const isSelf = msg.sender === currentUser.uid;
+      if (!isSelf) {
+        showNotification(friendName, msg.text);
+      }
     });
 
     update(ref(db, `users/${currentUser.uid}`), {
