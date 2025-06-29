@@ -1,988 +1,481 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>BanterBox - Friends & Groups</title>
-  <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    body {
-      font-family: 'Inter', 'Segoe UI', sans-serif;
-      background: linear-gradient(to bottom, #f9f9f9, #e5e7eb);
-      padding-bottom: 80px;
-      transition: background 0.3s ease;
-    }
-    body.dark {
-      background: linear-gradient(to bottom, #1f2937, #111827);
-    }
-    .header {
-      background: white;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-    }
-    .header.dark {
-      background: #374151;
-      border-bottom: 1px solid #4b5563;
-      color: #e5e7eb;
-    }
-    .tab-nav {
-      position: fixed;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      background: white;
-      display: flex;
-      border-top: 1px solid #ddd;
-      z-index: 10;
-    }
-    .tab-nav.dark {
-      background: #374151;
-      border-top: 1px solid #4b5563;
-    }
-    .tab-nav button {
-      flex: 1;
-      text-align: center;
-      padding: 10px 0;
-      font-weight: bold;
-      color: #555;
-      border-top: 3px solid transparent;
-    }
-    .tab-nav button.active {
-      color: #ef4444;
-      border-color: #ef4444;
-    }
-    .tab-nav button.dark {
-      color: #e5e7eb;
-    }
-    .tab-panel {
-      display: none;
-      padding: 1rem;
-    }
-    .tab-panel.active {
-      display: block;
-    }
-    .friend-card, .status-card, .service-card {
-      display: flex;
-      align-items: center;
-      background: white;
-      padding: 1rem;
-      border-radius: 8px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-      margin-bottom: 1rem;
-      cursor: pointer;
-      border: 2px solid transparent;
-      transition: box-shadow 0.3s, border-color 0.3s, background 0.3s;
-    }
-    .friend-card.dark, .status-card.dark, .service-card.dark {
-      background: #374151;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-      color: #e5e7eb;
-    }
-    .friend-card.unread {
-      border-color: #ef4444;
-      box-shadow: 0 4px 10px rgba(239,68,68,0.5);
-    }
-    .friend-card:hover, .status-card:hover, .service-card:hover {
-      background: #f3f4f6;
-    }
-    .friend-card.dark:hover, .status-card.dark:hover, .service-card.dark:hover {
-      background: #4b5563;
-    }
-    .status-indicator {
-      width: 10px;
-      height: 10px;
-      border-radius: 9999px;
-      margin-left: auto;
-    }
-    .status-online {
-      background: #22c55e;
-    }
-    .status-offline {
-      background: #9ca3af;
-    }
-    .last-message, .status-text, .service-description {
-      font-size: 0.9rem;
-      color: #555;
-      margin-top: 4px;
-    }
-    .last-message.dark, .status-text.dark, .service-description.dark {
-      color: #d1d5db;
-    }
-    .last-seen, .status-time, .member-count, .service-added {
-      font-size: 0.8rem;
-      color: #888;
-      margin-top: 2px;
-    }
-    .last-seen.dark, .status-time.dark, .member-count.dark, .service-added.dark {
-      color: #9ca3af;
-    }
-    .group-avatar, .status-avatar, .service-icon {
-      width: 48px;
-      height: 48px;
-      border-radius: 9999px;
-      margin-right: 1rem;
-      flex-shrink: 0;
-      background-color: #eee;
-      object-fit: cover;
-    }
-    .group-info, .service-info {
-      flex-grow: 1;
-    }
-    .status-grid, .services-grid {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 1rem;
-    }
-    .own-statuses {
-      display: flex;
-      overflow-x: auto;
-      gap: 1rem;
-      padding-bottom: 0.5rem;
-      margin-bottom: 1.5rem;
-      scrollbar-width: thin;
-      scrollbar-color: #ef4444 #e5e7eb;
-    }
-    .own-statuses::-webkit-scrollbar {
-      height: 6px;
-    }
-    .own-statuses::-webkit-scrollbar-track {
-      background: #e5e7eb;
-    }
-    .own-statuses::-webkit-scrollbar-thumb {
-      background: #ef4444;
-      border-radius: 3px;
-    }
-    .own-statuses.dark::-webkit-scrollbar-track {
-      background: #4b5563;
-    }
-    .own-statuses.dark::-webkit-scrollbar-thumb {
-      background: #dc2626;
-    }
-    .delete-icon {
-      color: #ef4444;
-      cursor: pointer;
-      transition: color 0.2s ease;
-    }
-    .delete-icon:hover {
-      color: #dc2626;
-    }
-    #no-friends-message, #no-groups-message, #no-statuses-message, #no-own-statuses-message, #no-services-message {
-      color: #555;
-    }
-    #no-friends-message.dark, #no-groups-message.dark, #no-statuses-message.dark, #no-own-statuses-message.dark, #no-services-message.dark {
-      color: #d1d5db;
-    }
-    #floating-btn {
-      background: #ef4444;
-      color: white;
-    }
-    #floating-btn.dark {
-      background: #dc2626;
-    }
-    .modal {
-      background: white;
-      padding: 1.5rem;
-      border-radius: 8px;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.2);
-      max-width: 400px;
-      width: 100%;
-      text-align: center;
-    }
-    .modal.dark {
-      background: #374151;
-      color: #e5e7eb;
-    }
-    .modal-buttons {
-      display: flex;
-      gap: 1rem;
-      justify-content: center;
-      margin-top: 1.5rem;
-    }
-    .modal-btn {
-      padding: 0.5rem 1rem;
-      border-radius: 8px;
-      font-weight: 600;
-      transition: background-color 0.3s ease, transform 0.2s ease;
-    }
-    .modal-btn-confirm {
-      background: #ef4444;
-      color: white;
-    }
-    .modal-btn-confirm:hover {
-      background: #dc2626;
-      transform: translateY(-2px);
-    }
-    .modal-btn-cancel {
-      background: #e5e7eb;
-      color: #374151;
-    }
-    .modal-btn-cancel:hover {
-      background: #d1d5db;
-      transform: translateY(-2px);
-    }
-    .modal-btn-cancel.dark {
-      background: #4b5563;
-      color: #e5e7eb;
-    }
-    .modal-btn-cancel.dark:hover {
-      background: #6b7280;
-    }
+    body{font-family:'Inter','Segoe UI',sans-serif;background:linear-gradient(to bottom,#f9f9f9,#e5e7eb);padding-bottom:80px;transition:background .3s ease}
+    body.dark{background:linear-gradient(to bottom,#1f2937,#111827)}
+    .header{background:white;box-shadow:0 2px 4px rgba(0,0,0,.05)}
+    .header.dark{background:#374151;border-bottom:1px solid #4b5563;color:#e5e7eb}
+    .tab-nav{position:fixed;bottom:0;left:0;right:0;background:white;display:flex;border-top:1px solid #ddd;z-index:10}
+    .tab-nav.dark{background:#374151;border-top:1px solid #4b5563}
+    .tab-nav button{flex:1;text-align:center;padding:10px 0;font-weight:bold;color:#555;border-top:3px solid transparent}
+    .tab-nav button.active{color:#ef4444;border-color:#ef4444}
+    .tab-nav button.dark{color:#e5e7eb}
+    .tab-panel{display:none;padding:1rem}
+    .tab-panel.active{display:block}
+    .friend-card,.status-card{display:flex;align-items:center;background:white;padding:1rem;border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,.05);margin-bottom:1rem;cursor:pointer;border:2px solid transparent;transition:box-shadow .3s,border-color .3s,background .3s}
+    .friend-card.dark,.status-card.dark{background:#374151;box-shadow:0 1px 3px rgba(0,0,0,.2);color:#e5e7eb}
+    .friend-card.unread{border-color:#ef4444;box-shadow:0 4px 10px rgba(239,68,68,.5)}
+    .friend-card:hover,.status-card:hover{background:#f3f4f6}
+    .friend-card.dark:hover,.status-card.dark:hover{background:#4b5563}
+    .status-indicator{width:10px;height:10px;border-radius:9999px;margin-left:auto}
+    .status-online{background:#22c55e}
+    .status-offline{background:#9ca3af}
+    .last-message,.status-text{font-size:.9rem;color:#555;margin-top:4px}
+    .last-message.dark,.status-text.dark{color:#d1d5db}
+    .last-seen,.status-time,.member-count{font-size:.8rem;color:#888;margin-top:2px}
+    .last-seen.dark,.status-time.dark,.member-count.dark{color:#9ca3af}
+    .group-avatar,.status-avatar{width:48px;height:48px;border-radius:9999px;margin-right:1rem;flex-shrink:0;background-color:#eee;object-fit:cover}
+    .group-info{flex-grow:1}
+    .status-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:1rem}
+    .own-statuses{display:flex;overflow-x:auto;gap:1rem;padding-bottom:.5rem;margin-bottom:1.5rem;scrollbar-width:thin;scrollbar-color:#ef4444 #e5e7eb}
+    .own-statuses::-webkit-scrollbar{height:6px}
+    .own-statuses::-webkit-scrollbar-track{background:#e5e7eb}
+    .own-statuses::-webkit-scrollbar-thumb{background:#ef4444;border-radius:3px}
+    .own-statuses.dark::-webkit-scrollbar-track{background:#4b5563}
+    .own-statuses.dark::-webkit-scrollbar-thumb{background:#dc2626}
+    .delete-icon{color:#ef4444;cursor:pointer;transition:color .2s ease}
+    .delete-icon:hover{color:#dc2626}
+    #no-friends-message,#no-groups-message,#no-statuses-message,#no-own-statuses-message{color:#555}
+    #no-friends-message.dark,#no-groups-message.dark,#no-statuses-message.dark,#no-own-statuses-message.dark{color:#d1d5db}
+    #floating-btn{background:#ef4444;color:white}
+    #floating-btn.dark{background:#dc2626}
+    .modal{background:white;padding:1.5rem;border-radius:8px;box-shadow:0 4px 10px rgba(0,0,0,.2);max-width:400px;width:100%;text-align:center}
+    .modal.dark{background:#374151;color:#e5e7eb}
+    .modal-buttons{display:flex;gap:1rem;justify-content:center;margin-top:1.5rem}
+    .modal-btn{padding:.5rem 1rem;border-radius:8px;font-weight:600;transition:background-color .3s ease,transform .2s ease}
+    .modal-btn-confirm{background:#ef4444;color:white}
+    .modal-btn-confirm:hover{background:#dc2626;transform:translateY(-2px)}
+    .modal-btn-cancel{background:#e5e7eb;color:#374151}
+    .modal-btn-cancel:hover{background:#d1d5db;transform:translateY(-2px)}
+    .modal-btn-cancel.dark{background:#4b5563;color:#e5e7eb}
+    .modal-btn-cancel.dark:hover{background:#6b7280}
   </style>
 </head>
 <body>
+  <header class="header p-4 text-xl font-bold text-red-500 flex justify-between items-center">
+    <span>BanterBox</span>
+    <a id="profile-link" href="#" class="text-sm bg-red-500 text-white px-4 py-1 rounded-full hover:bg-red-600 transition duration-200">View Profile</a>
+  </header>
 
-<header class="header p-4 text-xl font-bold text-red-500 flex justify-between items-center">
-  <span>BanterBox</span>
-  <a id="profile-link" href="#" class="text-sm bg-red-500 text-white px-4 py-1 rounded-full hover:bg-red-600 transition duration-200">
-    View Profile
-  </a>
-</header>
+  <div class="tab-panel active" id="tab-chat">
+    <h2 class="text-lg font-semibold mt-4 mb-2 dark:text-gray-100">Your Friends</h2>
+    <div id="friends-list" aria-live="polite" aria-relevant="additions"></div>
+    <p id="no-friends-message" class="text-center hidden">No friends yet.</p>
+  </div>
+  <div class="tab-panel" id="tab-groups">
+    <h2 class="text-lg font-semibold mt-4 mb-2 dark:text-gray-100">Your Groups</h2>
+    <div id="groups-list" aria-live="polite" aria-relevant="additions"></div>
+    <p id="no-groups-message" class="text-center hidden">You haven’t joined any groups yet.</p>
+  </div>
+  <div class="tab-panel" id="tab-statuses">
+    <h2 class="text-lg font-semibold mt-4 mb-2 dark:text-gray-100">My Statuses</h2>
+    <div id="own-statuses" class="own-statuses"></div>
+    <p id="no-own-statuses-message" class="text-center hidden">You haven’t posted any statuses yet.</p>
+    <h2 class="text-lg font-semibold mt-4 mb-2 dark:text-gray-100">Friends' Statuses</h2>
+    <div id="statuses-list" class="status-grid" aria-live="polite" aria-relevant="additions"></div>
+    <p id="no-statuses-message" class="text-center hidden">No friends' statuses yet.</p>
+  </div>
+  <div class="tab-panel" id="tab-services">
+    <h2 class="text-lg font-semibold mt-4 mb-2 dark:text-gray-100">Services</h2>
+    <p class="p-4 dark:text-gray-100">Explore available services (e.g., premium features, integrations, etc.).</p>
+  </div>
 
-<!-- Tabs -->
-<div class="tab-panel active" id="tab-chat">
-  <h2 class="text-lg font-semibold mt-4 mb-2 dark:text-gray-100">Your Friends</h2>
-  <div id="friends-list" aria-live="polite" aria-relevant="additions"></div>
-  <p id="no-friends-message" class="text-center hidden">No friends yet.</p>
-</div>
-<div class="tab-panel" id="tab-groups">
-  <h2 class="text-lg font-semibold mt-4 mb-2 dark:text-gray-100">Your Groups</h2>
-  <div id="groups-list" aria-live="polite" aria-relevant="additions"></div>
-  <p id="no-groups-message" class="text-center hidden">You haven’t joined any groups yet.</p>
-</div>
-<div class="tab-panel" id="tab-statuses">
-  <h2 class="text-lg font-semibold mt-4 mb-2 dark:text-gray-100">My Statuses</h2>
-  <div id="own-statuses" class="own-statuses"></div>
-  <p id="no-own-statuses-message" class="text-center hidden">You haven’t posted any statuses yet.</p>
-  <h2 class="text-lg font-semibold mt-4 mb-2 dark:text-gray-100">Friends' Statuses</h2>
-  <div id="statuses-list" class="status-grid" aria-live="polite" aria-relevant="additions"></div>
-  <p id="no-statuses-message" class="text-center hidden">No friends' statuses yet.</p>
-</div>
-<div class="tab-panel" id="tab-services">
-  <h2 class="text-lg font-semibold mt-4 mb-2 dark:text-gray-100">Your Services</h2>
-  <div id="services-list" class="services-grid" aria-live="polite" aria-relevant="additions"></div>
-  <p id="no-services-message" class="text-center hidden">No services selected yet.</p>
-</div>
+  <button id="floating-btn" class="fixed bottom-20 right-4 font-bold px-4 py-2 rounded-full flex items-center gap-2 z-20">
+    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+    </svg>
+    <span id="floating-btn-text">Add Friend</span>
+  </button>
 
-<!-- Reusable Floating Button -->
-<button id="floating-btn" class="fixed bottom-20 right-4 font-bold px-4 py-2 rounded-full flex items-center gap-2 z-20">
-  <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-  </svg>
-  <span id="floating-btn-text">Add Friend</span>
-</button>
-
-<!-- Modal for Status Deletion Confirmation -->
-<div id="delete-status-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
-  <div class="modal dark:modal">
-    <p class="text-lg font-semibold dark:text-gray-100">Delete Status</p>
-    <p class="mt-2 text-gray-600 dark:text-gray-300">Are you sure you want to delete this status?</p>
-    <div class="modal-buttons">
-      <button id="modal-confirm" class="modal-btn modal-btn-confirm">Delete</button>
-      <button id="modal-cancel" class="modal-btn modal-btn-cancel dark:modal-btn-cancel">Cancel</button>
+  <div id="delete-status-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+    <div class="modal">
+      <p class="text-lg font-semibold dark:text-gray-100">Delete Status</p>
+      <p class="mt-2 text-gray-600 dark:text-gray-300">Are you sure you want to delete this status?</p>
+      <div class="modal-buttons">
+        <button id="modal-confirm" class="modal-btn modal-btn-confirm">Delete</button>
+        <button id="modal-cancel" class="modal-btn modal-btn-cancel">Cancel</button>
+      </div>
     </div>
   </div>
-</div>
 
-<!-- Loading Overlay -->
-<div id="loading-overlay" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
-  <svg class="animate-spin h-10 w-10 text-red-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4z"/>
-  </svg>
-</div>
+  <div id="loading-overlay" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+    <svg class="animate-spin h-10 w-10 text-red-500" fill="none" viewBox="0 0 24 24">
+      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4z"/>
+    </svg>
+  </div>
 
-<!-- Bottom Navigation -->
-<div class="tab-nav" role="tablist">
-  <button class="active" data-tab="chat" role="tab" aria-selected="true">Chat</button>
-  <button data-tab="groups" role="tab" aria-selected="false">Groups</button>
-  <button data-tab="statuses" role="tab" aria-selected="false">Statuses</button>
-  <button data-tab="services" role="tab" aria-selected="false">Services</button>
-</div>
+  <div class="tab-nav" role="tablist">
+    <button class="active" data-tab="chat" role="tab" aria-selected="true">Chat</button>
+    <button data-tab="groups" role="tab" aria-selected="false">Groups</button>
+    <button data-tab="statuses" role="tab" aria-selected="false">Statuses</button>
+    <button data-tab="services" role="tab" aria-selected="false">Services</button>
+  </div>
 
-<script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
-  import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
-  import { getDatabase, ref, onValue, set, push, get, remove, update } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
+  <script type="module" defer>
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
+    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
+    import { getDatabase, ref, get, remove, update } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
 
-  const firebaseConfig = {
-    apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
-    authDomain: "fire-b-a8878.firebaseapp.com",
-    databaseURL: "https://fire-b-a8878.firebaseio.com",
-    projectId: "fire-b-a8878",
-    storageBucket: "fire-b-a8878.appspot.com",
-    messagingSenderId: "658673187627",
-    appId: "1:658673187627:web:6e4c29af661785f0afa36e"
-  };
+    const firebaseConfig = {
+      apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
+      authDomain: "fire-b-a8878.firebaseapp.com",
+      databaseURL: "https://fire-b-a8878.firebaseio.com",
+      projectId: "fire-b-a8878",
+      storageBucket: "fire-b-a8878.appspot.com",
+      messagingSenderId: "658673187627",
+      appId: "1:658673187627:web:6e4c29af661785f0afa36e"
+    };
 
-  const app = initializeApp(firebaseConfig);
-  const auth = getAuth();
-  const db = getDatabase();
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth();
+    const db = getDatabase();
+    const elements = {
+      tabBtns: document.querySelectorAll(".tab-nav button"),
+      tabPanels: document.querySelectorAll(".tab-panel"),
+      floatingBtn: document.getElementById("floating-btn"),
+      floatingBtnText: document.getElementById("floating-btn-text"),
+      friendsList: document.getElementById("friends-list"),
+      noFriendsMessage: document.getElementById("no-friends-message"),
+      groupsList: document.getElementById("groups-list"),
+      noGroupsMessage: document.getElementById("no-groups-message"),
+      ownStatusesList: document.getElementById("own-statuses"),
+      noOwnStatusesMessage: document.getElementById("no-own-statuses-message"),
+      statusesList: document.getElementById("statuses-list"),
+      noStatusesMessage: document.getElementById("no-statuses-message"),
+      loadingOverlay: document.getElementById("loading-overlay"),
+      deleteStatusModal: document.getElementById("delete-status-modal"),
+      modalConfirm: document.getElementById("modal-confirm"),
+      modalCancel: document.getElementById("modal-cancel")
+    };
 
-  const tabBtns = document.querySelectorAll(".tab-nav button");
-  const tabPanels = document.querySelectorAll(".tab-panel");
-  const floatingBtn = document.getElementById("floating-btn");
-  const floatingBtnText = document.getElementById("floating-btn-text");
-  const friendsList = document.getElementById("friends-list");
-  const noFriendsMessage = document.getElementById("no-friends-message");
-  const groupsList = document.getElementById("groups-list");
-  const noGroupsMessage = document.getElementById("no-groups-message");
-  const ownStatusesList = document.getElementById("own-statuses");
-  const noOwnStatusesMessage = document.getElementById("no-own-statuses-message");
-  const statusesList = document.getElementById("statuses-list");
-  const noStatusesMessage = document.getElementById("no-statuses-message");
-  const servicesList = document.getElementById("services-list");
-  const noServicesMessage = document.getElementById("no-services-message");
-  const loadingOverlay = document.getElementById("loading-overlay");
-  const deleteStatusModal = document.getElementById("delete-status-modal");
-  const modalConfirm = document.getElementById("modal-confirm");
-  const modalCancel = document.getElementById("modal-cancel");
+    function showLoading() { elements.loadingOverlay.classList.remove("hidden"); }
+    function hideLoading() { elements.loadingOverlay.classList.add("hidden"); }
 
-  function showLoading() { loadingOverlay.classList.remove("hidden"); }
-  function hideLoading() { loadingOverlay.classList.add("hidden"); }
-
-  function applyTheme(themeValue) {
-    const isDark = themeValue === 'dark';
-    document.body.classList.toggle('dark', isDark);
-    document.querySelector('.header').classList.toggle('dark', isDark);
-    document.querySelector('.tab-nav').classList.toggle('dark', isDark);
-    document.querySelectorAll('.friend-card, .status-card, .service-card').forEach(el => el.classList.toggle('dark', isDark));
-    document.querySelectorAll('.last-message, .status-text, .service-description').forEach(el => el.classList.toggle('dark', isDark));
-    document.querySelectorAll('.last-seen, .status-time, .member-count, .service-added').forEach(el => el.classList.toggle('dark', isDark));
-    document.querySelectorAll('#no-friends-message, #no-groups-message, #no-statuses-message, #no-own-statuses-message, #no-services-message').forEach(el => el.classList.toggle('dark', isDark));
-    document.querySelectorAll('.tab-nav button').forEach(el => el.classList.toggle('dark', isDark));
-    document.querySelectorAll('.text-lg').forEach(el => el.classList.toggle('dark:text-gray-100', isDark));
-    document.querySelector('.own-statuses').classList.toggle('dark', isDark);
-    document.querySelector('.modal').classList.toggle('dark', isDark);
-    document.querySelectorAll('.modal-btn-cancel').forEach(el => el.classList.toggle('dark', isDark));
-    floatingBtn.classList.toggle('dark', isDark);
-  }
-
-  onAuthStateChanged(auth, async user => {
-    if (!user) {
-      location.href = "login.html";
-      return;
+    function applyTheme(themeValue) {
+      const isDark = themeValue === 'dark';
+      document.body.classList.toggle('dark', isDark);
+      document.querySelector('.header').classList.toggle('dark', isDark);
+      document.querySelector('.tab-nav').classList.toggle('dark', isDark);
+      document.querySelectorAll('.friend-card, .status-card').forEach(el => el.classList.toggle('dark', isDark));
+      document.querySelectorAll('.last-message, .status-text').forEach(el => el.classList.toggle('dark', isDark));
+      document.querySelectorAll('.last-seen, .status-time, .member-count').forEach(el => el.classList.toggle('dark', isDark));
+      document.querySelectorAll('#no-friends-message, #no-groups-message, #no-statuses-message, #no-own-statuses-message').forEach(el => el.classList.toggle('dark', isDark));
+      document.querySelectorAll('.tab-nav button').forEach(el => el.classList.toggle('dark', isDark));
+      document.querySelectorAll('.text-lg').forEach(el => el.classList.toggle('dark:text-gray-100', isDark));
+      document.querySelector('.own-statuses').classList.toggle('dark', isDark);
+      document.querySelector('.modal').classList.toggle('dark', isDark);
+      document.querySelectorAll('.modal-btn-cancel').forEach(el => el.classList.toggle('dark', isDark));
+      elements.floatingBtn.classList.toggle('dark', isDark);
     }
-    showLoading();
-    document.getElementById("profile-link").href = `profile.html?uid=${user.uid}&owner=true`;
 
-    try {
-      // Parallelize initial data fetching
-      const [settingsSnap, chatsSnap, groupsSnap, statusesSnap, servicesSnap] = await Promise.all([
-        get(ref(db, `users/${user.uid}/settings`)),
-        get(ref(db, `users/${user.uid}/chats`)),
-        get(ref(db, `groups`)),
-        get(ref(db, `statuses`)),
-        get(ref(db, `users/${user.uid}/settings/services`))
-      ]);
-
-      // Apply theme
-      const settings = settingsSnap.val() || {};
-      applyTheme(settings.theme || 'light');
-
-      // Load data
-      await Promise.all([
-        loadFriends(user.uid, chatsSnap, settings),
-        loadGroups(user.uid, groupsSnap),
-        loadStatuses(user.uid, chatsSnap, statusesSnap, settings),
-        loadServices(user.uid, servicesSnap)
-      ]);
-    } catch (error) {
-      console.error('Error loading initial data:', error);
-      alert('Failed to load data: ' + error.message);
-    } finally {
-      hideLoading();
-    }
-  });
-
-  // Initialize floating button for the default "Chat" tab
-  floatingBtn.classList.remove("hidden");
-  floatingBtnText.textContent = "Add Friend";
-  floatingBtn.onclick = () => {
-    window.location.href = "add-friend.html";
-  };
-
-  tabBtns.forEach((btn) => {
-    btn.addEventListener("click", () => {
-      tabBtns.forEach(b => {
-        b.classList.remove("active");
-        b.setAttribute("aria-selected", "false");
-      });
-      tabPanels.forEach(p => p.classList.remove("active"));
-
-      btn.classList.add("active");
-      btn.setAttribute("aria-selected", "true");
-      document.getElementById(`tab-${btn.dataset.tab}`).classList.add("active");
-
-      if (btn.dataset.tab === "chat") {
-        floatingBtn.classList.remove("hidden");
-        floatingBtnText.textContent = "Add Friend";
-        floatingBtn.onclick = () => {
-          window.location.href = "add-friend.html";
-        };
-      } else if (btn.dataset.tab === "groups") {
-        floatingBtn.classList.remove("hidden");
-        floatingBtnText.textContent = "Add Group";
-        floatingBtn.onclick = () => {
-          window.location.href = "add-group.html";
-        };
-      } else if (btn.dataset.tab === "statuses") {
-        floatingBtn.classList.remove("hidden");
-        floatingBtnText.textContent = "Add Status";
-        floatingBtn.onclick = () => {
-          window.location.href = "add-status.html";
-        };
-      } else if (btn.dataset.tab === "services") {
-        floatingBtn.classList.remove("hidden");
-        floatingBtnText.textContent = "Add Service";
-        floatingBtn.onclick = () => {
-          window.location.href = "services.html";
-        };
-      }
-    });
-  });
-
-  function timeAgo(timestamp) {
-    if (!timestamp) return "";
-    const now = Date.now();
-    const diff = now - timestamp;
-    if (diff < 60000) return "just now";
-    if (diff < 3600000) return Math.floor(diff / 60000) + "m ago";
-    if (diff < 86400000) return Math.floor(diff / 3600000) + "h ago";
-    return Math.floor(diff / 86400000) + "d ago";
-  }
-
-  function showDeleteStatusModal(statusId) {
-    deleteStatusModal.classList.remove("hidden");
-    modalConfirm.onclick = async () => {
-      showLoading();
+    onAuthStateChanged(auth, async user => {
+      if (!user) return location.href = "login.html";
+      document.getElementById("profile-link").href = `profile.html?uid=${user.uid}&owner=true`;
       try {
-        await remove(ref(db, `statuses/${statusId}`));
-        deleteStatusModal.classList.add("hidden");
+        const snap = await get(ref(db, `users/${user.uid}/settings`));
+        applyTheme(snap.val()?.theme || 'light');
+        await Promise.all([loadFriends(user.uid), loadGroups(user.uid), loadStatuses(user.uid)]);
       } catch (error) {
-        console.error("Error deleting status:", error);
-        alert("Failed to delete status: " + error.message);
+        console.error('Error initializing:', error);
       }
       hideLoading();
-    };
-    modalCancel.onclick = () => {
-      deleteStatusModal.classList.add("hidden");
-    };
-  }
-
-  function renderFriend(uid, data, lastMsg, lastMsgTime, unreadCount) {
-    const card = document.createElement("div");
-    card.className = "friend-card";
-    if (unreadCount > 0) card.classList.add("unread");
-
-    card.innerHTML = `
-      <img src="${data.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${data.name || 'Friend'}" class="w-12 h-12 rounded-full mr-4" />
-      <div>
-        <h4 class="font-bold dark:text-gray-100">${data.name || "Friend"}</h4>
-        <p class="last-message">${lastMsg || "No messages yet"}</p>
-        <p class="last-seen">${data.presence === 'online' ? 'Online' : 'Last seen: ' + timeAgo(data.lastSeen)}</p>
-      </div>
-      <div class="status-indicator ${data.presence === 'online' ? 'status-online' : 'status-offline'}"></div>
-    `;
-    card.onclick = () => { window.location.href = `chat.html?uid=${uid}`; };
-    return card;
-  }
-
-  async function loadFriends(uid, chatsSnap, settings) {
-    console.log('loadFriends called for uid:', uid);
-    noFriendsMessage.classList.add("hidden");
-    const fragment = document.createDocumentFragment();
-
-    let friendUids = new Set();
-    let users = {};
-
-    // Check users/$uid/chats first
-    if (chatsSnap.exists()) {
-      console.log('Chats found in users/$uid/chats:', chatsSnap.val());
-      friendUids = new Set(Object.keys(chatsSnap.val() || {}));
-    } else {
-      console.log('No chats in users/$uid/chats, falling back to chats node');
-      // Fallback to chats node
-      try {
-        const chatsRef = ref(db, "chats");
-        const chatsFallbackSnap = await get(chatsRef);
-        if (chatsFallbackSnap.exists()) {
-          const chats = chatsFallbackSnap.val();
-          console.log('Chats node data:', chats);
-          for (const chatId in chats) {
-            const participants = chats[chatId].participants || {};
-            if (participants[uid]) {
-              for (const friendUid in participants) {
-                if (friendUid !== uid) friendUids.add(friendUid);
-              }
-            }
-          }
-        }
-      } catch (error) {
-        console.error('Error fetching chats node:', error);
-      }
-    }
-
-    if (friendUids.size === 0) {
-      console.log('No friends found for uid:', uid);
-      noFriendsMessage.classList.remove("hidden");
-      friendsList.innerHTML = "";
-      return;
-    }
-
-    console.log('Friend UIDs:', Array.from(friendUids));
-
-    // Fetch blocked users
-    const blockedUsers = settings.blockedUsers || {};
-    console.log('Blocked users:', blockedUsers);
-
-    // Filter out blocked users
-    friendUids = new Set([...friendUids].filter(friendUid => !blockedUsers[friendUid]));
-    console.log('Filtered friend UIDs (excluding blocked):', Array.from(friendUids));
-
-    if (friendUids.size === 0) {
-      console.log('All friends are blocked');
-      noFriendsMessage.classList.remove("hidden");
-      friendsList.innerHTML = "";
-      return;
-    }
-
-    // Fetch user data for friends
-    try {
-      const usersSnap = await get(ref(db, "users"));
-      users = usersSnap.exists() ? usersSnap.val() : {};
-      console.log('Users data:', users);
-    } catch (error) {
-      console.error('Error fetching users:', error);
-    }
-
-    // Fetch messages for each chat
-    const messagePromises = Array.from(friendUids).map(async friendUid => {
-      const chatId = uid < friendUid ? `${uid}_${friendUid}` : `${friendUid}_${uid}`;
-      try {
-        const messagesRef = ref(db, `messages/${chatId}`);
-        const msgSnap = await get(messagesRef);
-        let lastMsg = null, lastMsgTime = null, unreadCount = 0;
-        if (msgSnap.exists()) {
-          const msgs = msgSnap.val();
-          for (const mid in msgs) {
-            const m = msgs[mid];
-            if (!lastMsgTime || m.timestamp > lastMsgTime) {
-              lastMsg = m.text || (m.image ? "[Image]" : "[Media]");
-              lastMsgTime = m.timestamp;
-            }
-            if (m.sender === friendUid && !m.read) unreadCount++;
-          }
-        }
-        return { friendUid, lastMsg, lastMsgTime, unreadCount };
-      } catch (error) {
-        console.error(`Error fetching messages for chat ${chatId}:`, error);
-        return { friendUid, lastMsg: null, lastMsgTime: null, unreadCount: 0 };
-      }
     });
 
-    const messageData = await Promise.all(messagePromises);
-    console.log('Message data:', messageData);
+    elements.tabBtns.forEach(btn => {
+      btn.addEventListener("click", () => {
+        elements.tabBtns.forEach(b => {
+          b.classList.remove("active");
+          b.setAttribute("aria-selected", "false");
+        });
+        elements.tabPanels.forEach(p => p.classList.remove("active"));
+        btn.classList.add("active");
+        btn.setAttribute("aria-selected", "true");
+        document.getElementById(`tab-${btn.dataset.tab}`).classList.add("active");
 
-    // Render friends
-    messageData.forEach(({ friendUid, lastMsg, lastMsgTime, unreadCount }) => {
-      const userData = users[friendUid] || {};
-      const card = renderFriend(friendUid, userData, lastMsg, lastMsgTime, unreadCount);
-      fragment.appendChild(card);
-    });
-
-    friendsList.innerHTML = "";
-    friendsList.appendChild(fragment);
-
-    // Real-time updates for messages and presence
-    friendUids.forEach(friendUid => {
-      const chatId = uid < friendUid ? `${uid}_${friendUid}` : `${friendUid}_${uid}`;
-      onValue(ref(db, `messages/${chatId}`), (msgSnap) => {
-        const msgs = msgSnap.val() || {};
-        let lastMsg = null, lastMsgTime = null, unreadCount = 0;
-        for (const mid in msgs) {
-          const m = msgs[mid];
-          if (!lastMsgTime || m.timestamp > lastMsgTime) {
-            lastMsg = m.text || (m.image ? "[Image]" : "[Media]");
-            lastMsgTime = m.timestamp;
-          }
-          if (m.sender === friendUid && !m.read) unreadCount++;
+        elements.floatingBtn.classList.remove("hidden");
+        if (btn.dataset.tab === "chat") {
+          elements.floatingBtnText.textContent = "Add Friend";
+          elements.floatingBtn.onclick = () => location.href = "add-friend.html";
+        } else if (btn.dataset.tab === "groups") {
+          elements.floatingBtnText.textContent = "Add Group";
+          elements.floatingBtn.onclick = () => location.href = "add-group.html";
+        } else if (btn.dataset.tab === "statuses") {
+          elements.floatingBtnText.textContent = "Add Status";
+          elements.floatingBtn.onclick = () => location.href = "add-status.html";
+        } else {
+          elements.floatingBtn.classList.add("hidden");
         }
-        const existing = [...friendsList.children].find(c =>
-          c.onclick && c.onclick.toString().includes(`chat.html?uid=${friendUid}`));
-        if (existing) friendsList.removeChild(existing);
-        const userData = users[friendUid] || {};
-        const card = renderFriend(friendUid, userData, lastMsg, lastMsgTime, unreadCount);
-        friendsList.appendChild(card);
-      }, (error) => {
-        console.error(`Error in messages/${chatId} listener:`, error);
-      });
-
-      onValue(ref(db, `users/${friendUid}`), (userSnap) => {
-        if (userSnap.exists()) {
-          const userData = userSnap.val();
-          const existing = [...friendsList.children].find(c =>
-            c.onclick && c.onclick.toString().includes(`chat.html?uid=${friendUid}`));
-          if (existing) {
-            existing.querySelector('img').src = userData.photoURL || 'https://www.gravatar.com/avatar?d=mp';
-            existing.querySelector('h4').textContent = userData.name || 'Friend';
-            const presenceEl = existing.querySelector('.status-indicator');
-            presenceEl.className = `status-indicator ${userData.presence === 'online' ? 'status-online' : 'status-offline'}`;
-            existing.querySelector('.last-seen').textContent = userData.presence === 'online' ? 'Online' : `Last seen: ${timeAgo(userData.lastSeen)}`;
-          }
-        }
-      }, (error) => {
-        console.error(`Error in users/${friendUid} listener:`, error);
       });
     });
 
-    // Real-time listener for chats to detect new friends
-    onValue(ref(db, `users/${uid}/chats`), (snap) => {
-      console.log('Chats real-time update for uid:', uid, snap.val());
-      if (!snap.exists()) {
-        friendsList.innerHTML = "";
-        noFriendsMessage.classList.remove("hidden");
-        return;
-      }
-      const chats = snap.val() || {};
-      const newFriendUids = new Set(Object.keys(chats));
-      if (newFriendUids.size === 0) {
-        friendsList.innerHTML = "";
-        noFriendsMessage.classList.remove("hidden");
-        return;
-      }
-      // Reload friends if new UIDs are detected
-      if ([...newFriendUids].some(uid => !friendUids.has(uid))) {
-        loadFriends(uid, snap, settings);
-      }
-    }, (error) => {
-      console.error('Error in chats listener:', error);
-    });
-  }
+    function timeAgo(timestamp) {
+      if (!timestamp) return "";
+      const diff = Date.now() - timestamp;
+      return diff < 60000 ? "just now" : diff < 3600000 ? `${Math.floor(diff / 60000)}m ago` : diff < 86400000 ? `${Math.floor(diff / 3600000)}h ago` : `${Math.floor(diff / 86400000)}d ago`;
+    }
 
-  function renderGroupCard(gid, group, currentUserUid) {
-    const memberCount = group.members ? Object.keys(group.members).length : 0;
-    const avatarUrl = group.avatar || `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(group.name)}`;
-
-    const div = document.createElement("div");
-    div.className = "friend-card";
-    div.innerHTML = `
-      <img src="${avatarUrl}" alt="${group.name} avatar" class="group-avatar" />
-      <div class="group-info">
-        <h4 class="font-bold dark:text-gray-100">${group.name}</h4>
-        <p class="member-count">${memberCount} member${memberCount !== 1 ? 's' : ''}</p>
-        <p class="last-seen">Created: ${timeAgo(group.createdAt)}</p>
-      </div>
-      <svg class="delete-icon ml-auto self-start" data-gid="${gid}" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
-      </svg>
-    `;
-    div.querySelector(".delete-icon").addEventListener("click", async (e) => {
-      e.stopPropagation();
-      if (confirm("Are you sure you want to leave this group?")) {
+    function showDeleteStatusModal(statusId) {
+      elements.deleteStatusModal.classList.remove("hidden");
+      elements.modalConfirm.onclick = async () => {
         showLoading();
         try {
-          const groupRef = ref(db, `groups/${gid}`);
-          const snapshot = await get(groupRef);
-          const groupData = snapshot.val();
-          if (groupData && groupData.members) {
-            delete groupData.members[currentUserUid];
-            if (Object.keys(groupData.members).length === 0) {
-              await remove(groupRef);
-            } else {
-              await update(groupRef, { members: groupData.members });
-            }
-          }
+          await remove(ref(db, `statuses/${statusId}`));
+          elements.deleteStatusModal.classList.add("hidden");
         } catch (error) {
-          console.error("Error leaving group:", error);
-          alert("Failed to leave group: " + error.message);
+          console.error("Error deleting status:", error);
+          alert("Failed to delete status.");
         }
         hideLoading();
-      }
-    });
-    div.addEventListener("click", (e) => {
-      if (!e.target.closest(".delete-icon")) {
-        window.location.href = `group.html?gid=${gid}`;
-      }
-    });
-    return div;
-  }
-
-  async function loadGroups(uid, groupsSnap) {
-    console.log('loadGroups called for uid:', uid);
-    noGroupsMessage.classList.add("hidden");
-    const fragment = document.createDocumentFragment();
-
-    if (!groupsSnap.exists()) {
-      console.log('No groups found');
-      noGroupsMessage.classList.remove("hidden");
-      return;
+      };
+      elements.modalCancel.onclick = () => elements.deleteStatusModal.classList.add("hidden");
     }
 
-    const groups = groupsSnap.val();
-    let hasGroups = false;
-    for (const gid in groups) {
-      const group = groups[gid];
-      if (group.members && group.members[uid]) {
-        hasGroups = true;
-        const groupCard = renderGroupCard(gid, group, uid);
-        fragment.appendChild(groupCard);
-      }
+    function renderFriend(uid, data, lastMsg, lastMsgTime, unreadCount) {
+      const card = document.createElement("div");
+      card.className = `friend-card${unreadCount > 0 ? ' unread' : ''}`;
+      card.innerHTML = `
+        <img src="${data.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${data.name || 'Friend'}" class="w-12 h-12 rounded-full mr-4" loading="lazy">
+        <div>
+          <h4 class="font-bold dark:text-gray-100">${data.name || "Friend"}</h4>
+          <p class="last-message">${lastMsg || "No messages yet"}</p>
+          <p class="last-seen">${data.presence === 'online' ? 'Online' : 'Last seen: ' + timeAgo(data.lastSeen)}</p>
+        </div>
+        <div class="status-indicator ${data.presence === 'online' ? 'status-online' : 'status-offline'}"></div>
+      `;
+      card.onclick = () => location.href = `chat.html?uid=${uid}`;
+      return card;
     }
 
-    groupsList.innerHTML = "";
-    groupsList.appendChild(fragment);
-    if (!hasGroups) {
-      console.log('No groups for user');
-      noGroupsMessage.classList.remove("hidden");
-    }
-
-    // Real-time updates
-    onValue(ref(db, "groups"), (snap) => {
-      console.log('Groups real-time update:', snap.val());
-      if (!snap.exists()) {
-        groupsList.innerHTML = "";
-        noGroupsMessage.classList.remove("hidden");
-        return;
-      }
-      const groups = snap.val();
-      groupsList.innerHTML = "";
+    async function loadFriends(uid) {
+      showLoading();
+      elements.friendsList.innerHTML = "";
+      elements.noFriendsMessage.classList.add("hidden");
       const fragment = document.createDocumentFragment();
-      let hasGroups = false;
-      for (const gid in groups) {
-        const group = groups[gid];
-        if (group.members && group.members[uid]) {
-          hasGroups = true;
-          const groupCard = renderGroupCard(gid, group, uid);
-          fragment.appendChild(groupCard);
+
+      try {
+        const [chatsSnap, usersSnap] = await Promise.all([
+          get(ref(db, "chats")),
+          get(ref(db, "users"))
+        ]);
+
+        if (!chatsSnap.exists() || !usersSnap.exists()) {
+          elements.noFriendsMessage.classList.remove("hidden");
+          return;
         }
-      }
-      groupsList.appendChild(fragment);
-      if (!hasGroups) {
-        noGroupsMessage.classList.remove("hidden");
-      }
-    }, (error) => {
-      console.error('Error in groups listener:', error);
-    });
-  }
 
-  function renderStatusCard(statusId, status, userData, isOwnStatus = false) {
-    const card = document.createElement("div");
-    card.className = `status-card ${isOwnStatus ? 'flex-none w-64' : ''}`;
-    card.innerHTML = `
-      <img src="${userData.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${userData.name || 'User'} avatar" class="status-avatar" />
-      <div class="flex-grow">
-        <h4 class="font-bold dark:text-gray-100">${userData.name || "User"}</h4>
-        <p class="status-text">${status.text || "No status text"}</p>
-        <p class="status-time">${timeAgo(status.timestamp)}</p>
-      </div>
-    `;
-    if (isOwnStatus) {
-      card.addEventListener("click", () => showDeleteStatusModal(statusId));
-    }
-    return card;
-  }
+        const chats = chatsSnap.val();
+        const users = usersSnap.val();
+        const friendUids = new Set();
 
-  async function loadStatuses(uid, chatsSnap, statusesSnap, settings) {
-    console.log('loadStatuses called for uid:', uid);
-    noOwnStatusesMessage.classList.add("hidden");
-    noStatusesMessage.classList.add("hidden");
-    const ownFragment = document.createDocumentFragment();
-    const friendFragment = document.createDocumentFragment();
-
-    const usersSnap = await get(ref(db, "users"));
-    const users = usersSnap.exists() ? usersSnap.val() : {};
-    console.log('Users for statuses:', users);
-    const friendUids = new Set();
-
-    if (chatsSnap.exists()) {
-      const chats = chatsSnap.val();
-      for (const friendUid in chats) {
-        if (friendUid !== uid) friendUids.add(friendUid);
-      }
-    }
-    console.log('Friend UIDs for statuses:', Array.from(friendUids));
-
-    // Fetch blocked users
-    const blockedUsers = settings.blockedUsers || {};
-    console.log('Blocked users for statuses:', blockedUsers);
-
-    // Filter friendUids for statuses
-    const filteredFriendUids = new Set([...friendUids].filter(friendUid => !blockedUsers[friendUid]));
-    console.log('Filtered friend UIDs for statuses:', Array.from(filteredFriendUids));
-
-    // Fetch status visibility settings
-    const visibilityPromises = [uid, ...filteredFriendUids].map(async userId => {
-      const settingsSnap = await get(ref(db, `users/${userId}/settings`));
-      return { userId, visibility: settingsSnap.val()?.statusVisibility || 'everyone' };
-    });
-    const statusVisibilities = Object.fromEntries((await Promise.all(visibilityPromises)).map(({ userId, visibility }) => [userId, visibility]));
-    console.log('Status visibilities:', statusVisibilities);
-
-    let hasOwnStatuses = false;
-    let hasFriendStatuses = false;
-
-    if (statusesSnap.exists()) {
-      const statuses = statusesSnap.val();
-      console.log('Statuses data:', statuses);
-      for (const statusId in statuses) {
-        const status = statuses[statusId];
-        const userId = status.userId;
-        if (userId === uid) {
-          hasOwnStatuses = true;
-          const userData = users[uid] || {};
-          const card = renderStatusCard(statusId, status, userData, true);
-          ownFragment.appendChild(card);
-        } else if (filteredFriendUids.has(userId)) {
-          const visibility = statusVisibilities[userId];
-          if (visibility === 'nobody') continue;
-          if (visibility === 'friends' && !filteredFriendUids.has(userId)) continue;
-          hasFriendStatuses = true;
-          const userData = users[userId] || {};
-          const card = renderStatusCard(statusId, status, userData, false);
-          friendFragment.appendChild(card);
+        for (const chatId in chats) {
+          if (chats[chatId].participants?.[uid]) {
+            Object.keys(chats[chatId].participants).forEach(friendUid => {
+              if (friendUid !== uid) friendUids.add(friendUid);
+            });
+          }
         }
+
+        if (!friendUids.size) {
+          elements.noFriendsMessage.classList.remove("hidden");
+          return;
+        }
+
+        for (const friendUid of friendUids) {
+          const chatId = uid < friendUid ? `${uid}_${friendUid}` : `${friendUid}_${uid}`;
+          const msgSnap = await get(ref(db, `messages/${chatId}`));
+          const userData = users[friendUid] || {};
+          let lastMsg = null, lastMsgTime = null, unreadCount = 0;
+
+          if (msgSnap.exists()) {
+            const msgs = msgSnap.val();
+            for (const mid in msgs) {
+              const m = msgs[mid];
+              if (!lastMsgTime || m.timestamp > lastMsgTime) {
+                lastMsg = m.text || (m.image ? "[Image]" : "[Media]");
+                lastMsgTime = m.timestamp;
+              }
+              if (m.sender === friendUid && !m.read) unreadCount++;
+            }
+          }
+
+          fragment.appendChild(renderFriend(friendUid, userData, lastMsg, lastMsgTime, unreadCount));
+        }
+
+        elements.friendsList.appendChild(fragment);
+      } catch (error) {
+        console.error("Error loading friends:", error);
+      } finally {
+        hideLoading();
       }
     }
 
-    ownStatusesList.innerHTML = "";
-    statusesList.innerHTML = "";
-    ownStatusesList.appendChild(ownFragment);
-    statusesList.appendChild(friendFragment);
-
-    if (!hasOwnStatuses) {
-      console.log('No own statuses');
-      noOwnStatusesMessage.classList.remove("hidden");
+    function renderGroupCard(gid, group, currentUserUid) {
+      const memberCount = group.members ? Object.keys(group.members).length : 0;
+      const avatarUrl = group.avatar || `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(group.name)}`;
+      const div = document.createElement("div");
+      div.className = "friend-card";
+      div.innerHTML = `
+        <img src="${avatarUrl}" alt="${group.name} avatar" class="group-avatar" loading="lazy">
+        <div class="group-info">
+          <h4 class="font-bold dark:text-gray-100">${group.name}</h4>
+          <p class="member-count">${memberCount} member${memberCount !== 1 ? 's' : ''}</p>
+          <p class="last-seen">Created: ${timeAgo(group.createdAt)}</p>
+        </div>
+        <svg class="delete-icon ml-auto self-start" data-gid="${gid}" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
+        </svg>
+      `;
+      div.querySelector(".delete-icon").addEventListener("click", async e => {
+        e.stopPropagation();
+        if (confirm("Are you sure you want to leave this group?")) {
+          showLoading();
+          try {
+            const groupRef = ref(db, `groups/${gid}`);
+            const snapshot = await get(groupRef);
+            const groupData = snapshot.val();
+            if (groupData?.members) {
+              delete groupData.members[currentUserUid];
+              if (!Object.keys(groupData.members).length) {
+                await remove(groupRef);
+              } else {
+                await update(groupRef, { members: groupData.members });
+              }
+            }
+          } catch (error) {
+            console.error("Error leaving group:", error);
+            alert("Failed to leave group.");
+          }
+          hideLoading();
+        }
+      });
+      div.addEventListener("click", e => {
+        if (!e.target.closest(".delete-icon")) location.href = `group.html?gid=${gid}`;
+      });
+      return div;
     }
-    if (!hasFriendStatuses) {
-      console.log('No friend statuses');
-      noStatusesMessage.classList.remove("hidden");
+
+    async function loadGroups(uid) {
+      showLoading();
+      elements.groupsList.innerHTML = "";
+      elements.noGroupsMessage.classList.add("hidden");
+      const fragment = document.createDocumentFragment();
+
+      try {
+        const groupsSnap = await get(ref(db, "groups"));
+        if (!groupsSnap.exists()) {
+          elements.noGroupsMessage.classList.remove("hidden");
+          return;
+        }
+
+        const groups = groupsSnap.val();
+        let hasGroups = false;
+        for (const gid in groups) {
+          if (groups[gid].members?.[uid]) {
+            hasGroups = true;
+            fragment.appendChild(renderGroupCard(gid, groups[gid], uid));
+          }
+        }
+
+        if (!hasGroups) elements.noGroupsMessage.classList.remove("hidden");
+        elements.groupsList.appendChild(fragment);
+      } catch (error) {
+        console.error("Error loading groups:", error);
+      } finally {
+        hideLoading();
+      }
     }
 
-    // Real-time updates
-    onValue(ref(db, "statuses"), (snap) => {
-      console.log('Statuses real-time update:', snap.val());
-      ownStatusesList.innerHTML = "";
-      statusesList.innerHTML = "";
+    function renderStatusCard(statusId, status, userData, isOwnStatus = false) {
+      const card = document.createElement("div");
+      card.className = `status-card${isOwnStatus ? ' flex-none w-64' : ''}`;
+      card.innerHTML = `
+        <img src="${userData.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${userData.name || 'User'} avatar" class="status-avatar" loading="lazy">
+        <div class="flex-grow">
+          <h4 class="font-bold dark:text-gray-100">${userData.name || "User"}</h4>
+          <p class="status-text">${status.text || "No status text"}</p>
+          <p class="status-time">${timeAgo(status.timestamp)}</p>
+        </div>
+      `;
+      if (isOwnStatus) card.addEventListener("click", () => showDeleteStatusModal(statusId));
+      return card;
+    }
+
+    async function loadStatuses(uid) {
+      showLoading();
+      elements.ownStatusesList.innerHTML = "";
+      elements.statusesList.innerHTML = "";
+      elements.noOwnStatusesMessage.classList.add("hidden");
+      elements.noStatusesMessage.classList.add("hidden");
       const ownFragment = document.createDocumentFragment();
       const friendFragment = document.createDocumentFragment();
-      let hasOwnStatuses = false;
-      let hasFriendStatuses = false;
 
-      if (snap.exists()) {
-        const statuses = snap.val();
+      try {
+        const [statusesSnap, usersSnap, chatsSnap] = await Promise.all([
+          get(ref(db, "statuses")),
+          get(ref(db, "users")),
+          get(ref(db, "chats"))
+        ]);
+
+        if (!statusesSnap.exists()) {
+          elements.noOwnStatusesMessage.classList.remove("hidden");
+          elements.noStatusesMessage.classList.remove("hidden");
+          return;
+        }
+
+        const statuses = statusesSnap.val();
+        const users = usersSnap.exists() ? usersSnap.val() : {};
+        const friendUids = new Set();
+        if (chatsSnap.exists()) {
+          const chats = chatsSnap.val();
+          for (const chatId in chats) {
+            if (chats[chatId].participants?.[uid]) {
+              Object.keys(chats[chatId].participants).forEach(friendUid => {
+                if (friendUid !== uid) friendUids.add(friendUid);
+              });
+            }
+          }
+        }
+
+        const statusVisibilities = {};
+        for (const statusId in statuses) {
+          const userId = statuses[statusId].userId;
+          if (userId === uid || friendUids.has(userId)) {
+            const settingsSnap = await get(ref(db, `users/${userId}/settings`));
+            statusVisibilities[userId] = settingsSnap.val()?.statusVisibility || 'everyone';
+          }
+        }
+
+        let hasOwnStatuses = false, hasFriendStatuses = false;
         for (const statusId in statuses) {
           const status = statuses[statusId];
           const userId = status.userId;
           if (userId === uid) {
             hasOwnStatuses = true;
-            const userData = users[uid] || {};
-            const card = renderStatusCard(statusId, status, userData, true);
-            ownFragment.appendChild(card);
-          } else if (filteredFriendUids.has(userId)) {
+            ownFragment.appendChild(renderStatusCard(statusId, status, users[uid] || {}, true));
+          } else if (friendUids.has(userId)) {
             const visibility = statusVisibilities[userId];
-            if (visibility === 'nobody') continue;
-            if (visibility === 'friends' && !filteredFriendUids.has(userId)) continue;
-            hasFriendStatuses = true;
-            const userData = users[userId] || {};
-            const card = renderStatusCard(statusId, status, userData, false);
-            friendFragment.appendChild(card);
+            if (visibility !== 'nobody' && (visibility !== 'friends' || friendUids.has(userId))) {
+              hasFriendStatuses = true;
+              friendFragment.appendChild(renderStatusCard(statusId, status, users[userId] || {}, false));
+            }
           }
         }
+
+        if (!hasOwnStatuses) elements.noOwnStatusesMessage.classList.remove("hidden");
+        if (!hasFriendStatuses) elements.noStatusesMessage.classList.remove("hidden");
+        elements.ownStatusesList.appendChild(ownFragment);
+        elements.statusesList.appendChild(friendFragment);
+      } catch (error) {
+        console.error("Error loading statuses:", error);
+      } finally {
+        hideLoading();
       }
-
-      ownStatusesList.appendChild(ownFragment);
-      statusesList.appendChild(friendFragment);
-      if (!hasOwnStatuses) {
-        noOwnStatusesMessage.classList.remove("hidden");
-      }
-      if (!hasFriendStatuses) {
-        noStatusesMessage.classList.remove("hidden");
-      }
-    }, (error) => {
-      console.error('Error in statuses listener:', error);
-    });
-  }
-
-  function renderServiceCard(serviceId, service) {
-    const card = document.createElement("div");
-    card.className = "service-card";
-    card.innerHTML = `
-      <img src="${service.icon || 'https://www.gravatar.com/avatar?d=mp'}" alt="${service.name} icon" class="service-icon" />
-      <div class="service-info">
-        <h4 class="font-bold dark:text-gray-100">${service.name || "Service"}</h4>
-        <p class="service-description">${service.description || "No description"}</p>
-        <p class="service-added">Added: ${timeAgo(service.addedAt)}</p>
-      </div>
-    `;
-    card.onclick = () => {
-      window.location.href = service.url || "#";
-    };
-    return card;
-  }
-
-  async function loadServices(uid, servicesSnap) {
-    console.log('loadServices called for uid:', uid);
-    noServicesMessage.classList.add("hidden");
-    const fragment = document.createDocumentFragment();
-
-    if (!servicesSnap.exists()) {
-      console.log('No services selected');
-      noServicesMessage.classList.remove("hidden");
-      return;
     }
-
-    const selectedServices = servicesSnap.val() || [];
-    if (selectedServices.length === 0) {
-      console.log('Empty services list');
-      noServicesMessage.classList.remove("hidden");
-      return;
-    }
-
-    const servicesRef = await get(ref(db, "services"));
-    const services = servicesRef.exists() ? servicesRef.val() : {};
-    console.log('Services data:', services);
-
-    selectedServices.forEach(serviceId => {
-      const service = services[serviceId] || {};
-      if (service.name) {
-        const card = renderServiceCard(serviceId, service);
-        fragment.appendChild(card);
-      }
-    });
-
-    servicesList.innerHTML = "";
-    servicesList.appendChild(fragment);
-
-    // Real-time updates
-    onValue(ref(db, `users/${uid}/settings/services`), async (snap) => {
-      console.log('Services real-time update:', snap.val());
-      servicesList.innerHTML = "";
-      const fragment = document.createDocumentFragment();
-      if (!snap.exists()) {
-        noServicesMessage.classList.remove("hidden");
-        return;
-      }
-
-      const selectedServices = snap.val() || [];
-      if (selectedServices.length === 0) {
-        noServicesMessage.classList.remove("hidden");
-        return;
-      }
-
-      const servicesRef = await get(ref(db, "services"));
-      const services = servicesRef.exists() ? servicesRef.val() : {};
-      selectedServices.forEach(serviceId => {
-        const service = services[serviceId] || {};
-        if (service.name) {
-          const card = renderServiceCard(serviceId, service);
-          fragment.appendChild(card);
-        }
-      });
-
-      servicesList.appendChild(fragment);
-    }, (error) => {
-      console.error('Error in services listener:', error);
-    });
-  }
-</script>
+  </script>
 </body>
 </html>
