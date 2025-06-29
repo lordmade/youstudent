@@ -2,80 +2,383 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Chaxo - Group</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    body { font-family: 'Segoe UI', sans-serif; background: #f9f9f9; }
-    .chat-bubble {
-      max-width: 70%;
-      padding: 10px 14px;
-      border-radius: 16px;
-      margin: 5px 0;
+    * { -webkit-user-select: none; user-select: none; }
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #f9f9f9;
+      margin: 0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
     }
-    .me {
-      background-color: #ef4444;
+    body.dark {
+      background: #1f2937;
+    }
+    header {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      background: white;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+      padding: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      z-index: 10;
+      height: 56px;
+    }
+    header.dark {
+      background: #374151;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+      color: #e5e7eb;
+    }
+    #group-info-link {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      cursor: pointer;
+    }
+    #notification {
+      position: fixed;
+      top: 56px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #ef4444;
       color: white;
-      align-self: flex-end;
-      border-bottom-right-radius: 0;
+      padding: 0.75rem 1.5rem;
+      border-radius: 8px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+      z-index: 20;
+      display: none;
+      max-width: 90%;
+      font-size: 0.9rem;
+      cursor: pointer;
+      animation: slideIn 0.3s ease;
     }
-    .other {
-      background-color: #e5e7eb;
-      color: #111;
-      align-self: flex-start;
-      border-bottom-left-radius: 0;
+    #notification.dark {
+      background: #dc2626;
     }
-    .chat-container {
-      padding-bottom: 80px; /* space for floating input */
+    @keyframes slideIn {
+      from { transform: translate(-50%, -100%); opacity: 0; }
+      to { transform: translate(-50%, 0); opacity: 1; }
     }
-    .floating-input {
+    #messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 72px 1rem 120px;
+      background: white;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      scroll-behavior: smooth;
+      box-sizing: border-box;
+    }
+    #messages.dark {
+      background: #1f2937;
+    }
+    .message-container {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+    }
+    .message-container.other {
+      align-items: flex-start;
+    }
+    .message {
+      max-width: 75%;
+      padding: 0.5rem 0.9rem;
+      border-radius: 1rem;
+      word-wrap: break-word;
+      font-size: 0.95rem;
+      line-height: 1.3;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+      white-space: pre-wrap;
+      position: relative;
+      -webkit-user-select: text;
+      user-select: text;
+      -webkit-touch-callout: default;
+    }
+    .message.dark {
+      box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+    }
+    .message.long-press-disable-select {
+      user-select: none !important;
+      -webkit-user-select: none !important;
+      -webkit-touch-callout: none !important;
+    }
+    .message.self {
+      background: #fee2e2;
+      color: #111827;
+      border-bottom-right-radius: 6px;
+    }
+    .message.other {
+      background: #e5e7eb;
+      color: #111827;
+      border-bottom-left-radius: 6px;
+    }
+    .message.self.dark {
+      background: #7f1d1d;
+      color: #e5e7eb;
+    }
+    .message.other.dark {
+      background: #4b5563;
+      color: #e5e7eb;
+    }
+    .message small {
+      display: block;
+      font-size: 0.7rem;
+      margin-top: 4px;
+      text-align: right;
+    }
+    .message.self small {
+      color: #4b5563;
+    }
+    .message.other small {
+      color: #6b7280;
+    }
+    .message.self.dark small {
+      color: #d1d5db;
+    }
+    .message.other.dark small {
+      color: #9ca3af;
+    }
+    .reaction {
+      font-size: 1rem;
+      margin-top: 4px;
+      display: flex;
+      gap: 4px;
+    }
+    .message-container.self .reaction {
+      justify-content: flex-end;
+    }
+    .message-container.other .reaction {
+      justify-content: flex-start;
+    }
+    .sender-name {
+      font-size: 0.8rem;
+      font-weight: bold;
+      color: #ef4444;
+      margin-bottom: 0.25rem;
+    }
+    .sender-name.dark {
+      color: #dc2626;
+    }
+    .reply-preview {
+      background: #f3f4f6;
+      border-left: 4px solid #ef4444;
+      padding: 0.5rem 2.5rem 0.5rem 1rem;
+      margin-bottom: 0.5rem;
+      border-radius: 0.5rem;
+      font-size: 0.85rem;
+      color: #374151;
+      position: relative;
+    }
+    .reply-preview.dark {
+      background: #4b5563;
+      color: #e5e7eb;
+    }
+    .quoted-text {
+      font-size: 0.8rem;
+      color: #6b7280;
+      margin-bottom: 0.25rem;
+      border-left: 2px solid #d1d5db;
+      padding-left: 6px;
+    }
+    .quoted-text.dark {
+      color: #9ca3af;
+      border-left-color: #6b7280;
+    }
+    #input-area {
       position: fixed;
       bottom: 0;
       left: 0;
       right: 0;
       background: white;
-      padding: 8px;
+      padding: 0.75rem 1rem;
+      box-shadow: 0 -2px 5px rgba(0,0,0,0.1);
       display: flex;
-      gap: 8px;
-      border-top: 1px solid #ccc;
+      flex-direction: column;
+      gap: 0.5rem;
       z-index: 10;
+    }
+    #input-area.dark {
+      background: #374151;
+      box-shadow: 0 -2px 5px rgba(0,0,0,0.2);
+    }
+    #input-form {
+      display: flex;
+      gap: 0.5rem;
+    }
+    #message-input {
+      flex: 1;
+      padding: 0.5rem 1rem;
+      border-radius: 9999px;
+      border: 1px solid #ddd;
+      font-size: 1rem;
+      line-height: 1.2;
+      height: 40px;
+      background: white;
+      color: #111827;
+    }
+    #message-input.dark {
+      border-color: #4b5563;
+      background: #4b5563;
+      color: #e5e7eb;
+    }
+    #send-btn {
+      background: #ef4444;
+      color: white;
+      padding: 0 1rem;
+      border-radius: 9999px;
+      font-weight: bold;
+      border: none;
+      cursor: pointer;
+      height: 40px;
+      user-select: none;
+    }
+    #send-btn.dark {
+      background: #dc2626;
+    }
+    .cancel-reply {
+      position: absolute;
+      top: 6px;
+      right: 10px;
+      color: #ef4444;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    .cancel-reply.dark {
+      color: #dc2626;
+    }
+    .emoji-picker {
+      position: absolute;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.15);
+      padding: 4px 8px;
+      z-index: 999;
+      display: none;
+      user-select: none;
+    }
+    .emoji-picker.dark {
+      background: #374151;
+      box-shadow: 0 0 10px rgba(0,0,0,0.3);
+    }
+    .emoji-picker span {
+      cursor: pointer;
+      padding: 4px;
+      font-size: 1.2rem;
+    }
+    .mic-anim {
+      animation: pulse 1s infinite;
+      background-color: #dc2626 !important;
+    }
+    @keyframes pulse {
+      0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.5); }
+      70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+    }
+    .modal {
+      background: white;
+      padding: 1.5rem;
+      border-radius: 8px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+      max-width: 400px;
+      width: 100%;
+      text-align: center;
+    }
+    .modal.dark {
+      background: #374151;
+      color: #e5e7eb;
+    }
+    .modal-buttons {
+      display: flex;
+      gap: 1rem;
+      justify-content: center;
+      margin-top: 1.5rem;
+    }
+    .modal-btn {
+      padding: 0.5rem 1rem;
+      border-radius: 8px;
+      font-weight: 600;
+      transition: background-color 0.3s ease, transform 0.2s ease;
+    }
+    .modal-btn-confirm {
+      background: #ef4444;
+      color: white;
+    }
+    .modal-btn-confirm:hover {
+      background: #dc2626;
+      transform: translateY(-2px);
+    }
+    .modal-btn-cancel {
+      background: #e5e7eb;
+      color: #374151;
+    }
+    .modal-btn-cancel:hover {
+      background: #d1d5db;
+      transform: translateY(-2px);
+    }
+    .modal-btn-cancel.dark {
+      background: #4b5563;
+      color: #e5e7eb;
+    }
+    .modal-btn-cancel.dark:hover {
+      background: #6b7280;
     }
   </style>
 </head>
-<body class="flex flex-col min-h-screen">
+<body>
 
-<!-- Header -->
-<header class="p-4 bg-white shadow flex items-center justify-between">
-  <div class="flex items-center gap-3">
+<header>
+  <button onclick="location.href='index.html'" class="text-red-500 font-bold dark:text-red-400">←</button>
+  <div id="group-info-link" aria-label="Go to group info">
     <img id="group-avatar" src="https://www.gravatar.com/avatar?d=mp" class="w-10 h-10 rounded-full" alt="Group Avatar" />
-    <h1 id="group-name" class="text-lg font-bold text-red-500">Group</h1>
+    <div>
+      <h1 id="group-name" class="font-bold text-lg dark:text-gray-100">Group</h1>
+      <span id="group-members-count" class="text-sm text-gray-500 dark:text-gray-400">0 members</span>
+    </div>
   </div>
-  <button id="group-info-btn" class="bg-gray-200 text-gray-700 px-3 py-1 rounded text-sm">Group Info</button>
 </header>
 
-<!-- Group Info Modal -->
-<div id="group-info-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-30">
-  <div class="bg-white p-6 rounded shadow-lg w-[90%] max-w-md max-h-[90vh] overflow-y-auto">
-    <h2 class="text-lg font-bold mb-4">Group Members</h2>
-    <div id="group-members-list" class="space-y-3"></div>
-    <button onclick="document.getElementById('group-info-modal').classList.add('hidden')" class="mt-4 w-full bg-red-500 text-white py-2 rounded">Close</button>
+<div id="notification" aria-live="polite"></div>
+
+<div id="messages"></div>
+
+<form id="input-area" onsubmit="return false;">
+  <div id="reply-box" class="reply-preview hidden">
+    <span id="reply-text"></span>
+    <span class="cancel-reply dark:cancel-reply" onclick="cancelReply()">×</span>
+  </div>
+  <div id="input-form">
+    <input type="text" id="message-input" placeholder="Type a message..." autocomplete="off" />
+    <button id="send-btn" type="button">Voice</button>
+  </div>
+</form>
+
+<div id="emoji-picker" class="emoji-picker">
+  <span>👍</span><span>😂</span><span>🔥</span><span>❤️</span><span>😢</span><span>😡</span>
+</div>
+
+<div id="delete-message-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+  <div class="modal dark:modal">
+    <p class="text-lg font-semibold dark:text-gray-100">Delete Message</p>
+    <p class="mt-2 text-gray-600 dark:text-gray-300">Are you sure you want to delete this message?</p>
+    <div class="modal-buttons">
+      <button id="modal-confirm" class="modal-btn modal-btn-confirm">Delete</button>
+      <button id="modal-cancel" class="modal-btn modal-btn-cancel dark:modal-btn-cancel">Cancel</button>
+    </div>
   </div>
 </div>
 
-<!-- Chat Messages -->
-<div id="chat-box" class="flex-1 overflow-y-auto px-4 py-2 flex flex-col gap-2 chat-container"></div>
-
-<!-- Floating Chat Input -->
-<form id="chat-form" class="floating-input">
-  <input id="message-input" type="text" placeholder="Type a message..." required class="flex-1 p-2 border rounded-full outline-none"/>
-  <button type="submit" class="px-4 py-2 bg-red-500 text-white rounded-full">Send</button>
-</form>
-
-<!-- Firebase Script -->
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
   import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
-  import { getDatabase, ref, onValue, push, set, get } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
+  import { getDatabase, ref, onValue, push, update, get, remove, onChildAdded } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
@@ -92,81 +395,362 @@
   const db = getDatabase();
 
   const gid = new URLSearchParams(location.search).get('gid');
-  const chatBox = document.getElementById('chat-box');
-  const chatForm = document.getElementById('chat-form');
-  const messageInput = document.getElementById('message-input');
-  const groupName = document.getElementById('group-name');
-  const groupAvatar = document.getElementById('group-avatar');
-  const groupInfoBtn = document.getElementById('group-info-btn');
-  const membersList = document.getElementById('group-members-list');
-  const groupInfoModal = document.getElementById('group-info-modal');
+  const messagesEl = document.getElementById("messages");
+  const messageInput = document.getElementById("message-input");
+  const sendBtn = document.getElementById("send-btn");
+  const replyBox = document.getElementById("reply-box");
+  const replyText = document.getElementById("reply-text");
+  const emojiPicker = document.getElementById("emoji-picker");
+  const groupInfoLink = document.getElementById("group-info-link");
+  const groupNameEl = document.getElementById("group-name");
+  const groupAvatar = document.getElementById("group-avatar");
+  const groupMembersCount = document.getElementById("group-members-count");
+  const deleteMessageModal = document.getElementById("delete-message-modal");
+  const modalConfirm = document.getElementById("modal-confirm");
+  const modalCancel = document.getElementById("modal-cancel");
+  const notificationEl = document.getElementById("notification");
 
-  let currentUser = null;
-  let groupData = null;
+  let currentUser, groupData, theme = 'light';
+  let replyingTo = null;
+  let reactingKey = null;
+  let deletingKey = null;
 
-  onAuthStateChanged(auth, async user => {
-    if (!user) return (location.href = "login.html");
-    currentUser = user;
+  function formatTime(ms) {
+    const d = new Date(ms);
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
 
-    const groupRef = ref(db, `groups/${gid}`);
-    onValue(groupRef, snapshot => {
-      if (!snapshot.exists()) return;
-      groupData = snapshot.val();
+  function cancelReply() {
+    replyingTo = null;
+    replyBox.classList.add("hidden");
+    replyText.textContent = "";
+    messageInput.focus();
+  }
 
-      groupName.textContent = groupData.name || "Group";
-      if (groupData.avatarURL) groupAvatar.src = groupData.avatarURL;
-
-      renderMembers(groupData.members || {});
-    });
-
-    // Chat Messages
-    const messagesRef = ref(db, `groupMessages/${gid}`);
-    onValue(messagesRef, snapshot => {
-      chatBox.innerHTML = "";
-      const messages = snapshot.val();
-      for (let mid in messages) {
-        const msg = messages[mid];
-        const bubble = document.createElement("div");
-        bubble.className = `chat-bubble ${msg.sender === currentUser.uid ? "me self-end" : "other self-start"}`;
-        bubble.textContent = msg.text;
-        chatBox.appendChild(bubble);
+  function showDeleteMessageModal(key) {
+    deletingKey = key;
+    deleteMessageModal.classList.remove("hidden");
+    modalConfirm.onclick = async () => {
+      try {
+        await remove(ref(db, `groupMessages/${gid}/${key}`));
+        deleteMessageModal.classList.add("hidden");
+        deletingKey = null;
+      } catch (error) {
+        console.error("Error deleting message:", error);
+        alert("Failed to delete message.");
       }
-      chatBox.scrollTop = chatBox.scrollHeight;
-    });
-  });
+    };
+    modalCancel.onclick = () => {
+      deleteMessageModal.classList.add("hidden");
+      deletingKey = null;
+    };
+  }
 
-  chatForm.onsubmit = async (e) => {
-    e.preventDefault();
-    const text = messageInput.value.trim();
-    if (!text || !currentUser) return;
-    const msgRef = push(ref(db, `groupMessages/${gid}`));
-    await set(msgRef, {
-      sender: currentUser.uid,
-      text,
-      timestamp: Date.now()
-    });
-    messageInput.value = "";
-  };
-
-  function renderMembers(members) {
-    membersList.innerHTML = "";
-    for (const uid in members) {
-      const m = members[uid];
-      const card = document.createElement('div');
-      card.className = "flex items-center justify-start gap-3 bg-gray-50 p-2 rounded";
-      card.innerHTML = `
-        <img src="${m.avatarURL || 'https://www.gravatar.com/avatar?d=mp'}" class="w-10 h-10 rounded-full" />
-        <div>
-          <p class="font-semibold">${m.name || 'Member'}</p>
-          <p class="text-sm text-gray-500">${uid}</p>
-        </div>
-      `;
-      membersList.appendChild(card);
+  function showNotification(senderName, text) {
+    if (messagesEl.scrollTop + messagesEl.clientHeight < messagesEl.scrollHeight - 50) {
+      notificationEl.textContent = `${senderName}: ${text.length > 30 ? text.substring(0, 30) + '...' : text}`;
+      notificationEl.classList.add(theme === 'dark' ? 'dark' : '');
+      notificationEl.style.display = 'block';
+      setTimeout(() => {
+        notificationEl.style.display = 'none';
+        notificationEl.classList.remove('dark');
+      }, 3000);
+      notificationEl.onclick = () => {
+        notificationEl.style.display = 'none';
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+      };
     }
   }
 
-  groupInfoBtn.onclick = () => {
-    groupInfoModal.classList.remove("hidden");
+  function renderMessage(key, msg, isSelf) {
+    const container = document.createElement("div");
+    container.className = `message-container ${isSelf ? "self" : "other"}`;
+
+    const div = document.createElement("div");
+    div.className = `message ${isSelf ? "self" : "other"} ${theme === 'dark' ? 'dark' : ''}`;
+
+    let pressTimer = null;
+    let startX = null;
+    let longPressActive = false;
+
+    div.addEventListener("touchstart", (e) => {
+      div.classList.add("long-press-disable-select");
+      startX = e.touches[0].clientX;
+      pressTimer = setTimeout(() => {
+        longPressActive = true;
+        if (isSelf) {
+          showDeleteMessageModal(key);
+        } else {
+          showEmojiPicker(div, key);
+        }
+      }, 600);
+    });
+
+    div.addEventListener("touchend", (e) => {
+      if (pressTimer) clearTimeout(pressTimer);
+      div.classList.remove("long-press-disable-select");
+
+      if (!longPressActive) {
+        const endX = e.changedTouches[0].clientX;
+        const deltaX = endX - startX;
+        if (deltaX > 60) {
+          replyingTo = msg.text;
+          replyText.textContent = msg.text;
+          replyBox.classList.remove("hidden");
+          messageInput.focus();
+        } else if (deltaX < -60 && isSelf) {
+          showDeleteMessageModal(key);
+        }
+      }
+      longPressActive = false;
+      startX = null;
+    });
+
+    div.addEventListener("touchmove", () => {
+      if (pressTimer) clearTimeout(pressTimer);
+      div.classList.remove("long-press-disable-select");
+      longPressActive = false;
+    });
+
+    if (!isSelf) {
+      const sender = document.createElement("div");
+      sender.className = `sender-name ${theme === 'dark' ? 'dark' : ''}`;
+      sender.textContent = msg.senderName || "Member";
+      div.appendChild(sender);
+    }
+
+    if (msg.replyTo) {
+      const quote = document.createElement("div");
+      quote.className = `quoted-text ${theme === 'dark' ? 'dark' : ''}`;
+      quote.textContent = msg.replyTo;
+      div.appendChild(quote);
+    }
+    div.append(msg.text);
+
+    const time = document.createElement("small");
+    time.textContent = formatTime(msg.timestamp);
+    div.appendChild(time);
+
+    container.appendChild(div);
+
+    if (msg.reaction) {
+      const reaction = document.createElement("div");
+      reaction.className = "reaction";
+      reaction.textContent = msg.reaction;
+      container.appendChild(reaction);
+    }
+
+    messagesEl.appendChild(container);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+  }
+
+  function showEmojiPicker(target, key) {
+    const rect = target.getBoundingClientRect();
+    emojiPicker.style.top = (rect.top - 50 + window.scrollY) + "px";
+    emojiPicker.style.left = rect.left + "px";
+    emojiPicker.style.display = "flex";
+    reactingKey = key;
+  }
+
+  document.addEventListener("click", (e) => {
+    if (!emojiPicker.contains(e.target)) emojiPicker.style.display = "none";
+    if (!deleteMessageModal.contains(e.target) && e.target !== modalConfirm && e.target !== modalCancel) {
+      deleteMessageModal.classList.add("hidden");
+      deletingKey = null;
+    }
+  });
+
+  emojiPicker.querySelectorAll("span").forEach(span => {
+    span.onclick = () => {
+      if (reactingKey) {
+        update(ref(db, `groupMessages/${gid}/${reactingKey}`), {
+          reaction: span.textContent
+        });
+        emojiPicker.style.display = "none";
+        reactingKey = null;
+      }
+    };
+  });
+
+  onAuthStateChanged(auth, async (user) => {
+    if (!user) return location.href = "login.html";
+    currentUser = user;
+
+    // Load theme
+    const settingsSnap = await get(ref(db, `users/${user.uid}/settings`));
+    theme = settingsSnap.val()?.theme || 'light';
+    applyTheme(theme);
+
+    const groupRef = ref(db, `groups/${gid}`);
+    onValue(groupRef, async snapshot => {
+      if (!snapshot.exists()) return;
+      groupData = snapshot.val();
+      groupNameEl.textContent = groupData.name || "Group";
+      groupAvatar.src = groupData.avatarURL || "https://www.gravatar.com/avatar?d=mp";
+      groupMembersCount.textContent = `${Object.keys(groupData.members || {}).length} members`;
+
+      groupInfoLink.onclick = () => {
+        location.href = `groupinfo.html?gid=${gid}`;
+      };
+
+      // Cache user names for notifications
+      const members = groupData.members || {};
+      const userNames = {};
+      for (const uid in members) {
+        const userSnap = await get(ref(db, `users/${uid}`));
+        userNames[uid] = userSnap.val()?.name || "Member";
+      }
+
+      // Messages
+      const messagesRef = ref(db, `groupMessages/${gid}`);
+      onValue(messagesRef, snap => {
+        messagesEl.innerHTML = "";
+        if (!snap.exists()) return;
+        const messages = Object.entries(snap.val()).sort((a, b) => a[1].timestamp - b[1].timestamp);
+        messages.forEach(([key, m]) => {
+          const isSelf = m.sender === currentUser.uid;
+          renderMessage(key, m, isSelf);
+        });
+      });
+
+      // New message notifications
+      onChildAdded(messagesRef, snap => {
+        const msg = snap.val();
+        const isSelf = msg.sender === currentUser.uid;
+        if (!isSelf) {
+          showNotification(userNames[msg.sender] || "Member", msg.text);
+        }
+      });
+    });
+
+    update(ref(db, `users/${currentUser.uid}`), {
+      presence: "online",
+      lastSeen: Date.now()
+    });
+    window.addEventListener("beforeunload", () => {
+      update(ref(db, `users/${currentUser.uid}`), {
+        presence: "offline",
+        lastSeen: Date.now()
+      });
+    });
+  });
+
+  function applyTheme(themeValue) {
+    theme = themeValue;
+    document.body.classList.toggle('dark', theme === 'dark');
+    document.querySelector('header').classList.toggle('dark', theme === 'dark');
+    messagesEl.classList.toggle('dark', theme === 'dark');
+    document.querySelectorAll('.message').forEach(el => el.classList.toggle('dark', theme === 'dark'));
+    document.querySelectorAll('.message.other').forEach(el => el.classList.toggle('dark', theme === 'dark'));
+    document.querySelectorAll('.message small').forEach(el => el.classList.toggle('dark', theme === 'dark'));
+    document.querySelectorAll('.sender-name').forEach(el => el.classList.toggle('dark', theme === 'dark'));
+    document.querySelectorAll('.quoted-text').forEach(el => el.classList.toggle('dark', theme === 'dark'));
+    replyBox.classList.toggle('dark', theme === 'dark');
+    document.querySelector('.cancel-reply').classList.toggle('dark', theme === 'dark');
+    document.querySelector('#input-area').classList.toggle('dark', theme === 'dark');
+    document.querySelector('#message-input').classList.toggle('dark', theme === 'dark');
+    sendBtn.classList.toggle('dark', theme === 'dark');
+    emojiPicker.classList.toggle('dark', theme === 'dark');
+    deleteMessageModal.classList.toggle('dark', theme === 'dark');
+    document.querySelectorAll('.modal-btn-cancel').forEach(el => el.classList.toggle('dark', theme === 'dark'));
+    notificationEl.classList.toggle('dark', theme === 'dark');
+  }
+
+  // Handle Voice/Send toggle and recognition
+  function updateSendButton() {
+    const hasText = messageInput.value.trim() !== "";
+    sendBtn.textContent = hasText ? "Send" : "Voice";
+    sendBtn.classList.remove("mic-anim");
+  }
+
+  messageInput.addEventListener("input", updateSendButton);
+  messageInput.addEventListener("focus", updateSendButton);
+  messageInput.addEventListener("blur", () => {
+    if (!messageInput.value.trim()) {
+      sendBtn.textContent = "Voice";
+      sendBtn.classList.remove("mic-anim");
+    }
+  });
+
+  let recognition;
+  let isRecording = false;
+  if ('webkitSpeechRecognition' in window) {
+    recognition = new webkitSpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.lang = 'en-US';
+
+    recognition.onstart = () => {
+      isRecording = true;
+      sendBtn.textContent = "Listening...";
+      sendBtn.classList.add("mic-anim");
+    };
+
+    recognition.onresult = (event) => {
+      const transcript = event.results[0][0].transcript.trim();
+      messageInput.value = transcript;
+      messageInput.focus();
+      updateSendButton();
+    };
+
+    recognition.onerror = (event) => {
+      console.error("Speech recognition error:", event.error);
+      alert(`Speech recognition error: ${event.error}`);
+      resetVoiceButton();
+    };
+
+    recognition.onend = () => {
+      isRecording = false;
+      if (messageInput.value.trim()) {
+        sendBtn.textContent = "Send";
+      } else {
+        resetVoiceButton();
+      }
+      sendBtn.classList.remove("mic-anim");
+    };
+  } else {
+    sendBtn.textContent = "Send";
+    sendBtn.disabled = true;
+    sendBtn.title = "Voice input not supported";
+  }
+
+  function resetVoiceButton() {
+    isRecording = false;
+    sendBtn.textContent = "Voice";
+    sendBtn.classList.remove("mic-anim");
+  }
+
+  sendBtn.onclick = async () => {
+    if (isRecording) {
+      recognition.stop();
+      return;
+    }
+
+    const text = messageInput.value.trim();
+    if (text) {
+      const userSnap = await get(ref(db, `users/${currentUser.uid}`));
+      const senderName = userSnap.val()?.name || "Member";
+      const msg = {
+        sender: currentUser.uid,
+        senderName,
+        text,
+        timestamp: Date.now()
+      };
+      if (replyingTo) msg.replyTo = replyingTo;
+      try {
+        await push(ref(db, `groupMessages/${gid}`), msg);
+        messageInput.value = "";
+        updateSendButton();
+        cancelReply();
+      } catch (error) {
+        console.error("Error sending message:", error);
+        alert("Failed to send message.");
+      }
+    } else if (recognition) {
+      recognition.start();
+    } else {
+      alert("Voice input not supported on this browser.");
+    }
   };
 </script>
 </body>
