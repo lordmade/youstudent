@@ -80,6 +80,15 @@
     #messages.dark {
       background: #1f2937;
     }
+    #no-messages {
+      text-align: center;
+      color: #6b7280;
+      font-size: 0.9rem;
+      margin-top: 1rem;
+    }
+    #no-messages.dark {
+      color: #9ca3af;
+    }
     .message-container {
       display: flex;
       flex-direction: column;
@@ -324,7 +333,7 @@
     }
     .bottom-sheet.open {
       transform: translateY(0);
-      display: block !important; /* Ensure visibility */
+      display: block !important;
     }
     .bottom-sheet.dark {
       background: #374151;
@@ -489,7 +498,9 @@
 
 <div id="notification" aria-live="polite"></div>
 
-<div id="messages"></div>
+<div id="messages">
+  <div id="no-messages" class="hidden">No messages yet</div>
+</div>
 
 <form id="input-area" onsubmit="return false;">
   <div id="reply-box" class="reply-preview hidden">
@@ -548,14 +559,14 @@
 </div>
 
 <script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
-  import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
-  import { getDatabase, ref, onValue, push, update, get, remove, onChildAdded, query, limitToLast } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+  import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+  import { getDatabase, ref, onValue, push, update, get, remove, onChildAdded, query, limitToLast } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
     authDomain: "fire-b-a8878.firebaseapp.com",
-    databaseURL: "https://fire-b-a8878.firebaseio.com",
+    databaseURL: "https://fire-b-a8878-default-rtdb.firebaseio.com",
     projectId: "fire-b-a8878",
     storageBucket: "fire-b-a8878.appspot.com",
     messagingSenderId: "658673187627",
@@ -567,6 +578,7 @@
   const db = getDatabase();
 
   const messagesEl = document.getElementById("messages");
+  const noMessagesEl = document.getElementById("no-messages");
   const messageInput = document.getElementById("message-input");
   const sendBtn = document.getElementById("send-btn");
   const replyBox = document.getElementById("reply-box");
@@ -641,7 +653,7 @@
   }
 
   function toggleBottomSheet() {
-    console.log("toggleBottomSheet called"); // Debug log
+    console.log("toggleBottomSheet called");
     const isOpen = bottomSheet.classList.contains("open");
     bottomSheet.classList.toggle("open", !isOpen);
     bottomSheet.style.display = isOpen ? "none" : "block";
@@ -655,6 +667,13 @@
   }
 
   function renderMessages(messages) {
+    console.log("Rendering messages:", messages); // Debug log
+    messagesEl.innerHTML = "";
+    noMessagesEl.classList.add("hidden");
+    if (!messages || messages.length === 0) {
+      noMessagesEl.classList.remove("hidden");
+      return;
+    }
     const fragment = document.createDocumentFragment();
     messages.forEach(([key, m]) => {
       const isSelf = m.sender === currentUser.uid;
@@ -759,12 +778,13 @@
     document.body.classList.toggle('dark', theme === 'dark');
     document.querySelector('header').classList.toggle('dark', theme === 'dark');
     messagesEl.classList.toggle('dark', theme === 'dark');
+    noMessagesEl.classList.toggle('dark', theme === 'dark');
     document.querySelectorAll('.message').forEach(el => el.classList.toggle('dark', theme === 'dark'));
     document.querySelectorAll('.message.friend').forEach(el => el.classList.toggle('dark', theme === 'dark'));
     document.querySelectorAll('.message small').forEach(el => el.classList.toggle('dark', theme === 'dark'));
     document.querySelectorAll('.quoted-text').forEach(el => el.classList.toggle('dark', theme === 'dark'));
     replyBox.classList.toggle('dark', theme === 'dark');
-    document.querySelector('.cancel-reply').forEach(el => el.classList.toggle('dark', theme === 'dark'));
+    document.querySelector('.cancel-reply').classList.toggle('dark', theme === 'dark');
     document.querySelector('#input-area').classList.toggle('dark', theme === 'dark');
     document.querySelector('#message-input').classList.toggle('dark', theme === 'dark');
     sendBtn.classList.toggle('dark', theme === 'dark');
@@ -799,7 +819,7 @@
 
   // Add event listener for emoji button
   emojiBtn.addEventListener("click", (e) => {
-    e.stopPropagation(); // Prevent global click handler from closing immediately
+    e.stopPropagation();
     toggleBottomSheet();
   });
 
@@ -817,20 +837,28 @@
       }
     } catch (error) {
       console.error("Error checking blocked status:", error);
+      alert("Failed to check blocked status: " + error.message);
     }
   }
 
   onAuthStateChanged(auth, async (user) => {
-    if (!user) return location.href = "login.html";
+    console.log("onAuthStateChanged triggered, user:", user); // Debug log
+    if (!user) {
+      console.log("No user authenticated, redirecting to login.html");
+      return location.href = "login.html";
+    }
     currentUser = user;
     friendUid = getParam("uid");
     if (!friendUid) {
+      console.error("Friend UID not provided in URL");
       alert("Friend UID not provided.");
       return location.href = "index.html";
     }
     chatId = currentUser.uid < friendUid ? `${currentUser.uid}_${friendUid}` : `${friendUid}_${currentUser.uid}`;
+    console.log("Chat ID:", chatId); // Debug log
 
     try {
+      console.log("Fetching user settings, friend data, and presence...");
       const [settingsSnap, userSnap, presenceSnap, lastSeenSnap] = await Promise.all([
         get(ref(db, `users/${user.uid}/settings`)),
         get(ref(db, `users/${friendUid}`)),
@@ -842,6 +870,7 @@
       applyTheme(theme);
 
       if (!userSnap.exists()) {
+        console.error("Friend data not found for UID:", friendUid);
         alert("Friend not found.");
         return location.href = "index.html";
       }
@@ -855,6 +884,8 @@
       } else if (lastSeenSnap.val()) {
         const lastSeenDate = new Date(lastSeenSnap.val());
         document.getElementById("friend-presence").textContent = `Last seen at ${lastSeenDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+      } else {
+        document.getElementById("friend-presence").textContent = "Offline";
       }
     } catch (error) {
       console.error("Error loading initial data:", error);
@@ -866,15 +897,21 @@
       location.href = `profile.html?uid=${friendUid}`;
     };
 
-    checkBlockedStatus();
+    await checkBlockedStatus();
     onValue(ref(db, `users/${currentUser.uid}/blockedUsers/${friendUid}`), () => checkBlockedStatus());
     onValue(ref(db, `users/${friendUid}/blockedUsers/${currentUser.uid}`), () => checkBlockedStatus());
 
     const messagesQuery = query(ref(db, `messages/${chatId}`), limitToLast(50));
-    onValue(messagesQuery, snap => {
+    onValue(messagesQuery, (snap) => {
+      console.log("Messages snapshot:", snap.val()); // Debug log
       messagesEl.innerHTML = "";
-      if (!snap.exists()) return;
-      const messages = Object.entries(snap.val()).sort((a, b) => a[1].timestamp - b[1].timestamp);
+      noMessagesEl.classList.add("hidden");
+      if (!snap.exists()) {
+        console.log("No messages found for chatId:", chatId);
+        noMessagesEl.classList.remove("hidden");
+        return;
+      }
+      const messages = Object.entries(snap.val() || {}).sort((a, b) => a[1].timestamp - b[1].timestamp);
       renderMessages(messages);
       messages.forEach(([key, m]) => {
         if (m.sender !== currentUser.uid && !m.read) {
@@ -883,15 +920,22 @@
           });
         }
       });
+    }, (error) => {
+      console.error("Error in messages onValue:", error);
+      alert("Failed to load messages: " + error.message);
+      noMessagesEl.classList.remove("hidden");
+      noMessagesEl.textContent = "Failed to load messages";
     });
 
-    onChildAdded(ref(db, `messages/${chatId}`), snap => {
+    onChildAdded(ref(db, `messages/${chatId}`), (snap) => {
       const msg = snap.val();
       const isSelf = msg.sender === currentUser.uid;
       if (!isSelf) {
         showNotification(friendName, msg.text);
         renderMessages([[snap.key, msg]]);
       }
+    }, (error) => {
+      console.error("Error in messages onChildAdded:", error);
     });
 
     try {
