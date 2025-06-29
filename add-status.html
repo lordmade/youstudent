@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Chaxo - Add Status</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family: 'Segoe UI', sans-serif; background: #f9f9f9; }
+    .container { max-width: 400px; margin: 0 auto; padding: 1rem; }
+    .form-box { background: white; padding: 1.5rem; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+  </style>
+</head>
+<body>
+
+<header class="p-4 bg-white shadow text-xl font-bold text-red-500 flex justify-between items-center">
+  <span>BanterBox</span>
+  <a href="friends.html" class="text-sm bg-red-500 text-white px-4 py-1 rounded-full hover:bg-red-600 transition duration-200">
+    Back to Home
+  </a>
+</header>
+
+<div class="container mt-6">
+  <div class="form-box">
+    <h3 class="text-lg font-bold mb-4 flex items-center gap-2">
+      <svg class="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+      </svg>
+      Add New Status
+    </h3>
+    <form id="add-status-form">
+      <textarea id="status-text" class="w-full border p-2 rounded mb-3" placeholder="What's on your mind?" required></textarea>
+      <button type="submit" class="w-full bg-red-500 text-white font-bold py-2 rounded flex items-center justify-center gap-2">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+        </svg>
+        Post Status
+      </button>
+    </form>
+    <p id="status-result" class="mt-2 text-sm text-center text-green-600" role="alert"></p>
+  </div>
+</div>
+
+<!-- Loading Overlay -->
+<div id="loading-overlay" class="fixed inset-0 bg-white bg-opacity-70 flex items-center justify-center z-50 hidden">
+  <svg class="animate-spin h-10 w-10 text-red-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4z"/>
+  </svg>
+</div>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
+  import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
+  import { getDatabase, ref, push } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
+    authDomain: "fire-b-a8878.firebaseapp.com",
+    databaseURL: "https://fire-b-a8878.firebaseio.com",
+    projectId: "fire-b-a8878",
+    storageBucket: "fire-b-a8878.appspot.com",
+    messagingSenderId: "658673187627",
+    appId: "1:658673187627:web:6e4c29af661785f0afa36e"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth();
+  const db = getDatabase();
+
+  const addStatusForm = document.getElementById("add-status-form");
+  const statusResult = document.getElementById("status-result");
+  const loadingOverlay = document.getElementById("loading-overlay");
+
+  function showLoading() { loadingOverlay.classList.remove("hidden"); }
+  function hideLoading() { loadingOverlay.classList.add("hidden"); }
+
+  onAuthStateChanged(auth, async user => {
+    if (!user) {
+      location.href = "signup.html";
+      return;
+    }
+  });
+
+  addStatusForm.onsubmit = async (e) => {
+    e.preventDefault();
+    showLoading();
+    statusResult.textContent = "Posting status...";
+    const statusText = document.getElementById("status-text").value.trim();
+    if (!statusText) {
+      statusResult.textContent = "Please enter a status.";
+      hideLoading();
+      return;
+    }
+
+    const currentUser = auth.currentUser;
+    const statusesRef = ref(db, "statuses");
+
+    try {
+      await push(statusesRef, {
+        userId: currentUser.uid,
+        text: statusText,
+        timestamp: Date.now()
+      });
+      statusResult.textContent = "Status posted! Redirecting...";
+      setTimeout(() => {
+        window.location.href = "friends.html";
+      }, 1000);
+    } catch (error) {
+      statusResult.textContent = "Error posting status.";
+      console.error("Error posting status:", error);
+    }
+    hideLoading();
+  };
+</script>
+</body>
+</html>
