@@ -186,6 +186,43 @@
       border-color: #6b7280;
       color: #e5e7eb;
     }
+    .blocked-users-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+    .blocked-user-card {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      background: #f9fafb;
+      padding: 0.75rem;
+      border-radius: 8px;
+      border: 1px solid #e5e7eb;
+    }
+    .blocked-user-card.dark {
+      background: #4b5563;
+      border-color: #6b7280;
+      color: #e5e7eb;
+    }
+    .blocked-user-card img {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+    }
+    .blocked-user-card button {
+      margin-left: auto;
+      background: #ef4444;
+      color: white;
+      padding: 0.5rem 1rem;
+      border-radius: 9999px;
+      border: none;
+      cursor: pointer;
+      font-size: 0.8rem;
+    }
+    .blocked-user-card button.dark {
+      background: #dc2626;
+    }
   </style>
 </head>
 <body>
@@ -251,6 +288,11 @@
       </div>
     </div>
 
+    <div class="settings-card fade-in">
+      <h2 class="text-lg font-semibold mb-4 dark:text-gray-100">Blocked Users</h2>
+      <div id="blocked-users-list" class="blocked-users-list"></div>
+    </div>
+
     <div class="settings-card">
       <h2 class="text-lg font-semibold mb-4 dark:text-gray-100">Account</h2>
       <div class="space-y-3">
@@ -281,7 +323,7 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
     import { getAuth, onAuthStateChanged, signOut, deleteUser } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
-    import { getDatabase, ref, get, update } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
+    import { getDatabase, ref, get, update, onValue } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
@@ -308,6 +350,7 @@
     const cancelDelete = document.getElementById('cancel-delete');
     const confirmDelete = document.getElementById('confirm-delete');
     const loadingOverlay = document.getElementById('loading-overlay');
+    const blockedUsersList = document.getElementById('blocked-users-list');
 
     function showLoading() { loadingOverlay.classList.remove('hidden'); }
     function hideLoading() { loadingOverlay.classList.add('hidden'); }
@@ -320,6 +363,9 @@
       document.querySelectorAll('.text-gray-700').forEach(el => el.classList.toggle('label-dark', isDark));
       document.querySelectorAll('.btn-secondary').forEach(el => el.classList.toggle('dark', isDark));
       document.querySelector('.modal-content').classList.toggle('dark', isDark);
+      document.querySelectorAll('.blocked-user-card').forEach(el => el.classList.toggle('dark', isDark));
+      document.querySelectorAll('.blocked-user-card button').forEach(el => el.classList.toggle('dark', isDark));
+      document.querySelectorAll('.select-field').forEach(el => el.classList.toggle('dark', isDark));
     }
 
     let currentUser;
@@ -343,6 +389,50 @@
       } catch (error) {
         console.error('Error loading settings:', error);
       }
+
+      // Load blocked users
+      onValue(ref(db, `users/${user.uid}/blockedUsers`), async snap => {
+        blockedUsersList.innerHTML = '';
+        if (!snap.exists()) {
+          blockedUsersList.innerHTML = '<p class="text-gray-500 dark:text-gray-400">No blocked users.</p>';
+          return;
+        }
+        const blockedUsers = snap.val();
+        for (const uid in blockedUsers) {
+          try {
+            const userSnap = await get(ref(db, `users/${uid}`));
+            const userData = userSnap.val() || { name: 'Unknown', photoURL: 'https://www.gravatar.com/avatar?d=mp' };
+            const card = document.createElement('div');
+            card.className = `blocked-user-card ${theme.value === 'dark' ? 'dark' : ''}`;
+            card.innerHTML = `
+              <img src="${userData.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${userData.name || 'Unknown'}" />
+              <div>
+                <p class="font-semibold">${userData.name || 'Unknown'}</p>
+                <p class="text-sm text-gray-500 dark:text-gray-400">${uid}</p>
+              </div>
+            `;
+            const unblockBtn = document.createElement('button');
+            unblockBtn.textContent = 'Unblock';
+            unblockBtn.className = `dark:blocked-user-card ${theme.value === 'dark' ? 'dark' : ''}`;
+            unblockBtn.setAttribute('aria-label', `Unblock ${userData.name || 'Unknown'}`);
+            unblockBtn.onclick = async () => {
+              try {
+                showLoading();
+                await update(ref(db, `users/${currentUser.uid}/blockedUsers`), { [uid]: null });
+                hideLoading();
+              } catch (error) {
+                console.error('Error unblocking user:', error);
+                alert('Failed to unblock user.');
+                hideLoading();
+              }
+            };
+            card.appendChild(unblockBtn);
+            blockedUsersList.appendChild(card);
+          } catch (error) {
+            console.error('Error fetching blocked user data:', error);
+          }
+        }
+      });
     });
 
     function saveSettings() {
@@ -360,6 +450,7 @@
         hideLoading();
       }).catch(error => {
         console.error('Error saving settings:', error);
+        alert('Failed to save settings.');
         hideLoading();
       });
     }
@@ -378,6 +469,7 @@
         location.href = 'signup.html';
       } catch (error) {
         console.error('Error signing out:', error);
+        alert('Failed to sign out.');
         hideLoading();
       }
     };
@@ -394,6 +486,7 @@
         location.href = 'signup.html';
       } catch (error) {
         console.error('Error deleting account:', error);
+        alert('Failed to delete account.');
         hideLoading();
       }
     };
