@@ -9,6 +9,12 @@
     body { font-family: 'Segoe UI', sans-serif; background: #f9f9f9; }
     .container { max-width: 400px; margin: 0 auto; padding: 1rem; }
     .form-box { background: white; padding: 1.5rem; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+    .suggestion-card {
+      display: flex; align-items: center; background: white; padding: 1rem; border-radius: 8px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05); margin-bottom: 1rem; cursor: pointer; border: 2px solid transparent;
+      transition: box-shadow 0.3s, border-color 0.3s;
+    }
+    .suggestion-card:hover { background: #f3f4f6; }
   </style>
 </head>
 <body>
@@ -39,6 +45,7 @@
     </form>
     <p id="add-result" class="mt-2 text-sm text-center text-green-600" role="alert"></p>
   </div>
+  <div id="suggestions-list" class="mt-4" aria-live="polite" aria-relevant="additions removals"></div>
 </div>
 
 <!-- Loading Overlay -->
@@ -69,8 +76,10 @@
   const db = getDatabase();
 
   const addFriendForm = document.getElementById("add-friend-form");
+  const friendEmailInput = document.getElementById("friend-email");
   const addFriendResult = document.getElementById("add-result");
   const loadingOverlay = document.getElementById("loading-overlay");
+  const suggestionsList = document.getElementById("suggestions-list");
 
   function showLoading() { loadingOverlay.classList.remove("hidden"); }
   function hideLoading() { loadingOverlay.classList.add("hidden"); }
@@ -82,11 +91,70 @@
     }
   });
 
+  function renderSuggestion(userId, userData) {
+    const card = document.createElement("div");
+    card.className = "suggestion-card";
+    card.innerHTML = `
+      <img src="${userData.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${userData.name || 'User'}" class="w-12 h-12 rounded-full mr-4" />
+      <div>
+        <h4 class="font-bold">${userData.name || "User"}</h4>
+        <p class="text-sm text-gray-500">${userData.email || "No email"}</p>
+      </div>
+    `;
+    card.onclick = () => {
+      friendEmailInput.value = userData.email || "";
+      suggestionsList.innerHTML = ""; // Clear suggestions after selection
+      addFriendResult.textContent = "";
+    };
+    return card;
+  }
+
+  async function loadSuggestions(query) {
+    if (!query) {
+      suggestionsList.innerHTML = "";
+      return;
+    }
+    showLoading();
+    const usersRef = ref(db, "users");
+    const currentUser = auth.currentUser.uid;
+
+    try {
+      const usersSnap = await get(usersRef);
+      suggestionsList.innerHTML = "";
+      if (!usersSnap.exists()) {
+        hideLoading();
+        return;
+      }
+
+      const users = usersSnap.val();
+      const matchingUsers = [];
+
+      for (let uid in users) {
+        if (uid !== currentUser && users[uid].email?.toLowerCase().includes(query.toLowerCase())) {
+          matchingUsers.push({ uid, ...users[uid] });
+        }
+      }
+
+      matchingUsers.forEach(user => {
+        const suggestionCard = renderSuggestion(user.uid, user);
+        suggestionsList.appendChild(suggestionCard);
+      });
+    } catch (error) {
+      console.error("Error loading suggestions:", error);
+    }
+    hideLoading();
+  }
+
+  friendEmailInput.addEventListener("input", (e) => {
+    const query = e.target.value.trim();
+    loadSuggestions(query);
+  });
+
   addFriendForm.onsubmit = async (e) => {
     e.preventDefault();
     showLoading();
     addFriendResult.textContent = "Searching...";
-    const email = document.getElementById("friend-email").value.toLowerCase();
+    const email = friendEmailInput.value.toLowerCase();
     const usersRef = ref(db, "users");
     const current = auth.currentUser.uid;
 
@@ -110,6 +178,7 @@
       const chatId = current < target ? `${current}_${target}` : `${target}_${current}`;
       await set(ref(db, `chats/${chatId}`), { participants: { [current]: true, [target]: true } });
       addFriendResult.textContent = "Friend added! Redirecting...";
+      suggestionsList.innerHTML = ""; // Clear suggestions
       setTimeout(() => {
         window.location.href = "index.html";
       }, 1000);
