@@ -257,9 +257,9 @@
   <p id="no-statuses-message" class="text-center hidden">No friends' statuses yet.</p>
 </div>
 <div class="tab-panel" id="tab-services">
-  <h2 class="text-lg font-semibold mt-4 mb-2 dark:text-gray-100">Your Services</h2>
+  <h2 class="text-lg font-semibold mt-4 mb-2 dark:text-gray-100">Services</h2>
   <div id="services-list" aria-live="polite" aria-relevant="additions"></div>
-  <p id="no-services-message" class="text-center hidden">You haven’t added any services yet.</p>
+  <p id="no-services-message" class="text-center hidden">No services available yet.</p>
 </div>
 
 <!-- Reusable Floating Button -->
@@ -353,7 +353,7 @@
     document.querySelector('.own-statuses').classList.toggle('dark', isDark);
     document.querySelector('.modal').classList.toggle('dark', isDark);
     document.querySelectorAll('.modal-btn-cancel').forEach(el => el.classList.toggle('dark', isDark));
-    floatingBtn.class.ckList.toggle('dark', isDark);
+    floatingBtn.classList.toggle('dark', isDark);
   }
 
   onAuthStateChanged(auth, async user => {
@@ -722,31 +722,40 @@
     });
   }
 
-  function renderServiceCard(serviceId, service) {
+  function renderServiceCard(serviceId, service, userData, isOwnService = false) {
     const card = document.createElement("div");
     card.className = "service-card";
     card.innerHTML = `
-      <img src="https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(service.name)}" alt="${service.name || 'Service'} avatar" class="service-avatar" />
+      <img src="${userData.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${userData.name || 'User'} avatar" class="service-avatar" />
       <div class="flex-grow">
-        <h4 class="font-bold dark:text-gray-100">${service.name || "Service"}</h4>
+        <h4 class="font-bold dark:text-gray-100">${service.name || "Service"} by ${userData.name || "User"}</h4>
         <p class="service-description">${service.description || "No description"}</p>
         <p class="service-time">Added: ${timeAgo(service.createdAt)}</p>
       </div>
-      <svg class="delete-icon ml-auto self-start" data-sid="${serviceId}" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
-      </svg>
+      ${isOwnService ? `
+        <svg class="delete-icon ml-auto self-start" data-sid="${serviceId}" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
+        </svg>
+      ` : ''}
     `;
-    card.querySelector(".delete-icon").addEventListener("click", async (e) => {
-      e.stopPropagation();
-      if (confirm("Are you sure you want to delete this service?")) {
-        showLoading();
-        try {
-          await remove(ref(db, `services/${serviceId}`));
-        } catch (error) {
-          console.error("Error deleting service:", error);
-          alert("Failed to delete service.");
+    if (isOwnService) {
+      card.querySelector(".delete-icon").addEventListener("click", async (e) => {
+        e.stopPropagation();
+        if (confirm("Are you sure you want to delete this service?")) {
+          showLoading();
+          try {
+            await remove(ref(db, `services/${serviceId}`));
+          } catch (error) {
+            console.error("Error deleting service:", error);
+            alert("Failed to delete service.");
+          }
+          hideLoading();
         }
-        hideLoading();
+      });
+    }
+    card.addEventListener("click", (e) => {
+      if (!e.target.closest(".delete-icon")) {
+        window.location.href = `service.html?sid=${serviceId}`;
       }
     });
     return card;
@@ -758,24 +767,29 @@
     noServicesMessage.classList.add("hidden");
 
     const servicesRef = ref(db, "services");
-    onValue(servicesRef, (servicesSnap) => {
+    const usersRef = ref(db, "users");
+
+    onValue(servicesRef, async (servicesSnap) => {
       if (!servicesSnap.exists()) {
         noServicesMessage.classList.remove("hidden");
         hideLoading();
         return;
       }
 
+      const usersSnap = await get(usersRef);
+      const users = usersSnap.exists() ? usersSnap.val() : {};
       const services = servicesSnap.val();
+
       servicesList.innerHTML = "";
 
       let hasServices = false;
       for (const serviceId in services) {
         const service = services[serviceId];
-        if (service.userId === uid) {
-          hasServices = true;
-          const serviceCard = renderServiceCard(serviceId, service);
-          servicesList.appendChild(serviceCard);
-        }
+        const userData = users[service.userId] || {};
+        hasServices = true;
+        const isOwnService = service.userId === uid;
+        const serviceCard = renderServiceCard(serviceId, service, userData, isOwnService);
+        servicesList.appendChild(serviceCard);
       }
 
       if (!hasServices) {
