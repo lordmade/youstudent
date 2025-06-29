@@ -49,7 +49,6 @@
   </a>
 </header>
 
-
 <!-- Tabs -->
 <div class="tab-panel active" id="tab-chat">
   <h2 class="text-lg font-semibold mt-4 mb-2">Your Friends</h2>
@@ -72,29 +71,6 @@
   <span id="floating-btn-text">Add Friend</span>
 </button>
 
-<!-- Add Friend Modal -->
-<div id="add-friend-modal" role="dialog" aria-modal="true" class="fixed top-0 inset-x-0 bg-black bg-opacity-50 hidden items-start justify-center pt-10 z-30">
-  <div class="modal-box">
-    <h3 class="text-lg font-bold mb-2 flex items-center gap-2">
-      <svg class="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-      </svg>
-      Add Friend by Email
-    </h3>
-    <form id="add-friend-form">
-      <input type="email" id="friend-email" class="w-full border p-2 rounded mb-3" placeholder="example@mail.com" required />
-      <button type="submit" class="w-full bg-red-500 text-white font-bold py-2 rounded flex items-center justify-center gap-2">
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-        </svg>
-        Add Friend
-      </button>
-    </form>
-    <p id="add-result" class="mt-2 text-sm text-center text-green-600" role="alert"></p>
-  </div>
-</div>
-
-
 <!-- Add Group Modal -->
 <div id="add-group-modal" role="dialog" aria-modal="true" class="fixed top-0 inset-x-0 bg-black bg-opacity-50 hidden items-start justify-center pt-10 z-30">
   <div class="modal-box">
@@ -116,7 +92,6 @@
     <p id="group-result" class="mt-2 text-sm text-center text-green-600" role="alert"></p>
   </div>
 </div>
-
 
 <!-- Loading Overlay -->
 <div id="loading-overlay" class="fixed inset-0 bg-white bg-opacity-70 flex items-center justify-center z-50 hidden">
@@ -162,11 +137,6 @@
   const groupsList = document.getElementById("groups-list");
   const noGroupsMessage = document.getElementById("no-groups-message");
   const loadingOverlay = document.getElementById("loading-overlay");
-
-  const addFriendModal = document.getElementById("add-friend-modal");
-  const addFriendForm = document.getElementById("add-friend-form");
-  const addFriendResult = document.getElementById("add-result");
-
   const addGroupModal = document.getElementById("add-group-modal");
   const addGroupForm = document.getElementById("add-group-form");
   const addGroupResult = document.getElementById("group-result");
@@ -190,9 +160,7 @@
         floatingBtn.classList.remove("hidden");
         floatingBtnText.textContent = "Add Friend";
         floatingBtn.onclick = () => {
-          addFriendModal.classList.remove("hidden");
-          addFriendResult.textContent = "";
-          addFriendForm.reset();
+          window.location.href = "add-friend.html";
         };
       } else if (btn.dataset.tab === "groups") {
         floatingBtn.classList.remove("hidden");
@@ -208,7 +176,6 @@
     });
   });
 
-  addFriendModal.onclick = e => { if (e.target === addFriendModal) addFriendModal.classList.add("hidden"); };
   addGroupModal.onclick = e => { if (e.target === addGroupModal) addGroupModal.classList.add("hidden"); };
 
   function timeAgo(timestamp) {
@@ -298,7 +265,6 @@
               if (m.sender === friendUid && !m.read) unreadCount++;
             }
 
-            // Remove existing friend card if exists
             const existing = [...friendsList.children].find(c =>
               c.onclick && c.onclick.toString().includes(`chat.html?uid=${friendUid}`));
             if (existing) friendsList.removeChild(existing);
@@ -361,39 +327,6 @@
       hideLoading();
     });
   }
-
-  addFriendForm.onsubmit = async (e) => {
-    e.preventDefault();
-    addFriendResult.textContent = "Searching...";
-    const email = document.getElementById("friend-email").value.toLowerCase();
-    const usersRef = ref(db, "users");
-    const current = auth.currentUser.uid;
-
-    const usersSnap = await get(usersRef);
-    if (!usersSnap.exists()) {
-      addFriendResult.textContent = "User not found.";
-      return;
-    }
-    const users = usersSnap.val();
-    let target = null;
-
-    for (let uid in users) {
-      if (users[uid].email?.toLowerCase() === email && uid !== current) {
-        target = uid;
-        break;
-      }
-    }
-
-    if (target) {
-      const chatId = current < target ? `${current}_${target}` : `${target}_${current}`;
-      await set(ref(db, `chats/${chatId}`), { participants: { [current]: true, [target]: true } });
-      addFriendResult.textContent = "Friend added!";
-      addFriendModal.classList.add("hidden");
-      await loadFriends(current);
-    } else {
-      addFriendResult.textContent = "User not found.";
-    }
-  };
 
   addGroupForm.onsubmit = async (e) => {
     e.preventDefault();
