@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Chaxo - Group Info</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    * { -webkit-user-select: none; user-select: none; }
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #f9f9f9;
+      margin: 0;
+      min-height: 100vh;
+    }
+    body.dark {
+      background: #1f2937;
+    }
+    header {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      background: white;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+      padding: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      z-index: 10;
+      height: 56px;
+    }
+    header.dark {
+      background: #374151;
+      color: #e5e7eb;
+    }
+    .content {
+      padding: 72px 1rem 1rem;
+      max-width: 600px;
+      margin: 0 auto;
+    }
+    .group-info {
+      text-align: center;
+      margin-bottom: 2rem;
+    }
+    .group-info img {
+      width: 100px;
+      height: 100px;
+      border-radius: 50%;
+      margin: 0 auto 1rem;
+    }
+    .group-info h1 {
+      font-size: 1.5rem;
+      font-weight: bold;
+      color: #111827;
+    }
+    .group-info h1.dark {
+      color: #e5e7eb;
+    }
+    .members-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+    .member-card {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      background: #ffffff;
+      padding: 0.75rem;
+      border-radius: 8px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    .member-card.dark {
+      background: #4b5563;
+      color: #e5e7eb;
+    }
+    .member-card img {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+    }
+    .member-card .creator {
+      font-size: 0.8rem;
+      color: #ef4444;
+    }
+    .member-card .creator.dark {
+      color: #dc2626;
+    }
+    .member-card button {
+      margin-left: auto;
+      background: #ef4444;
+      color: white;
+      padding: 0.5rem 1rem;
+      border-radius: 9999px;
+      border: none;
+      cursor: pointer;
+      font-size: 0.8rem;
+    }
+    .member-card button.dark {
+      background: #dc2626;
+    }
+    .add-member {
+      display: flex;
+      gap: 0.5rem;
+      margin-top: 1rem;
+    }
+    .add-member input {
+      flex: 1;
+      padding: 0.5rem 1rem;
+      border-radius: 9999px;
+      border: 1px solid #ddd;
+      font-size: 1rem;
+      background: white;
+      color: #111827;
+    }
+    .add-member input.dark {
+      border-color: #4b5563;
+      background: #4b5563;
+      color: #e5e7eb;
+    }
+    .add-member button {
+      background: #ef4444;
+      color: white;
+      padding: 0 1rem;
+      border-radius: 9999px;
+      border: none;
+      cursor: pointer;
+      font-weight: bold;
+    }
+    .add-member button.dark {
+      background: #dc2626;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <button onclick="location.href='group.html?gid=' + new URLSearchParams(location.search).get('gid')" class="text-red-500 font-bold dark:text-red-400">←</button>
+  <h1 class="font-bold text-lg dark:text-gray-100">Group Info</h1>
+</header>
+
+<div class="content">
+  <div class="group-info">
+    <img id="group-avatar" src="https://www.gravatar.com/avatar?d=mp" alt="Group Avatar" />
+    <h1 id="group-name" class="dark:group-info h1">Group</h1>
+  </div>
+  <h2 class="text-lg font-bold mb-4 dark:text-gray-100">Members</h2>
+  <div id="members-list" class="members-list"></div>
+  <div id="add-member" class="add-member hidden">
+    <input id="new-member-uid" type="text" placeholder="Enter user UID" />
+    <button id="add-member-btn">Add</button>
+  </div>
+</div>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
+  import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
+  import { getDatabase, ref, get, update } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
+    authDomain: "fire-b-a8878.firebaseapp.com",
+    databaseURL: "https://fire-b-a8878.firebaseio.com",
+    projectId: "fire-b-a8878",
+    storageBucket: "fire-b-a8878.appspot.com",
+    messagingSenderId: "658673187627",
+    appId: "1:658673187627:web:6e4c29af661785f0afa36e"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth();
+  const db = getDatabase();
+
+  const gid = new URLSearchParams(location.search).get('gid');
+  const groupNameEl = document.getElementById("group-name");
+  const groupAvatar = document.getElementById("group-avatar");
+  const membersList = document.getElementById("members-list");
+  const addMemberSection = document.getElementById("add-member");
+  const newMemberUidInput = document.getElementById("new-member-uid");
+  const addMemberBtn = document.getElementById("add-member-btn");
+
+  let currentUser, groupData, theme = 'light';
+
+  onAuthStateChanged(auth, async (user) => {
+    if (!user) return location.href = "login.html";
+    currentUser = user;
+
+    // Load theme
+    const settingsSnap = await get(ref(db, `users/${user.uid}/settings`));
+    theme = settingsSnap.val()?.theme || 'light';
+    applyTheme(theme);
+
+    const groupRef = ref(db, `groups/${gid}`);
+    const snapshot = await get(groupRef);
+    if (!snapshot.exists()) {
+      alert("Group not found.");
+      return location.href = "index.html";
+    }
+    groupData = snapshot.val();
+    groupNameEl.textContent = groupData.name || "Group";
+    groupAvatar.src = groupData.avatarURL || "https://www.gravatar.com/avatar?d=mp";
+
+    // Show add member section only for creator
+    if (groupData.creator === currentUser.uid) {
+      addMemberSection.classList.remove("hidden");
+    }
+
+    renderMembers(groupData.members || {});
+
+    addMemberBtn.onclick = async () => {
+      const newUid = newMemberUidInput.value.trim();
+      if (!newUid) return alert("Please enter a valid UID.");
+      const userSnap = await get(ref(db, `users/${newUid}`));
+      if (!userSnap.exists()) return alert("User not found.");
+      const userData = userSnap.val();
+      try {
+        await update(ref(db, `groups/${gid}/members`), {
+          [newUid]: { name: userData.name || "Member", avatarURL: userData.photoURL || "https://www.gravatar.com/avatar?d=mp" }
+        });
+        newMemberUidInput.value = "";
+      } catch (error) {
+        console.error("Error adding member:", error);
+        alert("Failed to add member.");
+      }
+    };
+  });
+
+  function renderMembers(members) {
+    membersList.innerHTML = "";
+    for (const uid in members) {
+      const m = members[uid];
+      const card = document.createElement("div");
+      card.className = `member-card ${theme === 'dark' ? 'dark' : ''}`;
+      card.innerHTML = `
+        <img src="${m.avatarURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${m.name || 'Member'}" />
+        <div>
+          <p class="font-semibold">${m.name || 'Member'}</p>
+          <p class="text-sm text-gray-500 dark:text-gray-400">${uid}${uid === groupData.creator ? ' <span class="creator dark:creator">(Creator)</span>' : ''}</p>
+        </div>
+      `;
+      if (uid !== currentUser.uid && groupData.creator === currentUser.uid) {
+        const removeBtn = document.createElement("button");
+        removeBtn.textContent = "Remove";
+        removeBtn.className = `dark:member-card ${theme === 'dark' ? 'dark' : ''}`;
+        removeBtn.onclick = async () => {
+          try {
+            await update(ref(db, `groups/${gid}/members`), { [uid]: null });
+          } catch (error) {
+            console.error("Error removing member:", error);
+            alert("Failed to remove member.");
+          }
+        };
+        card.appendChild(removeBtn);
+      }
+      membersList.appendChild(card);
+    }
+  }
+
+  function applyTheme(themeValue) {
+    theme = themeValue;
+    document.body.classList.toggle('dark', theme === 'dark');
+    document.querySelector('header').classList.toggle('dark', theme === 'dark');
+    groupNameEl.classList.toggle('dark', theme === 'dark');
+    document.querySelectorAll('.member-card').forEach(el => el.classList.toggle('dark', theme === 'dark'));
+    document.querySelectorAll('.creator').forEach(el => el.classList.toggle('dark', theme === 'dark'));
+    newMemberUidInput.classList.toggle('dark', theme === 'dark');
+    addMemberBtn.classList.toggle('dark', theme === 'dark');
+  }
+</script>
+</body>
+</html>
