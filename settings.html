@@ -37,6 +37,7 @@
     .header.dark {
       background: #374151;
       border-bottom: 1px solid #4b5563;
+      color: #e5e7eb;
     }
     .settings-card {
       background: white;
@@ -49,6 +50,7 @@
     .settings-card.dark {
       background: #374151;
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+      color: #e5e7eb;
     }
     .settings-card:hover {
       transform: translateY(-4px);
@@ -80,6 +82,7 @@
     }
     .modal-content.dark {
       background: #374151;
+      color: #e5e7eb;
     }
     @keyframes slideIn {
       from { transform: translateY(-20px); opacity: 0; }
@@ -107,6 +110,13 @@
     }
     .btn-secondary:hover {
       background: #d1d5db;
+    }
+    .btn-secondary.dark {
+      background: #4b5563;
+      color: #e5e7eb;
+    }
+    .btn-secondary.dark:hover {
+      background: #6b7280;
     }
     .btn-danger {
       background: #b91c1c;
@@ -188,28 +198,28 @@
         Back
       </button>
       <h1 class="text-xl font-bold text-gray-900 dark:text-gray-100">Settings</h1>
-      <div class="w-5"></div> <!-- Placeholder for symmetry -->
+      <div class="w-5"></div>
     </header>
 
     <div class="settings-card">
       <h2 class="text-lg font-semibold mb-4 dark:text-gray-100">Notifications</h2>
       <div class="space-y-4">
         <div class="flex justify-between items-center">
-          <span class="text-gray-700 dark:text-gray-300">Push Notifications</span>
+          <span class="text-gray-700 dark:label-dark">Push Notifications</span>
           <label class="toggle">
             <input id="push-notifications" type="checkbox" />
             <span class="slider"></span>
           </label>
         </div>
         <div class="flex justify-between items-center">
-          <span class="text-gray-700 dark:text-gray-300">Sound</span>
+          <span class="text-gray-700 dark:label-dark">Sound</span>
           <label class="toggle">
             <input id="sound" type="checkbox" />
             <span class="slider"></span>
           </label>
         </div>
         <div class="flex justify-between items-center">
-          <span class="text-gray-700 dark:text-gray-300">Vibration</span>
+          <span class="text-gray-700 dark:label-dark">Vibration</span>
           <label class="toggle">
             <input id="vibration" type="checkbox" />
             <span class="slider"></span>
@@ -221,7 +231,7 @@
     <div class="settings-card">
       <h2 class="text-lg font-semibold mb-4 dark:text-gray-100">Appearance</h2>
       <div class="flex justify-between items-center">
-        <span class="text-gray-700 dark:text-gray-300">Theme</span>
+        <span class="text-gray-700 dark:label-dark">Theme</span>
         <select id="theme" class="select-field dark:select-field">
           <option value="light">Light</option>
           <option value="dark">Dark</option>
@@ -232,7 +242,7 @@
     <div class="settings-card">
       <h2 class="text-lg font-semibold mb-4 dark:text-gray-100">Privacy</h2>
       <div class="flex justify-between items-center">
-        <span class="text-gray-700 dark:text-gray-300">Who can see my status</span>
+        <span class="text-gray-700 dark:label-dark">Who can see my status</span>
         <select id="status-visibility" class="select-field dark:select-field">
           <option value="everyone">Everyone</option>
           <option value="friends">Friends</option>
@@ -244,25 +254,23 @@
     <div class="settings-card">
       <h2 class="text-lg font-semibold mb-4 dark:text-gray-100">Account</h2>
       <div class="space-y-3">
-        <button id="signout-btn" class="btn btn-secondary w-full">Sign Out</button>
+        <button id="signout-btn" class="btn btn-secondary w-full dark:btn-secondary">Sign Out</button>
         <button id="delete-btn" class="btn btn-danger w-full">Delete Account</button>
       </div>
     </div>
   </div>
 
-  <!-- Confirmation Modal -->
   <div id="confirm-modal" class="modal hidden">
     <div class="modal-content dark:modal-content">
       <h2 class="text-lg font-bold text-gray-900 dark:text-gray-100">Confirm Account Deletion</h2>
       <p class="text-gray-600 dark:text-gray-300 mt-2">This action is irreversible. Are you sure you want to delete your account?</p>
       <div class="flex justify-between space-x-4 mt-6">
-        <button id="cancel-delete" class="btn btn-secondary flex-1">Cancel</button>
+        <button id="cancel-delete" class="btn btn-secondary flex-1 dark:btn-secondary">Cancel</button>
         <button id="confirm-delete" class="btn btn-danger flex-1">Delete</button>
       </div>
     </div>
   </div>
 
-  <!-- Loading Overlay -->
   <div id="loading-overlay" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
     <svg class="animate-spin h-10 w-10 text-red-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
       <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
@@ -304,6 +312,16 @@
     function showLoading() { loadingOverlay.classList.remove('hidden'); }
     function hideLoading() { loadingOverlay.classList.add('hidden'); }
 
+    function applyTheme(themeValue) {
+      const isDark = themeValue === 'dark';
+      document.body.classList.toggle('dark', isDark);
+      document.querySelector('.header').classList.toggle('dark', isDark);
+      document.querySelectorAll('.settings-card').forEach(el => el.classList.toggle('dark', isDark));
+      document.querySelectorAll('.text-gray-700').forEach(el => el.classList.toggle('label-dark', isDark));
+      document.querySelectorAll('.btn-secondary').forEach(el => el.classList.toggle('dark', isDark));
+      document.querySelector('.modal-content').classList.toggle('dark', isDark);
+    }
+
     let currentUser;
 
     onAuthStateChanged(auth, async user => {
@@ -321,13 +339,7 @@
         vibration.checked = settings.notifications?.vibration ?? true;
         theme.value = settings.theme || 'light';
         statusVisibility.value = settings.statusVisibility || 'everyone';
-
-        // Apply theme immediately
-        if (theme.value === 'dark') {
-          document.body.classList.add('dark');
-          document.querySelectorAll('.header, .settings-card, .modal-content').forEach(el => el.classList.add('dark'));
-          document.querySelectorAll('.text-gray-700').forEach(el => el.classList.add('label-dark'));
-        }
+        applyTheme(theme.value);
       } catch (error) {
         console.error('Error loading settings:', error);
       }
@@ -354,11 +366,7 @@
 
     [pushNotifications, sound, vibration, theme, statusVisibility].forEach(input => {
       input.addEventListener('change', () => {
-        if (input === theme) {
-          document.body.classList.toggle('dark', theme.value === 'dark');
-          document.querySelectorAll('.header, .settings-card, .modal-content').forEach(el => el.classList.toggle('dark', theme.value === 'dark'));
-          document.querySelectorAll('.text-gray-700').forEach(el => el.classList.toggle('label-dark', theme.value === 'dark'));
-        }
+        if (input === theme) applyTheme(theme.value);
         saveSettings();
       });
     });
