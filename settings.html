@@ -345,14 +345,14 @@
   </div>
 
   <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-    import { getAuth, onAuthStateChanged, signOut, deleteUser } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-    import { getDatabase, ref, get, update, onValue } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
+    import { getAuth, onAuthStateChanged, signOut, deleteUser } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
+    import { getDatabase, ref, get, update, onValue } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
       authDomain: "fire-b-a8878.firebaseapp.com",
-      databaseURL: "https://fire-b-a8878-default-rtdb.firebaseio.com",
+      databaseURL: "https://fire-b-a8878.firebaseio.com",
       projectId: "fire-b-a8878",
       storageBucket: "fire-b-a8878.appspot.com",
       messagingSenderId: "658673187627",
@@ -376,21 +376,10 @@
     const loadingOverlay = document.getElementById('loading-overlay');
     const blockedUsersList = document.getElementById('blocked-users-list');
 
-    function showLoading() {
-      console.log("Showing loading overlay");
-      loadingOverlay.classList.remove('hidden');
-    }
-    function hideLoading() {
-      console.log("Hiding loading overlay");
-      loadingOverlay.classList.add('hidden');
-    }
-    function showError(message) {
-      console.error("Error:", message);
-      alert(message);
-    }
+    function showLoading() { loadingOverlay.classList.remove('hidden'); }
+    function hideLoading() { loadingOverlay.classList.add('hidden'); }
 
     function applyTheme(themeValue) {
-      console.log("Applying theme:", themeValue);
       const isDark = themeValue === 'dark';
       document.body.classList.toggle('dark', isDark);
       document.querySelector('.header').classList.toggle('dark', isDark);
@@ -407,19 +396,15 @@
     let currentUser;
 
     onAuthStateChanged(auth, async user => {
-      console.log("Auth state changed, user:", user ? user.uid : null);
       if (!user) {
-        console.log("No user, redirecting to signup.html");
         location.href = 'signup.html';
         return;
       }
       currentUser = user;
 
       try {
-        console.log("Fetching settings for user:", user.uid);
         const snap = await get(ref(db, `users/${user.uid}/settings`));
         const settings = snap.val() || {};
-        console.log("Settings fetched:", settings);
         pushNotifications.checked = settings.notifications?.push ?? true;
         sound.checked = settings.notifications?.sound ?? true;
         vibration.checked = settings.notifications?.vibration ?? true;
@@ -428,13 +413,10 @@
         applyTheme(theme.value);
       } catch (error) {
         console.error('Error loading settings:', error);
-        showError('Failed to load settings: ' + error.message);
       }
 
       // Load blocked users
-      console.log("Setting up blocked users listener");
       onValue(ref(db, `users/${user.uid}/blockedUsers`), async snap => {
-        console.log("Blocked users snapshot:", snap.val());
         blockedUsersList.innerHTML = '';
         if (!snap.exists()) {
           blockedUsersList.innerHTML = '<p class="text-gray-500 dark:text-gray-400">No blocked users.</p>';
@@ -445,7 +427,6 @@
           try {
             const userSnap = await get(ref(db, `users/${uid}`));
             const userData = userSnap.val() || { name: 'Unknown', photoURL: 'https://www.gravatar.com/avatar?d=mp' };
-            console.log("Blocked user data:", uid, userData);
             const card = document.createElement('div');
             card.className = `blocked-user-card ${theme.value === 'dark' ? 'dark' : ''}`;
             card.innerHTML = `
@@ -463,11 +444,10 @@
               try {
                 showLoading();
                 await update(ref(db, `users/${currentUser.uid}/blockedUsers`), { [uid]: null });
-                console.log(`Unblocked user: ${uid}`);
                 hideLoading();
               } catch (error) {
                 console.error('Error unblocking user:', error);
-                showError('Failed to unblock user: ' + error.message);
+                alert('Failed to unblock user.');
                 hideLoading();
               }
             };
@@ -475,29 +455,13 @@
             blockedUsersList.appendChild(card);
           } catch (error) {
             console.error('Error fetching blocked user data:', error);
-            showError('Failed to load blocked user: ' + error.message);
           }
         }
-      }, error => {
-        console.error('Blocked users listener error:', error);
-        showError('Failed to load blocked users: ' + error.message);
       });
     });
 
     function saveSettings() {
-      if (!currentUser) {
-        console.error("Cannot save settings: No user");
-        return;
-      }
-      console.log("Saving settings:", {
-        notifications: {
-          push: pushNotifications.checked,
-          sound: sound.checked,
-          vibration: vibration.checked
-        },
-        theme: theme.value,
-        statusVisibility: statusVisibility.value
-      });
+      if (!currentUser) return;
       showLoading();
       update(ref(db, `users/${currentUser.uid}/settings`), {
         notifications: {
@@ -508,58 +472,46 @@
         theme: theme.value,
         statusVisibility: statusVisibility.value
       }).then(() => {
-        console.log("Settings saved successfully");
         hideLoading();
       }).catch(error => {
         console.error('Error saving settings:', error);
-        showError('Failed to save settings: ' + error.message);
+        alert('Failed to save settings.');
         hideLoading();
       });
     }
 
     [pushNotifications, sound, vibration, theme, statusVisibility].forEach(input => {
       input.addEventListener('change', () => {
-        console.log(`Input changed: ${input.id} = ${input.value || input.checked}`);
         if (input === theme) applyTheme(theme.value);
         saveSettings();
       });
     });
 
     signoutBtn.onclick = async () => {
-      console.log("Sign out button clicked");
       try {
         showLoading();
         await signOut(auth);
-        console.log("Signed out successfully");
         location.href = 'signup.html';
       } catch (error) {
         console.error('Error signing out:', error);
-        showError('Failed to sign out: ' + error.message);
+        alert('Failed to sign out.');
         hideLoading();
       }
     };
 
-    deleteBtn.onclick = () => {
-      console.log("Delete account button clicked");
-      confirmModal.classList.remove('hidden');
-    };
+    deleteBtn.onclick = () => confirmModal.classList.remove('hidden');
 
-    cancelDelete.onclick = () => {
-      console.log("Cancel delete clicked");
-      confirmModal.classList.add('hidden');
-    };
+    cancelDelete.onclick = () => confirmModal.classList.add('hidden');
 
     confirmDelete.onclick = async () => {
-      console.log("Confirm delete clicked");
       try {
         showLoading();
         await deleteUser(currentUser);
-        console.log("Account deleted successfully");
         confirmModal.classList.add('hidden');
         location.href = 'signup.html';
       } catch (error) {
         console.error('Error deleting account:', error);
-        showError('Failed to delete account: ' + error.message);
+        alert('Failed to delete account.');
         hideLoading();
       }
     };
