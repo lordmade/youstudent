@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://www.gstatic.com https://cdn.tailwindcss.com; style-src 'self' https://cdn.tailwindcss.com 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://fire-b-a8878.firebaseio.com;">
   <title>BanterBox - Add Status</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
@@ -122,12 +123,15 @@
         Add New Status
       </h3>
       <form id="add-status-form">
-        <textarea id="status-text" class="w-full border p-2 rounded mb-3 dark:text-gray-100" placeholder="What's on your mind?" required></textarea>
+        <div class="mb-4">
+          <textarea id="status-text" class="w-full border p-2 rounded mb-3 dark:text-gray-100" placeholder="What's on your mind?" maxlength="280" required></textarea>
+          <p id="text-error" class="error hidden">Please enter a valid status (1-280 characters).</p>
+        </div>
         <div class="mb-4">
           <label for="status-image" class="block text-sm font-medium mb-1 dark:text-gray-100">Add Image (optional)</label>
           <input id="status-image" type="file" accept="image/jpeg,image/png" class="w-full border p-2 rounded mb-3">
           <p id="image-error" class="error hidden">Please upload a valid JPEG or PNG image (max 5MB).</p>
-          <p id="image-loading" class="image-loading hidden">Uploading image...</p>
+          <p id="image-loading" class="image-loading hidden">Converting image...</p>
           <img id="image-preview" class="hidden" alt="Image preview">
         </div>
         <button type="submit" class="w-full btn-primary flex items-center justify-center gap-2">
@@ -151,8 +155,7 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
     import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
-    import { getDatabase, ref, push } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
-    import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-storage.js";
+    import { getDatabase, ref, push, get } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
@@ -167,10 +170,10 @@
     const app = initializeApp(firebaseConfig);
     const auth = getAuth();
     const db = getDatabase();
-    const storage = getStorage();
 
     const addStatusForm = document.getElementById("add-status-form");
     const statusTextInput = document.getElementById("status-text");
+    const textError = document.getElementById("text-error");
     const statusImageInput = document.getElementById("status-image");
     const imageError = document.getElementById("image-error");
     const imageLoading = document.getElementById("image-loading");
@@ -196,7 +199,26 @@
       statusResult.classList.toggle('dark', isDark && statusResult.classList.contains('error'));
     }
 
-    statusImageInput.addEventListener('change', async (e) => {
+    // Basic sanitization for status text
+    function sanitizeText(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // Rate limiting check (1 status per minute)
+    function canPostStatus() {
+      const lastPostTime = localStorage.getItem('lastStatusPostTime');
+      const now = Date.now();
+      const oneMinute = 60 * 1000;
+      if (lastPostTime && (now - parseInt(lastPostTime)) < oneMinute) {
+        return false;
+      }
+      localStorage.setItem('lastStatusPostTime', now);
+      return true;
+    }
+
+    statusImageInput.addEventListener('change', (e) => {
       const file = e.target.files[0];
       imageError.classList.add('hidden');
       imagePreview.classList.add('hidden');
@@ -224,33 +246,20 @@
         return;
       }
 
-      // Show preview
-      imagePreview.src = URL.createObjectURL(file);
-      imagePreview.classList.remove('hidden');
-
-      // Upload to Firebase Storage
-      try {
-        const currentUser = auth.currentUser;
-        if (!currentUser) {
-          imageError.textContent = "You must be logged in to upload an image.";
-          imageError.classList.remove('hidden');
-          imageLoading.classList.add('hidden');
-          return;
-        }
-
-        const timestamp = Date.now();
-        const extension = file.name.split('.').pop().toLowerCase();
-        const imagePath = `status-images/${currentUser.uid}/${timestamp}.${extension}`;
-        const imageRef = storageRef(storage, imagePath);
-        await uploadBytes(imageRef, file);
-        imageUrl = await getDownloadURL(imageRef);
+      // Convert to Data URL
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        imageUrl = event.target.result;
+        imagePreview.src = imageUrl;
+        imagePreview.classList.remove('hidden');
         imageLoading.classList.add('hidden');
-      } catch (error) {
-        imageError.textContent = "Error uploading image.";
+      };
+      reader.onerror = () => {
+        imageError.textContent = "Error converting image.";
         imageError.classList.remove('hidden');
         imageLoading.classList.add('hidden');
-        console.error("Error uploading image:", error);
-      }
+      };
+      reader.readAsDataURL(file);
     });
 
     onAuthStateChanged(auth, async user => {
@@ -259,7 +268,7 @@
         return;
       }
       try {
-        const snap = await import("https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js").then(module => module.get(ref(db, `users/${user.uid}/settings`)));
+        const snap = await get(ref(db, `users/${user.uid}/settings`));
         const settings = snap.val() || {};
         applyTheme(settings.theme || 'light');
       } catch (error) {
@@ -271,12 +280,21 @@
       e.preventDefault();
       showLoading();
       statusResult.classList.remove('error');
+      textError.classList.add('hidden');
       statusResult.textContent = "Posting status...";
 
       const statusText = statusTextInput.value.trim();
-      if (!statusText) {
+      if (!statusText || statusText.length > 280) {
         statusResult.classList.add('error');
-        statusResult.textContent = "Please enter a status.";
+        textError.classList.remove('hidden');
+        statusResult.textContent = "";
+        hideLoading();
+        return;
+      }
+
+      if (!canPostStatus()) {
+        statusResult.classList.add('error');
+        statusResult.textContent = "Please wait a minute before posting again.";
         hideLoading();
         return;
       }
@@ -285,9 +303,10 @@
       const statusesRef = ref(db, "statuses");
 
       try {
+        const sanitizedText = sanitizeText(statusText);
         const statusData = {
           userId: currentUser.uid,
-          text: statusText,
+          text: sanitizedText,
           timestamp: Date.now()
         };
         if (imageUrl) {
