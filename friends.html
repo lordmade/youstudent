@@ -72,10 +72,10 @@
     .friend-card {
       padding: 0.75rem;
     }
-    .status-card {
+    .status-card, .service-card {
       padding: 0.75rem;
       min-height: 100px;
-      max-width: 100%; /* Adjusted for smaller cards */
+      max-width: 100%;
     }
     .friend-card.dark, .status-card.dark, .service-card.dark {
       background: #374151;
@@ -106,13 +106,13 @@
     .status-offline {
       background: #9ca3af;
     }
-    .status-text {
+    .status-text, .service-description {
       font-size: 0.9rem;
       color: #444;
       margin-top: 0.5rem;
       line-height: 1.4;
     }
-    .status-text.dark {
+    .status-text.dark, .service-description.dark {
       color: #d1d5db;
     }
     .last-seen, .status-time, .member-count, .service-time {
@@ -123,7 +123,7 @@
     .last-seen.dark, .status-time.dark, .member-count.dark, .service-time.dark {
       color: #9ca3af;
     }
-    .group-avatar, .status-avatar {
+    .group-avatar, .status-avatar, .service-avatar {
       width: 36px;
       height: 36px;
       border-radius: 9999px;
@@ -132,7 +132,7 @@
       background-color: #eee;
       object-fit: cover;
     }
-    .status-image {
+    .status-image, .service-image {
       max-width: 100%;
       height: auto;
       border-radius: 6px;
@@ -140,16 +140,7 @@
       display: block;
       object-fit: cover;
     }
-    .service-avatar {
-      width: 48px;
-      height: 48px;
-      border-radius: 9999px;
-      margin-right: 0.75rem;
-      flex-shrink: 0;
-      background-color: #eee;
-      object-fit: cover;
-    }
-    .posted-by {
+    .posted-by, .sponsored-text {
       font-size: 0.75rem;
       font-weight: 600;
       text-transform: uppercase;
@@ -160,7 +151,7 @@
       margin-bottom: 0.5rem;
       display: inline-block;
     }
-    .posted-by.dark {
+    .posted-by.dark, .sponsored-text.dark {
       color: #dc2626;
       background: #1f2937;
     }
@@ -197,25 +188,9 @@
       color: #d1d5db;
     }
     .service-card {
-      max-width: 95%;
       min-height: 180px;
       padding: 1rem;
       position: relative;
-    }
-    .sponsored-text {
-      font-size: 0.75rem;
-      font-weight: 600;
-      text-transform: uppercase;
-      color: #ef4444;
-      background: #fef2f2;
-      padding: 0.2rem 0.4rem;
-      border-radius: 4px;
-      margin-bottom: 0.5rem;
-      display: inline-block;
-    }
-    .sponsored-text.dark {
-      color: #dc2626;
-      background: #1f2937;
     }
     .service-cta {
       display: inline-block;
@@ -241,9 +216,9 @@
     .group-info {
       flex-grow: 1;
     }
-    .status-grid {
+    .status-grid, .services-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); /* Smaller cards */
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
       gap: 0.75rem;
     }
     .own-statuses {
@@ -256,7 +231,7 @@
       scrollbar-color: #ef4444 #e5e7eb;
     }
     .own-statuses .status-card {
-      flex: 0 0 14rem; /* Smaller width for own statuses */
+      flex: 0 0 14rem;
     }
     .own-statuses::-webkit-scrollbar {
       height: 5px;
@@ -385,7 +360,7 @@
 </div>
 <div class="tab-panel" id="tab-services">
   <h2 class="text-base font-semibold mt-3 mb-2 dark:text-gray-100">Services</h2>
-  <div id="services-list" aria-live="polite" aria-relevant="additions"></div>
+  <div id="services-list" class="services-grid" aria-live="polite" aria-relevant="additions"></div>
   <p id="no-services-message" class="text-center hidden">No services available yet.</p>
 </div>
 
@@ -405,6 +380,18 @@
     <div class="modal-buttons">
       <button id="modal-confirm" class="modal-btn modal-btn-confirm">Delete</button>
       <button id="modal-cancel" class="modal-btn modal-btn-cancel dark:modal-btn-cancel">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal for Service Deletion Confirmation -->
+<div id="delete-service-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+  <div class="modal dark:modal">
+    <p class="text-base font-semibold dark:text-gray-100">Delete Service</p>
+    <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">Are you sure you want to delete this service?</p>
+    <div class="modal-buttons">
+      <button id="modal-service-confirm" class="modal-btn modal-btn-confirm">Delete</button>
+      <button id="modal-service-cancel" class="modal-btn modal-btn-cancel dark:modal-btn-cancel">Cancel</button>
     </div>
   </div>
 </div>
@@ -462,6 +449,9 @@
   const deleteStatusModal = document.getElementById("delete-status-modal");
   const modalConfirm = document.getElementById("modal-confirm");
   const modalCancel = document.getElementById("modal-cancel");
+  const deleteServiceModal = document.getElementById("delete-service-modal");
+  const modalServiceConfirm = document.getElementById("modal-service-confirm");
+  const modalServiceCancel = document.getElementById("modal-service-cancel");
   let currentUserUid = null;
 
   function showLoading() { loadingOverlay.classList.remove("hidden"); }
@@ -479,14 +469,14 @@
     document.querySelectorAll('.tab-nav button').forEach(el => el.classList.toggle('dark', isDark));
     document.querySelectorAll('.text-base').forEach(el => el.classList.toggle('dark:text-gray-100', isDark));
     document.querySelector('.own-statuses').classList.toggle('dark', isDark);
-    document.querySelector('.modal').classList.toggle('dark', isDark);
+    document.querySelectorAll('.modal').forEach(el => el.classList.toggle('dark', isDark));
     document.querySelectorAll('.modal-btn-cancel').forEach(el => el.classList.toggle('dark', isDark));
     floatingBtn.classList.toggle('dark', isDark);
   }
 
   onAuthStateChanged(auth, async user => {
     if (!user) {
-      location.href = "login.html";
+      location.href = "signup.html";
       return;
     }
     currentUserUid = user.uid;
@@ -573,6 +563,24 @@
     };
     modalCancel.onclick = () => {
       deleteStatusModal.classList.add("hidden");
+    };
+  }
+
+  function showDeleteServiceModal(serviceId) {
+    deleteServiceModal.classList.remove("hidden");
+    modalServiceConfirm.onclick = async () => {
+      showLoading();
+      try {
+        await remove(ref(db, `services/${serviceId}`));
+        deleteServiceModal.classList.add("hidden");
+      } catch (error) {
+        console.error("Error deleting service:", error);
+        alert("Failed to delete service.");
+      }
+      hideLoading();
+    };
+    modalServiceCancel.onclick = () => {
+      deleteServiceModal.classList.add("hidden");
     };
   }
 
@@ -739,7 +747,7 @@
       }
 
       if (!hasGroups) {
-        noGroupsMessage.classList.add("hidden");
+        noGroupsMessage.classList.remove("hidden");
       }
       hideLoading();
     });
@@ -909,25 +917,19 @@
         <img src="${userData.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${userData.name || 'User'} avatar" class="service-avatar" />
         <div>
           <h4 class="font-bold text-sm dark:text-gray-100">${service.name || "Service"} by ${userData.name || "User"}</h4>
-          <p class="service-time">Added: ${timeAgo(service.createdAt)}</p>
+          <p class="service-time">${timeAgo(service.createdAt)}</p>
         </div>
       </div>
-      <p class="service-description text-sm">${service.description || "No description"}</p>
+      ${service.description ? `<p class="service-description">${service.description}</p>` : ''}
+      ${service.imageUrl ? `
+        <img src="${service.imageUrl}?w=300&h=300&c=fill" alt="Service image" class="service-image" loading="lazy" />
+      ` : ''}
       <button class="service-cta" data-sid="${serviceId}">Learn More</button>
     `;
     if (isOwnService) {
       card.querySelector(".delete-icon").addEventListener("click", async (e) => {
         e.stopPropagation();
-        if (confirm("Are you sure you want to delete this service?")) {
-          showLoading();
-          try {
-            await remove(ref(db, `services/${serviceId}`));
-          } catch (error) {
-            console.error("Error deleting service:", error);
-            alert("Failed to delete service.");
-          }
-          hideLoading();
-        }
+        showDeleteServiceModal(serviceId);
       });
     }
     card.querySelector(".service-cta").addEventListener("click", (e) => {
