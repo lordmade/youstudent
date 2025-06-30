@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>BanterBox - Chat</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
   <style>
     body {
       font-family: 'Inter', 'Segoe UI', sans-serif;
@@ -227,6 +228,24 @@
     const profileLink = document.getElementById("profile-link");
     const loadingOverlay = document.getElementById("loading-overlay");
 
+    // Encryption key (replace with secure key management in production)
+    const ENCRYPTION_KEY = "your-secure-key-32bytes-long-1234"; // Must be 32 bytes for AES-256
+
+    function encryptMessage(message) {
+      return CryptoJS.AES.encrypt(message, ENCRYPTION_KEY).toString();
+    }
+
+    function decryptMessage(encryptedMessage) {
+      try {
+        const bytes = CryptoJS.AES.decrypt(encryptedMessage, ENCRYPTION_KEY);
+        const decrypted = bytes.toString(CryptoJS.enc.Utf8);
+        return decrypted || "[Decryption Failed]";
+      } catch (error) {
+        console.error("Decryption error:", error);
+        return "[Decryption Failed]";
+      }
+    }
+
     function showLoading() { loadingOverlay.classList.add("active"); }
     function hideLoading() { loadingOverlay.classList.remove("active"); }
 
@@ -256,7 +275,9 @@
       const div = document.createElement("div");
       div.className = `message ${isSent ? 'sent' : 'received'}`;
       if (isSent) div.classList.add('dark');
-      const content = message.image ? `<img src="${message.image}" class="message-image" alt="Shared image" />` : `<p class="message-text">${message.text || ''}</p>`;
+      const content = message.image 
+        ? `<img src="${message.image}" class="message-image" alt="Shared image" />`
+        : `<p class="message-text">${message.text ? decryptMessage(message.text) : ''}</p>`;
       div.innerHTML = `
         ${content}
         <p class="message-time ${isSent ? '' : 'received'}">${timeAgo(message.timestamp)}</p>
@@ -328,9 +349,10 @@
         if (!text) return;
         showLoading();
         try {
+          const encryptedText = encryptMessage(text);
           await push(messagesRef, {
             sender: user.uid,
-            text,
+            text: encryptedText,
             timestamp: Date.now(),
             read: false
           });
