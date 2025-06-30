@@ -87,7 +87,7 @@
     #messages {
       flex: 1;
       overflow-y: auto;
-      padding: 96px 1rem 120px; /* Adjusted padding-top to account for encryption notice */
+      padding: 96px 1rem 120px;
       background: white;
       display: flex;
       flex-direction: column;
@@ -468,7 +468,6 @@
 
   <div id="notification" aria-live="polite"></div>
   
-  <!-- New Encryption Notice -->
   <div id="encryption-notice" class="dark:encryption-notice">
     Messages are end-to-end encrypted 🔒
   </div>
@@ -497,7 +496,7 @@
 
   <div id="bottom-sheet" class="bottom-sheet">
     <div class="bottom-sheet-header dark:bottom-sheet-header">
-      operazioni
+      Operazioni
       <div class="bottom-sheet-tabs">
         <div class="bottom-sheet-tab active" data-tab="emojis">Emojis</div>
         <div class="bottom-sheet-tab" data-tab="stickers">Stickers</div>
@@ -565,7 +564,7 @@
 
     let currentUser, friendUid, chatId, friendName;
     let replyingTo = null;
-    let replyingToDecrypted = null; // Store decrypted text for reply preview
+    let replyingToDecrypted = null;
     let reactingKey = null;
     let deletingKey = null;
     let theme = 'light';
@@ -1053,6 +1052,7 @@
       const hasText = messageInput.value.trim() !== "";
       sendBtn.textContent = hasText ? "Send" : "Voice";
       sendBtn.classList.remove("mic-anim");
+      sendBtn.disabled = false;
     }
 
     messageInput.addEventListener("input", updateSendButton);
@@ -1061,6 +1061,7 @@
       if (!messageInput.value.trim()) {
         sendBtn.textContent = "Voice";
         sendBtn.classList.remove("mic-anim");
+        sendBtn.disabled = false;
       }
     });
 
@@ -1102,7 +1103,7 @@
       };
     } else {
       sendBtn.textContent = "Send";
-      sendBtn.disabled = true;
+      sendBtn.disabled = false;
       sendBtn.title = "Voice input not supported";
     }
 
@@ -1110,15 +1111,19 @@
       isRecording = false;
       sendBtn.textContent = "Voice";
       sendBtn.classList.remove("mic-anim");
+      sendBtn.disabled = false;
     }
 
     sendBtn.onclick = async () => {
+      console.log("Send button clicked, isRecording:", isRecording);
       if (isRecording) {
+        console.log("Stopping voice recognition");
         recognition.stop();
         return;
       }
 
       const text = messageInput.value.trim();
+      console.log("Text to send:", text);
       if (text) {
         const msg = {
           sender: currentUser.uid,
@@ -1126,14 +1131,17 @@
           read: false
         };
         try {
+          console.log("Processing message, isSticker:", text.match(/\.(png|jpg|jpeg|gif)$/i));
           if (text.match(/\.(png|jpg|jpeg|gif)$/i)) {
-            msg.text = text; // Stickers are not encrypted
+            msg.text = text;
           } else {
+            console.log("Encrypting message for recipient:", friendUid);
             const { encryptedMessageB64, encryptedAesKeyB64, ivB64 } = await encryptMessage(text, friendUid);
             msg.encryptedMessage = encryptedMessageB64;
             msg.encryptedKey = encryptedAesKeyB64;
             msg.iv = ivB64;
             if (replyingTo) {
+              console.log("Handling reply, replyingToDecrypted:", replyingToDecrypted);
               if (replyingTo.match(/\.(png|jpg|jpeg|gif)$/i)) {
                 msg.replyTo = replyingTo;
               } else {
@@ -1144,18 +1152,22 @@
               }
             }
           }
+          console.log("Pushing message to Firebase:", msg);
           await push(ref(db, `messages/${chatId}`), msg);
           messageInput.value = "";
           updateSendButton();
           cancelReply();
+          console.log("Message sent successfully");
         } catch (error) {
           console.error("Error sending message:", error);
-          showNotification("System", "Failed to send message.");
+          showNotification("System", `Failed to send message: ${error.message}`);
         }
-      } else if (recognition) {
+      } else if (recognition && !messageInput.value.trim()) {
+        console.log("Starting voice recognition");
         recognition.start();
       } else {
-        showNotification("System", "Voice input not supported on this browser.");
+        console.log("No text or voice support");
+        showNotification("System", "Please enter a message or use voice input.");
       }
     };
 
