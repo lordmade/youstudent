@@ -1,534 +1,230 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Chaxo</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>BanterBox - Chat</title>
+  <script src="https://cdn.tailwindcss.com"></script>
   <style>
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
-      margin: 0;
-      background: #f5f5f5;
-      overscroll-behavior: none;
-      user-select: none;
+      font-family: 'Inter', 'Segoe UI', sans-serif;
+      background: linear-gradient(to bottom, #f9f9f9, #e5e7eb);
+      transition: background 0.3s ease;
+      user-select: none; /* Prevent text selection */
+      -webkit-user-select: none; /* Safari */
+      -moz-user-select: none; /* Firefox */
+      -ms-user-select: none; /* IE/Edge */
     }
-    header {
-      background: #fff;
-      padding: 10px 15px;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-      display: flex;
-      align-items: center;
-      position: sticky;
-      top: 0;
-      z-index: 10;
+    body.dark {
+      background: linear-gradient(to bottom, #1f2937, #111827);
     }
-    header img {
-      width: 40px;
-      height: 40px;
-      border-radius: 50%;
-      margin-right: 10px;
+    .header {
+      background: white;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
     }
-    header div {
-      flex: 1;
+    .header.dark {
+      background: #374151;
+      border-bottom: 1px solid #4b5563;
+      color: #e5e7eb;
     }
-    header h1 {
-      margin: 0;
-      font-size: 18px;
-      font-weight: 600;
-    }
-    header small {
-      font-size: 12px;
-      color: #888;
-    }
-    #messages {
-      padding: 10px;
-      margin-bottom: 80px;
-      overscroll-behavior: none;
+    .chat-container {
+      height: calc(100vh - 200px);
       overflow-y: auto;
-      max-height: calc(100vh - 160px);
+      padding: 1rem;
+      scrollbar-width: thin;
+      scrollbar-color: #ef4444 #e5e7eb;
+      user-select: none; /* Prevent text selection in chat */
     }
-    .message-container {
-      display: flex;
-      flex-direction: column;
-      align-items: flex-start;
-      margin-bottom: 10px;
+    .chat-container::-webkit-scrollbar {
+      width: 6px;
     }
-    .message-container.self {
-      align-items: flex-end;
+    .chat-container::-webkit-scrollbar-track {
+      background: #e5e7eb;
+    }
+    .chat-container::-webkit-scrollbar-thumb {
+      background: #ef4444;
+      border-radius: 3px;
+    }
+    .chat-container.dark::-webkit-scrollbar-track {
+      background: #4b5563;
+    }
+    .chat-container.dark::-webkit-scrollbar-thumb {
+      background: #dc2626;
     }
     .message {
       max-width: 70%;
-      padding: 8px 12px;
-      border-radius: 15px;
-      font-size: 16px;
-      line-height: 1.4;
+      margin-bottom: 1rem;
+      padding: 0.75rem;
+      border-radius: 8px;
       position: relative;
-      background: #fff;
-      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
-      word-wrap: break-word;
+      user-select: none; /* Prevent text selection in messages */
     }
-    .message.friend {
-      background: #e0f7fa;
-      color: #000;
+    .message.sent {
+      background: #ef4444;
+      color: white;
+      margin-left: auto;
+      border-bottom-right-radius: 0;
     }
-    .message small {
-      font-size: 11px;
+    .message.received {
+      background: #e5e7eb;
+      color: #1f2937;
+      margin-right: auto;
+      border-bottom-left-radius: 0;
+    }
+    .message.dark.received {
+      background: #4b5563;
+      color: #e5e7eb;
+    }
+    .message-time {
+      font-size: 0.75rem;
       color: #888;
       margin-top: 4px;
-      display: block;
-      text-align: right;
+    }
+    .message.dark .message-time {
+      color: #9ca3af;
     }
     .message img {
-      border-radius: 10px;
-    }
-    .quoted-text {
-      background: rgba(0, 0, 0, 0.1);
-      padding: 8px;
-      border-radius: 10px;
-      font-size: 14px;
-      margin-bottom: 8px;
       max-width: 100%;
-      overflow: hidden;
-      text-overflow: ellipsis;
+      border-radius: 8px;
+      margin-top: 0.5rem;
     }
-    .reaction {
-      font-size: 20px;
-      margin-top: 4px;
-      align-self: flex-end;
-    }
-    #input-area {
+    .input-container {
       position: fixed;
       bottom: 0;
-      width: 100%;
-      padding: 12px 15px;
-      background: linear-gradient(180deg, #ffffff, #f8f9fa);
-      box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.08);
-      display: flex;
-      align-items: center;
-      border-top: 1px solid #e0e0e0;
-      z-index: 10;
-      box-sizing: border-box;
-    }
-    #message-input {
-      flex: 1;
-      padding: 12px 15px;
-      border: none;
-      border-radius: 25px;
-      font-size: 16px;
-      background: #f1f1f1;
-      resize: vertical;
-      min-height: 44px;
-      max-height: 100px;
-      overflow-y: auto;
-      transition: background 0.3s ease, transform 0.2s ease, box-shadow 0.2s ease;
-      outline: none;
-      line-height: 1.4;
-    }
-    #message-input:focus {
-      background: #fff;
-      box-shadow: 0 0 0 2px #007bff;
-      transform: scale(1.01);
-    }
-    #message-input::placeholder {
-      color: #999;
-      transition: opacity 0.3s ease;
-    }
-    #message-input:focus::placeholder {
-      opacity: 0.7;
-    }
-    #emoji-btn, #send-btn {
-      background: transparent;
-      border: none;
-      width: 48px;
-      height: 48px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      transition: transform 0.2s ease, opacity 0.2s ease, background 0.3s ease;
-      border-radius: 50%;
-      margin-left: 8px;
-    }
-    #emoji-btn:hover, #send-btn:hover:not(:disabled) {
-      transform: scale(1.1);
-      opacity: 0.9;
-    }
-    #emoji-btn svg, #send-btn svg {
-      width: 28px;
-      height: 28px;
-      fill: #555;
-      transition: fill 0.3s ease;
-    }
-    #send-btn {
-      background: #007bff;
-    }
-    #send-btn svg {
-      fill: #fff;
-    }
-    #send-btn:hover:not(:disabled) {
-      background: #0056b3;
-      transform: scale(1.1);
-    }
-    #send-btn:disabled {
-      background: #ccc;
-      cursor: not-allowed;
-      transform: none;
-    }
-    #send-btn.mic-anim {
-      animation: pulse 1.5s infinite;
-    }
-    @keyframes pulse {
-      0% { transform: scale(1); }
-      50% { transform: scale(1.1); }
-      100% { transform: scale(1); }
-    }
-    #emoji-picker {
-      position: absolute;
-      bottom: 80px;
-      display: none;
-      background: #fff;
-      padding: 10px;
-      border-radius: 10px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-      z-index: 20;
-      display: grid;
-      grid-template-columns: repeat(6, 1fr);
-      gap: 5px;
-    }
-    #emoji-picker span {
-      font-size: 24px;
-      cursor: pointer;
-      text-align: center;
-    }
-    #reply-box {
-      display: none;
-      background: #fff;
-      padding: 10px;
-      border-top: 1px solid #ddd;
-      position: fixed;
-      bottom: 72px;
-      width: 100%;
-      z-index: 10;
-    }
-    #reply-box div {
-      max-width: 90%;
-      font-size: 14px;
-      color: #888;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    .cancel-reply {
-      cursor: pointer;
-      font-size: 14px;
-      color: #007bff;
-      margin-left: auto;
-    }
-    #bottom-sheet {
-      position: fixed;
-      bottom: 0;
-      width: 100%;
-      background: #fff;
-      border-top-left-radius: 15px;
-      border-top-right-radius: 15px;
-      box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.2);
-      transform: translateY(100%);
-      transition: transform 0.3s ease-in-out;
-      z-index: 30;
-      max-height: 50vh;
-      display: flex;
-      flex-direction: column;
-    }
-    #bottom-sheet.open {
-      transform: translateY(0);
-    }
-    .bottom-sheet-header {
-      display: flex;
-      padding: 10px;
-      border-bottom: 1px solid #ddd;
-    }
-    .bottom-sheet-tab {
-      flex: 1;
-      text-align: center;
-      padding: 10px;
-      cursor: pointer;
-      font-size: 16px;
-      font-weight: 500;
-    }
-    .bottom-sheet-tab.active {
-      border-bottom: 2px solid #007bff;
-      color: #007bff;
-    }
-    #emoji-content, #sticker-content {
-      display: none;
-      padding: 10px;
-      overflow-y: auto;
-      flex: 1;
-    }
-    #emoji-content span, #sticker-content img {
-      font-size: 30px;
-      margin: 5px;
-      cursor: pointer;
-    }
-    #sticker-content img {
-      width: 50px;
-      height: 50px;
-    }
-    .close-btn {
-      position: absolute;
-      right: 10px;
-      top: 10px;
-      font-size: 24px;
-      cursor: pointer;
-      color: #888;
-    }
-    #delete-message-modal {
-      display: none;
-      position: fixed;
-      top: 0;
       left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0, 0, 0, 0.5);
-      z-index: 40;
-      justify-content: center;
-      align-items: center;
+      right: 0;
+      background: white;
+      padding: 1rem;
+      border-top: 1px solid #ddd;
     }
-    .modal-content {
-      background: #fff;
-      padding: 20px;
-      border-radius: 10px;
-      text-align: center;
-      width: 80%;
+    .input-container.dark {
+      background: #374151;
+      border-top: 1px solid #4b5563;
+    }
+    .input-container input[type="text"] {
+      flex-grow: 1;
+      padding: 0.5rem;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      background: white;
+      color: #1f2937;
+    }
+    .input-container.dark input[type="text"] {
+      background: #4b5563;
+      border-color: #6b7280;
+      color: #e5e7eb;
+    }
+    .input-container input[type="file"] {
+      display: none;
+    }
+    .input-container button {
+      background: #ef4444;
+      color: white;
+      padding: 0.5rem 1rem;
+      border-radius: 8px;
+      margin-left: 0.5rem;
+    }
+    .input-container.dark button {
+      background: #dc2626;
+    }
+    .input-container button:hover {
+      background: #dc2626;
+    }
+    .emoji-picker {
+      position: absolute;
+      bottom: 70px;
+      left: 1rem;
+      background: white;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 0.5rem;
+      display: none;
+      flex-wrap: wrap;
+      gap: 0.5rem;
       max-width: 300px;
     }
-    .modal-content p {
-      margin: 0 0 20px;
-      font-size: 16px;
+    .emoji-picker.dark {
+      background: #4b5563;
+      border-color: #6b7280;
     }
-    .modal-btn {
-      padding: 10px 20px;
+    .emoji-picker button {
+      background: none;
       border: none;
-      border-radius: 5px;
+      font-size: 1.5rem;
       cursor: pointer;
-      font-size: 16px;
-      margin: 0 5px;
     }
-    .modal-btn-confirm {
-      background: #007bff;
-      color: #fff;
-    }
-    .modal-btn-cancel {
-      background: #ccc;
-    }
-    #notification {
+    .loading-overlay {
       position: fixed;
-      top: 80px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: #fff;
-      padding: 10px 20px;
-      border-radius: 20px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-      font-size: 14px;
-      display: none;
-      z-index: 20;
-      max-width: 80%;
-      text-align: center;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 50;
     }
-    body.dark {
-      background: #121212;
+    .status-indicator {
+      width: 10px;
+      height: 10px;
+      border-radius: 9999px;
+      margin-left: 0.5rem;
     }
-    header.dark {
-      background: #1e1e1e;
-      color: #fff;
+    .status-online {
+      background: #22c55e;
     }
-    header.dark small {
-      color: #aaa;
-    }
-    #messages.dark {
-      background: #121212;
-    }
-    .message.dark {
-      background: #1e1e1e;
-      color: #fff;
-      box-shadow: 0 1px 2px rgba(255, 255, 255, 0.1);
-    }
-    .message.friend.dark {
-      background: #263238;
-      color: #fff;
-    }
-    .message.dark small {
-      color: #aaa;
-    }
-    .quoted-text.dark {
-      background: rgba(255, 255, 255, 0.1);
-    }
-    #input-area.dark {
-      background: linear-gradient(180deg, #1e1e1e, #252525);
-      box-shadow: 0 -4px 12px rgba(255, 255, 255, 0.08);
-      border-top: 1px solid #333;
-    }
-    #message-input.dark {
-      background: #2c2c2c;
-      color: #fff;
-      box-shadow: none;
-    }
-    #message-input.dark:focus {
-      background: #333;
-      box-shadow: 0 0 0 2px #0288d1;
-    }
-    #message-input.dark::placeholder {
-      color: #888;
-    }
-    #emoji-btn.dark svg {
-      fill: #ccc;
-    }
-    #emoji-btn.dark:hover {
-      background: #333;
-      transform: scale(1.1);
-    }
-    #send-btn.dark {
-      background: #0288d1;
-    }
-    #send-btn.dark svg {
-      fill: #fff;
-    }
-    #send-btn.dark:hover:not(:disabled) {
-      background: #01579b;
-      transform: scale(1.1);
-    }
-    #send-btn.dark:disabled {
-      background: #555;
-      transform: none;
-    }
-    #send-btn.dark.mic-anim {
-      animation: pulse 1.5s infinite;
-    }
-    #emoji-picker.dark {
-      background: #1e1e1e;
-      box-shadow: 0 2px 8px rgba(255, 255, 255, 0.2);
-    }
-    #reply-box.dark {
-      background: #1e1e1e;
-      border-top: 1px solid #444;
-      color: #fff;
-    }
-    .cancel-reply.dark {
-      color: #0288d1;
-    }
-    #bottom-sheet.dark {
-      background: #1e1e1e;
-      box-shadow: 0 -2px 8px rgba(255, 255, 255, 0.2);
-    }
-    .bottom-sheet-header.dark {
-      border-bottom: 1px solid #444;
-    }
-    .bottom-sheet-tab.dark {
-      color: #fff;
-    }
-    .bottom-sheet-tab.active.dark {
-      border-bottom: 2px solid #0288d1;
-      color: #0288d1;
-    }
-    .close-btn.dark {
-      color: #aaa;
-    }
-    #delete-message-modal.dark .modal-content {
-      background: #1e1e1e;
-      color: #fff;
-    }
-    .modal-btn-cancel.dark {
-      background: #444;
-      color: #fff;
-    }
-    #notification.dark {
-      background: #1e1e1e;
-      color: #fff;
-      box-shadow: 0 2px 8px rgba(255, 255, 255, 0.2);
-    }
-    .long-press-disable-select {
-      user-select: none;
-      -webkit-user-select: none;
-      -webkit-touch-callout: none;
-    }
-    .hidden {
-      display: none !important;
+    .status-offline {
+      background: #9ca3af;
     }
   </style>
 </head>
 <body>
-  <header>
-    <img id="friend-photo" src="https://www.gravatar.com/avatar?d=mp" alt="Friend">
-    <div>
-      <h1 id="friend-name">Friend</h1>
-      <small id="friend-presence">Offline</small>
+  <header class="header p-4 flex items-center justify-between">
+    <div class="flex items-center">
+      <a href="index.html" class="mr-4">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+        </svg>
+      </a>
+      <img id="friend-avatar" src="https://www.gravatar.com/avatar?d=mp" alt="Friend avatar" class="w-10 h-10 rounded-full mr-2"/>
+      <span id="friend-name" class="text-lg font-bold text-red-500">Friend</span>
+      <div id="friend-status" class="status-indicator status-offline"></div>
     </div>
-    <a id="friend-profile-link">View Profile</a>
+    <a id="friend-profile-link" href="#" class="text-sm bg-red-500 text-white px-4 py-1 rounded-full hover:bg-red-600 transition duration-200">
+      View Profile
+    </a>
   </header>
-  <div id="messages"></div>
-  <div id="notification"></div>
-  <div id="reply-box" class="hidden">
-    <div id="reply-text"></div>
-    <span class="cancel-reply">Cancel</span>
-  </div>
-  <div id="input-area">
-    <input type="text" id="message-input" placeholder="Type a message...">
-    <button id="emoji-btn">
-      <svg viewBox="0 0 24 24">
-        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm-4-10c0-1.1.9-2 2-2s2 .9 2 2-.9 2-2 2-2-.9-2-2zm6 0c0-1.1.9-2 2-2s2 .9 2 2-.9 2-2 2-2-.9-2-2zm-6 5s1.5 2 4 2 4-2 4-2c-.5-1.5-2.5-2.5-4-2.5s-3.5 1-4 2.5z"/>
+
+  <div id="chat-container" class="chat-container" aria-live="polite" aria-relevant="additions"></div>
+
+  <div id="emoji-picker" class="emoji-picker"></div>
+
+  <div class="input-container flex items-center">
+    <input type="text" id="message-input" placeholder="Type a message..." />
+    <input type="file" id="image-input" accept="image/*" />
+    <button id="emoji-btn" class="flex items-center">
+      <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
       </svg>
     </button>
-    <button id="send-btn" disabled>
-      <svg id="send-icon" class="hidden" viewBox="0 0 24 24">
-        <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
-      </svg>
-      <svg id="mic-icon" viewBox="0 0 24 24">
-        <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.91-3c-.49 0-.9.36-.98.85C16.52 14.2 14.47 16 12 16s-4.52-1.8-4.93-4.15c-.08-.49-.49-.85-.98-.85-.61 0-1.09.54-1 1.14.49 2.84 2.76 5.01 5.91 5.01s5.42-2.17 5.91-5.01c.09-.6-.39-1.14-1-1.14z"/>
+    <button id="image-btn" class="flex items-center">
+      <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
       </svg>
     </button>
+    <button id="send-btn">Send</button>
   </div>
-  <div id="emoji-picker" class="hidden">
-    <span>👍</span>
-    <span>❤️</span>
-    <span>😂</span>
-    <span>😢</span>
-    <span>😮</span>
-    <span>🙏</span>
+
+  <div id="loading-overlay" class="loading-overlay hidden">
+    <svg class="animate-spin h-10 w-10 text-red-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4z"/>
+    </svg>
   </div>
-  <div id="bottom-sheet">
-    <div class="bottom-sheet-header">
-      <div class="bottom-sheet-tab active" data-tab="emojis">Emojis</div>
-      <div class="bottom-sheet-tab" data-tab="stickers">Stickers</div>
-      <span class="close-btn" onclick="document.getElementById('bottom-sheet').classList.remove('open')">×</span>
-    </div>
-    <div id="emoji-content" style="display: flex;">
-      <span>😊</span>
-      <span>😂</span>
-      <span>😍</span>
-      <span>😢</span>
-      <span>👍</span>
-      <span>🙏</span>
-      <span>🎉</span>
-      <span>😎</span>
-    </div>
-    <div id="sticker-content">
-      <img src="https://cdn-icons-png.flaticon.com/128/616/616430.png" alt="Sticker">
-      <img src="https://cdn-icons-png.flaticon.com/128/2589/2589175.png" alt="Sticker">
-      <img src="https://cdn-icons-png.flaticon.com/128/3106/3106726.png" alt="Sticker">
-      <img src="https://cdn-icons-png.flaticon.com/128/3076/3076535.png" alt="Sticker">
-    </div>
-  </div>
-  <div id="delete-message-modal" class="hidden">
-    <div class="modal-content">
-      <p>Delete this message?</p>
-      <button id="modal-confirm" class="modal-btn modal-btn-confirm">Delete</button>
-      <button id="modal-cancel" class="modal-btn modal-btn-cancel">Cancel</button>
-    </div>
-  </div>
+
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
     import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
-    import { getDatabase, ref, onValue, push, update, get, remove, onChildAdded, query, limitToLast, set } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
+    import { getDatabase, ref, onValue, push, update, get } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
+    import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-storage.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
@@ -543,602 +239,180 @@
     const app = initializeApp(firebaseConfig);
     const auth = getAuth();
     const db = getDatabase();
-
-    const messagesEl = document.getElementById("messages");
+    const storage = getStorage();
+    const chatContainer = document.getElementById("chat-container");
     const messageInput = document.getElementById("message-input");
     const sendBtn = document.getElementById("send-btn");
-    const sendIcon = document.getElementById("send-icon");
-    const micIcon = document.getElementById("mic-icon");
-    const replyBox = document.getElementById("reply-box");
-    const replyText = document.getElementById("reply-text");
-    const emojiPicker = document.getElementById("emoji-picker");
-    const friendProfileLink = document.getElementById("friend-profile-link");
-    const deleteMessageModal = document.getElementById("delete-message-modal");
-    const modalConfirm = document.getElementById("modal-confirm");
-    const modalCancel = document.getElementById("modal-cancel");
-    const notificationEl = document.getElementById("notification");
-    const bottomSheet = document.getElementById("bottom-sheet");
-    const emojiContent = document.getElementById("emoji-content");
-    const stickerContent = document.getElementById("sticker-content");
+    const imageInput = document.getElementById("image-input");
+    const imageBtn = document.getElementById("image-btn");
     const emojiBtn = document.getElementById("emoji-btn");
+    const emojiPicker = document.getElementById("emoji-picker");
+    const loadingOverlay = document.getElementById("loading-overlay");
+    const friendName = document.getElementById("friend-name");
+    const friendAvatar = document.getElementById("friend-avatar");
+    const friendStatus = document.getElementById("friend-status");
+    const friendProfileLink = document.getElementById("friend-profile-link");
 
-    let currentUser, friendUid, chatId, friendName;
-    let replyingTo = null;
-    let reactingKey = null;
-    let deletingKey = null;
-    let theme = 'light';
-    let lastMessageKey = null;
-
-    function getParam(name) {
-      return new URLSearchParams(location.search).get(name);
-    }
-
-    function formatTime(ms) {
-      const d = new Date(ms);
-      return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    }
-
-    function cancelReply() {
-      replyingTo = null;
-      replyBox.classList.add("hidden");
-      replyText.textContent = "";
-      messageInput.focus();
-    }
-
-    function showDeleteMessageModal(key) {
-      deletingKey = key;
-      deleteMessageModal.classList.remove("hidden");
-      modalConfirm.onclick = async () => {
-        try {
-          await remove(ref(db, `messages/${chatId}/${key}`));
-          deleteMessageModal.classList.add("hidden");
-          deletingKey = null;
-        } catch (error) {
-          console.error("Error deleting message:", error);
-          showNotification("System", "Failed to delete message.");
-        }
-      };
-      modalCancel.onclick = () => {
-        deleteMessageModal.classList.add("hidden");
-        deletingKey = null;
-      };
-    }
-
-    function showNotification(senderName, text) {
-      if (messagesEl.scrollTop + messagesEl.clientHeight < messagesEl.scrollHeight - 50) {
-        notificationEl.textContent = `${senderName}: ${text.length > 30 ? text.substring(0, 30) + '...' : text}`;
-        notificationEl.classList.add(theme === 'dark' ? 'dark' : '');
-        notificationEl.style.display = 'block';
-        setTimeout(() => {
-          notificationEl.style.display = 'none';
-          notificationEl.classList.remove('dark');
-        }, 3000);
-        notificationEl.onclick = () => {
-          notificationEl.style.display = 'none';
-          messagesEl.scrollTop = messagesEl.scrollHeight;
-        };
-      }
-    }
-
-    function toggleBottomSheet() {
-      bottomSheet.classList.toggle("open");
-      if (bottomSheet.classList.contains("open")) {
-        emojiContent.style.display = "flex";
-        stickerContent.style.display = "none";
-        document.querySelector(".bottom-sheet-tab[data-tab='emojis']").classList.add("active");
-        document.querySelector(".bottom-sheet-tab[data-tab='stickers']").classList.remove("active");
-      }
-    }
-
-    async function renderMessages(messages) {
-      const fragment = document.createDocumentFragment();
-      for (const [key, m] of messages) {
-        const isSelf = m.sender === currentUser.uid;
-        const displayText = m.text;
-        const replyText = m.replyTo;
-
-        const container = document.createElement("div");
-        container.className = `message-container ${isSelf ? "self" : "friend"}`;
-
-        const div = document.createElement("div");
-        div.className = `message ${isSelf ? "self" : "friend"} ${theme === 'dark' ? 'dark' : ''}`;
-
-        let pressTimer = null;
-        let startX = null;
-        let longPressActive = false;
-
-        div.addEventListener("touchstart", (e) => {
-          div.classList.add("long-press-disable-select");
-          startX = e.touches[0].clientX;
-          pressTimer = setTimeout(() => {
-            longPressActive = true;
-            if (isSelf) {
-              showDeleteMessageModal(key);
-            } else {
-              showEmojiPicker(div, key);
-            }
-          }, 600);
-        });
-
-        div.addEventListener("touchend", (e) => {
-          if (pressTimer) clearTimeout(pressTimer);
-          div.classList.remove("long-press-disable-select");
-
-          if (!longPressActive) {
-            const endX = e.changedTouches[0].clientX;
-            const deltaX = endX - startX;
-            if (deltaX > 60) {
-              replyingTo = m.text;
-              replyText.textContent = displayText;
-              replyBox.classList.remove("hidden");
-              messageInput.focus();
-            } else if (deltaX < -60 && isSelf) {
-              showDeleteMessageModal(key);
-            }
-          }
-          longPressActive = false;
-          startX = null;
-        });
-
-        div.addEventListener("touchmove", () => {
-          if (pressTimer) clearTimeout(pressTimer);
-          div.classList.remove("long-press-disable-select");
-          longPressActive = false;
-        });
-
-        if (replyText) {
-          const quote = document.createElement("div");
-          quote.className = `quoted-text ${theme === 'dark' ? 'dark' : ''}`;
-          quote.textContent = replyText;
-          div.appendChild(quote);
-        }
-
-        if (displayText.match(/\.(png|jpg|jpeg|gif)$/i)) {
-          const img = document.createElement("img");
-          img.src = displayText;
-          img.className = "h-16 w-16 object-contain";
-          img.alt = "Sticker";
-          div.appendChild(img);
-        } else {
-          div.append(displayText);
-        }
-
-        const time = document.createElement("small");
-        time.textContent = isSelf
-          ? `${formatTime(m.timestamp)} • ${m.read ? "Delivered" : "Sent"}`
-          : formatTime(m.timestamp);
-        div.appendChild(time);
-
-        container.appendChild(div);
-
-        if (m.reaction) {
-          const reaction = document.createElement("div");
-          reaction.className = "reaction";
-          reaction.textContent = m.reaction;
-          container.appendChild(reaction);
-        }
-
-        fragment.appendChild(container);
-        if (!lastMessageKey || key > lastMessageKey) lastMessageKey = key;
-      }
-      messagesEl.appendChild(fragment);
-      messagesEl.scrollTop = messagesEl.scrollHeight;
-    }
-
-    function showEmojiPicker(target, key) {
-      const rect = target.getBoundingClientRect();
-      emojiPicker.style.top = (rect.top - 50 + window.scrollY) + "px";
-      emojiPicker.style.left = rect.left + "px";
-      emojiPicker.style.display = "grid";
-      reactingKey = key;
-    }
+    function showLoading() { loadingOverlay.classList.remove("hidden"); }
+    function hideLoading() { loadingOverlay.classList.add("hidden"); }
 
     function applyTheme(themeValue) {
-      theme = themeValue;
-      document.body.classList.toggle('dark', theme === 'dark');
-      document.querySelector('header').classList.toggle('dark', theme === 'dark');
-      messagesEl.classList.toggle('dark', theme === 'dark');
-      document.querySelectorAll('.message').forEach(el => el.classList.toggle('dark', theme === 'dark'));
-      document.querySelectorAll('.message.friend').forEach(el => el.classList.toggle('dark', theme === 'dark'));
-      document.querySelectorAll('.message small').forEach(el => el.classList.toggle('dark', theme === 'dark'));
-      document.querySelectorAll('.quoted-text').forEach(el => el.classList.toggle('dark', theme === 'dark'));
-      replyBox.classList.toggle('dark', theme === 'dark');
-      document.querySelector('.cancel-reply').classList.toggle('dark', theme === 'dark');
-      document.querySelector('#input-area').classList.toggle('dark', theme === 'dark');
-      document.querySelector('#message-input').classList.toggle('dark', theme === 'dark');
-      sendBtn.classList.toggle('dark', theme === 'dark');
-      emojiPicker.classList.toggle('dark', theme === 'dark');
-      emojiBtn.classList.toggle('dark', theme === 'dark');
-      bottomSheet.classList.toggle('dark', theme === 'dark');
-      document.querySelector('.bottom-sheet-header').classList.toggle('dark', theme === 'dark');
-      document.querySelectorAll('.bottom-sheet-tab').forEach(el => el.classList.toggle('dark', theme === 'dark'));
-      document.querySelectorAll('.bottom-sheet-tab.active').forEach(el => el.classList.toggle('dark', theme === 'dark'));
-      document.querySelector('.close-btn').classList.toggle('dark', theme === 'dark');
-      deleteMessageModal.classList.toggle('dark', theme === 'dark');
-      document.querySelectorAll('.modal-btn-cancel').forEach(el => el.classList.toggle('dark', theme === 'dark'));
+      const isDark = themeValue === 'dark';
+      document.body.classList.toggle('dark', isDark);
+      document.querySelector('.header').classList.toggle('dark', isDark);
+      document.querySelector('.input-container').classList.toggle('dark', isDark);
+      document.querySelectorAll('.message').forEach(el => el.classList.toggle('dark', isDark));
+      document.querySelectorAll('.message-time').forEach(el => el.classList.toggle('dark', isDark));
+      document.querySelector('.emoji-picker').classList.toggle('dark', isDark);
     }
 
-    document.addEventListener("click", (e) => {
-      if (!emojiPicker.contains(e.target) && e.target !== emojiBtn && !emojiBtn.contains(e.target)) {
-        emojiPicker.style.display = "none";
-      }
-      if (!bottomSheet.contains(e.target) && e.target !== emojiBtn && !emojiBtn.contains(e.target) && bottomSheet.classList.contains("open")) {
-        bottomSheet.classList.remove("open");
-      }
-      if (!deleteMessageModal.contains(e.target) && e.target !== modalConfirm && e.target !== modalCancel) {
-        deleteMessageModal.classList.add("hidden");
-        deletingKey = null;
+    function timeAgo(timestamp) {
+      if (!timestamp) return "";
+      const now = Date.now();
+      const diff = now - timestamp;
+      if (diff < 60000) return "just now";
+      if (diff < 3600000) return Math.floor(diff / 60000) + "m ago";
+      if (diff < 86400000) return Math.floor(diff / 3600000) + "h ago";
+      return Math.floor(diff / 86400000) + "d ago";
+    }
+
+    function renderMessage(message, currentUserUid) {
+      const isSent = message.sender === currentUserUid;
+      const div = document.createElement("div");
+      div.className = `message ${isSent ? 'sent' : 'received'}`;
+      div.innerHTML = `
+        ${message.text ? `<p>${message.text}</p>` : ''}
+        ${message.image ? `<img src="${message.image}" alt="Shared image" />` : ''}
+        <p class="message-time">${timeAgo(message.timestamp)}</p>
+      `;
+      chatContainer.appendChild(div);
+      chatContainer.scrollTop = chatContainer.scrollHeight;
+    }
+
+    // Emoji picker setup
+    const emojis = ['😀', '😂', '😍', '😊', '👍', '❤️', '🔥', '🎉', '😢', '😡'];
+    emojis.forEach(emoji => {
+      const btn = document.createElement("button");
+      btn.textContent = emoji;
+      btn.addEventListener("click", () => {
+        messageInput.value += emoji;
+        emojiPicker.style.display = 'none';
+      });
+      emojiPicker.appendChild(btn);
+    });
+
+    emojiBtn.onclick = () => {
+      emojiPicker.style.display = emojiPicker.style.display === 'flex' ? 'none' : 'flex';
+    };
+
+    // Close emoji picker when clicking outside
+    document.addEventListener('click', (e) => {
+      if (!emojiPicker.contains(e.target) && e.target !== emojiBtn) {
+        emojiPicker.style.display = 'none';
       }
     });
 
-    async function checkBlockedStatus() {
-      if (!currentUser || !friendUid) return;
-      try {
-        const [blockedByMe, blockedByFriend] = await Promise.all([
-          get(ref(db, `users/${currentUser.uid}/blockedUsers/${friendUid}`)),
-          get(ref(db, `users/${friendUid}/blockedUsers/${currentUser.uid}`))
-        ]);
-        if (blockedByMe.exists() || blockedByFriend.exists()) {
-          document.getElementById("input-area").style.display = "none";
-        } else {
-          document.getElementById("input-area").style.display = "flex";
+    async function loadChat(currentUserUid, friendUid) {
+      showLoading();
+      const chatId = currentUserUid < friendUid ? `${currentUserUid}_${friendUid}` : `${friendUid}_${currentUserUid}`;
+      const messagesRef = ref(db, `messages/${chatId}`);
+      const userRef = ref(db, `users/${friendUid}`);
+
+      // Load friend info
+      const userSnap = await get(userRef);
+      const userData = userSnap.val() || {};
+      friendName.textContent = userData.name || "Friend";
+      friendAvatar.src = userData.photoURL || 'https://www.gravatar.com/avatar?d=mp';
+      friendProfileLink.href = `profile.html?uid=${friendUid}&owner=false`;
+      friendStatus.className = `status-indicator ${userData.presence === 'online' ? 'status-online' : 'status-offline'}`;
+
+      // Load messages
+      onValue(messagesRef, (snap) => {
+        chatContainer.innerHTML = "";
+        if (!snap.exists()) {
+          hideLoading();
+          return;
         }
-      } catch (error) {
-        console.error("Error checking blocked status:", error);
-        showNotification("System", "Error checking blocked status.");
-      }
-    }
-
-    onAuthStateChanged(auth, async (user) => {
-      if (!user) return location.href = "login.html";
-      currentUser = user;
-      friendUid = getParam("uid");
-      if (!friendUid) {
-        showNotification("System", "Friend UID not provided.");
-        return location.href = "index.html";
-      }
-      chatId = currentUser.uid < friendUid ? `${currentUser.uid}_${friendUid}` : `${friendUid}_${currentUser.uid}`;
-
-      try {
-        const [settingsSnap, userSnap, presenceSnap, lastSeenSnap] = await Promise.all([
-          get(ref(db, `users/${user.uid}/settings`)),
-          get(ref(db, `users/${friendUid}`)),
-          get(ref(db, `users/${friendUid}/presence`)),
-          get(ref(db, `users/${friendUid}/lastSeen`))
-        ]);
-
-        theme = settingsSnap.val()?.theme || 'light';
-        applyTheme(theme);
-
-        if (!userSnap.exists()) {
-          showNotification("System", "Friend not found.");
-          return location.href = "index.html";
-        }
-        const data = userSnap.val();
-        friendName = data.name || "Friend";
-        document.getElementById("friend-name").textContent = friendName;
-        document.getElementById("friend-photo").src = data.photoURL || "https://www.gravatar.com/avatar?d=mp";
-
-        if (presenceSnap.val() === "online") {
-          document.getElementById("friend-presence").textContent = "Online";
-        } else if (lastSeenSnap.val()) {
-          const lastSeenDate = new Date(lastSeenSnap.val());
-          document.getElementById("friend-presence").textContent = `Last seen at ${lastSeenDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
-        }
-      } catch (error) {
-        console.error("Error loading initial data:", error);
-        showNotification("System", "Failed to load chat data.");
-        return location.href = "index.html";
-      }
-
-      friendProfileLink.onclick = () => {
-        location.href = `profile.html?uid=${friendUid}`;
-      };
-
-      checkBlockedStatus();
-      onValue(ref(db, `users/${currentUser.uid}/blockedUsers/${friendUid}`), () => checkBlockedStatus());
-      onValue(ref(db, `users/${friendUid}/blockedUsers/${currentUser.uid}`), () => checkBlockedStatus());
-
-      const messagesQuery = query(ref(db, `messages/${chatId}`), limitToLast(50));
-      onValue(messagesQuery, snap => {
-        messagesEl.innerHTML = "";
-        if (!snap.exists()) return;
-        const messages = Object.entries(snap.val()).sort((a, b) => a[1].timestamp - b[1].timestamp);
-        renderMessages(messages);
-        messages.forEach(([key, m]) => {
-          if (m.sender !== currentUser.uid && !m.read) {
-            update(ref(db, `messages/${chatId}/${key}`), { read: true }).catch(error => {
-              console.error("Error marking message as read:", error);
-            });
+        const messages = snap.val();
+        for (const mid in messages) {
+          renderMessage(messages[mid], currentUserUid);
+          if (messages[mid].sender !== currentUserUid && !messages[mid].read) {
+            update(ref(db, `messages/${chatId}/${mid}`), { read: true });
           }
-        });
-      });
-
-      onChildAdded(ref(db, `messages/${chatId}`), async snap => {
-        const msg = snap.val();
-        const isSelf = msg.sender === currentUser.uid;
-        if (!isSelf) {
-          showNotification(friendName, msg.text);
-          renderMessages([[snap.key, msg]]);
         }
+        hideLoading();
       });
-
-      try {
-        await update(ref(db, `users/${currentUser.uid}`), {
-          presence: "online",
-          lastSeen: Date.now()
-        });
-      } catch (error) {
-        console.error("Error updating presence:", error);
-      }
-      window.addEventListener("beforeunload", () => {
-        update(ref(db, `users/${currentUser.uid}`), {
-          presence: "offline",
-          lastSeen: Date.now()
-        }).catch(error => {
-          console.error("Error updating presence on unload:", error);
-        });
-      });
-    });
-
-    function updateSendButton() {
-      const hasText = messageInput.value.trim() !== "";
-      sendIcon.classList.toggle("hidden", !hasText);
-      micIcon.classList.toggle("hidden", hasText);
-      sendBtn.classList.remove("mic-anim");
-      sendBtn.disabled = false;
-      messageInput.style.height = 'auto';
-      messageInput.style.height = `${Math.min(messageInput.scrollHeight, 100)}px`;
     }
 
-    messageInput.addEventListener("input", updateSendButton);
-    messageInput.addEventListener("focus", updateSendButton);
-    messageInput.addEventListener("blur", () => {
-      if (!messageInput.value.trim()) {
-        sendIcon.classList.add("hidden");
-        micIcon.classList.remove("hidden");
-        sendBtn.classList.remove("mic-anim");
-        sendBtn.disabled = false;
-      }
-    });
-
-    let recognition;
-    let isRecording = false;
-    if ('webkitSpeechRecognition' in window) {
-      recognition = new webkitSpeechRecognition();
-      recognition.continuous = false;
-      recognition.interimResults = false;
-      recognition.lang = 'en-US';
-
-      recognition.onstart = () => {
-        isRecording = true;
-        sendIcon.classList.add("hidden");
-        micIcon.classList.remove("hidden");
-        sendBtn.classList.add("mic-anim");
-      };
-
-      recognition.onresult = (event) => {
-        const transcript = event.results[0][0].transcript.trim();
-        messageInput.value = transcript;
-        messageInput.focus();
-        updateSendButton();
-      };
-
-      recognition.onerror = (event) => {
-        console.error("Speech recognition error:", event.error);
-        showNotification("System", `Speech recognition error: ${event.error}`);
-        resetVoiceButton();
-      };
-
-      recognition.onend = () => {
-        isRecording = false;
-        updateSendButton();
-      };
-    } else {
-      sendIcon.classList.remove("hidden");
-      micIcon.classList.add("hidden");
-      sendBtn.disabled = false;
-      sendBtn.title = "Voice input not supported";
-    }
-
-    function resetVoiceButton() {
-      isRecording = false;
-      sendIcon.classList.add("hidden");
-      micIcon.classList.remove("hidden");
-      sendBtn.classList.remove("mic-anim");
-      sendBtn.disabled = false;
-    }
-
-    sendBtn.onclick = async () => {
-      console.log("Send button clicked, isRecording:", isRecording, "friendUid:", friendUid, "chatId:", chatId);
-      if (isRecording) {
-        console.log("Stopping voice recognition");
-        recognition.stop();
+    onAuthStateChanged(auth, async user => {
+      if (!user) {
+        location.href = "login.html";
         return;
       }
+      const urlParams = new URLSearchParams(window.location.search);
+      const friendUid = urlParams.get("uid");
+      if (!friendUid) {
+        alert("No friend selected.");
+        location.href = "index.html";
+        return;
+      }
+      try {
+        const snap = await get(ref(db, `users/${user.uid}/settings`));
+        const settings = snap.val() || {};
+        applyTheme(settings.theme || 'light');
+      } catch (error) {
+        console.error('Error loading theme:', error);
+      }
+      await loadChat(user.uid, friendUid);
 
-      const text = messageInput.value.trim();
-      console.log("Text to send:", text);
-      if (text) {
-        const msg = {
-          sender: currentUser.uid,
-          text: text,
+      sendBtn.onclick = async () => {
+        const text = messageInput.value.trim();
+        if (!text) return;
+        showLoading();
+        const chatId = user.uid < friendUid ? `${user.uid}_${friendUid}` : `${friendUid}_${user.uid}`;
+        const message = {
+          sender: user.uid,
+          text,
           timestamp: Date.now(),
           read: false
         };
         try {
-          console.log("Pushing message to Firebase:", msg);
-          if (replyingTo) {
-            msg.replyTo = replyingTo;
-          }
-          await push(ref(db, `messages/${chatId}`), msg);
+          await push(ref(db, `messages/${chatId}`), message);
           messageInput.value = "";
-          updateSendButton();
-          cancelReply();
-          console.log("Message sent successfully");
+          emojiPicker.style.display = 'none';
         } catch (error) {
           console.error("Error sending message:", error);
-          showNotification("System", `Failed to send message: ${error.message}`);
+          alert("Failed to send message.");
         }
-      } else if (recognition && !messageInput.value.trim()) {
-        console.log("Starting voice recognition");
-        recognition.start();
-      } else {
-        console.log("No text or voice support");
-        showNotification("System", "Please enter a message or use voice input.");
-      }
-    };
-
-    document.querySelector('.cancel-reply').addEventListener('click', cancelReply);
-
-    emojiBtn.addEventListener("click", (e) => {
-      e.preventDefault();
-      toggleBottomSheet();
-    });
-
-    let isLoadingMore = false;
-    messagesEl.addEventListener('scroll', async () => {
-      if (messagesEl.scrollTop < 50 && !isLoadingMore) {
-        isLoadingMore = true;
-        try {
-          const olderMessagesQuery = query(ref(db, `messages/${chatId}`), limitToLast(50));
-          const snap = await get(olderMessagesQuery);
-          if (snap.exists()) {
-            const messages = Object.entries(snap.val()).sort((a, b) => a[1].timestamp - b[1].timestamp);
-            const fragment = document.createDocumentFragment();
-            for (const [key, m] of messages) {
-              const isSelf = m.sender === currentUser.uid;
-              const displayText = m.text;
-              const replyText = m.replyTo;
-
-              const container = document.createElement("div");
-              container.className = `message-container ${isSelf ? "self" : "friend"}`;
-
-              const div = document.createElement("div");
-              div.className = `message ${isSelf ? "self" : "friend"} ${theme === 'dark' ? 'dark' : ''}`;
-
-              let pressTimer = null;
-              let startX = null;
-              let longPressActive = false;
-
-              div.addEventListener("touchstart", (e) => {
-                div.classList.add("long-press-disable-select");
-                startX = e.touches[0].clientX;
-                pressTimer = setTimeout(() => {
-                  longPressActive = true;
-                  if (isSelf) {
-                    showDeleteMessageModal(key);
-                  } else {
-                    showEmojiPicker(div, key);
-                  }
-                }, 600);
-              });
-
-              div.addEventListener("touchend", (e) => {
-                if (pressTimer) clearTimeout(pressTimer);
-                div.classList.remove("long-press-disable-select");
-
-                if (!longPressActive) {
-                  const endX = e.changedTouches[0].clientX;
-                  const deltaX = endX - startX;
-                  if (deltaX > 60) {
-                    replyingTo = m.text;
-                    replyText.textContent = displayText;
-                    replyBox.classList.remove("hidden");
-                    messageInput.focus();
-                  } else if (deltaX < -60 && isSelf) {
-                    showDeleteMessageModal(key);
-                  }
-                }
-                longPressActive = false;
-                startX = null;
-              });
-
-              div.addEventListener("touchmove", () => {
-                if (pressTimer) clearTimeout(pressTimer);
-                div.classList.remove("long-press-disable-select");
-                longPressActive = false;
-              });
-
-              if (replyText) {
-                const quote = document.createElement("div");
-                quote.className = `quoted-text ${theme === 'dark' ? 'dark' : ''}`;
-                quote.textContent = replyText;
-                div.appendChild(quote);
-              }
-
-              if (displayText.match(/\.(png|jpg|jpeg|gif)$/i)) {
-                const img = document.createElement("img");
-                img.src = displayText;
-                img.className = "h-16 w-16 object-contain";
-                img.alt = "Sticker";
-                div.appendChild(img);
-              } else {
-                div.append(displayText);
-              }
-
-              const time = document.createElement("small");
-              time.textContent = isSelf
-                ? `${formatTime(m.timestamp)} • ${m.read ? "Delivered" : "Sent"}`
-                : formatTime(m.timestamp);
-              div.appendChild(time);
-
-              container.appendChild(div);
-
-              if (m.reaction) {
-                const reaction = document.createElement("div");
-                reaction.className = "reaction";
-                reaction.textContent = m.reaction;
-                container.appendChild(reaction);
-              }
-
-              fragment.appendChild(container);
-              if (!lastMessageKey || key < lastMessageKey) lastMessageKey = key;
-            }
-            messagesEl.prepend(fragment);
-          }
-        } catch (error) {
-          console.error("Error loading more messages:", error);
-          showNotification("System", "Error loading more messages.");
-        } finally {
-          isLoadingMore = false;
-        }
-      }
-    });
-
-    emojiPicker.querySelectorAll("span").forEach(span => {
-      span.onclick = () => {
-        if (reactingKey) {
-          update(ref(db, `messages/${chatId}/${reactingKey}`), {
-            reaction: span.textContent
-          }).catch(error => {
-            console.error("Error adding reaction:", error);
-            showNotification("System", "Failed to add reaction.");
-          });
-          emojiPicker.style.display = "none";
-          reactingKey = null;
-        }
+        hideLoading();
       };
-    });
 
-    document.querySelectorAll(".bottom-sheet-tab").forEach(tab => {
-      tab.addEventListener("click", () => {
-        document.querySelectorAll(".bottom-sheet-tab").forEach(t => t.classList.remove("active"));
-        tab.classList.add("active");
-        emojiContent.style.display = tab.dataset.tab === "emojis" ? "flex" : "none";
-        stickerContent.style.display = tab.dataset.tab === "stickers" ? "flex" : "none";
-      });
-    });
+      imageBtn.onclick = () => imageInput.click();
 
-    [emojiContent, stickerContent].forEach(content => {
-      content.querySelectorAll("span, img").forEach(item => {
-        item.addEventListener("click", () => {
-          messageInput.value += item.tagName === "IMG" ? item.src : item.textContent;
-          messageInput.focus();
-          updateSendButton();
-          toggleBottomSheet();
-        });
-      });
+      imageInput.onchange = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        showLoading();
+        const chatId = user.uid < friendUid ? `${user.uid}_${friendUid}` : `${friendUid}_${user.uid}`;
+        const storagePath = `chat_images/${chatId}/${Date.now()}_${file.name}`;
+        const imageRef = storageRef(storage, storagePath);
+        try {
+          await uploadBytes(imageRef, file);
+          const imageUrl = await getDownloadURL(imageRef);
+          const message = {
+            sender: user.uid,
+            image: imageUrl,
+            timestamp: Date.now(),
+            read: false
+          };
+          await push(ref(db, `messages/${chatId}`), message);
+          imageInput.value = "";
+        } catch (error) {
+          console.error("Error uploading image:", error);
+          alert("Failed to upload image.");
+        }
+        hideLoading();
+      };
     });
   </script>
 </body>
