@@ -11,7 +11,7 @@
       font-family: 'Inter', 'Segoe UI', sans-serif;
       background: linear-gradient(to bottom, #f9f9f9, #e5e7eb);
       padding-bottom: 80px;
-      padding-top: 40px; /* Adjusted for encryption notice */
+      padding-top: 40px;
       transition: background 0.3s ease;
     }
     body.dark {
@@ -55,7 +55,7 @@
     .chat-container {
       display: flex;
       flex-direction: column;
-      height: calc(100vh - 104px); /* Adjusted for encryption notice */
+      height: calc(100vh - 104px);
       padding: 1rem;
     }
     .message-list {
@@ -87,25 +87,26 @@
       padding: 0.75rem 1rem;
       border-radius: 8px;
       position: relative;
+      cursor: pointer;
     }
     .message.sent {
-      background: #ef4444;
+      background: #f87171; /* Lighter red for better text visibility */
       color: white;
       margin-left: auto;
       border-bottom-right-radius: 0;
     }
     .message.received {
-      background: white;
+      background: #f9fafb; /* Lighter gray for light mode */
       color: #374151;
       margin-right: auto;
       border-bottom-left-radius: 0;
       box-shadow: 0 1px 3px rgba(0,0,0,0.05);
     }
     .message.sent.dark {
-      background: #dc2626;
+      background: #f87171; /* Consistent lighter red in dark mode */
     }
     .message.received.dark {
-      background: #374151;
+      background: #4b5563; /* Lighter gray for dark mode */
       color: #e5e7eb;
       box-shadow: 0 1px 3px rgba(0,0,0,0.2);
     }
@@ -128,6 +129,41 @@
       max-width: 100%;
       border-radius: 8px;
       margin-top: 0.5rem;
+    }
+    .reactions {
+      display: flex;
+      gap: 0.5rem;
+      margin-top: 0.25rem;
+      font-size: 0.9rem;
+    }
+    .reaction-picker {
+      position: absolute;
+      background: white;
+      border: 2px solid #ef4444;
+      border-radius: 8px;
+      padding: 0.5rem;
+      display: flex;
+      gap: 0.5rem;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+      z-index: 20;
+      transform: translateY(10px);
+    }
+    .reaction-picker.dark {
+      background: #374151;
+      border-color: #dc2626;
+    }
+    .reaction-picker span {
+      cursor: pointer;
+      font-size: 1.2rem;
+      padding: 0.2rem;
+      border-radius: 4px;
+      transition: background 0.2s ease;
+    }
+    .reaction-picker span:hover {
+      background: #f3f4f6;
+    }
+    .reaction-picker.dark span:hover {
+      background: #4b5563;
     }
     .input-container {
       display: flex;
@@ -235,7 +271,7 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
     import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
-    import { getDatabase, ref, onValue, push, update, get } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
+    import { getDatabase, ref, onValue, push, update, get, set } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
     import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-storage.js";
 
     const firebaseConfig = {
@@ -293,6 +329,7 @@
       document.querySelectorAll('.message.sent').forEach(el => el.classList.toggle('dark', isDark));
       document.querySelectorAll('.message.received').forEach(el => el.classList.toggle('dark', isDark));
       document.querySelectorAll('.message-time.received').forEach(el => el.classList.toggle('dark', isDark));
+      document.querySelectorAll('.reaction-picker').forEach(el => el.classList.toggle('dark', isDark));
       document.querySelector('.message-list').classList.toggle('dark', isDark);
     }
 
@@ -306,17 +343,72 @@
       return Math.floor(diff / 86400000) + "d ago";
     }
 
-    function renderMessage(message, isSent, userData) {
+    function showReactionPicker(messageDiv, messageId, chatId, userId) {
+      // Remove any existing pickers
+      document.querySelectorAll('.reaction-picker').forEach(picker => picker.remove());
+
+      const picker = document.createElement("div");
+      picker.className = `reaction-picker ${document.body.classList.contains('dark') ? 'dark' : ''}`;
+      const emojis = ['😊', '👍', '❤️', '😂', '😮', '😢'];
+      picker.innerHTML = emojis.map(emoji => `<span>${emoji}</span>`).join('');
+      messageDiv.appendChild(picker);
+
+      // Position picker below the message
+      const rect = messageDiv.getBoundingClientRect();
+      picker.style.left = '0';
+      picker.style.bottom = `-${picker.offsetHeight + 5}px`;
+
+      // Handle reaction selection
+      picker.querySelectorAll('span').forEach(span => {
+        span.addEventListener('click', async () => {
+          showLoading();
+          try {
+            await set(ref(db, `messages/${chatId}/${messageId}/reactions/${userId}`), span.textContent);
+            picker.remove();
+          } catch (error) {
+            console.error("Error adding reaction:", error);
+            alert("Failed to add reaction.");
+          }
+          hideLoading();
+        });
+      });
+
+      // Dismiss picker on outside click
+      const dismissPicker = (e) => {
+        if (!picker.contains(e.target) && !messageDiv.contains(e.target)) {
+          picker.remove();
+          document.removeEventListener('click', dismissPicker);
+        }
+      };
+      setTimeout(() => document.addEventListener('click', dismissPicker), 0);
+    }
+
+    function renderMessage(message, isSent, userData, messageId, chatId, userId) {
       const div = document.createElement("div");
       div.className = `message ${isSent ? 'sent' : 'received'}`;
       if (isSent) div.classList.add('dark');
       const content = message.image 
         ? `<img src="${message.image}" class="message-image" alt="Shared image" />`
         : `<p class="message-text">${message.text ? decryptMessage(message.text) : ''}</p>`;
+      const reactions = message.reactions ? Object.values(message.reactions).join(' ') : '';
       div.innerHTML = `
         ${content}
         <p class="message-time ${isSent ? '' : 'received'}">${timeAgo(message.timestamp)}</p>
+        <div class="reactions">${reactions}</div>
       `;
+
+      // Long press for reaction picker
+      let touchTimer;
+      div.addEventListener('mousedown', () => {
+        touchTimer = setTimeout(() => showReactionPicker(div, messageId, chatId, userId), 500);
+      });
+      div.addEventListener('mouseup', () => clearTimeout(touchTimer));
+      div.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        touchTimer = setTimeout(() => showReactionPicker(div, messageId, chatId, userId), 500);
+      });
+      div.addEventListener('touchend', () => clearTimeout(touchTimer));
+
       messageList.appendChild(div);
       messageList.scrollTop = messageList.scrollHeight;
     }
@@ -339,14 +431,14 @@
       const friendUid = urlParams.get('uid');
       if (!friendUid) {
         alert("No friend selected.");
-        location.href = "index.html";
+        location.href = "friends.html";
         return;
       }
 
       const friendSnap = await get(ref(db, `users/${friendUid}`));
       if (!friendSnap.exists()) {
         alert("User not found.");
-        location.href = "index.html";
+        location.href = "friends.html";
         return;
       }
       chatTitle.textContent = friendSnap.val().name || "Friend";
@@ -367,7 +459,7 @@
         for (const mid in messages) {
           const msg = messages[mid];
           const isSent = msg.sender === user.uid;
-          renderMessage(msg, isSent, userData);
+          renderMessage(msg, isSent, userData, mid, chatId, user.uid);
           if (!isSent && !msg.read) {
             await update(ref(db, `messages/${chatId}/${mid}`), { read: true });
           }
