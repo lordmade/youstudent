@@ -141,13 +141,6 @@
       background-color: #eee;
       object-fit: cover;
     }
-    .status-image {
-      width: 100%;
-      max-height: 120px;
-      object-fit: cover;
-      border-radius: 8px;
-      margin: 0.5rem 0;
-    }
     .posted-by {
       font-size: 0.9rem;
       font-weight: bold;
@@ -162,6 +155,36 @@
     .posted-by.dark {
       color: #dc2626;
       background: #1f2937;
+    }
+    .reaction-btn {
+      width: 24px;
+      height: 24px;
+      color: #9ca3af;
+      cursor: pointer;
+      transition: color 0.2s ease;
+    }
+    .reaction-btn.reacted {
+      color: #ef4444;
+    }
+    .reaction-btn:hover {
+      color: #dc2626;
+    }
+    .reaction-btn.dark {
+      color: #d1d5db;
+    }
+    .reaction-btn.dark.reacted {
+      color: #dc2626;
+    }
+    .reaction-btn.dark:hover {
+      color: #b91c1c;
+    }
+    .reaction-count {
+      font-size: 0.85rem;
+      color: #555;
+      margin-top: 6px;
+    }
+    .reaction-count.dark {
+      color: #d1d5db;
     }
     .service-card {
       max-width: 95%;
@@ -421,6 +444,7 @@
   const deleteStatusModal = document.getElementById("delete-status-modal");
   const modalConfirm = document.getElementById("modal-confirm");
   const modalCancel = document.getElementById("modal-cancel");
+  let currentUserUid = null;
 
   function showLoading() { loadingOverlay.classList.remove("hidden"); }
   function hideLoading() { loadingOverlay.classList.add("hidden"); }
@@ -431,7 +455,7 @@
     document.querySelector('.header').classList.toggle('dark', isDark);
     document.querySelector('.tab-nav').classList.toggle('dark', isDark);
     document.querySelectorAll('.friend-card, .status-card, .service-card').forEach(el => el.classList.toggle('dark', isDark));
-    document.querySelectorAll('.status-text, .service-description, .sponsored-text, .posted-by, .service-cta').forEach(el => el.classList.toggle('dark', isDark));
+    document.querySelectorAll('.status-text, .service-description, .sponsored-text, .posted-by, .service-cta, .reaction-btn, .reaction-count').forEach(el => el.classList.toggle('dark', isDark));
     document.querySelectorAll('.last-seen, .status-time, .member-count, .service-time').forEach(el => el.classList.toggle('dark', isDark));
     document.querySelectorAll('#no-friends-message, #no-groups-message, #no-statuses-message, #no-own-statuses-message, #no-services-message').forEach(el => el.classList.toggle('dark', isDark));
     document.querySelectorAll('.tab-nav button').forEach(el => el.classList.toggle('dark', isDark));
@@ -447,6 +471,7 @@
       location.href = "login.html";
       return;
     }
+    currentUserUid = user.uid;
     document.getElementById("profile-link").href = `profile.html?uid=${user.uid}&owner=true`;
     try {
       const snap = await get(ref(db, `users/${user.uid}/settings`));
@@ -705,6 +730,9 @@
   function renderStatusCard(statusId, status, userData, isOwnStatus = false) {
     const card = document.createElement("div");
     card.className = `status-card ${isOwnStatus ? 'flex-none w-72' : ''}`;
+    const reactionCount = status.reactions ? Object.keys(status.reactions).length : 0;
+    const hasReacted = status.reactions && status.reactions[currentUserUid];
+    
     card.innerHTML = `
       <p class="posted-by">Posted by</p>
       <div class="flex items-center mb-2">
@@ -714,11 +742,38 @@
           <p class="status-time">${timeAgo(status.timestamp)}</p>
         </div>
       </div>
-      <img src="${status.image || 'https://via.placeholder.com/300x120?text=Status+Image'}" alt="${userData.name || 'User'} status image" class="status-image" />
       <p class="status-text">${status.text || "No status text"}</p>
+      ${!isOwnStatus ? `
+        <div class="flex items-center mt-2">
+          <svg class="reaction-btn ${hasReacted ? 'reacted' : ''}" data-sid="${statusId}" width="24" height="24" viewBox="0 0 24 24" fill="${hasReacted ? '#ef4444' : 'none'}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+          </svg>
+          <p class="reaction-count">${reactionCount} love${reactionCount !== 1 ? 's' : ''}</p>
+        </div>
+      ` : ''}
     `;
     if (isOwnStatus) {
       card.addEventListener("click", () => showDeleteStatusModal(statusId));
+    } else {
+      const reactionBtn = card.querySelector(".reaction-btn");
+      if (reactionBtn) {
+        reactionBtn.addEventListener("click", async (e) => {
+          e.stopPropagation();
+          showLoading();
+          try {
+            const reactionRef = ref(db, `statuses/${statusId}/reactions/${currentUserUid}`);
+            if (hasReacted) {
+              await remove(reactionRef);
+            } else {
+              await set(reactionRef, true);
+            }
+          } catch (error) {
+            console.error("Error toggling reaction:", error);
+            alert("Failed to update reaction.");
+          }
+          hideLoading();
+        });
+      }
     }
     return card;
   }
