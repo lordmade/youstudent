@@ -186,7 +186,7 @@
       align-items: center;
       gap: 0.5rem;
       box-shadow: 0 4px 10px rgba(0,0,0,0.2);
-      z-index: 20;
+      z-index: 2000; /* Increased z-index */
       transform: translateY(-100%) translateX(-50%);
       left: 50%;
       top: -5px;
@@ -233,7 +233,7 @@
       border-radius: 8px;
       padding: 0.5rem;
       box-shadow: 0 4px 10px rgba(0,0,0,0.2);
-      z-index: 20;
+      z-index: 2000; /* Increased z-index */
       top: 100%;
       right: 0;
       min-width: 120px;
@@ -495,7 +495,9 @@
       popup.style.top = '-5px';
 
       // Handle delete action
-      popup.querySelector('button').addEventListener('click', async () => {
+      const deleteButton = popup.querySelector('button');
+      deleteButton.addEventListener('click', async (e) => {
+        e.stopPropagation(); // Prevent dismissPopup from firing
         showLoading();
         try {
           await remove(ref(db, `messages/${chatId}/${messageId}`));
@@ -509,7 +511,8 @@
 
       // Handle kebab menu
       const kebabMenu = popup.querySelector('.kebab-menu');
-      kebabMenu.addEventListener('click', () => {
+      kebabMenu.addEventListener('click', (e) => {
+        e.stopPropagation(); // Prevent dismissPopup from firing
         document.querySelectorAll('.kebab-dropdown').forEach(dropdown => dropdown.remove());
         const dropdown = document.createElement("div");
         dropdown.className = `kebab-dropdown ${document.body.classList.contains('dark') ? 'dark' : ''}`;
@@ -523,7 +526,8 @@
         kebabMenu.appendChild(dropdown);
 
         // Handle dropdown options
-        dropdown.querySelector('.delete-option').addEventListener('click', async () => {
+        dropdown.querySelector('.delete-option').addEventListener('click', async (e) => {
+          e.stopPropagation();
           showLoading();
           try {
             await remove(ref(db, `messages/${chatId}/${messageId}`));
@@ -535,7 +539,8 @@
           hideLoading();
         });
         if (messageText) {
-          dropdown.querySelector('.copy-option').addEventListener('click', () => {
+          dropdown.querySelector('.copy-option').addEventListener('click', (e) => {
+            e.stopPropagation();
             navigator.clipboard.writeText(messageText).then(() => {
               alert("Message copied to clipboard!");
               popup.remove();
@@ -545,18 +550,21 @@
             });
           });
         }
-        dropdown.querySelector('.reply-option').addEventListener('click', () => {
+        dropdown.querySelector('.reply-option').addEventListener('click', (e) => {
+          e.stopPropagation();
           messageInput.dataset.replyTo = messageId;
           messageInput.dataset.replyText = messageText.substring(0, 30) + (messageText.length > 30 ? '...' : '');
           messageInput.placeholder = `Replying to "${messageInput.dataset.replyText}"...`;
           messageInput.focus();
           popup.remove();
         });
-        dropdown.querySelector('.forward-option').addEventListener('click', () => {
+        dropdown.querySelector('.forward-option').addEventListener('click', (e) => {
+          e.stopPropagation();
           alert("Forward feature not implemented yet.");
           popup.remove();
         });
-        dropdown.querySelector('.pin-option').addEventListener('click', async () => {
+        dropdown.querySelector('.pin-option').addEventListener('click', async (e) => {
+          e.stopPropagation();
           showLoading();
           try {
             await update(ref(db, `messages/${chatId}/${messageId}`), { pinned: true });
@@ -576,7 +584,7 @@
           document.removeEventListener('click', dismissPopup);
         }
       };
-      setTimeout(() => document.addEventListener('click', dismissPopup), 0);
+      document.addEventListener('click', dismissPopup);
     }
 
     function renderMessage(message, isSent, userData, messageId, chatId, userId) {
@@ -599,12 +607,14 @@
 
       // Long press for delete popup
       let touchTimer;
-      div.addEventListener('mousedown', () => {
+      div.addEventListener('mousedown', (e) => {
+        e.stopPropagation(); // Prevent bubbling to document
         touchTimer = setTimeout(() => showDeletePopup(div, messageId, chatId, isSent, messageText, message.replyTo), 500);
       });
       div.addEventListener('mouseup', () => clearTimeout(touchTimer));
       div.addEventListener('touchstart', (e) => {
         e.preventDefault();
+        e.stopPropagation();
         touchTimer = setTimeout(() => showDeletePopup(div, messageId, chatId, isSent, messageText, message.replyTo), 500);
       });
       div.addEventListener('touchend', () => clearTimeout(touchTimer));
