@@ -129,11 +129,11 @@
     .suggestion-name.dark {
       color: #e5e7eb;
     }
-    .suggestion-email {
+    .suggestion-email, .suggestion-mobile {
       font-size: 0.85rem;
       color: #6b7280;
     }
-    .suggestion-email.dark {
+    .suggestion-email.dark, .suggestion-mobile.dark {
       color: #9ca3af;
     }
     #friend-result.error {
@@ -163,7 +163,7 @@
     </h3>
     <form id="add-friend-form">
       <div class="relative">
-        <input type="email" id="friend-email" class="input-field dark:input-field mb-3" placeholder="Friend's Email" required autocomplete="off" />
+        <input type="text" id="friend-email" class="input-field dark:input-field mb-3" placeholder="Friend's Name, Email, or Mobile Number" required autocomplete="off" />
         <div id="suggestions-dropdown" class="suggestions-dropdown"></div>
       </div>
       <button type="submit" class="w-full btn-primary flex items-center justify-center gap-2">
@@ -224,7 +224,7 @@
     document.querySelector('.suggestions-dropdown').classList.toggle('dark', isDark);
     document.querySelectorAll('.suggestion-item').forEach(el => el.classList.toggle('dark', isDark));
     document.querySelectorAll('.suggestion-name').forEach(el => el.classList.toggle('dark', isDark));
-    document.querySelectorAll('.suggestion-email').forEach(el => el.classList.toggle('dark', isDark));
+    document.querySelectorAll('.suggestion-email, .suggestion-mobile').forEach(el => el.classList.toggle('dark', isDark));
     document.querySelector('#friend-result').classList.toggle('dark', isDark && friendResult.classList.contains('error'));
   }
 
@@ -274,8 +274,9 @@
         .filter(([uid, user]) => 
           uid !== currentUserUid &&
           !friendUids.has(uid) &&
-          user.email && 
-          user.email.toLowerCase().includes(query.toLowerCase())
+          (user.email?.toLowerCase().includes(query.toLowerCase()) || 
+           user.name?.toLowerCase().includes(query.toLowerCase()) || 
+           user.mobileNumber?.replace(/\D/g, '').includes(query.replace(/\D/g, '')))
         )
         .slice(0, 5); // Limit to 5 suggestions
 
@@ -289,10 +290,11 @@
         suggestion.className = 'suggestion-item';
         suggestion.innerHTML = `
           <p class="suggestion-name">${user.name || 'User'}</p>
-          <p class="suggestion-email">${user.email}</p>
+          <p class="suggestion-email">${user.email || 'No email'}</p>
+          ${user.mobileNumber ? `<p class="suggestion-mobile">${user.mobileNumber}</p>` : ''}
         `;
         suggestion.addEventListener('click', () => {
-          friendEmailInput.value = user.email;
+          friendEmailInput.value = user.email || user.mobileNumber;
           suggestionsDropdown.style.display = 'none';
         });
         suggestionsDropdown.appendChild(suggestion);
@@ -338,10 +340,10 @@
     showLoading();
     friendResult.classList.remove('error');
     friendResult.textContent = "Adding friend...";
-    const friendEmail = friendEmailInput.value.trim();
-    if (!friendEmail) {
+    const inputValue = friendEmailInput.value.trim();
+    if (!inputValue) {
       friendResult.classList.add('error');
-      friendResult.textContent = "Please enter an email.";
+      friendResult.textContent = "Please enter a name, email, or mobile number.";
       hideLoading();
       return;
     }
@@ -350,7 +352,10 @@
       const usersRef = ref(db, "users");
       const usersSnap = await get(usersRef);
       const users = usersSnap.val() || {};
-      const friendUid = Object.keys(users).find(uid => users[uid].email === friendEmail);
+      const friendUid = Object.keys(users).find(uid => 
+        users[uid].email === inputValue || 
+        users[uid].mobileNumber === inputValue
+      );
 
       if (!friendUid) {
         friendResult.classList.add('error');
