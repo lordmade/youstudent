@@ -3,10 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://www.gstatic.com https://cdn.tailwindcss.com https://widget.cloudinary.com; style-src 'self' https://cdn.tailwindcss.com 'unsafe-inline'; img-src 'self' https://res.cloudinary.com https://www.gravatar.com; connect-src 'self' https://fire-b-a8878.firebaseio.com https://api.cloudinary.com;">
   <title>BanterBox - Profile</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://widget.cloudinary.com/v2.0/global/all.js" type="text/javascript"></script>
   <style>
     body {
       background: linear-gradient(to bottom, #f9f9f9, #e5e7eb);
@@ -75,6 +73,10 @@
     .avatar-container:hover .upload-overlay {
       opacity: 1;
     }
+    .avatar-container.dragover .upload-overlay {
+      opacity: 1;
+      background: rgba(239, 68, 68, 0.6);
+    }
     .profile-card {
       background: white;
       border-radius: 12px;
@@ -117,9 +119,6 @@
     .input-field[readonly].dark {
       background: #6b7280;
     }
-    .input-field.invalid {
-      border-color: #ef4444;
-    }
     .fade-in {
       animation: fadeIn 0.5s ease-in-out;
     }
@@ -160,59 +159,42 @@
     .label-dark {
       color: #e5e7eb;
     }
-    .error {
+    .error-message {
+      font-size: 0.8rem;
       color: #ef4444;
-      font-size: 0.9rem;
       margin-top: 0.5rem;
-    }
-    .error.dark {
-      color: #dc2626;
-    }
-    .success-animation {
-      display: none;
       text-align: center;
-      margin-top: 1rem;
+      display: none;
     }
-    .success-animation svg {
-      width: 48px;
-      height: 48px;
-      stroke: #22c55e;
-      animation: checkmark 0.5s ease-in-out;
+    .error-message.show {
+      display: block;
     }
-    @keyframes checkmark {
-      0% { stroke-dasharray: 0 100; }
-      100% { stroke-dasharray: 100 0; }
-    }
-    .loading-overlay {
+    .loading-spinner {
       position: absolute;
-      inset: 0;
-      background: rgba(0, 0, 0, 0.5);
-      border-radius: 9999px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: white;
-      font-size: 0.9rem;
-      font-weight: 500;
-      opacity: 0;
-      transition: opacity 0.3s ease;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      display: none;
     }
-    .avatar-container.uploading .loading-overlay {
-      opacity: 1;
+    .loading-spinner.show {
+      display: block;
+    }
+    .upload-overlay.hidden .loading-spinner {
+      display: none;
     }
   </style>
 </head>
 <body>
   <div class="container fade-in">
     <header class="header">
-      <button onclick="location.href='friends.html'" class="text-red-500 font-bold hover:text-red-600 flex items-center gap-2" aria-label="Back to friends">
+      <button onclick="location.href='friends.html'" class="text-red-500 font-bold hover:text-red-600 flex items-center gap-2">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
         </svg>
         Back
       </button>
       <h1 class="text-xl font-bold text-gray-900 dark:text-gray-100">Profile</h1>
-      <button onclick="location.href='settings.html'" class="text-red-500 hover:text-red-600 flex items-center gap-2" aria-label="Go to settings">
+      <button onclick="location.href='settings.html'" class="text-red-500 hover:text-red-600 flex items-center gap-2">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -223,45 +205,37 @@
 
     <div class="avatar-container">
       <img id="avatar-img" src="https://www.gravatar.com/avatar?d=mp" alt="Avatar" class="avatar" />
-      <button id="upload-btn" class="upload-overlay hidden btn btn-primary" aria-label="Change profile photo">
-        Change Photo
-      </button>
-      <div id="upload-loading" class="loading-overlay hidden">
-        <svg class="animate-spin h-6 w-6 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4z"/>
+      <div id="upload-label" class="upload-overlay hidden">
+        <input id="avatar-input" type="file" accept="image/*" class="absolute inset-0 opacity-0 cursor-pointer" />
+        <span>Change Photo</span>
+        <svg id="loading-spinner" class="loading-spinner" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
         </svg>
       </div>
+      <p id="avatar-error" class="error-message">Failed to upload image.</p>
     </div>
 
     <div class="profile-card">
       <h2 class="text-lg font-semibold mb-4 dark:text-gray-100">Personal Information</h2>
       <form id="profile-form" class="space-y-4">
         <div>
-          <label class="block text-sm font-medium text-gray-700 dark:label-dark" for="name-input">Name</label>
-          <input id="name-input" type="text" class="input-field dark:input-field" readonly maxlength="50" aria-label="User name" />
-          <p id="name-error" class="error hidden dark:error" aria-live="polite">Name must be 1-50 characters.</p>
+          <label class="block text-sm font-medium text-gray-700 dark:label-dark">Name</label>
+          <input id="name-input" type="text" class="input-field dark:input-field" readonly />
         </div>
         <div>
-          <label class="block text-sm font-medium text-gray-700 dark:label-dark" for="email-input">Email</label>
-          <input id="email-input" type="email" class="input-field dark:input-field" readonly aria-label="User email" />
+          <label class="block text-sm font-medium text-gray-700 dark:label-dark">Email</label>
+          <input id="email-input" type="email" class="input-field dark:input-field" readonly />
         </div>
         <div>
-          <label class="block text-sm font-medium text-gray-700 dark:label-dark" for="bio-input">Bio</label>
-          <textarea id="bio-input" class="input-field dark:input-field" rows="4" readonly maxlength="160" placeholder="Tell us about yourself..." aria-label="User bio"></textarea>
-          <p id="bio-error" class="error hidden dark:error" aria-live="polite">Bio must be 0-160 characters.</p>
+          <label class="block text-sm font-medium text-gray-700 dark:label-dark">Bio</label>
+          <textarea id="bio-input" class="input-field dark:input-field" rows="4" readonly placeholder="Tell us about yourself..."></textarea>
         </div>
         <div id="profile-actions" class="flex justify-center space-x-4">
-          <button id="edit-btn" type="button" class="btn btn-primary" aria-label="Edit profile">Edit Profile</button>
-          <button id="save-btn" type="submit" class="btn btn-primary hidden" aria-label="Save profile changes">Save Changes</button>
-          <button id="cancel-btn" type="button" class="btn btn-secondary dark:btn-secondary hidden" aria-label="Cancel editing">Cancel</button>
+          <button id="edit-btn" type="button" class="btn btn-primary">Edit Profile</button>
+          <button id="save-btn" type="submit" class="btn btn-primary hidden">Save Changes</button>
+          <button id="cancel-btn" type="button" class="btn btn-secondary dark:btn-secondary hidden">Cancel</button>
         </div>
       </form>
-      <div class="success-animation" id="success-animation">
-        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
-        </svg>
-      </div>
     </div>
   </div>
 
@@ -271,7 +245,7 @@
     import { getDatabase, ref, get, update } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
 
     const firebaseConfig = {
-      apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
+      apiKey: "AIzaSyBOyZ3As4GTuNvjem psC6m6vqtNhc",
       authDomain: "fire-b-a8878.firebaseapp.com",
       databaseURL: "https://fire-b-a8878.firebaseio.com",
       projectId: "fire-b-a8878",
@@ -285,17 +259,20 @@
     const db = getDatabase();
 
     const avatarImg = document.getElementById('avatar-img');
-    const uploadBtn = document.getElementById('upload-btn');
-    const uploadLoading = document.getElementById('upload-loading');
+    const uploadLabel = document.getElementById('upload-label');
+    const avatarInput = document.getElementById('avatar-input');
+    const avatarError = document.getElementById('avatar-error');
     const nameInput = document.getElementById('name-input');
     const emailInput = document.getElementById('email-input');
     const bioInput = document.getElementById('bio-input');
-    const nameError = document.getElementById('name-error');
-    const bioError = document.getElementById('bio-error');
     const editBtn = document.getElementById('edit-btn');
     const saveBtn = document.getElementById('save-btn');
     const cancelBtn = document.getElementById('cancel-btn');
-    const successAnimation = document.getElementById('success-animation');
+    const loadingSpinner = document.getElementById('loading-spinner');
+
+    let currentUser;
+    let originalData = {};
+    let selectedFile = null;
 
     function applyTheme(themeValue) {
       const isDark = themeValue === 'dark';
@@ -306,98 +283,23 @@
       document.querySelectorAll('.text-gray-700').forEach(el => el.classList.toggle('label-dark', isDark));
       document.querySelectorAll('.btn-secondary').forEach(el => el.classList.toggle('dark', isDark));
       document.querySelectorAll('.text-lg').forEach(el => el.classList.toggle('dark:text-gray-100', isDark));
-      document.querySelectorAll('.error').forEach(el => el.classList.toggle('dark', isDark));
     }
 
-    // Sanitize text
-    function sanitizeText(text) {
-      const div = document.createElement('div');
-      div.textContent = text;
-      return div.innerHTML;
+    function showError(message) {
+      avatarError.textContent = message;
+      avatarError.classList.add('show');
     }
-
-    // Rate limiting (1 profile update/minute)
-    function canUpdateProfile() {
-      const lastUpdateTime = localStorage.getItem('lastProfileUpdateTime');
-      const now = Date.now();
-      const oneMinute = 60 * 1000;
-      if (lastUpdateTime && (now - parseInt(lastUpdateTime)) < oneMinute) {
-        return false;
-      }
-      localStorage.setItem('lastProfileUpdateTime', now);
-      return true;
+    function hideError() {
+      avatarError.classList.remove('show');
     }
-
-    let currentUser;
-    let originalData = {};
-    let newPhotoURL = null;
-
-    // Initialize Cloudinary upload widget
-    const cloudinaryWidget = cloudinary.createUploadWidget(
-      {
-        cloudName: 'dqkujefxj', // Replace with your Cloudinary cloud name
-        uploadPreset: 'banterbox_box', // Replace with your unsigned upload preset
-        sources: ['local', 'url', 'camera'],
-        multiple: false,
-        resourceType: 'image',
-        clientAllowedFormats: ['jpg', 'jpeg', 'png'],
-        maxFileSize: 5000000, // 5MB
-        cropping: true,
-        croppingAspectRatio: 1,
-        showSkipCropButton: false,
-        folder: 'banterbox_profiles',
-        tags: ['profile'],
-        styles: {
-          palette: {
-            window: '#FFFFFF',
-            windowBorder: '#EF4444',
-            tabIcon: '#EF4444',
-            menuIcons: '#374151',
-            textDark: '#374151',
-            textLight: '#E5E7EB',
-            link: '#EF4444',
-            action: '#EF4444',
-            inactiveTabIcon: '#6B7280',
-            error: '#EF4444',
-            inProgress: '#DC2626',
-            complete: '#22C55E'
-          }
-        }
-      },
-      (error, result) => {
-        if (!error && result && result.event === 'success') {
-          newPhotoURL = result.info.secure_url;
-          avatarImg.src = newPhotoURL;
-          avatarContainer.classList.remove('uploading');
-          uploadLoading.classList.add('hidden');
-        } else if (error) {
-          console.error('Upload error:', error);
-          avatarContainer.classList.remove('uploading');
-          uploadLoading.classList.add('hidden');
-          alert('Error uploading image. Please try again.');
-        }
-      }
-    );
-
-    const avatarContainer = document.querySelector('.avatar-container');
-    uploadBtn.addEventListener('click', () => {
-      avatarContainer.classList.add('uploading');
-      uploadLoading.classList.remove('hidden');
-      cloudinaryWidget.open();
-    });
-
-    // Real-time validation
-    nameInput.addEventListener('input', () => {
-      const length = nameInput.value.trim().length;
-      nameInput.classList.toggle('invalid', length === 0 || length > 50);
-      nameError.classList.toggle('hidden', length > 0 && length <= 50);
-    });
-
-    bioInput.addEventListener('input', () => {
-      const length = bioInput.value.trim().length;
-      bioInput.classList.toggle('invalid', length > 160);
-      bioError.classList.toggle('hidden', length <= 160);
-    });
+    function showSpinner() {
+      loadingSpinner.classList.add('show');
+      uploadLabel.querySelector('span').style.display = 'none';
+    }
+    function hideSpinner() {
+      loadingSpinner.classList.remove('show');
+      uploadLabel.querySelector('span').style.display = 'block';
+    }
 
     onAuthStateChanged(auth, async user => {
       if (!user) {
@@ -422,82 +324,134 @@
         applyTheme(settings.theme || 'light');
       } catch (error) {
         console.error('Error loading profile or theme:', error);
+        showError('Failed to load profile data.');
       }
 
       if (!isOwner) {
-        uploadBtn.classList.add('hidden');
+        uploadLabel.classList.add('hidden');
         editBtn.classList.add('hidden');
         saveBtn.classList.add('hidden');
         cancelBtn.classList.add('hidden');
         document.getElementById('profile-actions').classList.add('hidden');
+      } else {
+        uploadLabel.classList.remove('hidden');
       }
 
       if (isOwner) {
         editBtn.onclick = () => {
           [nameInput, bioInput].forEach(i => i.removeAttribute('readonly'));
-          uploadBtn.classList.remove('hidden');
+          uploadLabel.classList.remove('hidden');
           [editBtn, saveBtn, cancelBtn].forEach(b => b.classList.toggle('hidden'));
-          nameInput.focus();
         };
 
         cancelBtn.onclick = () => {
           nameInput.value = originalData.name;
           bioInput.value = originalData.bio;
           avatarImg.src = originalData.photoURL || 'https://www.gravatar.com/avatar?d=mp';
-          newPhotoURL = null;
+          selectedFile = null;
           [nameInput, bioInput].forEach(i => i.setAttribute('readonly', ''));
-          [nameInput, bioInput].forEach(i => i.classList.remove('invalid'));
-          [nameError, bioError].forEach(e => e.classList.add('hidden'));
-          uploadBtn.classList.add('hidden');
+          uploadLabel.classList.add('hidden');
           [editBtn, saveBtn, cancelBtn].forEach(b => b.classList.toggle('hidden'));
+          hideError();
         };
+
+        avatarInput.addEventListener('change', (e) => {
+          if (e.target.files.length > 0) {
+            handleFileSelection(e.target.files[0]);
+          }
+        });
+
+        // Handle drag-and-drop
+        avatarContainer.addEventListener('dragover', (e) => {
+          e.preventDefault();
+          avatarContainer.classList.add('dragover');
+        });
+        avatarContainer.addEventListener('dragleave', () => {
+          avatarContainer.classList.remove('dragover');
+        });
+        avatarContainer.addEventListener('drop', (e) => {
+          e.preventDefault();
+          avatarContainer.classList.remove('dragover');
+          const files = e.dataTransfer.files;
+          if (files.length > 0) {
+            handleFileSelection(files[0]);
+          }
+        });
+
+        function handleFileSelection(file) {
+          if (!file.type.startsWith('image/')) {
+            showError('Please select a valid image file (e.g., JPG, PNG).');
+            return;
+          }
+          if (file.size > 5 * 1024 * 1024) {
+            showError('Image size must be less than 5MB.');
+            return;
+          }
+          hideError();
+          selectedFile = file;
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            avatarImg.src = e.target.result;
+          };
+          reader.onerror = () => {
+            showError('Failed to preview image. Please try another file.');
+          };
+          reader.readAsDataURL(file);
+        }
 
         saveBtn.onclick = async (e) => {
           e.preventDefault();
-          if (!canUpdateProfile()) {
-            alert('Please wait a minute before updating again.');
-            return;
-          }
+          showSpinner();
+          let photoURL = originalData.photoURL;
 
-          const name = nameInput.value.trim();
-          const bio = bioInput.value.trim();
-          if (name.length === 0 || name.length > 50) {
-            nameInput.classList.add('invalid');
-            nameError.classList.remove('hidden');
-            return;
-          }
-          if (bio.length > 160) {
-            bioInput.classList.add('invalid');
-            bioError.classList.remove('hidden');
-            return;
+          if (selectedFile) {
+            try {
+              const formData = new FormData();
+              formData.append('file', selectedFile);
+              formData.append('upload_preset', 'banterbox_upload'); // Replace with your Cloudinary upload preset
+              const response = await fetch('https://api.cloudinary.com/v1_1/dqkujefxj/image/upload', {
+                method: 'POST',
+                body: formData
+              });
+              if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(`Image upload failed: ${errorData.error?.message || response.statusText}`);
+              }
+              const data = await response.json();
+              if (data.secure_url) {
+                photoURL = data.secure_url;
+              } else {
+                throw new Error('No secure_url returned from Cloudinary.');
+              }
+            } catch (error) {
+              console.error('Error uploading image:', error);
+              showError(`Failed to upload image: ${error.message}`);
+              hideSpinner();
+              return;
+            }
           }
 
           try {
-            const updates = {
-              name: sanitizeText(name),
-              bio: sanitizeText(bio)
+            await update(ref(db, `users/${currentUser.uid}`), {
+              name: nameInput.value.trim(),
+              bio: bioInput.value.trim(),
+              photoURL: photoURL || null
+            });
+            originalData = {
+              name: nameInput.value.trim(),
+              bio: bioInput.value.trim(),
+              photoURL: photoURL
             };
-            if (newPhotoURL) {
-              updates.photoURL = newPhotoURL;
-            }
-            await update(ref(db, `users/${user.uid}`), updates);
-            originalData.name = name;
-            originalData.bio = bio;
-            if (newPhotoURL) originalData.photoURL = newPhotoURL;
-            newPhotoURL = null;
             [nameInput, bioInput].forEach(i => i.setAttribute('readonly', ''));
-            [nameInput, bioInput].forEach(i => i.classList.remove('invalid'));
-            [nameError, bioError].forEach(e => e.classList.add('hidden'));
-            uploadBtn.classList.add('hidden');
+            uploadLabel.classList.add('hidden');
             [editBtn, saveBtn, cancelBtn].forEach(b => b.classList.toggle('hidden'));
-            successAnimation.style.display = 'block';
-            setTimeout(() => {
-              successAnimation.style.display = 'none';
-            }, 1000);
+            selectedFile = null;
+            hideError();
           } catch (error) {
             console.error('Error saving profile:', error);
-            alert('Error saving profile. Please try again.');
+            showError('Failed to save profile changes.');
           }
+          hideSpinner();
         };
       }
     });
