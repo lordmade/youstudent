@@ -5,267 +5,148 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>BanterBox - Chat</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js"></script>
   <style>
     body {
       font-family: 'Inter', 'Segoe UI', sans-serif;
-      background: #ffffff;
-      transition: background 0.3s ease, color 0.3s ease;
-      user-select: none;
-      -webkit-user-select: none;
-      -moz-user-select: none;
-      -ms-user-select: none;
-      margin: 0;
-      height: 100vh;
-      overflow: hidden;
+      background: linear-gradient(to bottom, #f9f9f9, #e5e7eb);
+      padding-bottom: 80px;
+      transition: background 0.3s ease;
     }
     body.dark {
-      background: #0b141a;
+      background: linear-gradient(to bottom, #1f2937, #111827);
     }
     .header {
-      background: #f0f2f5;
-      box-shadow: 0 1px 1px rgba(0, 0, 0, 0.1);
-      z-index: 10;
+      background: white;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
     }
     .header.dark {
-      background: #1f2a44;
-      border-bottom: 1px solid #2a3942;
+      background: #374151;
+      border-bottom: 1px solid #4b5563;
       color: #e5e7eb;
     }
     .chat-container {
-      height: calc(100vh - 136px);
-      overflow-y: auto;
-      padding: 1rem;
-      scrollbar-width: none; /* Hide scrollbar for Firefox */
       display: flex;
       flex-direction: column;
-      gap: 0.5rem;
-      background: #ffffff;
+      height: calc(100vh - 64px);
+      padding: 1rem;
     }
-    .chat-container::-webkit-scrollbar {
-      display: none; /* Hide scrollbar for Chrome/Safari */
+    .message-list {
+      flex-grow: 1;
+      overflow-y: auto;
+      padding-bottom: 1rem;
+      scrollbar-width: thin;
+      scrollbar-color: #ef4444 #e5e7eb;
     }
-    .chat-container.dark {
-      background: #0b141a;
+    .message-list::-webkit-scrollbar {
+      width: 6px;
+    }
+    .message-list::-webkit-scrollbar-track {
+      background: #e5e7eb;
+    }
+    .message-list::-webkit-scrollbar-thumb {
+      background: #ef4444;
+      border-radius: 3px;
+    }
+    .message-list.dark::-webkit-scrollbar-track {
+      background: #4b5563;
+    }
+    .message-list.dark::-webkit-scrollbar-thumb {
+      background: #dc2626;
     }
     .message {
       max-width: 70%;
-      padding: 0.5rem 0.75rem;
-      border-radius: 10px;
+      margin-bottom: 1rem;
+      padding: 0.75rem 1rem;
+      border-radius: 8px;
       position: relative;
-      animation: slideIn 0.3s ease;
-      display: inline-block;
-      word-wrap: break-word;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-      transition: transform 0.2s ease, background 0.2s ease;
     }
     .message.sent {
-      background: linear-gradient(to bottom, #e0ffdb, #c6f0bc);
+      background: #ef4444;
+      color: white;
       margin-left: auto;
-      border-bottom-right-radius: 2px;
-      color: #000;
+      border-bottom-right-radius: 0;
     }
     .message.received {
-      background: linear-gradient(to bottom, #f7f9fb, #e9ecef);
+      background: white;
+      color: #374151;
       margin-right: auto;
-      border-bottom-left-radius: 2px;
-      color: #333;
+      border-bottom-left-radius: 0;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
     }
-    .message.dark.received {
-      background: linear-gradient(to bottom, #1f2a44, #2a3942);
+    .message.sent.dark {
+      background: #dc2626;
+    }
+    .message.received.dark {
+      background: #374151;
       color: #e5e7eb;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.2);
     }
-    .message.swipe-deleting {
-      background: #ffcccc;
-    }
-    .message img {
-      max-width: 100%;
-      border-radius: 7.5px;
-      margin-top: 0.5rem;
-      display: block;
-      loading: lazy;
+    .message-text {
+      word-break: break-word;
     }
     .message-time {
-      font-size: 0.6875rem;
-      color: #667781;
-      margin-left: 0.5rem;
-      display: inline-block;
-      vertical-align: bottom;
-    }
-    .message.dark .message-time {
-      color: #8696a0;
-    }
-    .message-reactions {
-      display: flex;
-      gap: 0.25rem;
-      margin-top: 0.25rem;
-      font-size: 0.875rem;
-      justify-content: flex-end;
-    }
-    .message.received .message-reactions {
-      justify-content: flex-start;
-    }
-    .message-reaction {
-      cursor: pointer;
-      padding: 0.25rem;
-      border-radius: 12px;
-      background: #f0f2f5;
-      transition: transform 0.2s ease;
-    }
-    .message-reaction:hover {
-      transform: scale(1.2);
-    }
-    .message.dark .message-reaction {
-      background: #2a3942;
-    }
-    .reaction-popup {
-      position: absolute;
-      background: #ffffff;
-      border-radius: 20px;
-      padding: 0.5rem;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-      display: none;
-      z-index: 30;
-      transform: translate(-50%, -50%);
-    }
-    .reaction-popup.dark {
-      background: #2a3942;
+      font-size: 0.75rem;
       color: #e5e7eb;
+      margin-top: 0.25rem;
+      text-align: right;
     }
-    .reaction-popup button {
-      background: none;
-      border: none;
-      font-size: 1.5rem;
-      cursor: pointer;
-      padding: 0.25rem;
+    .message-time.received {
+      color: #888;
+    }
+    .message-time.received.dark {
+      color: #9ca3af;
+    }
+    .message-image {
+      max-width: 100%;
+      border-radius: 8px;
+      margin-top: 0.5rem;
     }
     .input-container {
+      display: flex;
+      gap: 0.5rem;
+      padding: 0.5rem;
+      background: white;
+      border-top: 1px solid #ddd;
       position: fixed;
       bottom: 0;
       left: 0;
       right: 0;
-      background: #f0f2f5;
-      padding: 0.75rem;
-      border-top: 1px solid #e9edef;
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      z-index: 10;
     }
     .input-container.dark {
-      background: #1f2a44;
-      border-top: 1px solid #2a3942;
+      background: #374151;
+      border-top: 1px solid #4b5563;
     }
-    .input-container input[type="text"] {
+    .message-input {
       flex-grow: 1;
+      border: 1px solid #ddd;
+      border-radius: 9999px;
       padding: 0.5rem 1rem;
-      border: none;
-      border-radius: 20px;
-      background: #ffffff;
-      color: #000;
-      transition: background 0.2s ease;
+      font-size: 1rem;
     }
-    .input-container input[type="text"]:focus {
-      outline: none;
-      background: #f0f2f5;
-    }
-    .input-container.dark input[type="text"] {
-      background: #2a3942;
+    .message-input.dark {
+      background: #4b5563;
+      border: 1px solid #6b7280;
       color: #e5e7eb;
     }
-    .input-container.dark input[type="text"]:focus {
-      background: #3a4b5c;
-    }
-    .input-container input[type="file"] {
-      display: none;
-    }
-    .input-container button {
-      background: none;
-      color: #667781;
-      padding: 0.5rem;
-      border-radius: 50%;
-      transition: color 0.2s ease;
-    }
-    .input-container button:hover {
-      color: #ef4444;
-    }
-    .input-container.dark button {
-      color: #8696a0;
-    }
-    .input-container #send-btn {
+    .send-btn, .media-btn {
       background: #ef4444;
       color: white;
+      border-radius: 9999px;
       padding: 0.5rem;
-    }
-    .input-container.dark #send-btn {
-      background: #dc2626;
-    }
-    .input-container #send-btn:hover {
-      background: #dc2626;
-    }
-    .emoji-picker {
-      position: absolute;
-      bottom: 60px;
-      left: 1rem;
-      background: #ffffff;
-      border: 1px solid #e9edef;
-      border-radius: 8px;
-      padding: 1rem;
-      display: none;
-      flex-direction: column;
-      gap: 0.5rem;
-      max-width: 320px;
-      width: 90%;
-      max-height: 300px;
-      overflow-y: auto;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-      z-index: 20;
-      animation: slideUp 0.3s ease;
-    }
-    .emoji-picker.dark {
-      background: #2a3942;
-      border-color: #3a4b5c;
-      color: #e5e7eb;
-    }
-    .emoji-picker input {
-      padding: 0.5rem;
-      border: 1px solid #e9edef;
-      border-radius: 8px;
-      width: 100%;
-      background: #ffffff;
-    }
-    .emoji-picker.dark input {
-      background: #3a4b5c;
-      border-color: #4a5b6c;
-      color: #e5e7eb;
-    }
-    .emoji-group {
       display: flex;
-      flex-wrap: wrap;
-      gap: 0.5rem;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.3s ease;
     }
-    .emoji-group button {
-      background: none;
-      border: none;
-      font-size: 1.5rem;
-      cursor: pointer;
-      transition: transform 0.2s ease;
+    .send-btn:hover, .media-btn:hover {
+      background: #dc2626;
     }
-    .emoji-group button:hover {
-      transform: scale(1.2);
+    .send-btn:disabled {
+      background: #9ca3af;
+      cursor: not-allowed;
     }
-    .typing-indicator {
-      font-size: 0.75rem;
-      color: #667781;
-      padding: 0.5rem 1rem;
-      opacity: 0;
-      transition: opacity 0.3s ease;
-    }
-    .typing-indicator.active {
-      opacity: 1;
-    }
-    .typing-indicator.dark {
-      color: #8696a0;
+    .media-input {
+      display: none;
     }
     .loading-overlay {
       position: fixed;
@@ -275,164 +156,41 @@
       align-items: center;
       justify-content: center;
       z-index: 50;
+      display: none;
     }
-    .status-indicator {
-      width: 10px;
-      height: 10px;
-      border-radius: 9999px;
-      margin-left: 0.5rem;
-    }
-    .status-online {
-      background: #ef4444;
-    }
-    .status-offline {
-      background: #8696a0;
-    }
-    .quoted-message {
-      background: #f0f2f5;
-      border-left: 4px solid #ef4444;
-      padding: 0.5rem;
-      margin-bottom: 0.5rem;
-      border-radius: 8px;
-      font-size: 0.875rem;
-      color: #333;
-      max-width: 100%;
+    .loading-overlay.active {
       display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-    .quoted-message.dark {
-      background: #2a3942;
-      color: #e5e7eb;
-    }
-    .quoted-message p {
-      margin: 0;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      max-width: 90%;
-    }
-    .quoted-message img {
-      max-width: 50px;
-      border-radius: 4px;
-      margin-top: 0.25rem;
-    }
-    .quoted-message button {
-      background: none;
-      border: none;
-      color: #ef4444;
-      cursor: pointer;
-      font-size: 1rem;
-    }
-    .message-quote {
-      background: #f0f2f5;
-      border-left: 4px solid #ef4444;
-      padding: 0.5rem;
-      margin-bottom: 0.5rem;
-      border-radius: 8px;
-      font-size: 0.875rem;
-      color: #333;
-    }
-    .message.dark .message-quote {
-      background: #2a3942;
-      color: #e5e7eb;
-    }
-    .message-quote p {
-      margin: 0;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-    .message-quote img {
-      max-width: 50px;
-      border-radius: 4px;
-      margin-top: 0.25rem;
-    }
-    @keyframes slideIn {
-      from { opacity: 0; transform: translateY(10px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-    @keyframes slideUp {
-      from { opacity: 0; transform: translateY(20px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-    @media (max-width: 640px) {
-      .chat-container {
-        padding: 0.75rem;
-      }
-      .message {
-        max-width: 85%;
-      }
-      .input-container {
-        padding: 0.5rem;
-      }
-      .emoji-picker {
-        width: 95%;
-        left: 0.5rem;
-      }
     }
   </style>
 </head>
 <body>
-  <header class="header p-4 flex items-center justify-between">
-    <div class="flex items-center">
-      <a href="index.html" class="mr-4" aria-label="Back to home">
-        <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
-        </svg>
-      </a>
-      <img id="friend-avatar" src="https://www.gravatar.com/avatar?d=mp" alt="Friend avatar" class="w-10 h-10 rounded-full mr-2"/>
-      <span id="friend-name" class="text-lg font-semibold text-gray-900 dark:text-gray-100">Friend</span>
-      <div id="friend-status" class="status-indicator status-offline"></div>
-    </div>
-    <a id="friend-profile-link" href="#" class="text-sm bg-red-500 text-white px-3 py-1 rounded-full hover:bg-red-600 transition duration-200" aria-label="View friend's profile">
-      Profile
+  <header class="header p-4 text-xl font-bold text-red-500 flex justify-between items-center">
+    <a href="index.html" class="hover:text-red-600 transition duration-200">← Back</a>
+    <span id="chat-title">Chat</span>
+    <a id="profile-link" href="#" class="text-sm bg-red-500 text-white px-4 py-1 rounded-full hover:bg-red-600 transition duration-200">
+      View Profile
     </a>
   </header>
 
-  <div id="chat-container" class="chat-container" aria-live="polite" aria-relevant="additions text">
-    <div id="typing-indicator" class="typing-indicator">Friend is typing...</div>
-  </div>
-
-  <div id="emoji-picker" class="emoji-picker">
-    <input type="text" id="emoji-search" placeholder="Search emojis..." aria-label="Search emojis"/>
-    <div id="emoji-groups"></div>
-  </div>
-
-  <div id="reaction-popup" class="reaction-popup">
-    <button data-emoji="👍" aria-label="React with thumbs up">👍</button>
-    <button data-emoji="❤️" aria-label="React with heart">❤️</button>
-    <button data-emoji="😂" aria-label="React with laughing">😂</button>
-    <button data-emoji="😢" aria-label="React with crying">😢</button>
-    <button data-emoji="😍" aria-label="React with heart eyes">😍</button>
-    <button data-emoji="🔥" aria-label="React with fire">🔥</button>
-  </div>
-
-  <div class="input-container flex items-center">
-    <div id="quoted-message" class="quoted-message hidden" style="width: 100%;">
-      <p id="quoted-text"></p>
-      <button id="cancel-quote" aria-label="Cancel reply">✕</button>
+  <div class="chat-container">
+    <div id="message-list" class="message-list" aria-live="polite" aria-relevant="additions"></div>
+    <div class="input-container">
+      <input type="file" id="media-input" class="media-input" accept="image/*" />
+      <button id="media-btn" class="media-btn">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+        </svg>
+      </button>
+      <input type="text" id="message-input" class="message-input" placeholder="Type a message..." />
+      <button id="send-btn" class="send-btn" disabled>
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
+        </svg>
+      </button>
     </div>
-    <input type="text" id="message-input" placeholder="Type a message..." aria-label="Type a message"/>
-    <input type="file" id="image-input" accept="image/*" aria-hidden="true"/>
-    <button id="emoji-btn" class="flex items-center" aria-label="Open emoji picker">
-      <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-      </svg>
-    </button>
-    <button id="image-btn" class="flex items-center" aria-label="Attach image">
-      <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
-      </svg>
-    </button>
-    <button id="send-btn" aria-label="Send message">
-      <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
-      </svg>
-    </button>
   </div>
 
-  <div id="loading-overlay" class="loading-overlay hidden">
+  <div id="loading-overlay" class="loading-overlay">
     <svg class="animate-spin h-10 w-10 text-red-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
       <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
       <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4z"/>
@@ -442,7 +200,7 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
     import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
-    import { getDatabase, ref, onValue, push, update, get, set } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
+    import { getDatabase, ref, onValue, push, update, get } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
     import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-storage.js";
 
     const firebaseConfig = {
@@ -459,43 +217,29 @@
     const auth = getAuth();
     const db = getDatabase();
     const storage = getStorage();
-    const chatContainer = document.getElementById("chat-container");
+
+    const messageList = document.getElementById("message-list");
     const messageInput = document.getElementById("message-input");
     const sendBtn = document.getElementById("send-btn");
-    const imageInput = document.getElementById("image-input");
-    const imageBtn = document.getElementById("image-btn");
-    const emojiBtn = document.getElementById("emoji-btn");
-    const emojiPicker = document.getElementById("emoji-picker");
-    const emojiSearch = document.getElementById("emoji-search");
-    const emojiGroups = document.getElementById("emoji-groups");
-    const typingIndicator = document.getElementById("typing-indicator");
+    const mediaBtn = document.getElementById("media-btn");
+    const mediaInput = document.getElementById("media-input");
+    const chatTitle = document.getElementById("chat-title");
+    const profileLink = document.getElementById("profile-link");
     const loadingOverlay = document.getElementById("loading-overlay");
-    const friendName = document.getElementById("friend-name");
-    const friendAvatar = document.getElementById("friend-avatar");
-    const friendStatus = document.getElementById("friend-status");
-    const friendProfileLink = document.getElementById("friend-profile-link");
-    const reactionPopup = document.getElementById("reaction-popup");
-    const quotedMessage = document.getElementById("quoted-message");
-    const quotedText = document.getElementById("quoted-text");
-    const cancelQuote = document.getElementById("cancel-quote");
 
-    function showLoading() { loadingOverlay.classList.remove("hidden"); }
-    function hideLoading() { loadingOverlay.classList.add("hidden"); }
+    function showLoading() { loadingOverlay.classList.add("active"); }
+    function hideLoading() { loadingOverlay.classList.remove("active"); }
 
     function applyTheme(themeValue) {
       const isDark = themeValue === 'dark';
       document.body.classList.toggle('dark', isDark);
       document.querySelector('.header').classList.toggle('dark', isDark);
       document.querySelector('.input-container').classList.toggle('dark', isDark);
-      document.querySelector('.chat-container').classList.toggle('dark', isDark);
-      document.querySelectorAll('.message').forEach(el => el.classList.toggle('dark', isDark));
-      document.querySelectorAll('.message-time').forEach(el => el.classList.toggle('dark', isDark));
-      document.querySelector('.emoji-picker').forEach(el => el.classList.toggle('dark', isDark));
-      document.querySelectorAll('.message-reaction').forEach(el => el.classList.toggle('dark', isDark));
-      document.querySelectorAll('.quoted-message').forEach(el => el.classList.toggle('dark', isDark));
-      document.querySelectorAll('.message-quote').forEach(el => el.classList.toggle('dark', isDark));
-      reactionPopup.classList.toggle('dark', isDark);
-      typingIndicator.classList.toggle('dark', isDark);
+      document.querySelector('.message-input').classList.toggle('dark', isDark);
+      document.querySelectorAll('.message.sent').forEach(el => el.classList.toggle('dark', isDark));
+      document.querySelectorAll('.message.received').forEach(el => el.classList.toggle('dark', isDark));
+      document.querySelectorAll('.message-time.received').forEach(el => el.classList.toggle('dark', isDark));
+      document.querySelector('.message-list').classList.toggle('dark', isDark);
     }
 
     function timeAgo(timestamp) {
@@ -508,496 +252,123 @@
       return Math.floor(diff / 86400000) + "d ago";
     }
 
-    const emojiCategories = {
-      'Smileys': ['😀', '😂', '😍', '😊', '😢', '😡', '😎', '🥳', '😴', '😜'],
-      'Gestures': ['👍', '👎', '👏', '🙌', '✋', '👊', '🙏', '👌', '✌️', '🤝'],
-      'Hearts': ['❤️', '💖', '💔', '💕', '💞', '💓', '💗', '💘', '💝', '💟'],
-      'Objects': ['🎉', '🔥', '💡', '📱', '💻', '🎁', '📚', '⚽', '🎸', '🎤']
-    };
-
-    function renderEmojiPicker() {
-      emojiGroups.innerHTML = '';
-      Object.entries(emojiCategories).forEach(([category, emojis]) => {
-        const groupDiv = document.createElement("div");
-        groupDiv.innerHTML = `<h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300">${category}</h3>`;
-        const emojiDiv = document.createElement("div");
-        emojiDiv.className = "emoji-group";
-        emojis.forEach(emoji => {
-          const btn = document.createElement("button");
-          btn.textContent = emoji;
-          btn.setAttribute("aria-label", `Add ${emoji} emoji`);
-          btn.addEventListener("click", () => {
-            messageInput.value += emoji;
-            emojiPicker.style.display = 'none';
-            messageInput.focus();
-          });
-          emojiDiv.appendChild(btn);
-        });
-        groupDiv.appendChild(emojiDiv);
-        emojiGroups.appendChild(groupDiv);
-      });
-    }
-
-    function filterEmojis(searchTerm) {
-      emojiGroups.innerHTML = '';
-      const filtered = Object.entries(emojiCategories).reduce((acc, [category, emojis]) => {
-        const filteredEmojis = emojis.filter(emoji => emoji.includes(searchTerm));
-        if (filteredEmojis.length) acc[category] = filteredEmojis;
-        return acc;
-      }, {});
-      if (Object.keys(filtered).length === 0) {
-        emojiGroups.innerHTML = '<p class="text-sm text-gray-500 dark:text-gray-400">No emojis found</p>';
-        return;
-      }
-      Object.entries(filtered).forEach(([category, emojis]) => {
-        const groupDiv = document.createElement("div");
-        groupDiv.innerHTML = `<h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300">${category}</h3>`;
-        const emojiDiv = document.createElement("div");
-        emojiDiv.className = "emoji-group";
-        emojis.forEach(emoji => {
-          const btn = document.createElement("button");
-          btn.textContent = emoji;
-          btn.setAttribute("aria-label", `Add ${emoji} emoji`);
-          btn.addEventListener("click", () => {
-            messageInput.value += emoji;
-            emojiPicker.style.display = 'none';
-            messageInput.focus();
-          });
-          emojiDiv.appendChild(btn);
-        });
-        groupDiv.appendChild(emojiDiv);
-        emojiGroups.appendChild(groupDiv);
-      });
-    }
-
-    emojiBtn.onclick = () => {
-      emojiPicker.style.display = emojiPicker.style.display === 'flex' ? 'none' : 'flex';
-      if (emojiPicker.style.display === 'flex') {
-        emojiSearch.value = '';
-        renderEmojiPicker();
-        emojiSearch.focus();
-      }
-    };
-
-    emojiSearch.oninput = () => filterEmojis(emojiSearch.value);
-
-    document.addEventListener('click', (e) => {
-      if (!emojiPicker.contains(e.target) && e.target !== emojiBtn) {
-        emojiPicker.style.display = 'none';
-      }
-      if (!reactionPopup.contains(e.target) && !e.target.closest('.message')) {
-        reactionPopup.style.display = 'none';
-      }
-    });
-
-    let quotedMessageData = null;
-
-    function renderMessage(message, currentUserUid, messageId, chatId) {
-      if (!message || (!message.text && !message.image)) return;
-      const isSent = message.sender === currentUserUid;
+    function renderMessage(message, isSent, userData) {
       const div = document.createElement("div");
       div.className = `message ${isSent ? 'sent' : 'received'}`;
-      div.setAttribute("aria-label", isSent ? "Sent message (press D to delete, R to reply)" : "Received message (press R to reply)");
-      div.tabIndex = 0;
-      div.dataset.mid = messageId;
-      const reactions = message.reactions || {};
-      let quoteHtml = '';
-      if (message.repliedTo) {
-        quoteHtml = `<div class="message-quote">
-          ${message.repliedTo.text ? `<p>${message.repliedTo.text}</p>` : ''}
-          ${message.repliedTo.image ? `<img src="${message.repliedTo.image}" alt="Quoted image" />` : ''}
-        </div>`;
-      }
+      if (isSent) div.classList.add('dark');
+      const content = message.image ? `<img src="${message.image}" class="message-image" alt="Shared image" />` : `<p class="message-text">${message.text || ''}</p>`;
       div.innerHTML = `
-        ${quoteHtml}
-        ${message.text ? `<p>${message.text}</p>` : ''}
-        ${message.forEach(emoji => {
-          const btn = document.createElement("button");
-          btn.textContent = emoji;
-          btn.setAttribute("aria-label", `Add ${emoji} emoji`);
-          btn.addEventListener("click", () => {
-            messageInput.value += emoji;
-            emojiPicker.style.display = 'none';
-            messageInput.focus();
-          });
-          emojiDiv.appendChild(btn);
-        });
-        groupDiv.appendChild(emojiDiv);
-        emojiGroups.appendChild(groupDiv);
-      });
-    }
-
-    function filterEmojis(searchTerm) {
-      emojiGroups.innerHTML = '';
-      const filtered = Object.entries(emojiCategories).reduce((acc, [category, emojis]) => {
-        const filteredEmojis = emojis.filter(emoji => emoji.includes(searchTerm));
-        if (filteredEmojis.length) acc[category] = filteredEmojis;
-        return acc;
-      }, {});
-      if (Object.keys(filtered).length === 0) {
-        emojiGroups.innerHTML = '<p class="text-sm text-gray-500 dark:text-gray-400">No emojis found</p>';
-        return;
-      }
-      Object.entries(filtered).forEach(([category, emojis]) => {
-        const groupDiv = document.createElement("div");
-        groupDiv.innerHTML = `<h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300">${category}</h3>`;
-        const emojiDiv = document.createElement("div");
-        emojiDiv.className = "emoji-group";
-        emojis.forEach(emoji => {
-          const btn = document.createElement("button");
-          btn.textContent = emoji;
-          btn.setAttribute("aria-label", `Add ${emoji} emoji`);
-          btn.addEventListener("click", () => {
-            messageInput.value += emoji;
-            emojiPicker.style.display = 'none';
-            messageInput.focus();
-          });
-          emojiDiv.appendChild(btn);
-        });
-        groupDiv.appendChild(emojiDiv);
-        emojiGroups.appendChild(groupDiv);
-      });
-    }
-
-    emojiBtn.onclick = () => {
-      emojiPicker.style.display = emojiPicker.style.display === 'flex' ? 'none' : 'flex';
-      if (emojiPicker.style.display === 'flex') {
-        emojiSearch.value = '';
-        renderEmojiPicker();
-        emojiSearch.focus();
-      }
-    };
-
-    emojiSearch.oninput = () => filterEmojis(emojiSearch.value);
-
-    document.addEventListener('click', (e) => {
-      if (!emojiPicker.contains(e.target) && e.target !== emojiBtn) {
-        emojiPicker.style.display = 'none';
-      }
-      if (!reactionPopup.contains(e.target) && !e.target.closest('.message')) {
-        reactionPopup.style.display = 'none';
-      }
-    });
-
-    let quotedMessageData = null;
-
-    function renderMessage(message, currentUserUid, messageId, chatId) {
-      if (!message || (!message.text && !message.image)) return;
-      const isSent = message.sender === currentUserUid;
-      const div = document.createElement("div");
-      div.className = `message ${isSent ? 'sent' : 'received'}`;
-      div.setAttribute("aria-label", isSent ? "Sent message (press D to delete, R to reply)" : "Received message (press R to reply)");
-      div.tabIndex = 0;
-      div.dataset.mid = messageId;
-      const reactions = message.reactions || {};
-      let quoteHtml = '';
-      if (message.repliedTo) {
-        quoteHtml = `<div class="message-quote">
-          ${message.repliedTo.text ? `<p>${message.repliedTo.text}</p>` : ''}
-          ${message.repliedTo.image ? `<img src="${message.repliedTo.image}" alt="Quoted image" />` : ''}
-        </div>`;
-      }
-      div.innerHTML = `
-        ${quoteHtml}
-        ${message.text ? `<p>${message.text}</p>` : ''}
-        ${message.image ? `<img src="${message.image}" alt="Shared image" loading="lazy" />` : ''}
-        <p class="message-time">${timeAgo(message.timestamp)}</p>
-        <div class="message-reactions">
-          ${Object.entries(reactions).map(([emoji, count]) => `<span class="message-reaction" data-emoji="${emoji}" data-mid="${messageId}">${emoji} ${count}</span>`).join('')}
-        </div>
+        ${content}
+        <p class="message-time ${isSent ? '' : 'received'}">${timeAgo(message.timestamp)}</p>
       `;
-      chatContainer.insertBefore(div, typingIndicator);
-      chatContainer.scrollTop = chatContainer.scrollHeight;
-
-      const hammer = new Hammer(div);
-      if (isSent) {
-        hammer.on('panright', () => div.classList.add('swipe-deleting'));
-        hammer.on('panend pancancel', () => div.classList.remove('swipe-deleting'));
-        hammer.on('swiperight', async () => {
-          if (confirm("Are you sure you want to delete this message?")) {
-            try {
-              showLoading();
-              await set(ref(db, `messages/${chatId}/${messageId}`), null);
-            } catch (error) {
-              console.error("Error deleting message:", error);
-              alert("Failed to delete message.");
-            } finally {
-              hideLoading();
-            }
-          }
-        });
-      } else {
-        hammer.on('swiperight', () => {
-          quotedMessageData = { mid: messageId, text: message.text, image: message.image };
-          quotedText.textContent = message.text || 'Image';
-          quotedMessage.classList.remove('hidden');
-          messageInput.focus();
-        });
-      }
-
-      div.addEventListener('contextmenu', (e) => {
-        e.preventDefault();
-        const rect = div.getBoundingClientRect();
-        const popupWidth = reactionPopup.offsetWidth || 200;
-        const popupHeight = reactionPopup.offsetHeight || 40;
-        let left = rect.left + rect.width / 2;
-        let top = rect.top + rect.height / 2;
-        left = Math.max(popupWidth / 2, Math.min(left, window.innerWidth - popupWidth / 2));
-        top = Math.max(popupHeight / 2, Math.min(top, window.innerHeight - popupHeight / 2));
-        reactionPopup.style.left = `${left}px`;
-        reactionPopup.style.top = `${top}px`;
-        reactionPopup.style.display = 'flex';
-        reactionPopup.dataset.mid = messageId;
-      });
-
-      div.addEventListener('touchstart', (e) => {
-        const touch = e.touches[0];
-        const rect = div.getBoundingClientRect();
-        const popupWidth = reactionPopup.offsetWidth || 200;
-        const popupHeight = reactionPopup.offsetHeight || 40;
-        let left = rect.left + rect.width / 2;
-        let top = rect.top + rect.height / 2;
-        left = Math.max(popupWidth / 2, Math.min(left, window.innerWidth - popupWidth / 2));
-        top = Math.max(popupHeight / 2, Math.min(top, window.innerHeight - popupHeight / 2));
-        const timeout = setTimeout(() => {
-          reactionPopup.style.left = `${left}px`;
-          reactionPopup.style.top = `${top}px`;
-          reactionPopup.style.display = 'flex';
-          reactionPopup.dataset.mid = messageId;
-        }, 500);
-        div.dataset.touchTimeout = timeout;
-      });
-
-      div.addEventListener('touchend', () => {
-        clearTimeout(div.dataset.touchTimeout);
-      });
-
-      div.addEventListener('keydown', (e) => {
-        if (e.key === 'r' || e.key === 'R') {
-          quotedMessageData = { mid: messageId, text: message.text, image: message.image };
-          quotedText.textContent = message.text || 'Image';
-          quotedMessage.classList.remove('hidden');
-          messageInput.focus();
-        } else if ((e.key === 'd' || e.key === 'D') && isSent) {
-          if (confirm("Are you sure you want to delete this message?")) {
-            try {
-              showLoading();
-              set(ref(db, `messages/${chatId}/${messageId}`), null)
-                .catch(error => {
-                  console.error("Error deleting message:", error);
-                  alert("Failed to delete message.");
-                })
-                .finally(() => hideLoading());
-            } catch (error) {
-              console.error("Error deleting message:", error);
-              alert("Failed to delete message.");
-            }
-          }
-        }
-      });
-    }
-
-    reactionPopup.querySelectorAll('button').forEach(btn => {
-      btn.addEventListener('click', async () => {
-        try {
-          const emoji = btn.dataset.emoji;
-          const mid = reactionPopup.dataset.mid;
-          const friendUid = friendProfileLink.href.split('uid=')[1]?.split('&')[0];
-          const chatId = auth.currentUser?.uid < friendUid ? 
-            `${auth.currentUser.uid}_${friendUid}` : 
-            `${friendUid}_${auth.currentUser.uid}`;
-          const reactionRef = ref(db, `messages/${chatId}/${mid}/reactions/${emoji}`);
-          const snap = await get(reactionRef);
-          const currentCount = snap.exists() ? snap.val() : 0;
-          await set(reactionRef, currentCount + 1);
-          reactionPopup.style.display = 'none';
-        } catch (error) {
-          console.error("Error adding reaction:", error);
-          alert("Failed to add reaction.");
-        }
-      });
-    });
-
-    cancelQuote.addEventListener('click', () => {
-      quotedMessageData = null;
-      quotedMessage.classList.add('hidden');
-      quotedText.textContent = '';
-      messageInput.focus();
-    });
-
-    async function loadChat(currentUserUid, friendUid) {
-      if (!currentUserUid || !friendUid) {
-        console.error("Invalid user or friend UID");
-        alert("Invalid chat parameters.");
-        location.href = "index.html";
-        return;
-      }
-      showLoading();
-      const chatId = currentUserUid < friendUid ? `${currentUserUid}_${friendUid}` : `${friendUid}_${currentUserUid}`;
-      const messagesRef = ref(db, `messages/${chatId}`);
-      const userRef = ref(db, `users/${friendUid}`);
-      const typingRef = ref(db, `typing/${chatId}/${friendUid}`);
-
-      try {
-        const userSnap = await get(userRef);
-        if (!userSnap.exists()) {
-          throw new Error("Friend profile not found");
-        }
-        const userData = userSnap.val() || {};
-        friendName.textContent = userData.name || "Friend";
-        friendAvatar.src = userData.photoURL || 'https://www.gravatar.com/avatar?d=mp';
-        friendProfileLink.href = `profile.html?uid=${friendUid}&owner=false`;
-        friendStatus.className = `status-indicator ${userData.presence === 'online' ? 'status-online' : 'status-offline'}`;
-
-        onValue(messagesRef, async (snap) => {
-          chatContainer.innerHTML = '';
-          chatContainer.appendChild(typingIndicator);
-          if (!snap.exists()) {
-            hideLoading();
-            return;
-          }
-          const messages = snap.val();
-          for (const mid in messages) {
-            let message = messages[mid];
-            if (message.repliedTo) {
-              const repliedToRef = ref(db, `messages/${chatId}/${message.repliedTo}`);
-              const repliedToSnap = await get(repliedToRef);
-              message.repliedTo = repliedToSnap.exists() ? repliedToSnap.val() : { text: "Original message deleted" };
-            }
-            renderMessage(message, currentUserUid, mid, chatId);
-            if (message.sender !== currentUserUid && !message.read) {
-              update(ref(db, `messages/${chatId}/${mid}`), { read: true }).catch(error => {
-                console.error("Error marking message as read:", error);
-              });
-            }
-          }
-          hideLoading();
-        }, { onlyOnce: false }, error => {
-          console.error("Error loading messages:", error);
-          alert("Failed to load messages.");
-          hideLoading();
-        });
-
-        onValue(typingRef, (snap) => {
-          typingIndicator.classList.toggle('active', snap.exists() && snap.val());
-        }, error => {
-          console.error("Error listening to typing indicator:", error);
-        });
-      } catch (error) {
-        console.error("Error loading chat:", error);
-        alert("Failed to load chat.");
-        hideLoading();
-        location.href = "index.html";
-      }
+      messageList.appendChild(div);
+      messageList.scrollTop = messageList.scrollHeight;
     }
 
     onAuthStateChanged(auth, async user => {
       if (!user) {
-        console.log("User not authenticated, redirecting to login");
         location.href = "login.html";
         return;
       }
-      const urlParams = new URLSearchParams(window.location.search);
-      const friendUid = urlParams.get("uid");
-      if (!friendUid) {
-        console.error("No friend UID provided");
-        alert("No friend selected.");
-        location.href = "index.html";
-        return;
-      }
+      profileLink.href = `profile.html?uid=${user.uid}&owner=true`;
       try {
         const snap = await get(ref(db, `users/${user.uid}/settings`));
         const settings = snap.val() || {};
         applyTheme(settings.theme || 'light');
       } catch (error) {
         console.error('Error loading theme:', error);
-        applyTheme('light');
       }
-      await loadChat(user.uid, friendUid);
 
-      let typingTimeout;
-      messageInput.oninput = () => {
-        const chatId = user.uid < friendUid ? `${user.uid}_${friendUid}` : `${friendUid}_${user.uid}`;
-        const typingRef = ref(db, `typing/${chatId}/${user.uid}`);
-        clearTimeout(typingTimeout);
-        set(typingRef, true).catch(error => {
-          console.error("Error setting typing status:", error);
-        });
-        typingTimeout = setTimeout(() => set(typingRef, false).catch(error => {
-          console.error("Error clearing typing status:", error);
-        }), 2000);
-      };
+      const urlParams = new URLSearchParams(window.location.search);
+      const friendUid = urlParams.get('uid');
+      if (!friendUid) {
+        alert("No friend selected.");
+        location.href = "index.html";
+        return;
+      }
 
-      sendBtn.onclick = async () => {
+      const friendSnap = await get(ref(db, `users/${friendUid}`));
+      if (!friendSnap.exists()) {
+        alert("User not found.");
+        location.href = "index.html";
+        return;
+      }
+      chatTitle.textContent = friendSnap.val().name || "Friend";
+
+      const chatId = user.uid < friendUid ? `${user.uid}_${friendUid}` : `${friendUid}_${user.uid}`;
+      const messagesRef = ref(db, `messages/${chatId}`);
+
+      showLoading();
+      onValue(messagesRef, async (snapshot) => {
+        messageList.innerHTML = "";
+        if (!snapshot.exists()) {
+          hideLoading();
+          return;
+        }
+
+        const messages = snapshot.val();
+        const userData = friendSnap.val();
+        for (const mid in messages) {
+          const msg = messages[mid];
+          const isSent = msg.sender === user.uid;
+          renderMessage(msg, isSent, userData);
+          if (!isSent && !msg.read) {
+            await update(ref(db, `messages/${chatId}/${mid}`), { read: true });
+          }
+        }
+        hideLoading();
+      });
+
+      messageInput.addEventListener("input", () => {
+        sendBtn.disabled = !messageInput.value.trim();
+      });
+
+      sendBtn.addEventListener("click", async () => {
         const text = messageInput.value.trim();
         if (!text) return;
         showLoading();
-        const chatId = user.uid < friendUid ? `${user.uid}_${friendUid}` : `${friendUid}_${user.uid}`;
-        const message = {
-          sender: user.uid,
-          text,
-          timestamp: Date.now(),
-          read: false
-        };
-        if (quotedMessageData) {
-          message.repliedTo = quotedMessageData.mid;
-        }
         try {
-          await push(ref(db, `messages/${chatId}`), message);
+          await push(messagesRef, {
+            sender: user.uid,
+            text,
+            timestamp: Date.now(),
+            read: false
+          });
           messageInput.value = "";
-          emojiPicker.style.display = 'none';
-          quotedMessage.classList.add('hidden');
-          quotedText.textContent = '';
-          quotedMessageData = null;
-          await set(ref(db, `typing/${chatId}/${user.uid}`), false);
+          sendBtn.disabled = true;
         } catch (error) {
           console.error("Error sending message:", error);
           alert("Failed to send message.");
         }
         hideLoading();
-      };
-
-      messageInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-          e.preventDefault();
-          sendBtn.click();
-        }
       });
 
-      imageBtn.onclick = () => imageInput.click();
-
-      imageInput.onchange = async (e) => {
+      mediaInput.addEventListener("change", async (e) => {
         const file = e.target.files[0];
         if (!file) return;
         showLoading();
-        const chatId = user.uid < friendUid ? `${user.uid}_${friendUid}` : `${friendUid}_${user.uid}`;
-        const storagePath = `chat_images/${chatId}/${Date.now()}_${file.name}`;
-        const imageRef = storageRef(storage, storagePath);
         try {
+          const storagePath = `chat_images/${chatId}/${Date.now()}_${file.name}`;
+          const imageRef = storageRef(storage, storagePath);
           await uploadBytes(imageRef, file);
           const imageUrl = await getDownloadURL(imageRef);
-          const message = {
+          await push(messagesRef, {
             sender: user.uid,
             image: imageUrl,
             timestamp: Date.now(),
             read: false
-          };
-          if (quotedMessageData) {
-            message.repliedTo = quotedMessageData.mid;
-          }
-          await push(ref(db, `messages/${chatId}`), message);
-          imageInput.value = "";
-          quotedMessage.classList.add('hidden');
-          quotedText.textContent = '';
-          quotedMessageData = null;
+          });
+          mediaInput.value = "";
         } catch (error) {
           console.error("Error uploading image:", error);
           alert("Failed to upload image.");
         }
         hideLoading();
-      };
+      });
 
-      renderEmojiPicker();
+      mediaBtn.addEventListener("click", () => {
+        mediaInput.click();
+      });
     });
   </script>
 </body>
