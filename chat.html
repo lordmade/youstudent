@@ -40,14 +40,6 @@
       font-size: 12px;
       color: #888;
     }
-    #encryption-notice {
-      text-align: center;
-      padding: 8px;
-      background: #e0f7fa;
-      color: #006064;
-      font-size: 14px;
-      font-weight: 500;
-    }
     #messages {
       padding: 10px;
       margin-bottom: 60px;
@@ -308,10 +300,6 @@
     header.dark small {
       color: #aaa;
     }
-    #encryption-notice.dark {
-      background: #263238;
-      color: #80deea;
-    }
     #messages.dark {
       background: #121212;
     }
@@ -409,10 +397,9 @@
     </div>
     <a id="friend-profile-link">View Profile</a>
   </header>
-  <div id="encryption-notice">Messages are end-to-end encrypted 🔒</div>
   <div id="messages"></div>
   <div id="notification"></div>
-  <div id="reply-box">
+  <div id="reply-box" class="hidden">
     <div id="reply-text"></div>
     <span class="cancel-reply">Cancel</span>
   </div>
@@ -421,7 +408,7 @@
     <button id="emoji-btn">😊</button>
     <button id="send-btn" disabled>Voice</button>
   </div>
-  <div id="emoji-picker">
+  <div id="emoji-picker" class="hidden">
     <span>👍</span>
     <span>❤️</span>
     <span>😂</span>
@@ -496,190 +483,10 @@
 
     let currentUser, friendUid, chatId, friendName;
     let replyingTo = null;
-    let replyingToDecrypted = null;
     let reactingKey = null;
     let deletingKey = null;
     let theme = 'light';
     let lastMessageKey = null;
-
-    // E2EE Functions using ECDH
-    async function generateAndStoreECDHKeyPair(userId) {
-      try {
-        console.log("Generating ECDH key pair for user:", userId);
-        const keyPair = await crypto.subtle.generateKey(
-          { name: "ECDH", namedCurve: "P-256" },
-          true,
-          ["deriveKey"]
-        );
-        const privateKey = await crypto.subtle.exportKey("jwk", keyPair.privateKey);
-        await storePrivateKey(userId, privateKey);
-        const publicKey = await crypto.subtle.exportKey("jwk", keyPair.publicKey);
-        await set(ref(db, `users/${userId}/ecdhPublicKey`), publicKey);
-        console.log("ECDH key pair generated and stored successfully");
-        return { privateKey, publicKey };
-      } catch (error) {
-        console.error("Key generation error:", error);
-        showNotification("System", "Failed to generate encryption keys: " + error.message);
-        throw error;
-      }
-    }
-
-    async function storePrivateKey(userId, privateKey) {
-      const request = indexedDB.open("ChaxoKeys", 1);
-      request.onupgradeneeded = (event) => {
-        const db = event.target.result;
-        db.createObjectStore("keys", { keyPath: "userId" });
-      };
-      return new Promise((resolve, reject) => {
-        request.onsuccess = (event) => {
-          const db = event.target.result;
-          const transaction = db.transaction(["keys"], "readwrite");
-          const store = transaction.objectStore("keys");
-          store.put({ userId, privateKey });
-          transaction.oncomplete = () => resolve();
-          transaction.onerror = () => reject(transaction.error);
-        };
-        request.onerror = () => reject(request.error);
-      });
-    }
-
-    async function getPrivateKey(userId) {
-      const request = indexedDB.open("ChaxoKeys", 1);
-      return new Promise((resolve, reject) => {
-        request.onsuccess = (event) => {
-          const db = event.target.result;
-          const transaction = db.transaction(["keys"], "readonly");
-          const store = transaction.objectStore("keys");
-          const getRequest = store.get(userId);
-          getRequest.onsuccess = () => resolve(getRequest.result?.privateKey);
-          getRequest.onerror = () => reject(getRequest.error);
-        };
-        request.onerror = () => reject(request.error);
-      });
-    }
-
-    async function deriveSharedSecret(userId, friendId, chatId) {
-      try {
-        console.log("Deriving shared secret for chat:", chatId);
-        const privateKeyJwk = await getPrivateKey(userId);
-        if (!privateKeyJwk) throw new Error("Private key not found");
-        const privateKey = await crypto.subtle.importKey(
-          "jwk",
-          privateKeyJwk,
-          { name: "ECDH", namedCurve: "P-256" },
-          true,
-          ["deriveKey"]
-        );
-        const friendPublicKeySnap = await get(ref(db, `users/${friendId}/ecdhPublicKey`));
-        if (!friendPublicKeySnap.exists()) {
-          throw new Error("Friend's ECDH public key not found. Please ensure they have initialized their account.");
-        }
-        const friendPublicKeyJwk = friendPublicKeySnap.val();
-        if (!friendPublicKeyJwk || !friendPublicKeyJwk.kty || !friendPublicKeyJwk.x || !friendPublicKeyJwk.y) {
-          throw new Error("Invalid friend public key format.");
-        }
-        const friendPublicKey = await crypto.subtle.importKey(
-          "jwk",
-          friendPublicKeyJwk,
-          { name: "ECDH", namedCurve: "P-256" },
-          true,
-          []
-        );
-        const sharedSecret = await crypto.subtle.deriveKey(
-          { name: "ECDH", public: friendPublicKey },
-          privateKey,
-          { name: "AES-GCM", length: 256 },
-          true,
-          ["encrypt", "decrypt"]
-        );
-        const exportedSecret = await crypto.subtle.exportKey("raw", sharedSecret);
-        const secretB64 = arrayBufferToBase64(exportedSecret);
-        await set(ref(db, `chats/${chatId}/sharedSecret`), secretB64);
-        console.log("Shared secret derived and stored for chat:", chatId);
-        return sharedSecret;
-      } catch (error) {
-        console.error("Shared secret derivation error:", error);
-        throw new Error(`Failed to derive shared secret: ${error.message}`);
-      }
-    }
-
-    async function getSharedSecret(chatId, userId, friendId) {
-      try {
-        const snapshot = await get(ref(db, `chats/${chatId}/sharedSecret`));
-        if (snapshot.exists()) {
-          const secretB64 = snapshot.val();
-          const secretRaw = base64ToArrayBuffer(secretB64);
-          return await crypto.subtle.importKey(
-            "raw",
-            secretRaw,
-            { name: "AES-GCM", length: 256 },
-            true,
-            ["encrypt", "decrypt"]
-          );
-        } else {
-          console.log("No shared secret found, deriving new one");
-          return await deriveSharedSecret(userId, friendId, chatId);
-        }
-      } catch (error) {
-        console.error("Error getting shared secret:", error);
-        throw error;
-      }
-    }
-
-    async function encryptMessage(message, chatId, userId, friendId) {
-      try {
-        console.log("Encrypting message for chat:", chatId);
-        const sharedSecret = await getSharedSecret(chatId, userId, friendId);
-        const encoder = new TextEncoder();
-        const encodedMessage = encoder.encode(message);
-        const iv = crypto.getRandomValues(new Uint8Array(12));
-        const encryptedMessage = await crypto.subtle.encrypt(
-          { name: "AES-GCM", iv },
-          sharedSecret,
-          encodedMessage
-        );
-        console.log("Message encrypted with AES-GCM");
-        return {
-          encryptedMessageB64: arrayBufferToBase64(encryptedMessage),
-          ivB64: arrayBufferToBase64(iv)
-        };
-      } catch (error) {
-        console.error("Encryption error:", error);
-        throw new Error(`Failed to encrypt message: ${error.message}`);
-      }
-    }
-
-    async function decryptMessage(encryptedMessageB64, ivB64, chatId, userId, friendId) {
-      try {
-        const sharedSecret = await getSharedSecret(chatId, userId, friendId);
-        const encryptedMessage = base64ToArrayBuffer(encryptedMessageB64);
-        const iv = base64ToArrayBuffer(ivB64);
-        const decryptedMessage = await crypto.subtle.decrypt(
-          { name: "AES-GCM", iv },
-          sharedSecret,
-          encryptedMessage
-        );
-        const decoder = new TextDecoder();
-        return decoder.decode(decryptedMessage);
-      } catch (error) {
-        console.error("Decryption error:", error);
-        return "Error decrypting message.";
-      }
-    }
-
-    function arrayBufferToBase64(buffer) {
-      return btoa(String.fromCharCode(...new Uint8Array(buffer)));
-    }
-
-    function base64ToArrayBuffer(base64) {
-      const binary = atob(base64);
-      const len = binary.length;
-      const bytes = new Uint8Array(len);
-      for (let i = 0; i < len; i++) {
-        bytes[i] = binary.charCodeAt(i);
-      }
-      return bytes.buffer;
-    }
 
     function getParam(name) {
       return new URLSearchParams(location.search).get(name);
@@ -692,7 +499,6 @@
 
     function cancelReply() {
       replyingTo = null;
-      replyingToDecrypted = null;
       replyBox.classList.add("hidden");
       replyText.textContent = "";
       messageInput.focus();
@@ -747,15 +553,8 @@
       const fragment = document.createDocumentFragment();
       for (const [key, m] of messages) {
         const isSelf = m.sender === currentUser.uid;
-        let displayText = m.text;
-        let replyText = m.replyTo;
-
-        if (m.encryptedMessage) {
-          displayText = await decryptMessage(m.encryptedMessage, m.iv, chatId, currentUser.uid, friendUid);
-          if (m.replyTo && !m.replyTo.match(/\.(png|jpg|jpeg|gif)$/i)) {
-            replyText = await decryptMessage(m.replyTo, m.replyIv, chatId, currentUser.uid, friendUid);
-          }
-        }
+        const displayText = m.text;
+        const replyText = m.replyTo;
 
         const container = document.createElement("div");
         container.className = `message-container ${isSelf ? "self" : "friend"}`;
@@ -788,8 +587,7 @@
             const endX = e.changedTouches[0].clientX;
             const deltaX = endX - startX;
             if (deltaX > 60) {
-              replyingTo = m.encryptedMessage ? m.encryptedMessage : m.text;
-              replyingToDecrypted = displayText;
+              replyingTo = m.text;
               replyText.textContent = displayText;
               replyBox.classList.remove("hidden");
               messageInput.focus();
@@ -859,7 +657,6 @@
       document.body.classList.toggle('dark', theme === 'dark');
       document.querySelector('header').classList.toggle('dark', theme === 'dark');
       messagesEl.classList.toggle('dark', theme === 'dark');
-      document.getElementById('encryption-notice').classList.toggle('dark', theme === 'dark');
       document.querySelectorAll('.message').forEach(el => el.classList.toggle('dark', theme === 'dark'));
       document.querySelectorAll('.message.friend').forEach(el => el.classList.toggle('dark', theme === 'dark'));
       document.querySelectorAll('.message small').forEach(el => el.classList.toggle('dark', theme === 'dark'));
@@ -921,30 +718,6 @@
       }
       chatId = currentUser.uid < friendUid ? `${currentUser.uid}_${friendUid}` : `${friendUid}_${currentUser.uid}`;
 
-      // Check if user has an ECDH key pair; generate if not
-      console.log("Checking ECDH public key for user:", currentUser.uid);
-      const keySnap = await get(ref(db, `users/${currentUser.uid}/ecdhPublicKey`));
-      if (!keySnap.exists()) {
-        console.log("ECDH public key not found, generating...");
-        await generateAndStoreECDHKeyPair(currentUser.uid);
-      }
-
-      // Check friend's ECDH public key and initialize shared secret
-      console.log("Checking friend's ECDH public key for user:", friendUid);
-      const friendKeySnap = await get(ref(db, `users/${friendUid}/ecdhPublicKey`));
-      if (!friendKeySnap.exists()) {
-        showNotification("System", "Friend's encryption key not found. Please ask them to log in to initialize their account.");
-        document.getElementById("input-area").style.display = "none";
-        return;
-      }
-
-      // Ensure shared secret exists
-      const sharedSecretSnap = await get(ref(db, `chats/${chatId}/sharedSecret`));
-      if (!sharedSecretSnap.exists()) {
-        console.log("Initializing shared secret for chat:", chatId);
-        await deriveSharedSecret(currentUser.uid, friendUid, chatId);
-      }
-
       try {
         const [settingsSnap, userSnap, presenceSnap, lastSeenSnap] = await Promise.all([
           get(ref(db, `users/${user.uid}/settings`)),
@@ -1004,8 +777,7 @@
         const msg = snap.val();
         const isSelf = msg.sender === currentUser.uid;
         if (!isSelf) {
-          const decryptedText = msg.encryptedMessage ? await decryptMessage(msg.encryptedMessage, msg.iv, chatId, currentUser.uid, friendUid) : msg.text;
-          showNotification(friendName, decryptedText);
+          showNotification(friendName, msg.text);
           renderMessages([[snap.key, msg]]);
         }
       });
@@ -1107,30 +879,15 @@
       if (text) {
         const msg = {
           sender: currentUser.uid,
+          text: text,
           timestamp: Date.now(),
           read: false
         };
         try {
-          console.log("Processing message, isSticker:", text.match(/\.(png|jpg|jpeg|gif)$/i));
-          if (text.match(/\.(png|jpg|jpeg|gif)$/i)) {
-            msg.text = text;
-          } else {
-            console.log("Encrypting message for chat:", chatId);
-            const { encryptedMessageB64, ivB64 } = await encryptMessage(text, chatId, currentUser.uid, friendUid);
-            msg.encryptedMessage = encryptedMessageB64;
-            msg.iv = ivB64;
-            if (replyingTo) {
-              console.log("Handling reply, replyingToDecrypted:", replyingToDecrypted);
-              if (replyingTo.match(/\.(png|jpg|jpeg|gif)$/i)) {
-                msg.replyTo = replyingTo;
-              } else {
-                const replyData = await encryptMessage(replyingToDecrypted, chatId, currentUser.uid, friendUid);
-                msg.replyTo = replyData.encryptedMessageB64;
-                msg.replyIv = replyData.ivB64;
-              }
-            }
-          }
           console.log("Pushing message to Firebase:", msg);
+          if (replyingTo) {
+            msg.replyTo = replyingTo;
+          }
           await push(ref(db, `messages/${chatId}`), msg);
           messageInput.value = "";
           updateSendButton();
@@ -1168,15 +925,8 @@
             const fragment = document.createDocumentFragment();
             for (const [key, m] of messages) {
               const isSelf = m.sender === currentUser.uid;
-              let displayText = m.text;
-              let replyText = m.replyTo;
-
-              if (m.encryptedMessage) {
-                displayText = await decryptMessage(m.encryptedMessage, m.iv, chatId, currentUser.uid, friendUid);
-                if (m.replyTo && !m.replyTo.match(/\.(png|jpg|jpeg|gif)$/i)) {
-                  replyText = await decryptMessage(m.replyTo, m.replyIv, chatId, currentUser.uid, friendUid);
-                }
-              }
+              const displayText = m.text;
+              const replyText = m.replyTo;
 
               const container = document.createElement("div");
               container.className = `message-container ${isSelf ? "self" : "friend"}`;
@@ -1209,8 +959,7 @@
                   const endX = e.changedTouches[0].clientX;
                   const deltaX = endX - startX;
                   if (deltaX > 60) {
-                    replyingTo = m.encryptedMessage ? m.encryptedMessage : m.text;
-                    replyingToDecrypted = displayText;
+                    replyingTo = m.text;
                     replyText.textContent = displayText;
                     replyBox.classList.remove("hidden");
                     messageInput.focus();
@@ -1308,16 +1057,6 @@
         });
       });
     });
-
-    /*
-    Firebase Security Rules (apply in Firebase Console for testing):
-    {
-      "rules": {
-        ".read": "auth != null",
-        ".write": "auth != null"
-      }
-    }
-    */
   </script>
 </body>
 </html>
