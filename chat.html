@@ -90,23 +90,23 @@
       cursor: pointer;
     }
     .message.sent {
-      background: #f87171; /* Lighter red for better text visibility */
+      background: #f87171;
       color: white;
       margin-left: auto;
       border-bottom-right-radius: 0;
     }
     .message.received {
-      background: #f9fafb; /* Lighter gray for light mode */
+      background: #f9fafb;
       color: #374151;
       margin-right: auto;
       border-bottom-left-radius: 0;
       box-shadow: 0 1px 3px rgba(0,0,0,0.05);
     }
     .message.sent.dark {
-      background: #f87171; /* Consistent lighter red in dark mode */
+      background: #f87171;
     }
     .message.received.dark {
-      background: #4b5563; /* Lighter gray for dark mode */
+      background: #4b5563;
       color: #e5e7eb;
       box-shadow: 0 1px 3px rgba(0,0,0,0.2);
     }
@@ -131,10 +131,15 @@
       margin-top: 0.5rem;
     }
     .reactions {
-      display: flex;
-      gap: 0.5rem;
-      margin-top: 0.25rem;
+      position: absolute;
+      bottom: -20px;
       font-size: 0.9rem;
+    }
+    .message.sent .reactions {
+      right: 5px;
+    }
+    .message.received .reactions {
+      left: 5px;
     }
     .reaction-picker {
       position: absolute;
@@ -143,10 +148,13 @@
       border-radius: 8px;
       padding: 0.5rem;
       display: flex;
+      align-items: center;
       gap: 0.5rem;
       box-shadow: 0 4px 10px rgba(0,0,0,0.2);
       z-index: 20;
-      transform: translateY(10px);
+      transform: translateY(-100%) translateX(-50%);
+      left: 50%;
+      top: -5px;
     }
     .reaction-picker.dark {
       background: #374151;
@@ -163,6 +171,47 @@
       background: #f3f4f6;
     }
     .reaction-picker.dark span:hover {
+      background: #4b5563;
+    }
+    .kebab-menu {
+      position: relative;
+    }
+    .kebab-menu svg {
+      stroke: #ef4444;
+      cursor: pointer;
+    }
+    .kebab-menu.dark svg {
+      stroke: #dc2626;
+    }
+    .kebab-dropdown {
+      position: absolute;
+      background: white;
+      border: 2px solid #ef4444;
+      border-radius: 8px;
+      padding: 0.5rem;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+      z-index: 20;
+      top: 100%;
+      right: 0;
+      min-width: 100px;
+    }
+    .kebab-dropdown.dark {
+      background: #374151;
+      border-color: #dc2626;
+    }
+    .kebab-dropdown div {
+      padding: 0.5rem;
+      cursor: pointer;
+      color: #374151;
+      transition: background 0.2s ease;
+    }
+    .kebab-dropdown.dark div {
+      color: #e5e7eb;
+    }
+    .kebab-dropdown div:hover {
+      background: #f3f4f6;
+    }
+    .kebab-dropdown.dark div:hover {
       background: #4b5563;
     }
     .input-container {
@@ -271,7 +320,7 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
     import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
-    import { getDatabase, ref, onValue, push, update, get, set } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
+    import { getDatabase, ref, onValue, push, update, get, set, remove } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
     import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-storage.js";
 
     const firebaseConfig = {
@@ -299,7 +348,7 @@
     const loadingOverlay = document.getElementById("loading-overlay");
 
     // Encryption key (replace with secure key management in production)
-    const ENCRYPTION_KEY = "your-secure-key-32bytes-long-1234"; // Must be 32 bytes for AES-256
+    const ENCRYPTION_KEY = "your-secure-key-32bytes-long-1234";
 
     function encryptMessage(message) {
       return CryptoJS.AES.encrypt(message, ENCRYPTION_KEY).toString();
@@ -330,6 +379,8 @@
       document.querySelectorAll('.message.received').forEach(el => el.classList.toggle('dark', isDark));
       document.querySelectorAll('.message-time.received').forEach(el => el.classList.toggle('dark', isDark));
       document.querySelectorAll('.reaction-picker').forEach(el => el.classList.toggle('dark', isDark));
+      document.querySelectorAll('.kebab-menu').forEach(el => el.classList.toggle('dark', isDark));
+      document.querySelectorAll('.kebab-dropdown').forEach(el => el.classList.toggle('dark', isDark));
       document.querySelector('.message-list').classList.toggle('dark', isDark);
     }
 
@@ -343,20 +394,28 @@
       return Math.floor(diff / 86400000) + "d ago";
     }
 
-    function showReactionPicker(messageDiv, messageId, chatId, userId) {
-      // Remove any existing pickers
+    function showReactionPicker(messageDiv, messageId, chatId, userId, isSent, messageText) {
+      // Remove any existing pickers or dropdowns
       document.querySelectorAll('.reaction-picker').forEach(picker => picker.remove());
+      document.querySelectorAll('.kebab-dropdown').forEach(dropdown => dropdown.remove());
 
       const picker = document.createElement("div");
       picker.className = `reaction-picker ${document.body.classList.contains('dark') ? 'dark' : ''}`;
       const emojis = ['😊', '👍', '❤️', '😂', '😮', '😢'];
-      picker.innerHTML = emojis.map(emoji => `<span>${emoji}</span>`).join('');
+      picker.innerHTML = `
+        ${emojis.map(emoji => `<span>${emoji}</span>`).join('')}
+        <div class="kebab-menu">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v.01M12 12v.01M12 18v.01"/>
+          </svg>
+        </div>
+      `;
       messageDiv.appendChild(picker);
 
-      // Position picker below the message
+      // Position picker above the message
       const rect = messageDiv.getBoundingClientRect();
-      picker.style.left = '0';
-      picker.style.bottom = `-${picker.offsetHeight + 5}px`;
+      picker.style.left = '50%';
+      picker.style.top = '-5px';
 
       // Handle reaction selection
       picker.querySelectorAll('span').forEach(span => {
@@ -373,6 +432,45 @@
         });
       });
 
+      // Handle kebab menu
+      const kebabMenu = picker.querySelector('.kebab-menu');
+      kebabMenu.addEventListener('click', () => {
+        document.querySelectorAll('.kebab-dropdown').forEach(dropdown => dropdown.remove());
+        const dropdown = document.createElement("div");
+        dropdown.className = `kebab-dropdown ${document.body.classList.contains('dark') ? 'dark' : ''}`;
+        dropdown.innerHTML = `
+          ${isSent ? '<div class="delete-option">Delete</div>' : ''}
+          ${messageText ? '<div class="copy-option">Copy</div>' : ''}
+        `;
+        kebabMenu.appendChild(dropdown);
+
+        // Handle dropdown options
+        if (isSent) {
+          dropdown.querySelector('.delete-option').addEventListener('click', async () => {
+            showLoading();
+            try {
+              await remove(ref(db, `messages/${chatId}/${messageId}`));
+              picker.remove();
+            } catch (error) {
+              console.error("Error deleting message:", error);
+              alert("Failed to delete message.");
+            }
+            hideLoading();
+          });
+        }
+        if (messageText) {
+          dropdown.querySelector('.copy-option').addEventListener('click', () => {
+            navigator.clipboard.writeText(messageText).then(() => {
+              alert("Message copied to clipboard!");
+              picker.remove();
+            }).catch(error => {
+              console.error("Error copying message:", error);
+              alert("Failed to copy message.");
+            });
+          });
+        }
+      });
+
       // Dismiss picker on outside click
       const dismissPicker = (e) => {
         if (!picker.contains(e.target) && !messageDiv.contains(e.target)) {
@@ -387,9 +485,10 @@
       const div = document.createElement("div");
       div.className = `message ${isSent ? 'sent' : 'received'}`;
       if (isSent) div.classList.add('dark');
+      const messageText = message.text ? decryptMessage(message.text) : '';
       const content = message.image 
         ? `<img src="${message.image}" class="message-image" alt="Shared image" />`
-        : `<p class="message-text">${message.text ? decryptMessage(message.text) : ''}</p>`;
+        : `<p class="message-text">${messageText}</p>`;
       const reactions = message.reactions ? Object.values(message.reactions).join(' ') : '';
       div.innerHTML = `
         ${content}
@@ -400,12 +499,12 @@
       // Long press for reaction picker
       let touchTimer;
       div.addEventListener('mousedown', () => {
-        touchTimer = setTimeout(() => showReactionPicker(div, messageId, chatId, userId), 500);
+        touchTimer = setTimeout(() => showReactionPicker(div, messageId, chatId, userId, isSent, messageText), 500);
       });
       div.addEventListener('mouseup', () => clearTimeout(touchTimer));
       div.addEventListener('touchstart', (e) => {
         e.preventDefault();
-        touchTimer = setTimeout(() => showReactionPicker(div, messageId, chatId, userId), 500);
+        touchTimer = setTimeout(() => showReactionPicker(div, messageId, chatId, userId, isSent, messageText), 500);
       });
       div.addEventListener('touchend', () => clearTimeout(touchTimer));
 
