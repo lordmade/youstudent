@@ -82,7 +82,7 @@
     .chat-container {
       display: flex;
       flex-direction: column;
-      height: calc(100vh - 144px); /* Adjusted for encryption notice and search */
+      height: calc(100vh - 144px);
       padding: 1rem;
     }
     .message-list {
@@ -189,25 +189,7 @@
       border-radius: 8px;
       margin-top: 0.5rem;
     }
-    .reactions {
-      position: absolute;
-      bottom: -20px;
-      font-size: 0.9rem;
-      background: #f9fafb;
-      padding: 0.2rem 0.5rem;
-      border-radius: 12px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-    }
-    .reactions.dark {
-      background: #374151;
-    }
-    .message.sent .reactions {
-      right: 5px;
-    }
-    .message.received .reactions {
-      left: 5px;
-    }
-    .reaction-picker {
+    .delete-popup {
       position: absolute;
       background: white;
       border: 2px solid #ef4444;
@@ -223,23 +205,27 @@
       top: -5px;
       animation: slideIn 0.2s ease-out;
     }
-    .reaction-picker.dark {
+    .delete-popup.dark {
       background: #374151;
       border-color: #dc2626;
     }
-    .reaction-picker span {
+    .delete-popup button {
+      background: #ef4444;
+      color: white;
+      padding: 0.3rem 0.8rem;
+      border-radius: 8px;
       cursor: pointer;
-      font-size: 1.2rem;
-      padding: 0.2rem;
-      border-radius: 4px;
-      transition: background 0.2s ease, transform 0.2s ease;
+      font-size: 0.9rem;
+      transition: background 0.2s ease;
     }
-    .reaction-picker span:hover {
-      background: #f3f4f6;
-      transform: scale(1.2);
+    .delete-popup button:hover {
+      background: #dc2626;
     }
-    .reaction-picker.dark span:hover {
-      background: #4b5563;
+    .delete-popup.dark button {
+      background: #dc2626;
+    }
+    .delete-popup.dark button:hover {
+      background: #b91c1c;
     }
     .kebab-menu {
       position: relative;
@@ -481,10 +467,9 @@
       document.querySelectorAll('.message.sent').forEach(el => el.classList.toggle('dark', isDark));
       document.querySelectorAll('.message.received').forEach(el => el.classList.toggle('dark', isDark));
       document.querySelectorAll('.message-time.received').forEach(el => el.classList.toggle('dark', isDark));
-      document.querySelectorAll('.reaction-picker').forEach(el => el.classList.toggle('dark', isDark));
+      document.querySelectorAll('.delete-popup').forEach(el => el.classList.toggle('dark', isDark));
       document.querySelectorAll('.kebab-menu').forEach(el => el.classList.toggle('dark', isDark));
       document.querySelectorAll('.kebab-dropdown').forEach(el => el.classList.toggle('dark', isDark));
-      document.querySelectorAll('.reactions').forEach(el => el.classList.toggle('dark', isDark));
       document.querySelector('.message-list').classList.toggle('dark', isDark);
       typingIndicator.classList.toggle('dark', isDark);
     }
@@ -499,51 +484,50 @@
       return Math.floor(diff / 86400000) + "d ago";
     }
 
-    function showReactionPicker(messageDiv, messageId, chatId, userId, isSent, messageText, replyTo = null) {
-      document.querySelectorAll('.reaction-picker').forEach(picker => picker.remove());
+    function showDeletePopup(messageDiv, messageId, chatId, isSent, messageText, replyTo = null) {
+      document.querySelectorAll('.delete-popup').forEach(popup => popup.remove());
       document.querySelectorAll('.kebab-dropdown').forEach(dropdown => dropdown.remove());
 
-      const picker = document.createElement("div");
-      picker.className = `reaction-picker ${document.body.classList.contains('dark') ? 'dark' : ''}`;
-      const emojis = ['😊', '👍', '❤️', '😂', '😮', '😢'];
-      picker.innerHTML = `
-        ${emojis.map(emoji => `<span role="button" aria-label="React with ${emoji}">${emoji}</span>`).join('')}
+      if (!isSent) return; // Only show for sent messages
+
+      const popup = document.createElement("div");
+      popup.className = `delete-popup ${document.body.classList.contains('dark') ? 'dark' : ''}`;
+      popup.innerHTML = `
+        <button role="button" aria-label="Delete message">Delete</button>
         <div class="kebab-menu">
           <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v.01M12 12v.01M12 18v.01"/>
           </svg>
         </div>
       `;
-      messageDiv.appendChild(picker);
+      messageDiv.appendChild(popup);
 
-      // Position picker above the message
+      // Position popup above the message
       const rect = messageDiv.getBoundingClientRect();
-      picker.style.left = '50%';
-      picker.style.top = '-5px';
+      popup.style.left = '50%';
+      popup.style.top = '-5px';
 
-      // Handle reaction selection
-      picker.querySelectorAll('span').forEach(span => {
-        span.addEventListener('click', async () => {
-          showLoading();
-          try {
-            await set(ref(db, `messages/${chatId}/${messageId}/reactions/${userId}`), span.textContent);
-            picker.remove();
-          } catch (error) {
-            console.error("Error adding reaction:", error);
-            alert("Failed to add reaction.");
-          }
-          hideLoading();
-        });
+      // Handle delete action
+      popup.querySelector('button').addEventListener('click', async () => {
+        showLoading();
+        try {
+          await remove(ref(db, `messages/${chatId}/${messageId}`));
+          popup.remove();
+        } catch (error) {
+          console.error("Error deleting message:", error);
+          alert("Failed to delete message.");
+        }
+        hideLoading();
       });
 
       // Handle kebab menu
-      const kebabMenu = picker.querySelector('.kebab-menu');
+      const kebabMenu = popup.querySelector('.kebab-menu');
       kebabMenu.addEventListener('click', () => {
         document.querySelectorAll('.kebab-dropdown').forEach(dropdown => dropdown.remove());
         const dropdown = document.createElement("div");
         dropdown.className = `kebab-dropdown ${document.body.classList.contains('dark') ? 'dark' : ''}`;
         dropdown.innerHTML = `
-          ${isSent ? '<div class="delete-option" role="button" aria-label="Delete message">Delete</div>' : ''}
+          <div class="delete-option" role="button" aria-label="Delete message">Delete</div>
           ${messageText ? '<div class="copy-option" role="button" aria-label="Copy message">Copy</div>' : ''}
           <div class="reply-option" role="button" aria-label="Reply to message">Reply</div>
           <div class="forward-option" role="button" aria-label="Forward message">Forward</div>
@@ -552,24 +536,22 @@
         kebabMenu.appendChild(dropdown);
 
         // Handle dropdown options
-        if (isSent) {
-          dropdown.querySelector('.delete-option').addEventListener('click', async () => {
-            showLoading();
-            try {
-              await remove(ref(db, `messages/${chatId}/${messageId}`));
-              picker.remove();
-            } catch (error) {
-              console.error("Error deleting message:", error);
-              alert("Failed to delete message.");
-            }
-            hideLoading();
-          });
-        }
+        dropdown.querySelector('.delete-option').addEventListener('click', async () => {
+          showLoading();
+          try {
+            await remove(ref(db, `messages/${chatId}/${messageId}`));
+            popup.remove();
+          } catch (error) {
+            console.error("Error deleting message:", error);
+            alert("Failed to delete message.");
+          }
+          hideLoading();
+        });
         if (messageText) {
           dropdown.querySelector('.copy-option').addEventListener('click', () => {
             navigator.clipboard.writeText(messageText).then(() => {
               alert("Message copied to clipboard!");
-              picker.remove();
+              popup.remove();
             }).catch(error => {
               console.error("Error copying message:", error);
               alert("Failed to copy message.");
@@ -581,17 +563,17 @@
           messageInput.dataset.replyText = messageText.substring(0, 30) + (messageText.length > 30 ? '...' : '');
           messageInput.placeholder = `Replying to "${messageInput.dataset.replyText}"...`;
           messageInput.focus();
-          picker.remove();
+          popup.remove();
         });
         dropdown.querySelector('.forward-option').addEventListener('click', () => {
           alert("Forward feature not implemented yet.");
-          picker.remove();
+          popup.remove();
         });
         dropdown.querySelector('.pin-option').addEventListener('click', async () => {
           showLoading();
           try {
             await update(ref(db, `messages/${chatId}/${messageId}`), { pinned: true });
-            picker.remove();
+            popup.remove();
           } catch (error) {
             console.error("Error pinning message:", error);
             alert("Failed to pin message.");
@@ -600,14 +582,14 @@
         });
       });
 
-      // Dismiss picker on outside click
-      const dismissPicker = (e) => {
-        if (!picker.contains(e.target) && !messageDiv.contains(e.target)) {
-          picker.remove();
-          document.removeEventListener('click', dismissPicker);
+      // Dismiss popup on outside click
+      const dismissPopup = (e) => {
+        if (!popup.contains(e.target) && !messageDiv.contains(e.target)) {
+          popup.remove();
+          document.removeEventListener('click', dismissPopup);
         }
       };
-      setTimeout(() => document.addEventListener('click', dismissPicker), 0);
+      setTimeout(() => document.addEventListener('click', dismissPopup), 0);
     }
 
     function renderMessage(message, isSent, userData, messageId, chatId, userId) {
@@ -619,7 +601,6 @@
       const content = message.image 
         ? `<img src="${message.image}" class="message-image" alt="Shared image" />`
         : `<p class="message-text" ${message.replyTo ? `data-reply="${replyText}"` : ''}>${messageText}</p>`;
-      const reactions = message.reactions ? Object.values(message.reactions).join(' ') : '';
       const readReceipt = isSent ? (message.read ? 'read' : '') : '';
       div.innerHTML = `
         ${content}
@@ -627,18 +608,17 @@
           ${timeAgo(message.timestamp)}
           ${isSent ? `<svg class="read-receipt ${readReceipt}" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z"/></svg>` : ''}
         </p>
-        <div class="reactions ${reactions ? '' : 'hidden'}">${reactions}</div>
       `;
 
-      // Long press for reaction picker
+      // Long press for delete popup
       let touchTimer;
       div.addEventListener('mousedown', () => {
-        touchTimer = setTimeout(() => showReactionPicker(div, messageId, chatId, userId, isSent, messageText, message.replyTo), 500);
+        touchTimer = setTimeout(() => showDeletePopup(div, messageId, chatId, isSent, messageText, message.replyTo), 500);
       });
       div.addEventListener('mouseup', () => clearTimeout(touchTimer));
       div.addEventListener('touchstart', (e) => {
         e.preventDefault();
-        touchTimer = setTimeout(() => showReactionPicker(div, messageId, chatId, userId, isSent, messageText, message.replyTo), 500);
+        touchTimer = setTimeout(() => showDeletePopup(div, messageId, chatId, isSent, messageText, message.replyTo), 500);
       });
       div.addEventListener('touchend', () => clearTimeout(touchTimer));
 
@@ -756,7 +736,7 @@
             const messageIds = Object.keys(messages)
               .filter(id => messages[id].timestamp < messages[lastMessageId].timestamp)
               .sort((a, b) => messages[b].timestamp - messages[a].timestamp)
-              .slice(0, 20); // Load 20 older messages
+              .slice(0, 20);
             if (messageIds.length) {
               lastMessageId = messageIds[messageIds.length - 1];
               const userData = friendSnap.val();
