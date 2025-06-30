@@ -74,33 +74,6 @@
     .loading-overlay {
       background: rgba(0, 0, 0, 0.5);
     }
-    /* Customize Google Places Autocomplete */
-    .pac-container {
-      background: white;
-      border-radius: 8px;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
-      border: 1px solid #d1d5db;
-      z-index: 1000;
-    }
-    .pac-container.dark {
-      background: #374151;
-      border: 1px solid #6b7280;
-      color: #e5e7eb;
-    }
-    .pac-item {
-      padding: 0.75rem;
-      color: #374151;
-      cursor: pointer;
-    }
-    .pac-item.dark {
-      color: #e5e7eb;
-    }
-    .pac-item:hover {
-      background: #f3f4f6;
-    }
-    .pac-item.dark:hover {
-      background: #4b5563;
-    }
   </style>
 </head>
 <body>
@@ -121,7 +94,7 @@
         <textarea id="item-description" class="p-2 border rounded w-full" rows="4"></textarea>
       </div>
       <div class="mb-4">
-        <label for="item-price" class="block text-sm font-medium mb-1">Price ($)</label>
+        <label for="item-price" class="block text-sm font-medium mb-1">Price (R)</label>
         <input id="item-price" type="number" min="0" step="0.01" class="p-2 border rounded w-full" required>
         <p id="price-error" class="error hidden">Please enter a valid price (0 or greater).</p>
       </div>
@@ -137,11 +110,6 @@
         </select>
         <p id="category-error" class="error hidden">Please select a category.</p>
       </div>
-      <div class="mb-4">
-        <label for="item-location" class="block text-sm font-medium mb-1">Location</label>
-        <input id="item-location" type="text" class="p-2 border rounded w-full" required>
-        <p id="location-error" class="error hidden">Please select a valid location.</p>
-      </div>
       <button type="submit" class="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600 transition duration-200">Add Item/Service</button>
     </form>
   </div>
@@ -153,9 +121,6 @@
       <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4z"/>
     </svg>
   </div>
-
-  <!-- Google Maps Places API -->
-  <script async src="https://maps.googleapis.com/maps/api/js?key=YOUR_API_KEY&libraries=places"></script>
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
@@ -184,10 +149,6 @@
     const priceError = document.getElementById("price-error");
     const itemCategoryInput = document.getElementById("item-category");
     const categoryError = document.getElementById("category-error");
-    const itemLocationInput = document.getElementById("item-location");
-    const locationError = document.getElementById("location-error");
-
-    let selectedLocation = null;
 
     function showLoading() { loadingOverlay.classList.remove("hidden"); }
     function hideLoading() { loadingOverlay.classList.add("hidden"); }
@@ -200,31 +161,6 @@
       document.querySelectorAll('label').forEach(el => el.classList.toggle('dark', isDark));
       document.querySelectorAll('input, textarea, select').forEach(el => el.classList.toggle('dark', isDark));
       document.querySelectorAll('.error').forEach(el => el.classList.toggle('dark', isDark));
-      document.querySelectorAll('.pac-container').forEach(el => el.classList.toggle('dark', isDark));
-      document.querySelectorAll('.pac-item').forEach(el => el.classList.toggle('dark', isDark));
-    }
-
-    // Initialize Google Places Autocomplete
-    function initAutocomplete() {
-      const autocomplete = new google.maps.places.Autocomplete(itemLocationInput, {
-        types: ['address'],
-        fields: ['formatted_address', 'geometry']
-      });
-      autocomplete.addListener('place_changed', () => {
-        const place = autocomplete.getPlace();
-        if (place.formatted_address && place.geometry) {
-          selectedLocation = {
-            address: place.formatted_address,
-            latitude: place.geometry.location.lat(),
-            longitude: place.geometry.location.lng()
-          };
-          itemLocationInput.value = place.formatted_address;
-          locationError.classList.add('hidden');
-        } else {
-          selectedLocation = null;
-          locationError.classList.remove('hidden');
-        }
-      });
     }
 
     onAuthStateChanged(auth, async user => {
@@ -236,7 +172,6 @@
         const snap = await get(ref(db, `users/${user.uid}/settings`));
         const settings = snap.val() || {};
         applyTheme(settings.theme || 'light');
-        initAutocomplete();
       } catch (error) {
         console.error('Error loading theme:', error);
       }
@@ -272,13 +207,6 @@
           categoryError.classList.add("hidden");
         }
 
-        if (!selectedLocation) {
-          locationError.classList.remove("hidden");
-          isValid = false;
-        } else {
-          locationError.classList.add("hidden");
-        }
-
         if (!isValid) return;
 
         showLoading();
@@ -289,7 +217,6 @@
             description,
             price,
             category,
-            location: selectedLocation,
             createdAt: Date.now()
           });
           location.href = "index.html";
