@@ -36,6 +36,7 @@
       border-radius: 8px;
       box-shadow: 0 1px 3px rgba(0,0,0,0.05);
       transition: background 0.3s ease;
+      position: relative;
     }
     .form-box.dark {
       background: #374151;
@@ -61,9 +62,11 @@
       padding: 0.75rem;
       border-radius: 8px;
       font-weight: 600;
+      transition: background 0.2s ease, transform 0.2s ease;
     }
     .btn-primary:hover {
       background: #dc2626;
+      transform: scale(1.02);
     }
     .btn-secondary {
       background: #e5e7eb;
@@ -85,6 +88,60 @@
     .label-dark {
       color: #e5e7eb;
     }
+    .suggestions-dropdown {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      background: white;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      max-height: 200px;
+      overflow-y: auto;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+      z-index: 10;
+      margin-top: 0.5rem;
+      display: none;
+    }
+    .suggestions-dropdown.dark {
+      background: #374151;
+      border-color: #6b7280;
+      color: #e5e7eb;
+    }
+    .suggestion-item {
+      padding: 0.75rem;
+      cursor: pointer;
+      border-left: 3px solid transparent;
+      transition: background 0.2s ease, border-color 0.2s ease;
+    }
+    .suggestion-item:hover {
+      background: #f3f4f6;
+      border-left-color: #ef4444;
+    }
+    .suggestion-item.dark:hover {
+      background: #4b5563;
+      border-left-color: #dc2626;
+    }
+    .suggestion-name {
+      font-weight: 600;
+      color: #374151;
+    }
+    .suggestion-name.dark {
+      color: #e5e7eb;
+    }
+    .suggestion-email {
+      font-size: 0.85rem;
+      color: #6b7280;
+    }
+    .suggestion-email.dark {
+      color: #9ca3af;
+    }
+    #friend-result.error {
+      color: #ef4444;
+    }
+    #friend-result.error.dark {
+      color: #dc2626;
+    }
   </style>
 </head>
 <body>
@@ -105,7 +162,10 @@
       Add New Friend
     </h3>
     <form id="add-friend-form">
-      <input type="email" id="friend-email" class="input-field dark:input-field mb-3" placeholder="Friend's Email" required />
+      <div class="relative">
+        <input type="email" id="friend-email" class="input-field dark:input-field mb-3" placeholder="Friend's Email" required autocomplete="off" />
+        <div id="suggestions-dropdown" class="suggestions-dropdown"></div>
+      </div>
       <button type="submit" class="w-full btn-primary flex items-center justify-center gap-2">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
@@ -144,8 +204,12 @@
   const db = getDatabase();
 
   const addFriendForm = document.getElementById("add-friend-form");
+  const friendEmailInput = document.getElementById("friend-email");
   const friendResult = document.getElementById("friend-result");
+  const suggestionsDropdown = document.getElementById("suggestions-dropdown");
   const loadingOverlay = document.getElementById("loading-overlay");
+  let currentUserUid = null;
+  let friendUids = new Set();
 
   function showLoading() { loadingOverlay.classList.remove("hidden"); }
   function hideLoading() { loadingOverlay.classList.add("hidden"); }
@@ -157,28 +221,126 @@
     document.querySelector('.form-box').classList.toggle('dark', isDark);
     document.querySelector('.input-field').classList.toggle('dark', isDark);
     document.querySelectorAll('.text-lg').forEach(el => el.classList.toggle('dark:text-gray-100', isDark));
+    document.querySelector('.suggestions-dropdown').classList.toggle('dark', isDark);
+    document.querySelectorAll('.suggestion-item').forEach(el => el.classList.toggle('dark', isDark));
+    document.querySelectorAll('.suggestion-name').forEach(el => el.classList.toggle('dark', isDark));
+    document.querySelectorAll('.suggestion-email').forEach(el => el.classList.toggle('dark', isDark));
+    document.querySelector('#friend-result').classList.toggle('dark', isDark && friendResult.classList.contains('error'));
   }
+
+  // Debounce function to limit Firebase queries
+  function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+      const later = () => {
+        clearTimeout(timeout);
+        func(...args);
+      };
+      clearTimeout(timeout);
+      timeout = setTimeout(later, wait);
+    };
+  }
+
+  async function loadFriends(uid) {
+    const chatsRef = ref(db, "chats");
+    const chatsSnap = await get(chatsRef);
+    friendUids.clear();
+    if (chatsSnap.exists()) {
+      const chats = chatsSnap.val();
+      for (const chatId in chats) {
+        const participants = chats[chatId].participants || {};
+        if (participants[uid]) {
+          for (const friendUid in participants) {
+            if (friendUid !== uid) friendUids.add(friendUid);
+          }
+        }
+      }
+    }
+  }
+
+  async function showSuggestions(query) {
+    if (!query) {
+      suggestionsDropdown.style.display = 'none';
+      return;
+    }
+
+    try {
+      const usersRef = ref(db, "users");
+      const usersSnap = await get(usersRef);
+      const users = usersSnap.val() || {};
+      suggestionsDropdown.innerHTML = '';
+
+      const suggestions = Object.entries(users)
+        .filter(([uid, user]) => 
+          uid !== currentUserUid &&
+          !friendUids.has(uid) &&
+          user.email && 
+          user.email.toLowerCase().includes(query.toLowerCase())
+        )
+        .slice(0, 5); // Limit to 5 suggestions
+
+      if (suggestions.length === 0) {
+        suggestionsDropdown.style.display = 'none';
+        return;
+      }
+
+      suggestions.forEach(([uid, user]) => {
+        const suggestion = document.createElement('div');
+        suggestion.className = 'suggestion-item';
+        suggestion.innerHTML = `
+          <p class="suggestion-name">${user.name || 'User'}</p>
+          <p class="suggestion-email">${user.email}</p>
+        `;
+        suggestion.addEventListener('click', () => {
+          friendEmailInput.value = user.email;
+          suggestionsDropdown.style.display = 'none';
+        });
+        suggestionsDropdown.appendChild(suggestion);
+      });
+
+      suggestionsDropdown.style.display = 'block';
+    } catch (error) {
+      console.error('Error fetching suggestions:', error);
+    }
+  }
+
+  const debouncedShowSuggestions = debounce(showSuggestions, 300);
 
   onAuthStateChanged(auth, async user => {
     if (!user) {
       location.href = "signup.html";
       return;
     }
+    currentUserUid = user.uid;
     try {
       const snap = await get(ref(db, `users/${user.uid}/settings`));
       const settings = snap.val() || {};
       applyTheme(settings.theme || 'light');
+      await loadFriends(user.uid);
     } catch (error) {
-      console.error('Error loading theme:', error);
+      console.error('Error loading theme or friends:', error);
+    }
+  });
+
+  friendEmailInput.addEventListener('input', (e) => {
+    debouncedShowSuggestions(e.target.value.trim());
+  });
+
+  // Hide suggestions when clicking outside
+  document.addEventListener('click', (e) => {
+    if (!friendEmailInput.contains(e.target) && !suggestionsDropdown.contains(e.target)) {
+      suggestionsDropdown.style.display = 'none';
     }
   });
 
   addFriendForm.onsubmit = async (e) => {
     e.preventDefault();
     showLoading();
+    friendResult.classList.remove('error');
     friendResult.textContent = "Adding friend...";
-    const friendEmail = document.getElementById("friend-email").value.trim();
+    const friendEmail = friendEmailInput.value.trim();
     if (!friendEmail) {
+      friendResult.classList.add('error');
       friendResult.textContent = "Please enter an email.";
       hideLoading();
       return;
@@ -191,13 +353,22 @@
       const friendUid = Object.keys(users).find(uid => users[uid].email === friendEmail);
 
       if (!friendUid) {
+        friendResult.classList.add('error');
         friendResult.textContent = "User not found.";
         hideLoading();
         return;
       }
 
       if (friendUid === auth.currentUser.uid) {
+        friendResult.classList.add('error');
         friendResult.textContent = "You cannot add yourself.";
+        hideLoading();
+        return;
+      }
+
+      if (friendUids.has(friendUid)) {
+        friendResult.classList.add('error');
+        friendResult.textContent = "This user is already your friend.";
         hideLoading();
         return;
       }
@@ -212,6 +383,7 @@
         window.location.href = "friends.html";
       }, 1000);
     } catch (error) {
+      friendResult.classList.add('error');
       friendResult.textContent = "Error adding friend.";
       console.error("Error adding friend:", error);
     }
