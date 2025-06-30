@@ -8,19 +8,23 @@
   <style>
     body {
       font-family: 'Inter', 'Segoe UI', sans-serif;
-      background: linear-gradient(to bottom, #f9f9f9, #e5e7eb);
-      transition: background 0.3s ease;
-      user-select: none; /* Prevent text selection */
-      -webkit-user-select: none; /* Safari */
-      -moz-user-select: none; /* Firefox */
-      -ms-user-select: none; /* IE/Edge */
+      background: linear-gradient(135deg, #f9fafb, #e5e7eb);
+      transition: background 0.3s ease, color 0.3s ease;
+      user-select: none;
+      -webkit-user-select: none;
+      -moz-user-select: none;
+      -ms-user-select: none;
+      margin: 0;
+      height: 100vh;
+      overflow: hidden;
     }
     body.dark {
-      background: linear-gradient(to bottom, #1f2937, #111827);
+      background: linear-gradient(135deg, #1f2937, #111827);
     }
     .header {
       background: white;
       box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+      z-index: 10;
     }
     .header.dark {
       background: #374151;
@@ -28,22 +32,25 @@
       color: #e5e7eb;
     }
     .chat-container {
-      height: calc(100vh - 200px);
+      height: calc(100vh - 136px);
       overflow-y: auto;
-      padding: 1rem;
+      padding: 1.5rem;
       scrollbar-width: thin;
       scrollbar-color: #ef4444 #e5e7eb;
-      user-select: none; /* Prevent text selection in chat */
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
     }
     .chat-container::-webkit-scrollbar {
-      width: 6px;
+      width: 8px;
     }
     .chat-container::-webkit-scrollbar-track {
       background: #e5e7eb;
+      border-radius: 4px;
     }
     .chat-container::-webkit-scrollbar-thumb {
       background: #ef4444;
-      border-radius: 3px;
+      border-radius: 4px;
     }
     .chat-container.dark::-webkit-scrollbar-track {
       background: #4b5563;
@@ -53,40 +60,64 @@
     }
     .message {
       max-width: 70%;
-      margin-bottom: 1rem;
-      padding: 0.75rem;
-      border-radius: 8px;
+      padding: 0.75rem 1rem;
+      border-radius: 12px;
       position: relative;
-      user-select: none; /* Prevent text selection in messages */
+      animation: slideIn 0.3s ease;
+      transition: transform 0.2s ease;
+    }
+    .message:hover {
+      transform: translateY(-2px);
     }
     .message.sent {
       background: #ef4444;
       color: white;
       margin-left: auto;
-      border-bottom-right-radius: 0;
+      border-bottom-right-radius: 4px;
     }
     .message.received {
       background: #e5e7eb;
       color: #1f2937;
       margin-right: auto;
-      border-bottom-left-radius: 0;
+      border-bottom-left-radius: 4px;
     }
     .message.dark.received {
       background: #4b5563;
       color: #e5e7eb;
     }
-    .message-time {
-      font-size: 0.75rem;
-      color: #888;
-      margin-top: 4px;
-    }
-    .message.dark .message-time {
-      color: #9ca3af;
-    }
     .message img {
       max-width: 100%;
       border-radius: 8px;
       margin-top: 0.5rem;
+      display: block;
+      loading: lazy;
+    }
+    .message-time {
+      font-size: 0.75rem;
+      color: #888;
+      margin-top: 4px;
+      opacity: 0.8;
+    }
+    .message.dark .message-time {
+      color: #9ca3af;
+    }
+    .message-reactions {
+      display: flex;
+      gap: 0.5rem;
+      margin-top: 0.25rem;
+      font-size: 1rem;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+    }
+    .message:hover .message-reactions {
+      opacity: 1;
+    }
+    .message-reaction {
+      cursor: pointer;
+      transition: transform 0.2s ease;
+    }
+    .message-reaction:hover {
+      transform: scale(1.2);
     }
     .input-container {
       position: fixed;
@@ -96,6 +127,10 @@
       background: white;
       padding: 1rem;
       border-top: 1px solid #ddd;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      z-index: 10;
     }
     .input-container.dark {
       background: #374151;
@@ -103,11 +138,16 @@
     }
     .input-container input[type="text"] {
       flex-grow: 1;
-      padding: 0.5rem;
+      padding: 0.75rem;
       border: 1px solid #ddd;
       border-radius: 8px;
       background: white;
       color: #1f2937;
+      transition: border-color 0.2s ease;
+    }
+    .input-container input[type="text"]:focus {
+      outline: none;
+      border-color: #ef4444;
     }
     .input-container.dark input[type="text"] {
       background: #4b5563;
@@ -120,14 +160,15 @@
     .input-container button {
       background: #ef4444;
       color: white;
-      padding: 0.5rem 1rem;
+      padding: 0.75rem;
       border-radius: 8px;
-      margin-left: 0.5rem;
-    }
-    .input-container.dark button {
-      background: #dc2626;
+      transition: background 0.2s ease, transform 0.2s ease;
     }
     .input-container button:hover {
+      background: #dc2626;
+      transform: translateY(-1px);
+    }
+    .input-container.dark button {
       background: #dc2626;
     }
     .emoji-picker {
@@ -137,21 +178,61 @@
       background: white;
       border: 1px solid #ddd;
       border-radius: 8px;
-      padding: 0.5rem;
+      padding: 1rem;
       display: none;
-      flex-wrap: wrap;
+      flex-direction: column;
       gap: 0.5rem;
-      max-width: 300px;
+      max-width: 320px;
+      width: 90%;
+      max-height: 300px;
+      overflow-y: auto;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      z-index: 20;
+      animation: slideUp 0.3s ease;
     }
     .emoji-picker.dark {
       background: #4b5563;
       border-color: #6b7280;
+      color: #e5e7eb;
     }
-    .emoji-picker button {
+    .emoji-picker input {
+      padding: 0.5rem;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      width: 100%;
+    }
+    .emoji-picker.dark input {
+      background: #374151;
+      border-color: #6b7280;
+      color: #e5e7eb;
+    }
+    .emoji-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+    .emoji-group button {
       background: none;
       border: none;
       font-size: 1.5rem;
       cursor: pointer;
+      transition: transform 0.2s ease;
+    }
+    .emoji-group button:hover {
+      transform: scale(1.2);
+    }
+    .typing-indicator {
+      font-size: 0.85rem;
+      color: #888;
+      padding: 0.5rem 1.5rem;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+    .typing-indicator.active {
+      opacity: 1;
+    }
+    .typing-indicator.dark {
+      color: #9ca3af;
     }
     .loading-overlay {
       position: fixed;
@@ -174,12 +255,31 @@
     .status-offline {
       background: #9ca3af;
     }
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes slideUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @media (max-width: 640px) {
+      .chat-container {
+        padding: 1rem;
+      }
+      .message {
+        max-width: 85%;
+      }
+      .input-container {
+        padding: 0.75rem;
+      }
+    }
   </style>
 </head>
 <body>
   <header class="header p-4 flex items-center justify-between">
     <div class="flex items-center">
-      <a href="index.html" class="mr-4">
+      <a href="index.html" class="mr-4" aria-label="Back to home">
         <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
         </svg>
@@ -188,29 +288,34 @@
       <span id="friend-name" class="text-lg font-bold text-red-500">Friend</span>
       <div id="friend-status" class="status-indicator status-offline"></div>
     </div>
-    <a id="friend-profile-link" href="#" class="text-sm bg-red-500 text-white px-4 py-1 rounded-full hover:bg-red-600 transition duration-200">
+    <a id="friend-profile-link" href="#" class="text-sm bg-red-500 text-white px-4 py-1 rounded-full hover:bg-red-600 transition duration-200" aria-label="View friend's profile">
       View Profile
     </a>
   </header>
 
-  <div id="chat-container" class="chat-container" aria-live="polite" aria-relevant="additions"></div>
+  <div id="chat-container" class="chat-container" aria-live="polite" aria-relevant="additions text">
+    <div id="typing-indicator" class="typing-indicator">Friend is typing...</div>
+  </div>
 
-  <div id="emoji-picker" class="emoji-picker"></div>
+  <div id="emoji-picker" class="emoji-picker">
+    <input type="text" id="emoji-search" placeholder="Search emojis..." aria-label="Search emojis"/>
+    <div id="emoji-groups"></div>
+  </div>
 
   <div class="input-container flex items-center">
-    <input type="text" id="message-input" placeholder="Type a message..." />
-    <input type="file" id="image-input" accept="image/*" />
-    <button id="emoji-btn" class="flex items-center">
+    <input type="text" id="message-input" placeholder="Type a message..." aria-label="Type a message"/>
+    <input type="file" id="image-input" accept="image/*" aria-hidden="true"/>
+    <button id="emoji-btn" class="flex items-center" aria-label="Open emoji picker">
       <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
       </svg>
     </button>
-    <button id="image-btn" class="flex items-center">
+    <button id="image-btn" class="flex items-center" aria-label="Attach image">
       <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
       </svg>
     </button>
-    <button id="send-btn">Send</button>
+    <button id="send-btn" aria-label="Send message">Send</button>
   </div>
 
   <div id="loading-overlay" class="loading-overlay hidden">
@@ -223,7 +328,7 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
     import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
-    import { getDatabase, ref, onValue, push, update, get } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
+    import { getDatabase, ref, onValue, push, update, get, set } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
     import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-storage.js";
 
     const firebaseConfig = {
@@ -247,6 +352,9 @@
     const imageBtn = document.getElementById("image-btn");
     const emojiBtn = document.getElementById("emoji-btn");
     const emojiPicker = document.getElementById("emoji-picker");
+    const emojiSearch = document.getElementById("emoji-search");
+    const emojiGroups = document.getElementById("emoji-groups");
+    const typingIndicator = document.getElementById("typing-indicator");
     const loadingOverlay = document.getElementById("loading-overlay");
     const friendName = document.getElementById("friend-name");
     const friendAvatar = document.getElementById("friend-avatar");
@@ -259,11 +367,12 @@
     function applyTheme(themeValue) {
       const isDark = themeValue === 'dark';
       document.body.classList.toggle('dark', isDark);
-      document.querySelector('.header').classList.toggle('dark', isDark);
-      document.querySelector('.input-container').classList.toggle('dark', isDark);
-      document.querySelectorAll('.message').forEach(el => el.classList.toggle('dark', isDark));
-      document.querySelectorAll('.message-time').forEach(el => el.classList.toggle('dark', isDark));
-      document.querySelector('.emoji-picker').classList.toggle('dark', isDark);
+      document.querySelector('.header').classList.toggle('dark compiled', isDark);
+      document.querySelector('.input-container').classList.toggle('dark compiled', isDark);
+      document.querySelectorAll('.message').forEach(el => el.classList.toggle('dark compiled', isDark));
+      document.querySelectorAll('.message-time').forEach(el => el.classList.toggle('dark compiled', isDark));
+      document.querySelector('.emoji-picker').classList.toggle('dark compiled', isDark);
+      typingIndicator.classList.toggle('dark compiled', isDark);
     }
 
     function timeAgo(timestamp) {
@@ -276,47 +385,123 @@
       return Math.floor(diff / 86400000) + "d ago";
     }
 
-    function renderMessage(message, currentUserUid) {
-      const isSent = message.sender === currentUserUid;
-      const div = document.createElement("div");
-      div.className = `message ${isSent ? 'sent' : 'received'}`;
-      div.innerHTML = `
-        ${message.text ? `<p>${message.text}</p>` : ''}
-        ${message.image ? `<img src="${message.image}" alt="Shared image" />` : ''}
-        <p class="message-time">${timeAgo(message.timestamp)}</p>
-      `;
-      chatContainer.appendChild(div);
-      chatContainer.scrollTop = chatContainer.scrollHeight;
+    const emojiCategories = {
+      'Smileys': ['😀', '😂', '😍', '😊', '😢', '😡', '😎', '🥳', '😴', '😜'],
+      'Gestures': ['👍', '👎', '👏', '🙌', '✋', '👊', '🙏', '👌', '✌️', '🤝'],
+      'Hearts': ['❤️', '💖', '💔', '💕', '💞', '💓', '💗', '💘', '💝', '💟'],
+      'Objects': ['🎉', '🔥', '💡', '📱', '💻', '🎁', '📚', '⚽', '🎸', '🎤']
+    };
+
+    function renderEmojiPicker() {
+      emojiGroups.innerHTML = '';
+      Object.entries(emojiCategories).forEach(([category, emojis]) => {
+        const groupDiv = document.createElement("div");
+        groupDiv.innerHTML = `<h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300">${category}</h3>`;
+        const emojiDiv = document.createElement("div");
+        emojiDiv.className = "emoji-group";
+        emojis.forEach(emoji => {
+          const btn = document.createElement("button");
+          btn.textContent = emoji;
+          btn.setAttribute("aria-label", `Add ${emoji} emoji`);
+          btn.addEventListener("click", () => {
+            messageInput.value += emoji;
+            emojiPicker.style.display = 'none';
+            messageInput.focus();
+          });
+          emojiDiv.appendChild(btn);
+        });
+        groupDiv.appendChild(emojiDiv);
+        emojiGroups.appendChild(groupDiv);
+      });
     }
 
-    // Emoji picker setup
-    const emojis = ['😀', '😂', '😍', '😊', '👍', '❤️', '🔥', '🎉', '😢', '😡'];
-    emojis.forEach(emoji => {
-      const btn = document.createElement("button");
-      btn.textContent = emoji;
-      btn.addEventListener("click", () => {
-        messageInput.value += emoji;
-        emojiPicker.style.display = 'none';
+    function filterEmojis(searchTerm) {
+      emojiGroups.innerHTML = '';
+      const filtered = Object.entries(emojiCategories).reduce((acc, [category, emojis]) => {
+        const filteredEmojis = emojis.filter(emoji => emoji.includes(searchTerm));
+        if (filteredEmojis.length) acc[category] = filteredEmojis;
+        return acc;
+      }, {});
+      if (Object.keys(filtered).length === 0) {
+        emojiGroups.innerHTML = '<p class="text-sm text-gray-500 dark:text-gray-400">No emojis found</p>';
+        return;
+      }
+      Object.entries(filtered).forEach(([category, emojis]) => {
+        const groupDiv = document.createElement("div");
+        groupDiv.innerHTML = `<h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300">${category}</h3>`;
+        const emojiDiv = document.createElement("div");
+        emojiDiv.className = "emoji-group";
+        emojis.forEach(emoji => {
+          const btn = document.createElement("button");
+          btn.textContent = emoji;
+          btn.setAttribute("aria-label", `Add ${emoji} emoji`);
+          btn.addEventListener("click", () => {
+            messageInput.value += emoji;
+            emojiPicker.style.display = 'none';
+            messageInput.focus();
+          });
+          emojiDiv.appendChild(btn);
+        });
+        groupDiv.appendChild(emojiDiv);
+        emojiGroups.appendChild(groupDiv);
       });
-      emojiPicker.appendChild(btn);
-    });
+    }
 
     emojiBtn.onclick = () => {
       emojiPicker.style.display = emojiPicker.style.display === 'flex' ? 'none' : 'flex';
+      if (emojiPicker.style.display === 'flex') {
+        emojiSearch.value = '';
+        renderEmojiPicker();
+        emojiSearch.focus();
+      }
     };
 
-    // Close emoji picker when clicking outside
+    emojiSearch.oninput = () => filterEmojis(emojiSearch.value);
+
     document.addEventListener('click', (e) => {
       if (!emojiPicker.contains(e.target) && e.target !== emojiBtn) {
         emojiPicker.style.display = 'none';
       }
     });
 
+    function renderMessage(message, currentUserUid, messageId, chatId) {
+      const isSent = message.sender === currentUserUid;
+      const div = document.createElement("div");
+      div.className = `message ${isSent ? 'sent' : 'received'}`;
+      div.setAttribute("aria-label", isSent ? "Sent message" : "Received message");
+      div.tabIndex = 0;
+      const reactions = message.reactions || {};
+      div.innerHTML = `
+        ${message.text ? `<p>${message.text}</p>` : ''}
+        ${message.image ? `<img src="${message.image}" alt="Shared image" loading="lazy" />` : ''}
+        <div class="message-reactions">
+          ${Object.entries(reactions).map(([emoji, count]) => `<span class="message-reaction" data-emoji="${emoji}" data-mid="${messageId}">${emoji} ${count}</span>`).join('')}
+          <span class="message-reaction" data-emoji="👍" data-mid="${messageId}">👍</span>
+          <span class="message-reaction" data-emoji="❤️" data-mid="${messageId}">❤️</span>
+        </div>
+        <p class="message-time">${timeAgo(message.timestamp)}</p>
+      `;
+      chatContainer.insertBefore(div, typingIndicator);
+      chatContainer.scrollTop = chatContainer.scrollHeight;
+
+      div.querySelectorAll('.message-reaction').forEach(reaction => {
+        reaction.addEventListener('click', async () => {
+          const emoji = reaction.dataset.emoji;
+          const mid = reaction.dataset.mid;
+          const reactionRef = ref(db, `messages/${chatId}/${mid}/reactions/${emoji}`);
+          const snap = await get(reactionRef);
+          const currentCount = snap.exists() ? snap.val() : 0;
+          await set(reactionRef, currentCount + 1);
+        });
+      });
+    }
+
     async function loadChat(currentUserUid, friendUid) {
       showLoading();
       const chatId = currentUserUid < friendUid ? `${currentUserUid}_${friendUid}` : `${friendUid}_${currentUserUid}`;
       const messagesRef = ref(db, `messages/${chatId}`);
       const userRef = ref(db, `users/${friendUid}`);
+      const typingRef = ref(db, `typing/${chatId}/${friendUid}`);
 
       // Load friend info
       const userSnap = await get(userRef);
@@ -328,19 +513,25 @@
 
       // Load messages
       onValue(messagesRef, (snap) => {
-        chatContainer.innerHTML = "";
+        chatContainer.innerHTML = '';
+        chatContainer.appendChild(typingIndicator);
         if (!snap.exists()) {
           hideLoading();
           return;
         }
         const messages = snap.val();
         for (const mid in messages) {
-          renderMessage(messages[mid], currentUserUid);
+          renderMessage(messages[mid], currentUserUid, mid, chatId);
           if (messages[mid].sender !== currentUserUid && !messages[mid].read) {
             update(ref(db, `messages/${chatId}/${mid}`), { read: true });
           }
         }
         hideLoading();
+      }, { onlyOnce: false });
+
+      // Typing indicator
+      onValue(typingRef, (snap) => {
+        typingIndicator.classList.toggle('active', snap.exists() && snap.val());
       });
     }
 
@@ -365,6 +556,15 @@
       }
       await loadChat(user.uid, friendUid);
 
+      let typingTimeout;
+      messageInput.oninput = () => {
+        const chatId = user.uid < friendUid ? `${user.uid}_${friendUid}` : `${friendUid}_${user.uid}`;
+        const typingRef = ref(db, `typing/${chatId}/${user.uid}`);
+        clearTimeout(typingTimeout);
+        set(typingRef, true);
+        typingTimeout = setTimeout(() => set(typingRef, false), 2000);
+      };
+
       sendBtn.onclick = async () => {
         const text = messageInput.value.trim();
         if (!text) return;
@@ -380,12 +580,20 @@
           await push(ref(db, `messages/${chatId}`), message);
           messageInput.value = "";
           emojiPicker.style.display = 'none';
+          set(ref(db, `typing/${chatId}/${user.uid}`), false);
         } catch (error) {
           console.error("Error sending message:", error);
           alert("Failed to send message.");
         }
         hideLoading();
       };
+
+      messageInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          sendBtn.click();
+        }
+      });
 
       imageBtn.onclick = () => imageInput.click();
 
@@ -413,6 +621,8 @@
         }
         hideLoading();
       };
+
+      renderEmojiPicker();
     });
   </script>
 </body>
