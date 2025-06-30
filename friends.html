@@ -62,27 +62,31 @@
     }
     .friend-card, .status-card, .service-card {
       display: flex;
-      align-items: center;
+      flex-direction: column;
       background: white;
-      padding: 1rem;
-      border-radius: 8px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-      margin-bottom: 1rem;
+      border-radius: 12px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+      margin-bottom: 1.5rem;
       cursor: pointer;
       border: 2px solid transparent;
-      transition: box-shadow 0.3s, border-color 0.3s, background 0.3s;
+      transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.3s ease;
+    }
+    .friend-card, .status-card {
+      padding: 1rem;
     }
     .friend-card.dark, .status-card.dark, .service-card.dark {
       background: #374151;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
       color: #e5e7eb;
     }
     .friend-card.unread {
       border-color: #ef4444;
-      box-shadow: 0 4px 10px rgba(239,68,68,0.5);
+      box-shadow: 0 4px 12px rgba(239,68,68,0.5);
     }
     .friend-card:hover, .status-card:hover, .service-card:hover {
       background: #f3f4f6;
+      transform: scale(1.02);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
     }
     .friend-card.dark:hover, .status-card.dark:hover, .service-card.dark:hover {
       background: #4b5563;
@@ -110,12 +114,12 @@
     .last-seen, .status-time, .member-count, .service-time {
       font-size: 0.8rem;
       color: #888;
-      margin-top: 2px;
+      margin-top: 4px;
     }
     .last-seen.dark, .status-time.dark, .member-count.dark, .service-time.dark {
       color: #9ca3af;
     }
-    .group-avatar, .status-avatar, .service-avatar {
+    .group-avatar, .status-avatar {
       width: 48px;
       height: 48px;
       border-radius: 9999px;
@@ -125,21 +129,61 @@
       object-fit: cover;
     }
     .service-card {
-      max-width: 90%;
+      max-width: 95%;
+      min-height: 200px;
       padding: 1.5rem;
+      position: relative;
     }
-    .service-card .service-avatar {
-      width: 64px;
-      height: 64px;
+    .service-avatar {
+      width: 56px;
+      height: 56px;
+      border-radius: 9999px;
+      margin-right: 1rem;
+      flex-shrink: 0;
+      background-color: #eee;
+      object-fit: cover;
+    }
+    .service-image {
+      width: 100%;
+      max-height: 150px;
+      object-fit: cover;
+      border-radius: 8px;
+      margin: 0.5rem 0;
     }
     .sponsored-text {
       font-size: 0.9rem;
       font-weight: bold;
+      text-transform: uppercase;
       color: #ef4444;
-      margin-bottom: 0.5rem;
+      background: #fef2f2;
+      padding: 0.25rem 0.5rem;
+      border-radius: 4px;
+      margin-bottom: 0.75rem;
+      display: inline-block;
     }
     .sponsored-text.dark {
       color: #dc2626;
+      background: #1f2937;
+    }
+    .service-cta {
+      display: inline-block;
+      padding: 0.5rem 1rem;
+      background: #ef4444;
+      color: white;
+      border-radius: 8px;
+      font-weight: 600;
+      margin-top: 0.75rem;
+      transition: background 0.2s ease, transform 0.2s ease;
+    }
+    .service-cta:hover {
+      background: #dc2626;
+      transform: translateY(-2px);
+    }
+    .service-cta.dark {
+      background: #dc2626;
+    }
+    .service-cta.dark:hover {
+      background: #b91c1c;
     }
     .group-info {
       flex-grow: 1;
@@ -178,6 +222,9 @@
       color: #ef4444;
       cursor: pointer;
       transition: color 0.2s ease;
+      position: absolute;
+      top: 1.5rem;
+      right: 1.5rem;
     }
     .delete-icon:hover {
       color: #dc2626;
@@ -362,7 +409,7 @@
     document.querySelector('.header').classList.toggle('dark', isDark);
     document.querySelector('.tab-nav').classList.toggle('dark', isDark);
     document.querySelectorAll('.friend-card, .status-card, .service-card').forEach(el => el.classList.toggle('dark', isDark));
-    document.querySelectorAll('.status-text, .service-description, .sponsored-text').forEach(el => el.classList.toggle('dark', isDark));
+    document.querySelectorAll('.status-text, .service-description, .sponsored-text, .service-cta').forEach(el => el.classList.toggle('dark', isDark));
     document.querySelectorAll('.last-seen, .status-time, .member-count, .service-time').forEach(el => el.classList.toggle('dark', isDark));
     document.querySelectorAll('#no-friends-message, #no-groups-message, #no-statuses-message, #no-own-statuses-message, #no-services-message').forEach(el => el.classList.toggle('dark', isDark));
     document.querySelectorAll('.tab-nav button').forEach(el => el.classList.toggle('dark', isDark));
@@ -470,12 +517,14 @@
     if (unreadCount > 0) card.classList.add("unread");
 
     card.innerHTML = `
-      <img src="${data.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${data.name || 'Friend'}" class="w-12 h-12 rounded-full mr-4" />
-      <div>
-        <h4 class="font-bold dark:text-gray-100">${data.name || "Friend"}</h4>
-        <p class="last-seen">${data.presence === 'online' ? 'Online' : 'Last seen: ' + timeAgo(data.lastSeen)}</p>
+      <div class="flex items-center">
+        <img src="${data.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${data.name || 'Friend'}" class="w-12 h-12 rounded-full mr-4" />
+        <div>
+          <h4 class="font-bold dark:text-gray-100">${data.name || "Friend"}</h4>
+          <p class="last-seen">${data.presence === 'online' ? 'Online' : 'Last seen: ' + timeAgo(data.lastSeen)}</p>
+        </div>
+        <div class="status-indicator ${data.presence === 'online' ? 'status-online' : 'status-offline'}"></div>
       </div>
-      <div class="status-indicator ${data.presence === 'online' ? 'status-online' : 'status-offline'}"></div>
     `;
     card.onclick = () => { window.location.href = `chat.html?uid=${uid}`; };
     friendsList.appendChild(card);
@@ -555,15 +604,17 @@
     const div = document.createElement("div");
     div.className = "friend-card";
     div.innerHTML = `
-      <img src="${avatarUrl}" alt="${group.name} avatar" class="group-avatar" />
-      <div class="group-info">
-        <h4 class="font-bold dark:text-gray-100">${group.name}</h4>
-        <p class="member-count">${memberCount} member${memberCount !== 1 ? 's' : ''}</p>
-        <p class="last-seen">Created: ${timeAgo(group.createdAt)}</p>
+      <div class="flex items-center">
+        <img src="${avatarUrl}" alt="${group.name} avatar" class="group-avatar" />
+        <div class="group-info">
+          <h4 class="font-bold dark:text-gray-100">${group.name}</h4>
+          <p class="member-count">${memberCount} member${memberCount !== 1 ? 's' : ''}</p>
+          <p class="last-seen">Created: ${timeAgo(group.createdAt)}</p>
+        </div>
+        <svg class="delete-icon ml-auto self-start" data-gid="${gid}" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
+        </svg>
       </div>
-      <svg class="delete-icon ml-auto self-start" data-gid="${gid}" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
-      </svg>
     `;
     div.querySelector(".delete-icon").addEventListener("click", async (e) => {
       e.stopPropagation();
@@ -633,11 +684,13 @@
     const card = document.createElement("div");
     card.className = `status-card ${isOwnStatus ? 'flex-none w-64' : ''}`;
     card.innerHTML = `
-      <img src="${userData.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${userData.name || 'User'} avatar" class="status-avatar" />
-      <div class="flex-grow">
-        <h4 class="font-bold dark:text-gray-100">${userData.name || "User"}</h4>
-        <p class="status-text">${status.text || "No status text"}</p>
-        <p class="status-time">${timeAgo(status.timestamp)}</p>
+      <div class="flex items-center">
+        <img src="${userData.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${userData.name || 'User'} avatar" class="status-avatar" />
+        <div class="flex-grow">
+          <h4 class="font-bold dark:text-gray-100">${userData.name || "User"}</h4>
+          <p class="status-text">${status.text || "No status text"}</p>
+          <p class="status-time">${timeAgo(status.timestamp)}</p>
+        </div>
       </div>
     `;
     if (isOwnStatus) {
@@ -739,19 +792,21 @@
     card.className = "service-card";
     card.innerHTML = `
       <p class="sponsored-text">Sponsored</p>
-      <div class="flex items-center">
+      ${isOwnService ? `
+        <svg class="delete-icon" data-sid="${serviceId}" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
+        </svg>
+      ` : ''}
+      <div class="flex items-center mb-2">
         <img src="${userData.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${userData.name || 'User'} avatar" class="service-avatar" />
-        <div class="flex-grow">
-          <h4 class="font-bold dark:text-gray-100">${service.name || "Service"} by ${userData.name || "User"}</h4>
-          <p class="service-description">${service.description || "No description"}</p>
+        <div>
+          <h4 class="font-bold text-lg dark:text-gray-100">${service.name || "Service"} by ${userData.name || "User"}</h4>
           <p class="service-time">Added: ${timeAgo(service.createdAt)}</p>
         </div>
-        ${isOwnService ? `
-          <svg class="delete-icon ml-auto self-start" data-sid="${serviceId}" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
-          </svg>
-        ` : ''}
       </div>
+      <img src="${service.image || 'https://via.placeholder.com/300x150?text=Service+Image'}" alt="${service.name || 'Service'} image" class="service-image" />
+      <p class="service-description">${service.description || "No description"}</p>
+      <button class="service-cta" data-sid="${serviceId}">Learn More</button>
     `;
     if (isOwnService) {
       card.querySelector(".delete-icon").addEventListener("click", async (e) => {
@@ -768,8 +823,12 @@
         }
       });
     }
+    card.querySelector(".service-cta").addEventListener("click", (e) => {
+      e.stopPropagation();
+      window.location.href = `service.html?sid=${serviceId}`;
+    });
     card.addEventListener("click", (e) => {
-      if (!e.target.closest(".delete-icon")) {
+      if (!e.target.closest(".delete-icon") && !e.target.closest(".service-cta")) {
         window.location.href = `service.html?sid=${serviceId}`;
       }
     });
