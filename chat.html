@@ -573,6 +573,7 @@
     // E2EE Functions
     async function generateAndStoreKeyPair(userId) {
       try {
+        console.log("Generating key pair for user:", userId);
         const keyPair = await crypto.subtle.generateKey(
           { name: "RSA-OAEP", modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: "SHA-256" },
           true,
@@ -582,10 +583,11 @@
         await storePrivateKey(userId, privateKey);
         const publicKey = await crypto.subtle.exportKey("jwk", keyPair.publicKey);
         await set(ref(db, `users/${userId}/publicKey`), publicKey);
+        console.log("Key pair generated and stored successfully");
         return { privateKey, publicKey };
       } catch (error) {
         console.error("Key generation error:", error);
-        showNotification("System", "Failed to generate encryption keys.");
+        showNotification("System", "Failed to generate encryption keys: " + error.message);
         throw error;
       }
     }
@@ -626,9 +628,19 @@
 
     async function encryptMessage(message, recipientId) {
       try {
+        console.log("Fetching public key for recipient:", recipientId);
         const snapshot = await get(ref(db, `users/${recipientId}/publicKey`));
-        if (!snapshot.exists()) throw new Error("Recipient public key not found");
+        if (!snapshot.exists()) {
+          throw new Error("Recipient public key not found. Please ensure the recipient has initialized their account.");
+        }
         const recipientPublicKeyJwk = snapshot.val();
+        console.log("Public key retrieved:", recipientPublicKeyJwk);
+
+        // Validate JWK format
+        if (!recipientPublicKeyJwk || !recipientPublicKeyJwk.kty || !recipientPublicKeyJwk.n || !recipientPublicKeyJwk.e) {
+          throw new Error("Invalid public key format.");
+        }
+
         const publicKey = await crypto.subtle.importKey(
           "jwk",
           recipientPublicKeyJwk,
@@ -636,11 +648,15 @@
           true,
           ["encrypt"]
         );
+        console.log("Public key imported successfully");
+
         const aesKey = await crypto.subtle.generateKey(
           { name: "AES-GCM", length: 256 },
           true,
           ["encrypt", "decrypt"]
         );
+        console.log("AES key generated");
+
         const encoder = new TextEncoder();
         const encodedMessage = encoder.encode(message);
         const iv = crypto.getRandomValues(new Uint8Array(12));
@@ -649,12 +665,16 @@
           aesKey,
           encodedMessage
         );
+        console.log("Message encrypted with AES-GCM");
+
         const exportedAesKey = await crypto.subtle.exportKey("raw", aesKey);
         const encryptedAesKey = await crypto.subtle.encrypt(
           { name: "RSA-OAEP" },
           publicKey,
           exportedAesKey
         );
+        console.log("AES key encrypted with RSA-OAEP");
+
         return {
           encryptedMessageB64: arrayBufferToBase64(encryptedMessage),
           encryptedAesKeyB64: arrayBufferToBase64(encryptedAesKey),
@@ -662,7 +682,7 @@
         };
       } catch (error) {
         console.error("Encryption error:", error);
-        throw error;
+        throw new Error(`Failed to encrypt message: ${error.message}`);
       }
     }
 
@@ -960,9 +980,20 @@
       chatId = currentUser.uid < friendUid ? `${currentUser.uid}_${friendUid}` : `${friendUid}_${currentUser.uid}`;
 
       // Check if user has a key pair; generate if not
-      const keySnap = await get(ref(db, `users/${user.uid}/publicKey`));
+      console.log("Checking sender's public key for user:", currentUser.uid);
+      const keySnap = await get(ref(db, `users/${currentUser.uid}/publicKey`));
       if (!keySnap.exists()) {
-        await generateAndStoreKeyPair(user.uid);
+        console.log("Sender's public key not found, generating...");
+        await generateAndStoreKeyPair(currentUser.uid);
+      }
+
+      // Check recipient's public key
+      console.log("Checking recipient's public key for user:", friendUid);
+      const friendKeySnap = await get(ref(db, `users/${friendUid}/publicKey`));
+      if (!friendKeySnap.exists()) {
+        showNotification("System", "Recipient's encryption key not found. Please ask them to log in to initialize their account.");
+        document.getElementById("input-area").style.display = "none";
+        return;
       }
 
       try {
@@ -1115,7 +1146,7 @@
     }
 
     sendBtn.onclick = async () => {
-      console.log("Send button clicked, isRecording:", isRecording);
+      console.log("Send button clicked, isRecording:", isRecording, "friendUid:", friendUid);
       if (isRecording) {
         console.log("Stopping voice recognition");
         recognition.stop();
