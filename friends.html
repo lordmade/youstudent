@@ -132,6 +132,13 @@
       background-color: #eee;
       object-fit: cover;
     }
+    .status-image {
+      max-width: 100%;
+      height: auto;
+      border-radius: 8px;
+      margin-top: 0.75rem;
+      display: block;
+    }
     .service-avatar {
       width: 56px;
       height: 56px;
@@ -734,7 +741,12 @@
     const hasReacted = status.reactions && status.reactions[currentUserUid];
     
     card.innerHTML = `
-      <p class="posted-by">Posted by</p>
+      ${isOwnStatus ? `
+        <svg class="delete-icon" data-sid="${statusId}" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
+        </svg>
+      ` : ''}
+      <p class="posted-by">Posted by ${userData.name || "User"}</p>
       <div class="flex items-center mb-2">
         <img src="${userData.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${userData.name || 'User'} avatar" class="status-avatar" />
         <div>
@@ -742,7 +754,10 @@
           <p class="status-time">${timeAgo(status.timestamp)}</p>
         </div>
       </div>
-      <p class="status-text">${status.text || "No status text"}</p>
+      <p class="status-text">${status.text || ""}</p>
+      ${status.imageUrl ? `
+        <img src="${status.imageUrl}" alt="Status image" class="status-image" />
+      ` : ''}
       ${!isOwnStatus ? `
         <div class="flex items-center mt-2">
           <svg class="reaction-btn ${hasReacted ? 'reacted' : ''}" data-sid="${statusId}" width="24" height="24" viewBox="0 0 24 24" fill="${hasReacted ? '#ef4444' : 'none'}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -753,6 +768,10 @@
       ` : ''}
     `;
     if (isOwnStatus) {
+      card.querySelector(".delete-icon")?.addEventListener("click", (e) => {
+        e.stopPropagation();
+        showDeleteStatusModal(statusId);
+      });
       card.addEventListener("click", () => showDeleteStatusModal(statusId));
     } else {
       const reactionBtn = card.querySelector(".reaction-btn");
