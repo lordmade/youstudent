@@ -1,532 +1,464 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Chaxo - Chat</title>
-  <script src="https://cdn.tailwindcss.com"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Chaxo</title>
   <style>
-    * { -webkit-user-select: none; user-select: none; }
     body {
-      font-family: 'Segoe UI', sans-serif;
-      background: #f9f9f9;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
       margin: 0;
-      height: 100vh;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-    }
-    body.dark {
-      background: #1f2937;
+      background: #f5f5f5;
+      overscroll-behavior: none;
+      user-select: none;
     }
     header {
-      position: fixed;
-      top: 0; left: 0; right: 0;
-      background: white;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-      padding: 1rem;
+      background: #fff;
+      padding: 10px 15px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
       display: flex;
       align-items: center;
-      justify-content: space-between;
+      position: sticky;
+      top: 0;
       z-index: 10;
-      height: 56px;
     }
-    header.dark {
-      background: #374151;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-      color: #e5e7eb;
+    header img {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      margin-right: 10px;
     }
-    #friend-profile-link {
-      display: flex;
-      align-items: center;
-      gap: 0.75rem;
-      cursor: pointer;
+    header div {
+      flex: 1;
     }
-    #notification {
-      position: fixed;
-      top: 56px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: #ef4444;
-      color: white;
-      padding: 0.75rem 1.5rem;
-      border-radius: 8px;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-      z-index: 20;
-      display: none;
-      max-width: 90%;
-      font-size: 0.9rem;
-      cursor: pointer;
-      animation: slideIn 0.3s ease;
+    header h1 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 600;
     }
-    #notification.dark {
-      background: #dc2626;
-    }
-    @keyframes slideIn {
-      from { transform: translate(-50%, -100%); opacity: 0; }
-      to { transform: translate(-50%, 0); opacity: 1; }
+    header small {
+      font-size: 12px;
+      color: #888;
     }
     #encryption-notice {
-      position: fixed;
-      top: 56px;
-      left: 0;
-      right: 0;
-      background: #f3f4f6;
-      color: #4b5563;
       text-align: center;
-      padding: 0.5rem;
-      font-size: 0.85rem;
-      z-index: 9;
-      border-bottom: 1px solid #e5e7eb;
-    }
-    #encryption-notice.dark {
-      background: #4b5563;
-      color: #d1d5db;
-      border-bottom: 1px solid #6b7280;
+      padding: 8px;
+      background: #e0f7fa;
+      color: #006064;
+      font-size: 14px;
+      font-weight: 500;
     }
     #messages {
-      flex: 1;
+      padding: 10px;
+      margin-bottom: 60px;
+      overscroll-behavior: none;
       overflow-y: auto;
-      padding: 96px 1rem 120px;
-      background: white;
-      display: flex;
-      flex-direction: column;
-      gap: 0.75rem;
-      scroll-behavior: smooth;
-      box-sizing: border-box;
-    }
-    #messages.dark {
-      background: #1f2937;
+      max-height: calc(100vh - 140px);
     }
     .message-container {
       display: flex;
       flex-direction: column;
+      align-items: flex-start;
+      margin-bottom: 10px;
+    }
+    .message-container.self {
       align-items: flex-end;
     }
-    .message-container.friend {
-      align-items: flex-start;
-    }
     .message {
-      max-width: 75%;
-      padding: 0.5rem 0.9rem;
-      border-radius: 1rem;
-      word-wrap: break-word;
-      font-size: 0.95rem;
-      line-height: 1.3;
-      box-shadow: 0 1px 2px rgba(0,0,0,0.1);
-      white-space: pre-wrap;
+      max-width: 70%;
+      padding: 8px 12px;
+      border-radius: 15px;
+      font-size: 16px;
+      line-height: 1.4;
       position: relative;
-      -webkit-user-select: text;
-      user-select: text;
-      -webkit-touch-callout: default;
-    }
-    .message.dark {
-      box-shadow: 0 1px 2px rgba(0,0,0,0.2);
-    }
-    .message.long-press-disable-select {
-      user-select: none !important;
-      -webkit-user-select: none !important;
-      -webkit-touch-callout: none !important;
-    }
-    .message.self {
-      background: #fee2e2;
-      color: #111827;
-      border-bottom-right-radius: 6px;
+      background: #fff;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+      word-wrap: break-word;
     }
     .message.friend {
-      background: #e5e7eb;
-      color: #111827;
-      border-bottom-left-radius: 6px;
-    }
-    .message.self.dark {
-      background: #7f1d1d;
-      color: #e5e7eb;
-    }
-    .message.friend.dark {
-      background: #4b5563;
-      color: #e5e7eb;
+      background: #e0f7fa;
+      color: #000;
     }
     .message small {
-      display: block;
-      font-size: 0.7rem;
+      font-size: 11px;
+      color: #888;
       margin-top: 4px;
+      display: block;
       text-align: right;
     }
-    .message.self small {
-      color: #4b5563;
-    }
-    .message.friend small {
-      color: #6b7280;
-    }
-    .message.self.dark small {
-      color: #d1d5db;
-    }
-    .message.friend.dark small {
-      color: #9ca3af;
-    }
     .message img {
-      height: 64px;
-      width: 64px;
-      object-fit: contain;
-      margin: 4px 0;
-    }
-    .reaction {
-      font-size: 1rem;
-      margin-top: 4px;
-      display: flex;
-      gap: 4px;
-    }
-    .message-container.self .reaction {
-      justify-content: flex-end;
-    }
-    .message-container.friend .reaction {
-      justify-content: flex-start;
-    }
-    .reply-preview {
-      background: #f3f4f6;
-      border-left: 4px solid #ef4444;
-      padding: 0.5rem 2.5rem 0.5rem 1rem;
-      margin-bottom: 0.5rem;
-      border-radius: 0.5rem;
-      font-size: 0.85rem;
-      color: #374151;
-      position: relative;
-    }
-    .reply-preview.dark {
-      background: #4b5563;
-      color: #e5e7eb;
+      border-radius: 10px;
     }
     .quoted-text {
-      font-size: 0.8rem;
-      color: #6b7280;
-      margin-bottom: 0.25rem;
-      border-left: 2px solid #d1d5db;
-      padding-left: 6px;
+      background: rgba(0, 0, 0, 0.1);
+      padding: 8px;
+      border-radius: 10px;
+      font-size: 14px;
+      margin-bottom: 8px;
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
-    .quoted-text.dark {
-      color: #9ca3af;
-      border-left-color: #6b7280;
+    .reaction {
+      font-size: 20px;
+      margin-top: 4px;
+      align-self: flex-end;
     }
     #input-area {
       position: fixed;
       bottom: 0;
-      left: 0;
-      right: 0;
-      background: white;
-      padding: 0.75rem 1rem;
-      box-shadow: 0 -2px 5px rgba(0,0,0,0.1);
+      width: 100%;
+      padding: 10px;
+      background: #fff;
+      box-shadow: 0 -2px 4px rgba(0, 0, 0, 0.1);
       display: flex;
-      flex-direction: column;
-      gap: 0.5rem;
-      z-index: 10;
-    }
-    #input-area.dark {
-      background: #374151;
-      box-shadow: 0 -2px 5px rgba(0,0,0,0.2);
-    }
-    #input-form {
-      display: flex;
-      gap: 0.5rem;
       align-items: center;
     }
     #message-input {
       flex: 1;
-      padding: 0.5rem 1rem;
-      border-radius: 9999px;
+      padding: 10px;
       border: 1px solid #ddd;
-      font-size: 1rem;
-      line-height: 1.2;
-      height: 40px;
-      background: white;
-      color: #111827;
+      border-radius: 20px;
+      font-size: 16px;
+      margin-right: 10px;
+      outline: none;
     }
-    #message-input.dark {
-      border-color: #4b5563;
-      background: #4b5563;
-      color: #e5e7eb;
-    }
-    #emoji-btn {
-      background: #e5e7eb;
-      color: #6b7280;
-      border-radius: 9999px;
+    #send-btn {
+      background: #007bff;
+      color: #fff;
+      border: none;
+      border-radius: 50%;
       width: 40px;
       height: 40px;
+      font-size: 16px;
+      cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
+    }
+    #send-btn:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+    #send-btn.mic-anim {
+      animation: pulse 1.5s infinite;
+    }
+    @keyframes pulse {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.1); }
+      100% { transform: scale(1); }
+    }
+    #emoji-picker {
+      position: absolute;
+      bottom: 70px;
+      display: none;
+      background: #fff;
+      padding: 10px;
+      border-radius: 10px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+      z-index: 20;
+    }
+    #emoji-picker span {
+      font-size: 24px;
+      margin: 0 5px;
       cursor: pointer;
     }
-    #emoji-btn.dark {
-      background: #4b5563;
-      color: #9ca3af;
+    #reply-box {
+      display: none;
+      background: #fff;
+      padding: 10px;
+      border-top: 1px solid #ddd;
+      position: fixed;
+      bottom: 60px;
+      width: 100%;
+      z-index: 10;
     }
-    #emoji-btn:hover {
-      background: #d1d5db;
-    }
-    #emoji-btn.dark:hover {
-      background: #6b7280;
-    }
-    #emoji-btn svg {
-      width: 24px;
-      height: 24px;
-    }
-    #send-btn {
-      background: #ef4444;
-      color: white;
-      padding: 0 1rem;
-      border-radius: 9999px;
-      font-weight: bold;
-      border: none;
-      cursor: pointer;
-      height: 40px;
-      user-select: none;
-    }
-    #send-btn.dark {
-      background: #dc2626;
+    #reply-box div {
+      max-width: 90%;
+      font-size: 14px;
+      color: #888;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
     .cancel-reply {
-      position: absolute;
-      top: 6px;
-      right: 10px;
-      color: #ef4444;
-      font-weight: bold;
       cursor: pointer;
+      font-size: 14px;
+      color: #007bff;
+      margin-left: auto;
     }
-    .cancel-reply.dark {
-      color: #dc2626;
-    }
-    .emoji-picker {
-      position: absolute;
-      background: white;
-      border-radius: 12px;
-      box-shadow: 0 0 10px rgba(0,0,0,0.15);
-      padding: 4px 8px;
-      z-index: 999;
-      display: none;
-      user-select: none;
-    }
-    .emoji-picker.dark {
-      background: #374151;
-      box-shadow: 0 0 10px rgba(0,0,0,0.3);
-    }
-    .emoji-picker span {
-      cursor: pointer;
-      padding: 4px;
-      font-size: 1.2rem;
-    }
-    .bottom-sheet {
+    #bottom-sheet {
       position: fixed;
       bottom: 0;
-      left: 0;
-      right: 0;
-      background: white;
-      border-top-left-radius: 16px;
-      border-top-right-radius: 16px;
-      box-shadow: 0 -4px 20px rgba(0,0,0,0.2);
-      max-height: 50vh;
-      overflow-y: auto;
-      z-index: 1000;
+      width: 100%;
+      background: #fff;
+      border-top-left-radius: 15px;
+      border-top-right-radius: 15px;
+      box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.2);
       transform: translateY(100%);
-      transition: transform 0.3s ease;
-      display: none;
+      transition: transform 0.3s ease-in-out;
+      z-index: 30;
+      max-height: 50vh;
+      display: flex;
+      flex-direction: column;
     }
-    .bottom-sheet.open {
+    #bottom-sheet.open {
       transform: translateY(0);
-      display: block;
-    }
-    .bottom-sheet.dark {
-      background: #374151;
     }
     .bottom-sheet-header {
       display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 0.75rem 1rem;
-      border-bottom: 1px solid #e5e7eb;
-    }
-    .bottom-sheet-header.dark {
-      border-bottom: 1px solid #4b5563;
-    }
-    .bottom-sheet-tabs {
-      display: flex;
-      gap: 1rem;
+      padding: 10px;
+      border-bottom: 1px solid #ddd;
     }
     .bottom-sheet-tab {
-      padding: 0.5rem 1rem;
-      font-weight: bold;
-      color: #6b7280;
+      flex: 1;
+      text-align: center;
+      padding: 10px;
       cursor: pointer;
+      font-size: 16px;
+      font-weight: 500;
     }
     .bottom-sheet-tab.active {
-      color: #ef4444;
-      border-bottom: 2px solid #ef4444;
+      border-bottom: 2px solid #007bff;
+      color: #007bff;
     }
-    .bottom-sheet-tab.dark {
-      color: #9ca3af;
+    #emoji-content, #sticker-content {
+      display: none;
+      padding: 10px;
+      overflow-y: auto;
+      flex: 1;
     }
-    .bottom-sheet-tab.active.dark {
-      color: #dc2626;
-      border-bottom-color: #dc2626;
-    }
-    .bottom-sheet-content {
-      padding: 1rem;
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-    }
-    .bottom-sheet-content span {
+    #emoji-content span, #sticker-content img {
+      font-size: 30px;
+      margin: 5px;
       cursor: pointer;
-      padding: 4px;
-      font-size: 1.5rem;
     }
-    .bottom-sheet-content img {
-      height: 48px;
-      width: 48px;
-      object-fit: contain;
-      cursor: pointer;
-      padding: 4px;
+    #sticker-content img {
+      width: 50px;
+      height: 50px;
     }
     .close-btn {
-      color: #ef4444;
-      font-size: 1.2rem;
+      position: absolute;
+      right: 10px;
+      top: 10px;
+      font-size: 24px;
       cursor: pointer;
+      color: #888;
     }
-    .close-btn.dark {
-      color: #dc2626;
-    }
-    .mic-anim {
-      animation: pulse 1s infinite;
-      background-color: #dc2626 !important;
-    }
-    @keyframes pulse {
-      0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.5); }
-      70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
-      100% { box-shadow: 0 0 0 0 rgba(239, 68, 0); }
-    }
-    .modal {
-      background: white;
-      padding: 1.5rem;
-      border-radius: 12px;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.2);
-      max-width: 400px;
-      width: 90%;
-      text-align: center;
-      animation: slideIn 0.3s ease;
-    }
-    .modal.dark {
-      background: #374151;
-      color: #e5e7eb;
-    }
-    .modal-buttons {
-      display: flex;
-      gap: 1rem;
+    #delete-message-modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 40;
       justify-content: center;
-      margin-top: 1.5rem;
+      align-items: center;
+    }
+    .modal-content {
+      background: #fff;
+      padding: 20px;
+      border-radius: 10px;
+      text-align: center;
+      width: 80%;
+      max-width: 300px;
+    }
+    .modal-content p {
+      margin: 0 0 20px;
+      font-size: 16px;
     }
     .modal-btn {
-      padding: 0.75rem 1.5rem;
-      border-radius: 8px;
-      font-weight: 600;
-      transition: background-color 0.3s ease, transform 0.2s ease;
+      padding: 10px 20px;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 16px;
+      margin: 0 5px;
     }
     .modal-btn-confirm {
-      background: #ef4444;
-      color: white;
-    }
-    .modal-btn-confirm:hover {
-      background: #dc2626;
-      transform: translateY(-2px);
+      background: #007bff;
+      color: #fff;
     }
     .modal-btn-cancel {
-      background: #e5e7eb;
-      color: #374151;
+      background: #ccc;
     }
-    .modal-btn-cancel:hover {
-      background: #d1d5db;
-      transform: translateY(-2px);
+    #notification {
+      position: fixed;
+      top: 80px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #fff;
+      padding: 10px 20px;
+      border-radius: 20px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+      font-size: 14px;
+      display: none;
+      z-index: 20;
+      max-width: 80%;
+      text-align: center;
+    }
+    body.dark {
+      background: #121212;
+    }
+    header.dark {
+      background: #1e1e1e;
+      color: #fff;
+    }
+    header.dark small {
+      color: #aaa;
+    }
+    #encryption-notice.dark {
+      background: #263238;
+      color: #80deea;
+    }
+    #messages.dark {
+      background: #121212;
+    }
+    .message.dark {
+      background: #1e1e1e;
+      color: #fff;
+      box-shadow: 0 1px 2px rgba(255, 255, 255, 0.1);
+    }
+    .message.friend.dark {
+      background: #263238;
+      color: #fff;
+    }
+    .message.dark small {
+      color: #aaa;
+    }
+    .quoted-text.dark {
+      background: rgba(255, 255, 255, 0.1);
+    }
+    #input-area.dark {
+      background: #1e1e1e;
+      box-shadow: 0 -2px 4px rgba(255, 255, 255, 0.1);
+    }
+    #message-input.dark {
+      background: #2c2c2c;
+      border-color: #444;
+      color: #fff;
+    }
+    #send-btn.dark {
+      background: #0288d1;
+    }
+    #send-btn.dark:disabled {
+      background: #555;
+    }
+    #emoji-picker.dark {
+      background: #1e1e1e;
+      box-shadow: 0 2px 8px rgba(255, 255, 255, 0.2);
+    }
+    #emoji-btn.dark {
+      color: #fff;
+    }
+    #reply-box.dark {
+      background: #1e1e1e;
+      border-top: 1px solid #444;
+      color: #fff;
+    }
+    .cancel-reply.dark {
+      color: #0288d1;
+    }
+    #bottom-sheet.dark {
+      background: #1e1e1e;
+      box-shadow: 0 -2px 8px rgba(255, 255, 255, 0.2);
+    }
+    .bottom-sheet-header.dark {
+      border-bottom: 1px solid #444;
+    }
+    .bottom-sheet-tab.dark {
+      color: #fff;
+    }
+    .bottom-sheet-tab.active.dark {
+      border-bottom: 2px solid #0288d1;
+      color: #0288d1;
+    }
+    .close-btn.dark {
+      color: #aaa;
+    }
+    #delete-message-modal.dark .modal-content {
+      background: #1e1e1e;
+      color: #fff;
     }
     .modal-btn-cancel.dark {
-      background: #4b5563;
-      color: #e5e7eb;
+      background: #444;
+      color: #fff;
     }
-    .modal-btn-cancel.dark:hover {
-      background: #6b7280;
+    #notification.dark {
+      background: #1e1e1e;
+      color: #fff;
+      box-shadow: 0 2px 8px rgba(255, 255, 255, 0.2);
+    }
+    .long-press-disable-select {
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
+    }
+    .hidden {
+      display: none !important;
     }
   </style>
 </head>
 <body>
   <header>
-    <button onclick="location.href='friends.html'" class="text-red-500 font-bold dark:text-red-400">←</button>
-    <div id="friend-profile-link" aria-label="Go to friend's profile">
-      <img id="friend-photo" src="https://www.gravatar.com/avatar?d=mp" class="w-10 h-10 rounded-full" alt="Friend's profile photo" />
-      <div>
-        <h1 id="friend-name" class="font-bold text-lg dark:text-gray-100">Friend</h1>
-        <span id="friend-presence" class="text-sm text-gray-500 dark:text-gray-400">Offline</span>
-      </div>
+    <img id="friend-photo" src="https://www.gravatar.com/avatar?d=mp" alt="Friend">
+    <div>
+      <h1 id="friend-name">Friend</h1>
+      <small id="friend-presence">Offline</small>
     </div>
+    <a id="friend-profile-link">View Profile</a>
   </header>
-
-  <div id="notification" aria-live="polite"></div>
-  
-  <div id="encryption-notice" class="dark:encryption-notice">
-    Messages are end-to-end encrypted 🔒
-  </div>
-
+  <div id="encryption-notice">Messages are end-to-end encrypted 🔒</div>
   <div id="messages"></div>
-
-  <form id="input-area" onsubmit="return false;">
-    <div id="reply-box" class="reply-preview hidden">
-      <span id="reply-text"></span>
-      <span class="cancel-reply dark:cancel-reply" onclick="cancelReply()">×</span>
-    </div>
-    <div id="input-form" class="flex gap-0.5 items-center">
-      <button id="emoji-btn" class="emoji-btn dark:emoji-btn bg-gray-200 dark:bg-gray-600 rounded-full w-10 h-10 flex items-center justify-center" type="button">
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-gray-600 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-      </button>
-      <input type="text" id="message-input" placeholder="Type a message..." autocomplete="off" class="flex-1 p-2 border border-gray-300 dark:border-gray-600 rounded-full bg-white dark:bg-gray-600 text-gray-900 dark:text-gray-100" />
-      <button id="send-btn" type="button">Voice</button>
-    </div>
-  </form>
-
-  <div id="emoji-picker" class="emoji-picker">
-    <span>👍</span><span>😂</span><span>🔥</span><span>❤️</span><span>😢</span><span>😡</span>
+  <div id="notification"></div>
+  <div id="reply-box">
+    <div id="reply-text"></div>
+    <span class="cancel-reply">Cancel</span>
   </div>
-
-  <div id="bottom-sheet" class="bottom-sheet">
-    <div class="bottom-sheet-header dark:bottom-sheet-header">
-      Operazioni
-      <div class="bottom-sheet-tabs">
-        <div class="bottom-sheet-tab active" data-tab="emojis">Emojis</div>
-        <div class="bottom-sheet-tab" data-tab="stickers">Stickers</div>
-      </div>
-      <span class="close-btn dark:close-btn" onclick="toggleBottomSheet()">×</span>
-    </div>
-    <div id="emoji-content" class="bottom-sheet-content">
-      <span>👍</span><span>😂</span><span>🔥</span><span>❤️</span><span>😢</span><span>😡</span>
-    </div>
-    <div id="sticker-content" class="bottom-sheet-content" style="display: none;">
-      <img src="https://cdn-icons-png.flaticon.com/128/616/616430.png" alt="Cat Sticker" class="h-12 w-12 cursor-pointer">
-      <img src="https://cdn-icons-png.flaticon.com/128/616/616498.png" alt="Dog Sticker" class="h-12 w-12 cursor-pointer">
-      <img src="https://cdn-icons-png.flaticon.com/128/1828/1828970.png" alt="Star Sticker" class="h-12 w-12 cursor-pointer">
-      <img src="https://cdn-icons-png.flaticon.com/128/2997/2997933.png" alt="Party Sticker" class="h-12 w-12 cursor-pointer">
-      <img src="https://cdn-icons-png.flaticon.com/128/415/415733.png" alt="Apple Sticker" class="h-12 w-12 cursor-pointer">
-      <img src="https://cdn-icons-png.flaticon.com/128/3201/3201495.png" alt="Rocket Sticker" class="h-12 w-12 cursor-pointer">
-    </div>
+  <div id="input-area">
+    <input type="text" id="message-input" placeholder="Type a message...">
+    <button id="emoji-btn">😊</button>
+    <button id="send-btn" disabled>Voice</button>
   </div>
-
-  <div id="delete-message-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
-    <div class="modal dark:modal">
-      <p class="text-lg font-semibold dark:text-gray-100">Delete Message</p>
-      <p class="mt-2 text-gray-600 dark:text-gray-300">Are you sure you want to delete this message?</p>
-      <div class="modal-buttons">
-        <button id="modal-confirm" class="modal-btn modal-btn-confirm">Delete</button>
-        <button id="modal-cancel" class="modal-btn modal-btn-cancel dark:modal-btn-cancel">Cancel</button>
-      </div>
+  <div id="emoji-picker">
+    <span>👍</span>
+    <span>❤️</span>
+    <span>😂</span>
+    <span>😢</span>
+    <span>😮</span>
+    <span>🙏</span>
+  </div>
+  <div id="bottom-sheet">
+    <div class="bottom-sheet-header">
+      <div class="bottom-sheet-tab active" data-tab="emojis">Emojis</div>
+      <div class="bottom-sheet-tab" data-tab="stickers">Stickers</div>
+      <span class="close-btn" onclick="document.getElementById('bottom-sheet').classList.remove('open')">×</span>
+    </div>
+    <div id="emoji-content" style="display: flex;">
+      <span>😊</span>
+      <span>😂</span>
+      <span>😍</span>
+      <span>😢</span>
+      <span>👍</span>
+      <span>🙏</span>
+      <span>🎉</span>
+      <span>😎</span>
+    </div>
+    <div id="sticker-content">
+      <img src="https://cdn-icons-png.flaticon.com/128/616/616430.png" alt="Sticker">
+      <img src="https://cdn-icons-png.flaticon.com/128/2589/2589175.png" alt="Sticker">
+      <img src="https://cdn-icons-png.flaticon.com/128/3106/3106726.png" alt="Sticker">
+      <img src="https://cdn-icons-png.flaticon.com/128/3076/3076535.png" alt="Sticker">
     </div>
   </div>
-
+  <div id="delete-message-modal" class="hidden">
+    <div class="modal-content">
+      <p>Delete this message?</p>
+      <button id="modal-confirm" class="modal-btn modal-btn-confirm">Delete</button>
+      <button id="modal-cancel" class="modal-btn modal-btn-cancel">Cancel</button>
+    </div>
+  </div>
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
     import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
@@ -570,20 +502,20 @@
     let theme = 'light';
     let lastMessageKey = null;
 
-    // E2EE Functions
-    async function generateAndStoreKeyPair(userId) {
+    // E2EE Functions using ECDH
+    async function generateAndStoreECDHKeyPair(userId) {
       try {
-        console.log("Generating key pair for user:", userId);
+        console.log("Generating ECDH key pair for user:", userId);
         const keyPair = await crypto.subtle.generateKey(
-          { name: "RSA-OAEP", modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: "SHA-256" },
+          { name: "ECDH", namedCurve: "P-256" },
           true,
-          ["encrypt", "decrypt"]
+          ["deriveKey"]
         );
         const privateKey = await crypto.subtle.exportKey("jwk", keyPair.privateKey);
         await storePrivateKey(userId, privateKey);
         const publicKey = await crypto.subtle.exportKey("jwk", keyPair.publicKey);
-        await set(ref(db, `users/${userId}/publicKey`), publicKey);
-        console.log("Key pair generated and stored successfully");
+        await set(ref(db, `users/${userId}/ecdhPublicKey`), publicKey);
+        console.log("ECDH key pair generated and stored successfully");
         return { privateKey, publicKey };
       } catch (error) {
         console.error("Key generation error:", error);
@@ -626,58 +558,89 @@
       });
     }
 
-    async function encryptMessage(message, recipientId) {
+    async function deriveSharedSecret(userId, friendId, chatId) {
       try {
-        console.log("Fetching public key for recipient:", recipientId);
-        const snapshot = await get(ref(db, `users/${recipientId}/publicKey`));
-        if (!snapshot.exists()) {
-          throw new Error("Recipient public key not found. Please ensure the recipient has initialized their account.");
-        }
-        const recipientPublicKeyJwk = snapshot.val();
-        console.log("Public key retrieved:", recipientPublicKeyJwk);
-
-        // Validate JWK format
-        if (!recipientPublicKeyJwk || !recipientPublicKeyJwk.kty || !recipientPublicKeyJwk.n || !recipientPublicKeyJwk.e) {
-          throw new Error("Invalid public key format.");
-        }
-
-        const publicKey = await crypto.subtle.importKey(
+        console.log("Deriving shared secret for chat:", chatId);
+        const privateKeyJwk = await getPrivateKey(userId);
+        if (!privateKeyJwk) throw new Error("Private key not found");
+        const privateKey = await crypto.subtle.importKey(
           "jwk",
-          recipientPublicKeyJwk,
-          { name: "RSA-OAEP", hash: "SHA-256" },
+          privateKeyJwk,
+          { name: "ECDH", namedCurve: "P-256" },
           true,
-          ["encrypt"]
+          ["deriveKey"]
         );
-        console.log("Public key imported successfully");
-
-        const aesKey = await crypto.subtle.generateKey(
+        const friendPublicKeySnap = await get(ref(db, `users/${friendId}/ecdhPublicKey`));
+        if (!friendPublicKeySnap.exists()) {
+          throw new Error("Friend's ECDH public key not found. Please ensure they have initialized their account.");
+        }
+        const friendPublicKeyJwk = friendPublicKeySnap.val();
+        if (!friendPublicKeyJwk || !friendPublicKeyJwk.kty || !friendPublicKeyJwk.x || !friendPublicKeyJwk.y) {
+          throw new Error("Invalid friend public key format.");
+        }
+        const friendPublicKey = await crypto.subtle.importKey(
+          "jwk",
+          friendPublicKeyJwk,
+          { name: "ECDH", namedCurve: "P-256" },
+          true,
+          []
+        );
+        const sharedSecret = await crypto.subtle.deriveKey(
+          { name: "ECDH", public: friendPublicKey },
+          privateKey,
           { name: "AES-GCM", length: 256 },
           true,
           ["encrypt", "decrypt"]
         );
-        console.log("AES key generated");
+        const exportedSecret = await crypto.subtle.exportKey("raw", sharedSecret);
+        const secretB64 = arrayBufferToBase64(exportedSecret);
+        await set(ref(db, `chats/${chatId}/sharedSecret`), secretB64);
+        console.log("Shared secret derived and stored for chat:", chatId);
+        return sharedSecret;
+      } catch (error) {
+        console.error("Shared secret derivation error:", error);
+        throw new Error(`Failed to derive shared secret: ${error.message}`);
+      }
+    }
 
+    async function getSharedSecret(chatId, userId, friendId) {
+      try {
+        const snapshot = await get(ref(db, `chats/${chatId}/sharedSecret`));
+        if (snapshot.exists()) {
+          const secretB64 = snapshot.val();
+          const secretRaw = base64ToArrayBuffer(secretB64);
+          return await crypto.subtle.importKey(
+            "raw",
+            secretRaw,
+            { name: "AES-GCM", length: 256 },
+            true,
+            ["encrypt", "decrypt"]
+          );
+        } else {
+          console.log("No shared secret found, deriving new one");
+          return await deriveSharedSecret(userId, friendId, chatId);
+        }
+      } catch (error) {
+        console.error("Error getting shared secret:", error);
+        throw error;
+      }
+    }
+
+    async function encryptMessage(message, chatId, userId, friendId) {
+      try {
+        console.log("Encrypting message for chat:", chatId);
+        const sharedSecret = await getSharedSecret(chatId, userId, friendId);
         const encoder = new TextEncoder();
         const encodedMessage = encoder.encode(message);
         const iv = crypto.getRandomValues(new Uint8Array(12));
         const encryptedMessage = await crypto.subtle.encrypt(
           { name: "AES-GCM", iv },
-          aesKey,
+          sharedSecret,
           encodedMessage
         );
         console.log("Message encrypted with AES-GCM");
-
-        const exportedAesKey = await crypto.subtle.exportKey("raw", aesKey);
-        const encryptedAesKey = await crypto.subtle.encrypt(
-          { name: "RSA-OAEP" },
-          publicKey,
-          exportedAesKey
-        );
-        console.log("AES key encrypted with RSA-OAEP");
-
         return {
           encryptedMessageB64: arrayBufferToBase64(encryptedMessage),
-          encryptedAesKeyB64: arrayBufferToBase64(encryptedAesKey),
           ivB64: arrayBufferToBase64(iv)
         };
       } catch (error) {
@@ -686,35 +649,14 @@
       }
     }
 
-    async function decryptMessage(encryptedMessageB64, encryptedAesKeyB64, ivB64, userId) {
+    async function decryptMessage(encryptedMessageB64, ivB64, chatId, userId, friendId) {
       try {
-        const privateKeyJwk = await getPrivateKey(userId);
-        if (!privateKeyJwk) throw new Error("Private key not found");
-        const privateKey = await crypto.subtle.importKey(
-          "jwk",
-          privateKeyJwk,
-          { name: "RSA-OAEP", hash: "SHA-256" },
-          true,
-          ["decrypt"]
-        );
+        const sharedSecret = await getSharedSecret(chatId, userId, friendId);
         const encryptedMessage = base64ToArrayBuffer(encryptedMessageB64);
-        const encryptedAesKey = base64ToArrayBuffer(encryptedAesKeyB64);
         const iv = base64ToArrayBuffer(ivB64);
-        const aesKeyRaw = await crypto.subtle.decrypt(
-          { name: "RSA-OAEP" },
-          privateKey,
-          encryptedAesKey
-        );
-        const aesKey = await crypto.subtle.importKey(
-          "raw",
-          aesKeyRaw,
-          { name: "AES-GCM" },
-          true,
-          ["decrypt"]
-        );
         const decryptedMessage = await crypto.subtle.decrypt(
           { name: "AES-GCM", iv },
-          aesKey,
+          sharedSecret,
           encryptedMessage
         );
         const decoder = new TextDecoder();
@@ -809,9 +751,9 @@
         let replyText = m.replyTo;
 
         if (m.encryptedMessage) {
-          displayText = await decryptMessage(m.encryptedMessage, m.encryptedKey, m.iv, currentUser.uid);
+          displayText = await decryptMessage(m.encryptedMessage, m.iv, chatId, currentUser.uid, friendUid);
           if (m.replyTo && !m.replyTo.match(/\.(png|jpg|jpeg|gif)$/i)) {
-            replyText = await decryptMessage(m.replyTo, m.replyKey, m.replyIv, currentUser.uid);
+            replyText = await decryptMessage(m.replyTo, m.replyIv, chatId, currentUser.uid, friendUid);
           }
         }
 
@@ -979,21 +921,28 @@
       }
       chatId = currentUser.uid < friendUid ? `${currentUser.uid}_${friendUid}` : `${friendUid}_${currentUser.uid}`;
 
-      // Check if user has a key pair; generate if not
-      console.log("Checking sender's public key for user:", currentUser.uid);
-      const keySnap = await get(ref(db, `users/${currentUser.uid}/publicKey`));
+      // Check if user has an ECDH key pair; generate if not
+      console.log("Checking ECDH public key for user:", currentUser.uid);
+      const keySnap = await get(ref(db, `users/${currentUser.uid}/ecdhPublicKey`));
       if (!keySnap.exists()) {
-        console.log("Sender's public key not found, generating...");
-        await generateAndStoreKeyPair(currentUser.uid);
+        console.log("ECDH public key not found, generating...");
+        await generateAndStoreECDHKeyPair(currentUser.uid);
       }
 
-      // Check recipient's public key
-      console.log("Checking recipient's public key for user:", friendUid);
-      const friendKeySnap = await get(ref(db, `users/${friendUid}/publicKey`));
+      // Check friend's ECDH public key and initialize shared secret
+      console.log("Checking friend's ECDH public key for user:", friendUid);
+      const friendKeySnap = await get(ref(db, `users/${friendUid}/ecdhPublicKey`));
       if (!friendKeySnap.exists()) {
-        showNotification("System", "Recipient's encryption key not found. Please ask them to log in to initialize their account.");
+        showNotification("System", "Friend's encryption key not found. Please ask them to log in to initialize their account.");
         document.getElementById("input-area").style.display = "none";
         return;
+      }
+
+      // Ensure shared secret exists
+      const sharedSecretSnap = await get(ref(db, `chats/${chatId}/sharedSecret`));
+      if (!sharedSecretSnap.exists()) {
+        console.log("Initializing shared secret for chat:", chatId);
+        await deriveSharedSecret(currentUser.uid, friendUid, chatId);
       }
 
       try {
@@ -1055,7 +1004,7 @@
         const msg = snap.val();
         const isSelf = msg.sender === currentUser.uid;
         if (!isSelf) {
-          const decryptedText = msg.encryptedMessage ? await decryptMessage(msg.encryptedMessage, msg.encryptedKey, msg.iv, currentUser.uid) : msg.text;
+          const decryptedText = msg.encryptedMessage ? await decryptMessage(msg.encryptedMessage, msg.iv, chatId, currentUser.uid, friendUid) : msg.text;
           showNotification(friendName, decryptedText);
           renderMessages([[snap.key, msg]]);
         }
@@ -1146,7 +1095,7 @@
     }
 
     sendBtn.onclick = async () => {
-      console.log("Send button clicked, isRecording:", isRecording, "friendUid:", friendUid);
+      console.log("Send button clicked, isRecording:", isRecording, "friendUid:", friendUid, "chatId:", chatId);
       if (isRecording) {
         console.log("Stopping voice recognition");
         recognition.stop();
@@ -1166,19 +1115,17 @@
           if (text.match(/\.(png|jpg|jpeg|gif)$/i)) {
             msg.text = text;
           } else {
-            console.log("Encrypting message for recipient:", friendUid);
-            const { encryptedMessageB64, encryptedAesKeyB64, ivB64 } = await encryptMessage(text, friendUid);
+            console.log("Encrypting message for chat:", chatId);
+            const { encryptedMessageB64, ivB64 } = await encryptMessage(text, chatId, currentUser.uid, friendUid);
             msg.encryptedMessage = encryptedMessageB64;
-            msg.encryptedKey = encryptedAesKeyB64;
             msg.iv = ivB64;
             if (replyingTo) {
               console.log("Handling reply, replyingToDecrypted:", replyingToDecrypted);
               if (replyingTo.match(/\.(png|jpg|jpeg|gif)$/i)) {
                 msg.replyTo = replyingTo;
               } else {
-                const replyData = await encryptMessage(replyingToDecrypted, friendUid);
+                const replyData = await encryptMessage(replyingToDecrypted, chatId, currentUser.uid, friendUid);
                 msg.replyTo = replyData.encryptedMessageB64;
-                msg.replyKey = replyData.encryptedAesKeyB64;
                 msg.replyIv = replyData.ivB64;
               }
             }
@@ -1225,9 +1172,9 @@
               let replyText = m.replyTo;
 
               if (m.encryptedMessage) {
-                displayText = await decryptMessage(m.encryptedMessage, m.encryptedKey, m.iv, currentUser.uid);
+                displayText = await decryptMessage(m.encryptedMessage, m.iv, chatId, currentUser.uid, friendUid);
                 if (m.replyTo && !m.replyTo.match(/\.(png|jpg|jpeg|gif)$/i)) {
-                  replyText = await decryptMessage(m.replyTo, m.replyKey, m.replyIv, currentUser.uid);
+                  replyText = await decryptMessage(m.replyTo, m.replyIv, chatId, currentUser.uid, friendUid);
                 }
               }
 
@@ -1363,41 +1310,11 @@
     });
 
     /*
-    Firebase Security Rules (apply in Firebase Console):
+    Firebase Security Rules (apply in Firebase Console for testing):
     {
       "rules": {
-        "users": {
-          "$uid": {
-            ".read": "$uid === auth.uid",
-            ".write": "$uid === auth.uid",
-            "publicKey": {
-              ".read": "auth != null",
-              ".write": "$uid === auth.uid"
-            },
-            "blockedUsers": {
-              ".read": "$uid === auth.uid",
-              ".write": "$uid === auth.uid"
-            },
-            "settings": {
-              ".read": "$uid === auth.uid",
-              ".write": "$uid === auth.uid"
-            },
-            "presence": {
-              ".read": "auth != null",
-              ".write": "$uid === auth.uid"
-            },
-            "lastSeen": {
-              ".read": "auth != null",
-              ".write": "$uid === auth.uid"
-            }
-          }
-        },
-        "messages": {
-          "$chatId": {
-            ".read": "auth != null && $chatId.contains(auth.uid)",
-            ".write": "auth != null && $chatId.contains(auth.uid)"
-          }
-        }
+        ".read": "auth != null",
+        ".write": "auth != null"
       }
     }
     */
