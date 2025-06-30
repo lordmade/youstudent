@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>BanterBox - Chat</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js"></script>
   <style>
     body {
       font-family: 'Inter', 'Segoe UI', sans-serif;
@@ -64,26 +65,28 @@
     .message {
       max-width: 70%;
       padding: 0.5rem 0.75rem;
-      border-radius: 7.5px;
+      border-radius: 10px;
       position: relative;
       animation: slideIn 0.3s ease;
-      color: #000;
       display: inline-block;
       word-wrap: break-word;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      transition: transform 0.2s ease;
     }
     .message.sent {
-      background: #d9fdd3;
+      background: linear-gradient(to bottom, #e0ffdb, #c6f0bc);
       margin-left: auto;
       border-bottom-right-radius: 2px;
+      color: #000;
     }
     .message.received {
-      background: #ffffff;
+      background: linear-gradient(to bottom, #f7f9fb, #e9ecef);
       margin-right: auto;
       border-bottom-left-radius: 2px;
-      box-shadow: 0 1px 0.5px rgba(0, 0, 0, 0.13);
+      color: #333;
     }
     .message.dark.received {
-      background: #1f2a44;
+      background: linear-gradient(to bottom, #1f2a44, #2a3942);
       color: #e5e7eb;
     }
     .message img {
@@ -297,6 +300,66 @@
     .status-offline {
       background: #8696a0;
     }
+    .quoted-message {
+      background: #f0f2f5;
+      border-left: 4px solid #ef4444;
+      padding: 0.5rem;
+      margin-bottom: 0.5rem;
+      border-radius: 8px;
+      font-size: 0.875rem;
+      color: #333;
+      max-width: 100%;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .quoted-message.dark {
+      background: #2a3942;
+      color: #e5e7eb;
+    }
+    .quoted-message p {
+      margin: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 90%;
+    }
+    .quoted-message img {
+      max-width: 50px;
+      border-radius: 4px;
+      margin-top: 0.25rem;
+    }
+    .quoted-message button {
+      background: none;
+      border: none;
+      color: #ef4444;
+      cursor: pointer;
+      font-size: 1rem;
+    }
+    .message-quote {
+      background: #f0f2f5;
+      border-left: 4px solid #ef4444;
+      padding: 0.5rem;
+      margin-bottom: 0.5rem;
+      border-radius: 8px;
+      font-size: 0.875rem;
+      color: #333;
+    }
+    .message.dark .message-quote {
+      background: #2a3942;
+      color: #e5e7eb;
+    }
+    .message-quote p {
+      margin: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .message-quote img {
+      max-width: 50px;
+      border-radius: 4px;
+      margin-top: 0.25rem;
+    }
     @keyframes slideIn {
       from { opacity: 0; transform: translateY(10px); }
       to { opacity: 1; transform: translateY(0); }
@@ -358,6 +421,10 @@
   </div>
 
   <div class="input-container flex items-center">
+    <div id="quoted-message" class="quoted-message hidden" style="width: 100%;">
+      <p id="quoted-text"></p>
+      <button id="cancel-quote" aria-label="Cancel reply">✕</button>
+    </div>
     <input type="text" id="message-input" placeholder="Type a message..." aria-label="Type a message"/>
     <input type="file" id="image-input" accept="image/*" aria-hidden="true"/>
     <button id="emoji-btn" class="flex items-center" aria-label="Open emoji picker">
@@ -420,6 +487,9 @@
     const friendStatus = document.getElementById("friend-status");
     const friendProfileLink = document.getElementById("friend-profile-link");
     const reactionPopup = document.getElementById("reaction-popup");
+    const quotedMessage = document.getElementById("quoted-message");
+    const quotedText = document.getElementById("quoted-text");
+    const cancelQuote = document.getElementById("cancel-quote");
 
     function showLoading() { loadingOverlay.classList.remove("hidden"); }
     function hideLoading() { loadingOverlay.classList.add("hidden"); }
@@ -434,6 +504,8 @@
       document.querySelectorAll('.message-time').forEach(el => el.classList.toggle('dark', isDark));
       document.querySelector('.emoji-picker').classList.toggle('dark', isDark);
       document.querySelectorAll('.message-reaction').forEach(el => el.classList.toggle('dark', isDark));
+      document.querySelectorAll('.quoted-message').forEach(el => el.classList.toggle('dark', isDark));
+      document.querySelectorAll('.message-quote').forEach(el => el.classList.toggle('dark', isDark));
       reactionPopup.classList.toggle('dark', isDark);
       typingIndicator.classList.toggle('dark', isDark);
     }
@@ -530,7 +602,10 @@
       }
     });
 
+    let quotedMessageData = null;
+
     function renderMessage(message, currentUserUid, messageId, chatId) {
+      if (!message || (!message.text && !message.image)) return;
       const isSent = message.sender === currentUserUid;
       const div = document.createElement("div");
       div.className = `message ${isSent ? 'sent' : 'received'}`;
@@ -538,7 +613,15 @@
       div.tabIndex = 0;
       div.dataset.mid = messageId;
       const reactions = message.reactions || {};
+      let quoteHtml = '';
+      if (message.repliedTo) {
+        quoteHtml = `<div class="message-quote">
+          ${message.repliedTo.text ? `<p>${message.repliedTo.text}</p>` : ''}
+          ${message.repliedTo.image ? `<img src="${message.repliedTo.image}" alt="Quoted image" />` : ''}
+        </div>`;
+      }
       div.innerHTML = `
+        ${quoteHtml}
         ${message.text ? `<p>${message.text}</p>` : ''}
         ${message.image ? `<img src="${message.image}" alt="Shared image" loading="lazy" />` : ''}
         <p class="message-time">${timeAgo(message.timestamp)}</p>
@@ -549,10 +632,18 @@
       chatContainer.insertBefore(div, typingIndicator);
       chatContainer.scrollTop = chatContainer.scrollHeight;
 
+      const hammer = new Hammer(div);
+      hammer.on('swiperight', () => {
+        quotedMessageData = { mid: messageId, text: message.text, image: message.image };
+        quotedText.textContent = message.text || 'Image';
+        quotedMessage.classList.remove('hidden');
+        messageInput.focus();
+      });
+
       div.addEventListener('contextmenu', (e) => {
         e.preventDefault();
         reactionPopup.style.display = 'flex';
-        reactionPopup.style.left = `${e.clientX}px`;
+        reactionPopup.style.left = `${Math.min(e.clientX, window.innerWidth - 100)}px`;
         reactionPopup.style.top = `${e.clientY - 40}px`;
         reactionPopup.dataset.mid = messageId;
       });
@@ -561,7 +652,7 @@
         const touch = e.touches[0];
         const timeout = setTimeout(() => {
           reactionPopup.style.display = 'flex';
-          reactionPopup.style.left = `${touch.clientX}px`;
+          reactionPopup.style.left = `${Math.min(touch.clientX, window.innerWidth - 100)}px`;
           reactionPopup.style.top = `${touch.clientY - 40}px`;
           reactionPopup.dataset.mid = messageId;
         }, 500);
@@ -571,70 +662,125 @@
       div.addEventListener('touchend', () => {
         clearTimeout(div.dataset.touchTimeout);
       });
+
+      div.addEventListener('keydown', (e) => {
+        if (e.key === 'r' || e.key === 'R') {
+          quotedMessageData = { mid: messageId, text: message.text, image: message.image };
+          quotedText.textContent = message.text || 'Image';
+          quotedMessage.classList.remove('hidden');
+          messageInput.focus();
+        }
+      });
     }
 
     reactionPopup.querySelectorAll('button').forEach(btn => {
       btn.addEventListener('click', async () => {
-        const emoji = btn.dataset.emoji;
-        const mid = reactionPopup.dataset.mid;
-        const chatId = auth.currentUser.uid < friendProfileLink.href.split('uid=')[1].split('&')[0] ? 
-          `${auth.currentUser.uid}_${friendProfileLink.href.split('uid=')[1].split('&')[0]}` : 
-          `${friendProfileLink.href.split('uid=')[1].split('&')[0]}_${auth.currentUser.uid}`;
-        const reactionRef = ref(db, `messages/${chatId}/${mid}/reactions/${emoji}`);
-        const snap = await get(reactionRef);
-        const currentCount = snap.exists() ? snap.val() : 0;
-        await set(reactionRef, currentCount + 1);
-        reactionPopup.style.display = 'none';
+        try {
+          const emoji = btn.dataset.emoji;
+          const mid = reactionPopup.dataset.mid;
+          const friendUid = friendProfileLink.href.split('uid=')[1]?.split('&')[0];
+          const chatId = auth.currentUser?.uid < friendUid ? 
+            `${auth.currentUser.uid}_${friendUid}` : 
+            `${friendUid}_${auth.currentUser.uid}`;
+          const reactionRef = ref(db, `messages/${chatId}/${mid}/reactions/${emoji}`);
+          const snap = await get(reactionRef);
+          const currentCount = snap.exists() ? snap.val() : 0;
+          await set(reactionRef, currentCount + 1);
+          reactionPopup.style.display = 'none';
+        } catch (error) {
+          console.error("Error adding reaction:", error);
+          alert("Failed to add reaction.");
+        }
       });
     });
 
+    cancelQuote.addEventListener('click', () => {
+      quotedMessageData = null;
+      quotedMessage.classList.add('hidden');
+      quotedText.textContent = '';
+      messageInput.focus();
+    });
+
     async function loadChat(currentUserUid, friendUid) {
+      if (!currentUserUid || !friendUid) {
+        console.error("Invalid user or friend UID");
+        alert("Invalid chat parameters.");
+        location.href = "index.html";
+        return;
+      }
       showLoading();
       const chatId = currentUserUid < friendUid ? `${currentUserUid}_${friendUid}` : `${friendUid}_${currentUserUid}`;
       const messagesRef = ref(db, `messages/${chatId}`);
       const userRef = ref(db, `users/${friendUid}`);
       const typingRef = ref(db, `typing/${chatId}/${friendUid}`);
 
-      // Load friend info
-      const userSnap = await get(userRef);
-      const userData = userSnap.val() || {};
-      friendName.textContent = userData.name || "Friend";
-      friendAvatar.src = userData.photoURL || 'https://www.gravatar.com/avatar?d=mp';
-      friendProfileLink.href = `profile.html?uid=${friendUid}&owner=false`;
-      friendStatus.className = `status-indicator ${userData.presence === 'online' ? 'status-online' : 'status-offline'}`;
-
-      // Load messages
-      onValue(messagesRef, (snap) => {
-        chatContainer.innerHTML = '';
-        chatContainer.appendChild(typingIndicator);
-        if (!snap.exists()) {
-          hideLoading();
-          return;
+      try {
+        const userSnap = await get(userRef);
+        if (!userSnap.exists()) {
+          throw new Error("Friend profile not found");
         }
-        const messages = snap.val();
-        for (const mid in messages) {
-          renderMessage(messages[mid], currentUserUid, mid, chatId);
-          if (messages[mid].sender !== currentUserUid && !messages[mid].read) {
-            update(ref(db, `messages/${chatId}/${mid}`), { read: true });
+        const userData = userSnap.val() || {};
+        friendName.textContent = userData.name || "Friend";
+        friendAvatar.src = userData.photoURL || 'https://www.gravatar.com/avatar?d=mp';
+        friendProfileLink.href = `profile.html?uid=${friendUid}&owner=false`;
+        friendStatus.className = `status-indicator ${userData.presence === 'online' ? 'status-online' : 'status-offline'}`;
+
+        onValue(messagesRef, async (snap) => {
+          chatContainer.innerHTML = '';
+          chatContainer.appendChild(typingIndicator);
+          if (!snap.exists()) {
+            hideLoading();
+            return;
           }
-        }
-        hideLoading();
-      }, { onlyOnce: false });
+          const messages = snap.val();
+          for (const mid in messages) {
+            let message = messages[mid];
+            if (message.repliedTo) {
+              const repliedToRef = ref(db, `messages/${chatId}/${message.repliedTo}`);
+              const repliedToSnap = await get(repliedToRef);
+              if (repliedToSnap.exists()) {
+                message.repliedTo = repliedToSnap.val();
+              } else {
+                message.repliedTo = { text: "Original message not found" };
+              }
+            }
+            renderMessage(message, currentUserUid, mid, chatId);
+            if (message.sender !== currentUserUid && !message.read) {
+              update(ref(db, `messages/${chatId}/${mid}`), { read: true }).catch(error => {
+                console.error("Error marking message as read:", error);
+              });
+            }
+          }
+          hideLoading();
+        }, { onlyOnce: false }, error => {
+          console.error("Error loading messages:", error);
+          alert("Failed to load messages.");
+          hideLoading();
+        });
 
-      // Typing indicator
-      onValue(typingRef, (snap) => {
-        typingIndicator.classList.toggle('active', snap.exists() && snap.val());
-      });
+        onValue(typingRef, (snap) => {
+          typingIndicator.classList.toggle('active', snap.exists() && snap.val());
+        }, error => {
+          console.error("Error listening to typing indicator:", error);
+        });
+      } catch (error) {
+        console.error("Error loading chat:", error);
+        alert("Failed to load chat.");
+        hideLoading();
+        location.href = "index.html";
+      }
     }
 
     onAuthStateChanged(auth, async user => {
       if (!user) {
+        console.log("User not authenticated, redirecting to login");
         location.href = "login.html";
         return;
       }
       const urlParams = new URLSearchParams(window.location.search);
       const friendUid = urlParams.get("uid");
       if (!friendUid) {
+        console.error("No friend UID provided");
         alert("No friend selected.");
         location.href = "index.html";
         return;
@@ -645,6 +791,7 @@
         applyTheme(settings.theme || 'light');
       } catch (error) {
         console.error('Error loading theme:', error);
+        applyTheme('light');
       }
       await loadChat(user.uid, friendUid);
 
@@ -653,8 +800,12 @@
         const chatId = user.uid < friendUid ? `${user.uid}_${friendUid}` : `${friendUid}_${user.uid}`;
         const typingRef = ref(db, `typing/${chatId}/${user.uid}`);
         clearTimeout(typingTimeout);
-        set(typingRef, true);
-        typingTimeout = setTimeout(() => set(typingRef, false), 2000);
+        set(typingRef, true).catch(error => {
+          console.error("Error setting typing status:", error);
+        });
+        typingTimeout = setTimeout(() => set(typingRef, false).catch(error => {
+          console.error("Error clearing typing status:", error);
+        }), 2000);
       };
 
       sendBtn.onclick = async () => {
@@ -668,11 +819,17 @@
           timestamp: Date.now(),
           read: false
         };
+        if (quotedMessageData) {
+          message.repliedTo = quotedMessageData.mid;
+        }
         try {
           await push(ref(db, `messages/${chatId}`), message);
           messageInput.value = "";
           emojiPicker.style.display = 'none';
-          set(ref(db, `typing/${chatId}/${user.uid}`), false);
+          quotedMessage.classList.add('hidden');
+          quotedText.textContent = '';
+          quotedMessageData = null;
+          await set(ref(db, `typing/${chatId}/${user.uid}`), false);
         } catch (error) {
           console.error("Error sending message:", error);
           alert("Failed to send message.");
@@ -705,8 +862,14 @@
             timestamp: Date.now(),
             read: false
           };
+          if (quotedMessageData) {
+            message.repliedTo = quotedMessageData.mid;
+          }
           await push(ref(db, `messages/${chatId}`), message);
           imageInput.value = "";
+          quotedMessage.classList.add('hidden');
+          quotedText.textContent = '';
+          quotedMessageData = null;
         } catch (error) {
           console.error("Error uploading image:", error);
           alert("Failed to upload image.");
