@@ -51,22 +51,44 @@
       position: sticky;
       top: 40px;
       z-index: 900;
+      padding: 1rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
     }
     .header.dark {
       background: #374151;
       border-bottom: 1px solid #4b5563;
       color: #e5e7eb;
     }
-    .search-container {
-      padding: 0.5rem 1rem;
-      background: #f9fafb;
-      border-bottom: 1px solid #ddd;
+    .search-icon {
+      cursor: pointer;
+      stroke: #ef4444;
+      width: 24px;
+      height: 24px;
     }
-    .search-container.dark {
+    .search-icon.dark {
+      stroke: #dc2626;
+    }
+    .search-bar {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      background: #f9fafb;
+      padding: 0.5rem 1rem;
+      border-bottom: 1px solid #ddd;
+      z-index: 950;
+      display: none;
+    }
+    .search-bar.active {
+      display: block;
+    }
+    .search-bar.dark {
       background: #374151;
       border-bottom: 1px solid #4b5563;
     }
-    .search-input {
+    .search-bar input {
       width: 100%;
       border: 1px solid #ddd;
       border-radius: 9999px;
@@ -74,7 +96,7 @@
       font-size: 0.9rem;
       background: white;
     }
-    .search-input.dark {
+    .search-bar.dark input {
       background: #4b5563;
       border: 1px solid #6b7280;
       color: #e5e7eb;
@@ -103,6 +125,7 @@
       position: relative;
       cursor: pointer;
       transition: transform 0.2s ease, background 0.2s ease;
+      user-select: none; /* Prevent text selection */
     }
     .message:hover {
       transform: scale(1.02);
@@ -343,16 +366,21 @@
     <span>Your messages are end-to-end encrypted</span>
   </div>
 
-  <header class="header p-4 text-xl font-bold text-red-500 flex justify-between items-center">
-    <a href="friends.html" class="hover:text-red-600 transition duration-200">← Back</a>
-    <span id="chat-title">Chat</span>
-    <a id="profile-link" href="#" class="text-sm bg-red-500 text-white px-4 py-1 rounded-full hover:bg-red-600 transition duration-200">
-      View Profile
-    </a>
+  <header class="header">
+    <a href="friends.html" class="hover:text-red-600 transition duration-200 text-xl font-bold text-red-500">← Back</a>
+    <span id="chat-title" class="text-xl font-bold text-red-500">Chat</span>
+    <div class="flex items-center gap-2">
+      <svg id="search-icon" class="search-icon" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35m1.85-2.65a7 7 0 11-14 0 7 7 0 0114 0z"/>
+      </svg>
+      <a id="profile-link" href="#" class="text-sm bg-red-500 text-white px-4 py-1 rounded-full hover:bg-red-600 transition duration-200">
+        View Profile
+      </a>
+    </div>
   </header>
 
-  <div class="search-container">
-    <input type="text" id="search-input" class="search-input" placeholder="Search messages..." />
+  <div id="search-bar" class="search-bar">
+    <input type="text" id="search-input" placeholder="Search messages..." />
   </div>
 
   <div class="chat-container">
@@ -417,6 +445,8 @@
     const chatTitle = document.getElementById("chat-title");
     const profileLink = document.getElementById("profile-link");
     const loadingOverlay = document.getElementById("loading-overlay");
+    const searchIcon = document.getElementById("search-icon");
+    const searchBar = document.getElementById("search-bar");
     const searchInput = document.getElementById("search-input");
     const typingIndicator = document.getElementById("typing-indicator");
     const deleteModal = document.getElementById("delete-modal");
@@ -448,8 +478,9 @@
       document.body.classList.toggle('dark', isDark);
       document.querySelector('.encryption-notice').classList.toggle('dark', isDark);
       document.querySelector('.header').classList.toggle('dark', isDark);
-      document.querySelector('.search-container').classList.toggle('dark', isDark);
-      document.querySelector('.search-input').classList.toggle('dark', isDark);
+      document.querySelector('.search-bar').classList.toggle('dark', isDark);
+      document.querySelector('.search-bar input').classList.toggle('dark', isDark);
+      document.querySelector('.search-icon').classList.toggle('dark', isDark);
       document.querySelector('.input-container').classList.toggle('dark', isDark);
       document.querySelector('.message-input').classList.toggle('dark', isDark);
       document.querySelectorAll('.message.sent').forEach(el => el.classList.toggle('dark', isDark));
@@ -514,6 +545,29 @@
       });
     }
 
+    function toggleSearchBar(e) {
+      e.stopPropagation();
+      searchBar.classList.toggle('active');
+      if (searchBar.classList.contains('active')) {
+        searchInput.focus();
+      } else {
+        searchInput.value = ''; // Clear search input
+        document.querySelectorAll('.message').forEach(message => {
+          message.style.display = ''; // Reset message visibility
+        });
+      }
+    }
+
+    function hideSearchBar(e) {
+      if (!searchBar.contains(e.target) && e.target !== searchIcon) {
+        searchBar.classList.remove('active');
+        searchInput.value = '';
+        document.querySelectorAll('.message').forEach(message => {
+          message.style.display = '';
+        });
+      }
+    }
+
     function renderMessage(message, isSent, userData, messageId, chatId, userId) {
       const div = document.createElement("div");
       div.className = `message ${isSent ? 'sent' : 'received'} ${message.replyTo ? 'reply' : ''} ${message.pinned ? 'pinned' : ''}`;
@@ -535,6 +589,7 @@
       // Swipe gestures
       let touchStartX = 0;
       div.addEventListener('touchstart', (e) => {
+        e.preventDefault(); // Prevent highlighting
         touchStartX = e.touches[0].clientX;
       });
       div.addEventListener('touchend', (e) => {
@@ -553,6 +608,7 @@
       let mouseStartX = 0;
       let isDragging = false;
       div.addEventListener('mousedown', (e) => {
+        e.preventDefault(); // Prevent highlighting
         isDragging = true;
         mouseStartX = e.clientX;
       });
@@ -571,7 +627,7 @@
         }
       });
       div.addEventListener('mousemove', (e) => {
-        if (isDragging) e.preventDefault();
+        if (isDragging) e.preventDefault(); // Prevent highlighting during drag
       });
 
       messageList.appendChild(div);
@@ -614,6 +670,10 @@
 
       let lastMessageId = null;
       let loadingMore = false;
+
+      // Toggle search bar
+      searchIcon.addEventListener('click', toggleSearchBar);
+      document.addEventListener('click', hideSearchBar);
 
       // Message search
       searchInput.addEventListener('input', () => {
