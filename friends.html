@@ -99,12 +99,12 @@
     .status-offline {
       background: #9ca3af;
     }
-    .last-message, .status-text, .service-description {
+    .status-text, .service-description {
       font-size: 0.9rem;
       color: #555;
       margin-top: 4px;
     }
-    .last-message.dark, .status-text.dark, .service-description.dark {
+    .status-text.dark, .service-description.dark {
       color: #d1d5db;
     }
     .last-seen, .status-time, .member-count, .service-time {
@@ -123,6 +123,23 @@
       flex-shrink: 0;
       background-color: #eee;
       object-fit: cover;
+    }
+    .service-card {
+      max-width: 90%;
+      padding: 1.5rem;
+    }
+    .service-card .service-avatar {
+      width: 64px;
+      height: 64px;
+    }
+    .sponsored-text {
+      font-size: 0.9rem;
+      font-weight: bold;
+      color: #ef4444;
+      margin-bottom: 0.5rem;
+    }
+    .sponsored-text.dark {
+      color: #dc2626;
     }
     .group-info {
       flex-grow: 1;
@@ -345,7 +362,7 @@
     document.querySelector('.header').classList.toggle('dark', isDark);
     document.querySelector('.tab-nav').classList.toggle('dark', isDark);
     document.querySelectorAll('.friend-card, .status-card, .service-card').forEach(el => el.classList.toggle('dark', isDark));
-    document.querySelectorAll('.last-message, .status-text, .service-description').forEach(el => el.classList.toggle('dark', isDark));
+    document.querySelectorAll('.status-text, .service-description, .sponsored-text').forEach(el => el.classList.toggle('dark', isDark));
     document.querySelectorAll('.last-seen, .status-time, .member-count, .service-time').forEach(el => el.classList.toggle('dark', isDark));
     document.querySelectorAll('#no-friends-message, #no-groups-message, #no-statuses-message, #no-own-statuses-message, #no-services-message').forEach(el => el.classList.toggle('dark', isDark));
     document.querySelectorAll('.tab-nav button').forEach(el => el.classList.toggle('dark', isDark));
@@ -447,7 +464,7 @@
     };
   }
 
-  function renderFriend(uid, data, lastMsg, lastMsgTime, unreadCount) {
+  function renderFriend(uid, data, unreadCount) {
     const card = document.createElement("div");
     card.className = "friend-card";
     if (unreadCount > 0) card.classList.add("unread");
@@ -456,7 +473,6 @@
       <img src="${data.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${data.name || 'Friend'}" class="w-12 h-12 rounded-full mr-4" />
       <div>
         <h4 class="font-bold dark:text-gray-100">${data.name || "Friend"}</h4>
-        <p class="last-message">${lastMsg || "No messages yet"}</p>
         <p class="last-seen">${data.presence === 'online' ? 'Online' : 'Last seen: ' + timeAgo(data.lastSeen)}</p>
       </div>
       <div class="status-indicator ${data.presence === 'online' ? 'status-online' : 'status-offline'}"></div>
@@ -513,14 +529,10 @@
 
           onValue(messagesRefChat, (msgSnap) => {
             const msgs = msgSnap.val() || {};
-            let lastMsg = null, lastMsgTime = null, unreadCount = 0;
+            let unreadCount = 0;
 
             for (const mid in msgs) {
               const m = msgs[mid];
-              if (!lastMsgTime || m.timestamp > lastMsgTime) {
-                lastMsg = m.text || (m.image ? "[Image]" : "[Media]");
-                lastMsgTime = m.timestamp;
-              }
               if (m.sender === friendUid && !m.read) unreadCount++;
             }
 
@@ -528,7 +540,7 @@
               c.onclick && c.onclick.toString().includes(`chat.html?uid=${friendUid}`));
             if (existing) friendsList.removeChild(existing);
 
-            renderFriend(friendUid, userData, lastMsg, lastMsgTime, unreadCount);
+            renderFriend(friendUid, userData, unreadCount);
           });
         });
         hideLoading();
@@ -726,17 +738,20 @@
     const card = document.createElement("div");
     card.className = "service-card";
     card.innerHTML = `
-      <img src="${userData.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${userData.name || 'User'} avatar" class="service-avatar" />
-      <div class="flex-grow">
-        <h4 class="font-bold dark:text-gray-100">${service.name || "Service"} by ${userData.name || "User"}</h4>
-        <p class="service-description">${service.description || "No description"}</p>
-        <p class="service-time">Added: ${timeAgo(service.createdAt)}</p>
+      <p class="sponsored-text">Sponsored</p>
+      <div class="flex items-center">
+        <img src="${userData.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${userData.name || 'User'} avatar" class="service-avatar" />
+        <div class="flex-grow">
+          <h4 class="font-bold dark:text-gray-100">${service.name || "Service"} by ${userData.name || "User"}</h4>
+          <p class="service-description">${service.description || "No description"}</p>
+          <p class="service-time">Added: ${timeAgo(service.createdAt)}</p>
+        </div>
+        ${isOwnService ? `
+          <svg class="delete-icon ml-auto self-start" data-sid="${serviceId}" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
+          </svg>
+        ` : ''}
       </div>
-      ${isOwnService ? `
-        <svg class="delete-icon ml-auto self-start" data-sid="${serviceId}" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
-        </svg>
-      ` : ''}
     `;
     if (isOwnService) {
       card.querySelector(".delete-icon").addEventListener("click", async (e) => {
