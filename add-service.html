@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Add Service - BanterBox</title>
+  <title>Add Item/Service - BanterBox</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     body {
@@ -46,16 +46,20 @@
     label.dark {
       color: #e5e7eb;
     }
-    input, textarea {
+    input, textarea, select {
       background: #f3f4f6;
       border: 1px solid #d1d5db;
+      border-radius: 8px;
+      padding: 0.75rem;
+      width: 100%;
+      font-size: 1rem;
     }
-    input.dark, textarea.dark {
+    input.dark, textarea.dark, select.dark {
       background: #4b5563;
       border: 1px solid #6b7280;
       color: #e5e7eb;
     }
-    input:focus, textarea:focus {
+    input:focus, textarea:focus, select:focus {
       border-color: #ef4444;
       outline: none;
     }
@@ -64,29 +68,81 @@
       font-size: 0.9rem;
       margin-top: 0.5rem;
     }
+    .error.dark {
+      color: #dc2626;
+    }
     .loading-overlay {
       background: rgba(0, 0, 0, 0.5);
+    }
+    /* Customize Google Places Autocomplete */
+    .pac-container {
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+      border: 1px solid #d1d5db;
+      z-index: 1000;
+    }
+    .pac-container.dark {
+      background: #374151;
+      border: 1px solid #6b7280;
+      color: #e5e7eb;
+    }
+    .pac-item {
+      padding: 0.75rem;
+      color: #374151;
+      cursor: pointer;
+    }
+    .pac-item.dark {
+      color: #e5e7eb;
+    }
+    .pac-item:hover {
+      background: #f3f4f6;
+    }
+    .pac-item.dark:hover {
+      background: #4b5563;
     }
   </style>
 </head>
 <body>
   <header class="header flex justify-between items-center">
-    <h1 class="text-xl font-bold text-red-500">Add Service</h1>
+    <h1 class="text-xl font-bold text-red-500">Add Item/Service</h1>
     <a href="index.html" class="text-sm bg-red-500 text-white px-4 py-1 rounded-full hover:bg-red-600 transition duration-200">Back</a>
   </header>
 
   <div class="form-container">
     <form id="add-service-form">
       <div class="mb-4">
-        <label for="service-name" class="block text-sm font-medium mb-1">Service Name</label>
-        <input id="service-name" type="text" class="p-2 border rounded w-full" required>
-        <p id="name-error" class="error hidden">Service name is required.</p>
+        <label for="item-name" class="block text-sm font-medium mb-1">Item/Service Name</label>
+        <input id="item-name" type="text" class="p-2 border rounded w-full" required>
+        <p id="name-error" class="error hidden">Item/Service name is required.</p>
       </div>
       <div class="mb-4">
-        <label for="service-description" class="block text-sm font-medium mb-1">Description</label>
-        <textarea id="service-description" class="p-2 border rounded w-full" rows="4"></textarea>
+        <label for="item-description" class="block text-sm font-medium mb-1">Description</label>
+        <textarea id="item-description" class="p-2 border rounded w-full" rows="4"></textarea>
       </div>
-      <button type="submit" class="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600 transition duration-200">Add Service</button>
+      <div class="mb-4">
+        <label for="item-price" class="block text-sm font-medium mb-1">Price ($)</label>
+        <input id="item-price" type="number" min="0" step="0.01" class="p-2 border rounded w-full" required>
+        <p id="price-error" class="error hidden">Please enter a valid price (0 or greater).</p>
+      </div>
+      <div class="mb-4">
+        <label for="item-category" class="block text-sm font-medium mb-1">Category</label>
+        <select id="item-category" class="p-2 border rounded w-full" required>
+          <option value="" disabled selected>Select a category</option>
+          <option value="Electronics">Electronics</option>
+          <option value="Furniture">Furniture</option>
+          <option value="Services">Services</option>
+          <option value="Clothing">Clothing</option>
+          <option value="Other">Other</option>
+        </select>
+        <p id="category-error" class="error hidden">Please select a category.</p>
+      </div>
+      <div class="mb-4">
+        <label for="item-location" class="block text-sm font-medium mb-1">Location</label>
+        <input id="item-location" type="text" class="p-2 border rounded w-full" required>
+        <p id="location-error" class="error hidden">Please select a valid location.</p>
+      </div>
+      <button type="submit" class="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600 transition duration-200">Add Item/Service</button>
     </form>
   </div>
 
@@ -97,6 +153,9 @@
       <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4z"/>
     </svg>
   </div>
+
+  <!-- Google Maps Places API -->
+  <script async src="https://maps.googleapis.com/maps/api/js?key=YOUR_API_KEY&libraries=places"></script>
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
@@ -119,8 +178,16 @@
 
     const loadingOverlay = document.getElementById("loading-overlay");
     const addServiceForm = document.getElementById("add-service-form");
-    const serviceNameInput = document.getElementById("service-name");
+    const itemNameInput = document.getElementById("item-name");
     const nameError = document.getElementById("name-error");
+    const itemPriceInput = document.getElementById("item-price");
+    const priceError = document.getElementById("price-error");
+    const itemCategoryInput = document.getElementById("item-category");
+    const categoryError = document.getElementById("category-error");
+    const itemLocationInput = document.getElementById("item-location");
+    const locationError = document.getElementById("location-error");
+
+    let selectedLocation = null;
 
     function showLoading() { loadingOverlay.classList.remove("hidden"); }
     function hideLoading() { loadingOverlay.classList.add("hidden"); }
@@ -131,7 +198,33 @@
       document.querySelector('.header').classList.toggle('dark', isDark);
       document.querySelector('.form-container').classList.toggle('dark', isDark);
       document.querySelectorAll('label').forEach(el => el.classList.toggle('dark', isDark));
-      document.querySelectorAll('input, textarea').forEach(el => el.classList.toggle('dark', isDark));
+      document.querySelectorAll('input, textarea, select').forEach(el => el.classList.toggle('dark', isDark));
+      document.querySelectorAll('.error').forEach(el => el.classList.toggle('dark', isDark));
+      document.querySelectorAll('.pac-container').forEach(el => el.classList.toggle('dark', isDark));
+      document.querySelectorAll('.pac-item').forEach(el => el.classList.toggle('dark', isDark));
+    }
+
+    // Initialize Google Places Autocomplete
+    function initAutocomplete() {
+      const autocomplete = new google.maps.places.Autocomplete(itemLocationInput, {
+        types: ['address'],
+        fields: ['formatted_address', 'geometry']
+      });
+      autocomplete.addListener('place_changed', () => {
+        const place = autocomplete.getPlace();
+        if (place.formatted_address && place.geometry) {
+          selectedLocation = {
+            address: place.formatted_address,
+            latitude: place.geometry.location.lat(),
+            longitude: place.geometry.location.lng()
+          };
+          itemLocationInput.value = place.formatted_address;
+          locationError.classList.add('hidden');
+        } else {
+          selectedLocation = null;
+          locationError.classList.remove('hidden');
+        }
+      });
     }
 
     onAuthStateChanged(auth, async user => {
@@ -143,33 +236,66 @@
         const snap = await get(ref(db, `users/${user.uid}/settings`));
         const settings = snap.val() || {};
         applyTheme(settings.theme || 'light');
+        initAutocomplete();
       } catch (error) {
         console.error('Error loading theme:', error);
       }
 
       addServiceForm.addEventListener("submit", async (e) => {
         e.preventDefault();
-        const name = serviceNameInput.value.trim();
-        const description = document.getElementById("service-description").value.trim();
+        let isValid = true;
 
+        const name = itemNameInput.value.trim();
+        const description = document.getElementById("item-description").value.trim();
+        const price = parseFloat(itemPriceInput.value);
+        const category = itemCategoryInput.value;
+
+        // Validate inputs
         if (!name) {
           nameError.classList.remove("hidden");
-          return;
+          isValid = false;
+        } else {
+          nameError.classList.add("hidden");
         }
-        nameError.classList.add("hidden");
+
+        if (isNaN(price) || price < 0) {
+          priceError.classList.remove("hidden");
+          isValid = false;
+        } else {
+          priceError.classList.add("hidden");
+        }
+
+        if (!category) {
+          categoryError.classList.remove("hidden");
+          isValid = false;
+        } else {
+          categoryError.classList.add("hidden");
+        }
+
+        if (!selectedLocation) {
+          locationError.classList.remove("hidden");
+          isValid = false;
+        } else {
+          locationError.classList.add("hidden");
+        }
+
+        if (!isValid) return;
 
         showLoading();
         try {
-          await push(ref(db, "services"), {
+          await push(ref(db, "items"), {
             userId: user.uid,
             name,
             description,
+            price,
+            category,
+            location: selectedLocation,
             createdAt: Date.now()
           });
           location.href = "index.html";
         } catch (error) {
-          console.error("Error adding service:", error);
-          alert("Failed to add service.");
+          console.error("Error adding item/service:", error);
+          alert("Failed to add item/service.");
           hideLoading();
         }
       });
