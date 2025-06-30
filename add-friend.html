@@ -142,6 +142,94 @@
     #friend-result.error.dark {
       color: #dc2626;
     }
+    .phonebook-contacts {
+      margin-top: 1.5rem;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+    .phonebook-card {
+      background: white;
+      padding: 1rem;
+      border-radius: 8px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+      margin-bottom: 1rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      transition: background 0.2s ease, transform 0.2s ease;
+    }
+    .phonebook-card.dark {
+      background: #374151;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+      color: #e5e7eb;
+    }
+    .phonebook-card:hover {
+      background: #f3f4f6;
+      transform: scale(1.02);
+    }
+    .phonebook-card.dark:hover {
+      background: #4b5563;
+    }
+    .phonebook-name {
+      font-weight: 600;
+      color: #374151;
+    }
+    .phonebook-name.dark {
+      color: #e5e7eb;
+    }
+    .phonebook-mobile {
+      font-size: 0.85rem;
+      color: #6b7280;
+    }
+    .phonebook-mobile.dark {
+      color: #9ca3af;
+    }
+    .phonebook-btn {
+      background: #ef4444;
+      color: white;
+      padding: 0.5rem 1rem;
+      border-radius: 8px;
+      font-weight: 600;
+      transition: background 0.2s ease, transform 0.2s ease;
+    }
+    .phonebook-btn:hover {
+      background: #dc2626;
+      transform: scale(1.02);
+    }
+    .phonebook-btn.dark {
+      background: #dc2626;
+    }
+    .phonebook-btn.dark:hover {
+      background: #b91c1c;
+    }
+    .phonebook-message {
+      color: #555;
+      text-align: center;
+      margin-top: 1rem;
+    }
+    .phonebook-message.dark {
+      color: #d1d5db;
+    }
+    .phonebook-access-btn {
+      background: #ef4444;
+      color: white;
+      padding: 0.75rem;
+      border-radius: 8px;
+      font-weight: 600;
+      transition: background 0.2s ease, transform 0.2s ease;
+      display: block;
+      margin: 1rem auto;
+    }
+    .phonebook-access-btn:hover {
+      background: #dc2626;
+      transform: scale(1.02);
+    }
+    .phonebook-access-btn.dark {
+      background: #dc2626;
+    }
+    .phonebook-access-btn.dark:hover {
+      background: #b91c1c;
+    }
   </style>
 </head>
 <body>
@@ -175,6 +263,10 @@
     </form>
     <p id="friend-result" class="mt-2 text-sm text-center text-green-600" role="alert"></p>
   </div>
+  <div id="phonebook-contacts" class="phonebook-contacts">
+    <h3 class="text-lg font-bold mb-2 dark:text-gray-100">Phonebook Contacts on BanterBox</h3>
+    <p id="phonebook-message" class="phonebook-message">Loading phonebook contacts...</p>
+  </div>
 </div>
 
 <div id="loading-overlay" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
@@ -207,6 +299,8 @@
   const friendEmailInput = document.getElementById("friend-email");
   const friendResult = document.getElementById("friend-result");
   const suggestionsDropdown = document.getElementById("suggestions-dropdown");
+  const phonebookContacts = document.getElementById("phonebook-contacts");
+  const phonebookMessage = document.getElementById("phonebook-message");
   const loadingOverlay = document.getElementById("loading-overlay");
   let currentUserUid = null;
   let friendUids = new Set();
@@ -226,6 +320,13 @@
     document.querySelectorAll('.suggestion-name').forEach(el => el.classList.toggle('dark', isDark));
     document.querySelectorAll('.suggestion-email, .suggestion-mobile').forEach(el => el.classList.toggle('dark', isDark));
     document.querySelector('#friend-result').classList.toggle('dark', isDark && friendResult.classList.contains('error'));
+    document.querySelector('.phonebook-contacts').classList.toggle('dark', isDark);
+    document.querySelectorAll('.phonebook-card').forEach(el => el.classList.toggle('dark', isDark));
+    document.querySelectorAll('.phonebook-name').forEach(el => el.classList.toggle('dark', isDark));
+    document.querySelectorAll('.phonebook-mobile').forEach(el => el.classList.toggle('dark', isDark));
+    document.querySelectorAll('.phonebook-btn').forEach(el => el.classList.toggle('dark', isDark));
+    document.querySelectorAll('.phonebook-message').forEach(el => el.classList.toggle('dark', isDark));
+    document.querySelectorAll('.phonebook-access-btn').forEach(el => el.classList.toggle('dark', isDark));
   }
 
   // Debounce function to limit Firebase queries
@@ -306,6 +407,103 @@
     }
   }
 
+  async function loadPhonebookContacts() {
+    if (!navigator.contacts || !navigator.contacts.select) {
+      phonebookMessage.textContent = "Phonebook access is not supported in this browser.";
+      return;
+    }
+
+    try {
+      const permission = await navigator.permissions.query({ name: 'contacts' });
+      if (permission.state !== 'granted') {
+        phonebookMessage.innerHTML = `
+          <p class="phonebook-message">Please allow access to your contacts to find friends on BanterBox.</p>
+          <button class="phonebook-access-btn">Request Access</button>
+        `;
+        const accessBtn = phonebookMessage.querySelector('.phonebook-access-btn');
+        accessBtn.addEventListener('click', async () => {
+          try {
+            await navigator.contacts.select(['name', 'tel'], { multiple: true });
+            loadPhonebookContacts(); // Retry after permission
+          } catch (error) {
+            phonebookMessage.textContent = "Permission to access contacts was denied.";
+            console.error('Error requesting contacts permission:', error);
+          }
+        });
+        return;
+      }
+
+      const contacts = await navigator.contacts.select(['name', 'tel'], { multiple: true });
+      if (!contacts || contacts.length === 0) {
+        phonebookMessage.textContent = "No contacts found in your phonebook.";
+        return;
+      }
+
+      const usersRef = ref(db, "users");
+      const usersSnap = await get(usersRef);
+      const users = usersSnap.val() || {};
+
+      const phonebookMatches = contacts
+        .map(contact => ({
+          name: contact.name && contact.name[0] || 'Unknown Contact',
+          mobile: contact.tel && contact.tel[0] ? contact.tel[0].replace(/\D/g, '') : null
+        }))
+        .filter(contact => contact.mobile)
+        .map(contact => {
+          const user = Object.entries(users).find(([uid, u]) => 
+            u.mobileNumber && u.mobileNumber.replace(/\D/g, '') === contact.mobile &&
+            uid !== currentUserUid && !friendUids.has(uid)
+          );
+          return user ? { ...contact, uid: user[0], userData: user[1] } : null;
+        })
+        .filter(contact => contact)
+        .slice(0, 10); // Limit to 10 matches
+
+      phonebookContacts.innerHTML = '<h3 class="text-lg font-bold mb-2 dark:text-gray-100">Phonebook Contacts on BanterBox</h3>';
+      if (phonebookMatches.length === 0) {
+        phonebookMessage.textContent = "No phonebook contacts found on BanterBox.";
+        return;
+      }
+
+      phonebookMatches.forEach(contact => {
+        const card = document.createElement('div');
+        card.className = 'phonebook-card';
+        card.innerHTML = `
+          <div>
+            <p class="phonebook-name">${contact.userData.name || contact.name}</p>
+            <p class="phonebook-mobile">${contact.userData.mobileNumber}</p>
+          </div>
+          <button class="phonebook-btn" data-uid="${contact.uid}">Add Friend</button>
+        `;
+        const addBtn = card.querySelector('.phonebook-btn');
+        addBtn.addEventListener('click', async () => {
+          showLoading();
+          try {
+            const friendUid = contact.uid;
+            const chatId = currentUserUid < friendUid ? `${currentUserUid}_${friendUid}` : `${friendUid}_${currentUserUid}`;
+            await set(ref(db, `chats/${chatId}/participants`), {
+              [currentUserUid]: true,
+              [friendUid]: true
+            });
+            friendResult.textContent = "Friend added! Redirecting...";
+            setTimeout(() => {
+              window.location.href = "friends.html";
+            }, 1000);
+          } catch (error) {
+            friendResult.classList.add('error');
+            friendResult.textContent = "Error adding friend.";
+            console.error("Error adding friend:", error);
+          }
+          hideLoading();
+        });
+        phonebookContacts.appendChild(card);
+      });
+    } catch (error) {
+      phonebookMessage.textContent = "Error accessing phonebook contacts.";
+      console.error('Error loading phonebook contacts:', error);
+    }
+  }
+
   const debouncedShowSuggestions = debounce(showSuggestions, 300);
 
   onAuthStateChanged(auth, async user => {
@@ -319,6 +517,7 @@
       const settings = snap.val() || {};
       applyTheme(settings.theme || 'light');
       await loadFriends(user.uid);
+      await loadPhonebookContacts();
     } catch (error) {
       console.error('Error loading theme or friends:', error);
     }
