@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://www.gstatic.com https://cdn.tailwindcss.com https://cdnjs.cloudflare.com; style-src 'self' https://cdn.tailwindcss.com 'unsafe-inline'; img-src 'self' https://res.cloudinary.com; connect-src 'self' https://fire-b-a8878.firebaseio.com https://api.cloudinary.com;">
   <title>BanterBox - Chat</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
@@ -105,17 +106,17 @@
       transition: height 0.2s ease;
     }
     .chat-container.search-active {
-      height: calc(100vh - 144px - 48px); /* Adjust for search bar height */
+      height: calc(100vh - 144px - 48px);
     }
     .message-list {
       flex-grow: 1;
       overflow-y: auto;
       padding-bottom: 1rem;
-      scrollbar-width: none; /* Hide scrollbar for Firefox */
-      -ms-overflow-style: none; /* Hide scrollbar for IE/Edge */
+      scrollbar-width: none;
+      -ms-overflow-style: none;
     }
     .message-list::-webkit-scrollbar {
-      display: none; /* Hide scrollbar for Chrome, Safari */
+      display: none;
     }
     .message {
       max-width: 70%;
@@ -125,7 +126,7 @@
       position: relative;
       cursor: pointer;
       transition: transform 0.2s ease, background 0.2s ease;
-      user-select: none; /* Prevent text selection */
+      user-select: none;
     }
     .message:hover {
       transform: scale(1.02);
@@ -198,6 +199,7 @@
       max-width: 100%;
       border-radius: 8px;
       margin-top: 0.5rem;
+      cursor: zoom-in;
     }
     .delete-modal {
       position: fixed;
@@ -273,6 +275,49 @@
     .modal-overlay.active {
       display: block;
     }
+    .image-modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.8);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 2000;
+      animation: zoomIn 0.3s ease-out;
+    }
+    .image-modal.active {
+      display: flex;
+    }
+    .image-modal.dark {
+      background: rgba(0, 0, 0, 0.9);
+    }
+    .image-modal img {
+      max-width: 90vw;
+      max-height: 90vh;
+      object-fit: contain;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    }
+    .close-btn {
+      position: absolute;
+      top: 1rem;
+      right: 1rem;
+      background: #ef4444;
+      color: white;
+      border-radius: 9999px;
+      padding: 0.5rem;
+      cursor: pointer;
+      transition: background 0.2s ease;
+    }
+    .close-btn:hover {
+      background: #dc2626;
+    }
+    .close-btn.dark {
+      background: #dc2626;
+    }
+    .close-btn.dark:hover {
+      background: #b91c1c;
+    }
     .typing-indicator {
       font-size: 0.8rem;
       color: #888;
@@ -337,7 +382,7 @@
       cursor: not-allowed;
     }
     .send-btn svg {
-      stroke: #000000; /* Black tick */
+      stroke: #000000;
     }
     .media-input {
       display: none;
@@ -369,10 +414,14 @@
       from { opacity: 0; transform: translate(-50%, -60%); }
       to { opacity: 1; transform: translate(-50%, -50%); }
     }
+    @keyframes zoomIn {
+      from { opacity: 0; transform: scale(0.8); }
+      to { opacity: 1; transform: scale(1); }
+    }
   </style>
 </head>
 <body>
-  <div class="encryption-notice">
+  <div class="encryption-notice" aria-label="Messages are end-to-end encrypted">
     <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M12 2a5 5 0 00-5 5v3a2 2 0 01-2 2v5a2 2 0 002 2h10a2 2 0 002-2v-5a2 2 0 01-2-2V7a5 5 0 00-5-5z"/>
     </svg>
@@ -380,13 +429,13 @@
   </div>
 
   <header class="header">
-    <a href="friends.html" class="hover:text-red-600 transition duration-200 text-xl font-bold text-red-500">← Back</a>
+    <a href="friends.html" class="hover:text-red-600 transition duration-200 text-xl font-bold text-red-500" aria-label="Back to friends">← Back</a>
     <span id="chat-title" class="text-xl font-bold text-red-500">Chat</span>
     <div class="flex items-center gap-2">
       <svg id="search-icon" class="search-icon" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35m1.85-2.65a7 7 0 11-14 0 7 7 0 0114 0z"/>
       </svg>
-      <a id="profile-link" href="#" class="text-sm bg-red-500 text-white px-4 py-1 rounded-full hover:bg-red-600 transition duration-200">
+      <a id="profile-link" href="#" class="text-sm bg-red-500 text-white px-4 py-1 rounded-full hover:bg-red-600 transition duration-200" aria-label="View profile">
         View Profile
       </a>
     </div>
@@ -394,33 +443,42 @@
 
   <div class="chat-container">
     <div id="search-bar" class="search-bar">
-      <input type="text" id="search-input" placeholder="Search messages..." />
+      <input type="text" id="search-input" placeholder="Search messages..." aria-label="Search messages" />
     </div>
     <div id="message-list" class="message-list" aria-live="polite" aria-relevant="additions"></div>
-    <div id="typing-indicator" class="typing-indicator" style="display: none;">Friend is typing...</div>
+    <div id="typing-indicator" class="typing-indicator" style="display: none;" aria-live="polite">Friend is typing...</div>
     <div class="input-container">
       <input type="file" id="media-input" class="media-input" accept="image/*" />
-      <button id="media-btn" class="media-btn">
+      <button id="media-btn" class="media-btn" aria-label="Upload image">
         <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
         </svg>
       </button>
-      <input type="text" id="message-input" class="message-input" placeholder="Type a message..." />
-      <button id="send-btn" class="send-btn" disabled>
+      <input type="text" id="message-input" class="message-input" placeholder="Type a message..." aria-label="Type a message" />
+      <button id="send-btn" class="send-btn" disabled aria-label="Send message">
         <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" stroke="#000000" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
         </svg>
       </button>
     </div>
-    <p id="media-error" class="error-message">Failed to upload image.</p>
+    <p id="media-error" class="error-message" aria-live="polite">Failed to upload image.</p>
   </div>
 
-  <div id="delete-modal" class="delete-modal" style="display: none;">
+  <div id="delete-modal" class="delete-modal" style="display: none;" aria-modal="true" role="dialog" aria-label="Delete message confirmation">
     <p>Are you sure you want to delete this message?</p>
     <button class="confirm-btn" role="button" aria-label="Confirm delete">Delete</button>
     <button class="cancel-btn" role="button" aria-label="Cancel delete">Cancel</button>
   </div>
   <div id="modal-overlay" class="modal-overlay"></div>
+
+  <div id="image-modal" class="image-modal" aria-modal="true" role="dialog" aria-label="Full-screen image viewer">
+    <img id="full-image" src="" alt="Full-screen chat image" />
+    <button class="close-btn" aria-label="Close image viewer">
+      <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+      </svg>
+    </button>
+  </div>
 
   <div id="loading-overlay" class="loading-overlay">
     <svg class="animate-spin h-10 w-10 text-red-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -462,6 +520,9 @@
     const typingIndicator = document.getElementById("typing-indicator");
     const deleteModal = document.getElementById("delete-modal");
     const modalOverlay = document.getElementById("modal-overlay");
+    const imageModal = document.getElementById("image-modal");
+    const fullImage = document.getElementById("full-image");
+    const imageModalCloseBtn = document.querySelector(".image-modal .close-btn");
     const chatContainer = document.querySelector(".chat-container");
     const mediaError = document.getElementById("media-error");
 
@@ -509,6 +570,8 @@
       document.querySelector('.message-list').classList.toggle('dark', isDark);
       typingIndicator.classList.toggle('dark', isDark);
       deleteModal.classList.toggle('dark', isDark);
+      imageModal.classList.toggle('dark', isDark);
+      imageModalCloseBtn.classList.toggle('dark', isDark);
     }
 
     function timeAgo(timestamp) {
@@ -528,13 +591,11 @@
       const confirmBtn = deleteModal.querySelector('.confirm-btn');
       const cancelBtn = deleteModal.querySelector('.cancel-btn');
 
-      // Remove existing listeners to prevent duplicates
       const newConfirmBtn = confirmBtn.cloneNode(true);
       const newCancelBtn = cancelBtn.cloneNode(true);
       confirmBtn.replaceWith(newConfirmBtn);
       cancelBtn.replaceWith(newCancelBtn);
 
-      // Confirm delete
       newConfirmBtn.addEventListener('click', async (e) => {
         e.stopPropagation();
         showLoading();
@@ -549,20 +610,29 @@
         hideLoading();
       });
 
-      // Cancel delete
       newCancelBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         deleteModal.style.display = 'none';
         modalOverlay.classList.remove('active');
       });
 
-      // Dismiss modal on overlay click
       modalOverlay.addEventListener('click', (e) => {
         if (e.target === modalOverlay) {
           deleteModal.style.display = 'none';
           modalOverlay.classList.remove('active');
         }
       });
+    }
+
+    function showImageModal(imageSrc) {
+      fullImage.src = imageSrc;
+      imageModal.classList.add('active');
+      fullImage.focus();
+    }
+
+    function hideImageModal() {
+      imageModal.classList.remove('active');
+      fullImage.src = '';
     }
 
     function toggleSearchBar(e) {
@@ -572,9 +642,9 @@
       if (searchBar.classList.contains('active')) {
         searchInput.focus();
       } else {
-        searchInput.value = ''; // Clear search input
+        searchInput.value = '';
         document.querySelectorAll('.message').forEach(message => {
-          message.style.display = ''; // Reset message visibility
+          message.style.display = '';
         });
       }
     }
@@ -608,17 +678,21 @@
         </p>
       `;
 
-      // Swipe gestures
+      if (message.image) {
+        const img = div.querySelector('.message-image');
+        img.addEventListener('click', () => showImageModal(message.image));
+      }
+
       let touchStartX = 0;
       div.addEventListener('touchstart', (e) => {
-        e.preventDefault(); // Prevent highlighting
+        e.preventDefault();
         touchStartX = e.touches[0].clientX;
       });
       div.addEventListener('touchend', (e) => {
         const touchEndX = e.changedTouches[0].clientX;
-        if (touchStartX - touchEndX > 50 && isSent) { // Swipe left
+        if (touchStartX - touchEndX > 50 && isSent) {
           showDeleteModal(messageId, chatId);
-        } else if (touchEndX - touchStartX > 50) { // Swipe right
+        } else if (touchEndX - touchStartX > 50) {
           messageInput.dataset.replyTo = messageId;
           messageInput.dataset.replyText = messageText.substring(0, 30) + (messageText.length > 30 ? '...' : '');
           messageInput.placeholder = `Replying to "${messageInput.dataset.replyText}"...`;
@@ -626,20 +700,19 @@
         }
       });
 
-      // Mouse-based swipe simulation
       let mouseStartX = 0;
       let isDragging = false;
       div.addEventListener('mousedown', (e) => {
-        e.preventDefault(); // Prevent highlighting
+        e.preventDefault();
         isDragging = true;
         mouseStartX = e.clientX;
       });
       div.addEventListener('mouseup', (e) => {
         if (isDragging) {
           const mouseEndX = e.clientX;
-          if (mouseStartX - mouseEndX > 50 && isSent) { // Swipe left
+          if (mouseStartX - mouseEndX > 50 && isSent) {
             showDeleteModal(messageId, chatId);
-          } else if (mouseEndX - mouseStartX > 50) { // Swipe right
+          } else if (mouseEndX - mouseStartX > 50) {
             messageInput.dataset.replyTo = messageId;
             messageInput.dataset.replyText = messageText.substring(0, 30) + (messageText.length > 30 ? '...' : '');
             messageInput.placeholder = `Replying to "${messageInput.dataset.replyText}"...`;
@@ -649,12 +722,68 @@
         }
       });
       div.addEventListener('mousemove', (e) => {
-        if (isDragging) e.preventDefault(); // Prevent highlighting during drag
+        if (isDragging) e.preventDefault();
       });
 
       messageList.appendChild(div);
       messageList.scrollTop = messageList.scrollHeight;
     }
+
+    // Image modal interactions
+    imageModalCloseBtn.addEventListener('click', hideImageModal);
+    imageModal.addEventListener('click', (e) => {
+      if (e.target === imageModal) hideImageModal();
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && imageModal.classList.contains('active')) {
+        hideImageModal();
+      }
+    });
+
+    // Pinch-to-zoom and pan
+    let scale = 1;
+    let startDistance = 0;
+    let translateX = 0;
+    let translateY = 0;
+    let isPanning = false;
+    let startX = 0;
+    let startY = 0;
+
+    fullImage.addEventListener('touchstart', (e) => {
+      if (e.touches.length === 2) {
+        e.preventDefault();
+        const touch1 = e.touches[0];
+        const touch2 = e.touches[1];
+        startDistance = Math.hypot(touch1.clientX - touch2.clientX, touch1.clientY - touch2.clientY);
+      } else if (e.touches.length === 1 && scale > 1) {
+        e.preventDefault();
+        isPanning = true;
+        startX = e.touches[0].clientX - translateX;
+        startY = e.touches[0].clientY - translateY;
+      }
+    });
+
+    fullImage.addEventListener('touchmove', (e) => {
+      if (e.touches.length === 2) {
+        e.preventDefault();
+        const touch1 = e.touches[0];
+        const touch2 = e.touches[1];
+        const currentDistance = Math.hypot(touch1.clientX - touch2.clientX, touch1.clientY - touch2.clientY);
+        const newScale = scale * (currentDistance / startDistance);
+        scale = Math.max(1, Math.min(newScale, 3)); // Limit zoom between 1x and 3x
+        fullImage.style.transform = `scale(${scale}) translate(${translateX}px, ${translateY}px)`;
+        startDistance = currentDistance;
+      } else if (e.touches.length === 1 && isPanning) {
+        e.preventDefault();
+        translateX = e.touches[0].clientX - startX;
+        translateY = e.touches[0].clientY - startY;
+        fullImage.style.transform = `scale(${scale}) translate(${translateX}px, ${translateY}px)`;
+      }
+    });
+
+    fullImage.addEventListener('touchend', (e) => {
+      isPanning = false;
+    });
 
     onAuthStateChanged(auth, async user => {
       if (!user) {
@@ -685,6 +814,7 @@
         return;
       }
       chatTitle.textContent = friendSnap.val().name || "Friend";
+      profileLink.href = `profile.html?uid=${friendUid}`;
 
       const chatId = user.uid < friendUid ? `${user.uid}_${friendUid}` : `${friendUid}_${user.uid}`;
       const messagesRef = ref(db, `messages/${chatId}`);
@@ -693,11 +823,9 @@
       let lastMessageId = null;
       let loadingMore = false;
 
-      // Toggle search bar
       searchIcon.addEventListener('click', toggleSearchBar);
       document.addEventListener('click', hideSearchBar);
 
-      // Message search
       searchInput.addEventListener('input', () => {
         const query = searchInput.value.toLowerCase();
         document.querySelectorAll('.message').forEach(message => {
@@ -706,7 +834,6 @@
         });
       });
 
-      // Typing indicator
       messageInput.addEventListener('input', async () => {
         await set(ref(db, `typing/${chatId}/${user.uid}`), true);
         setTimeout(async () => {
@@ -718,7 +845,6 @@
         typingIndicator.style.display = snapshot.val() ? 'block' : 'none';
       });
 
-      // Load messages
       showLoading();
       onValue(messagesRef, async (snapshot) => {
         messageList.innerHTML = "";
@@ -743,7 +869,6 @@
         hideLoading();
       });
 
-      // Infinite scroll for older messages
       messageList.addEventListener('scroll', async () => {
         if (messageList.scrollTop === 0 && !loadingMore && lastMessageId) {
           loadingMore = true;
@@ -823,7 +948,7 @@
         try {
           const formData = new FormData();
           formData.append('file', file);
-          formData.append('upload_preset', 'banter_box'); // Replace with your Cloudinary upload preset
+          formData.append('upload_preset', 'banter_box');
           const response = await fetch('https://api.cloudinary.com/v1_1/dqkujefxj/image/upload', {
             method: 'POST',
             body: formData
@@ -843,7 +968,7 @@
             read: false
           });
           mediaInput.value = "";
-        } catch (error) {
+        } cloudinary.comcatch (error) {
           console.error("Error uploading image:", error);
           showError(`Failed to upload image: ${error.message}`);
         }
