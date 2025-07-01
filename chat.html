@@ -61,6 +61,18 @@
       border-bottom: 1px solid #4b5563;
       color: #e5e7eb;
     }
+    .header-title {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .header-avatar {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      object-fit: cover;
+      flex-shrink: 0;
+    }
     .search-icon {
       cursor: pointer;
       stroke: #ef4444;
@@ -105,22 +117,19 @@
       transition: height 0.2s ease;
     }
     .chat-container.search-active {
-      height: calc(100vh - 144px - 48px); /* Adjust for search bar height */
+      height: calc(100vh - 144px - 48px);
     }
     .message-list {
       flex-grow: 1;
       overflow-y: auto;
       padding-bottom: 1rem;
-      scrollbar-width: none; /* Hide scrollbar for Firefox */
-      -ms-overflow-style: none; /* Hide scrollbar for IE/Edge */
+      scrollbar-width: none;
+      -ms-overflow-style: none;
     }
     .message-list::-webkit-scrollbar {
-      display: none; /* Hide scrollbar for Chrome, Safari */
+      display: none;
     }
     .message {
-      display: flex;
-      align-items: flex-start;
-      gap: 0.5rem;
       max-width: 70%;
       margin-bottom: 1.5rem;
       padding: 0.75rem 1rem;
@@ -134,14 +143,12 @@
       transform: scale(1.02);
     }
     .message.sent {
-      flex-direction: row-reverse; /* Avatar on the right for sent messages */
       background: #f87171;
       color: white;
       margin-left: auto;
       border-bottom-right-radius: 4px;
     }
     .message.received {
-      flex-direction: row; /* Avatar on the left for received messages */
       background: #f9fafb;
       color: #374151;
       margin-right: auto;
@@ -155,18 +162,6 @@
       background: #4b5563;
       color: #e5e7eb;
       box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-    }
-    .message-avatar {
-      width: 32px;
-      height: 32px;
-      border-radius: 50%;
-      object-fit: cover;
-      flex-shrink: 0;
-    }
-    .message-content {
-      display: flex;
-      flex-direction: column;
-      flex-grow: 1;
     }
     .message.reply .message-text::before {
       content: attr(data-reply);
@@ -354,7 +349,7 @@
       cursor: not-allowed;
     }
     .send-btn svg {
-      stroke: #000000; /* Black tick */
+      stroke: #000000;
     }
     .media-input {
       display: none;
@@ -398,7 +393,10 @@
 
   <header class="header">
     <a href="friends.html" class="hover:text-red-600 transition duration-200 text-xl font-bold text-red-500">← Back</a>
-    <span id="chat-title" class="text-xl font-bold textonton-red-500">Chat</span>
+    <div class="header-title">
+      <img id="header-avatar" class="header-avatar" src="https://via.placeholder.com/32" alt="Friend avatar" />
+      <span id="chat-title" class="text-xl font-bold text-red-500">Chat</span>
+    </div>
     <div class="flex items-center gap-2">
       <svg id="search-icon" class="search-icon" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35m1.85-2.65a7 7 0 11-14 0 7 7 0 0114 0z"/>
@@ -481,6 +479,7 @@
     const modalOverlay = document.getElementById("modal-overlay");
     const chatContainer = document.querySelector(".chat-container");
     const mediaError = document.getElementById("media-error");
+    const headerAvatar = document.getElementById("header-avatar");
 
     // Encryption key (replace with secure key management in production)
     const ENCRYPTION_KEY = "your-secure-key-32bytes-long-1234";
@@ -589,9 +588,9 @@
       if (searchBar.classList.contains('active')) {
         searchInput.focus();
       } else {
-        searchInput.value = ''; // Clear search input
+        searchInput.value = '';
         document.querySelectorAll('.message').forEach(message => {
-          message.style.display = ''; // Reset message visibility
+          message.style.display = '';
         });
       }
     }
@@ -607,31 +606,22 @@
       }
     }
 
-    async function renderMessage(message, isSent, userData, messageId, chatId, userId) {
+    function renderMessage(message, isSent, userData, messageId, chatId, userId) {
       const div = document.createElement("div");
       div.className = `message ${isSent ? 'sent' : 'received'} ${message.replyTo ? 'reply' : ''} ${message.pinned ? 'pinned' : ''}`;
       if (isSent) div.classList.add('dark');
-
       const messageText = message.text ? decryptMessage(message.text) : '';
       const replyText = message.replyTo ? (message.replyText || 'Replied message') : '';
-      
-      // Use userData.avatar if available, else fallback
-      const avatarUrl = userData.avatar || 'https://via.placeholder.com/32';
-
       const content = message.image 
         ? `<img src="${message.image}?w=300&h=300&c=fill" class="message-image" alt="Shared image" />`
         : `<p class="message-text" ${message.replyTo ? `data-reply="${replyText}"` : ''}>${messageText}</p>`;
       const readReceipt = isSent ? (message.read ? 'read' : '') : '';
-
       div.innerHTML = `
-        <img src="${avatarUrl}" class="message-avatar" alt="User avatar" />
-        <div class="message-content">
-          ${content}
-          <p class="message-time ${isSent ? '' : 'received'}">
-            ${timeAgo(message.timestamp)}
-            ${isSent ? `<svg class="read-receipt ${readReceipt}" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z"/></svg>` : ''}
-          </p>
-        </div>
+        ${content}
+        <p class="message-time ${isSent ? '' : 'received'}">
+          ${timeAgo(message.timestamp)}
+          ${isSent ? `<svg class="read-receipt ${readReceipt}" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z"/></svg>` : ''}
+        </p>
       `;
 
       // Swipe gestures
@@ -710,10 +700,9 @@
         location.href = "friends.html";
         return;
       }
-      chatTitle.textContent = friendSnap.val().name || "Friend";
-
-      const userSnap = await get(ref(db, `users/${user.uid}`));
-      const userData = userSnap.exists() ? userSnap.val() : { avatar: 'https://via.placeholder.com/32' };
+      const friendData = friendSnap.val();
+      chatTitle.textContent = friendData.name || "Friend";
+      headerAvatar.src = friendData.avatar || 'https://via.placeholder.com/32';
 
       const chatId = user.uid < friendUid ? `${user.uid}_${friendUid}` : `${friendUid}_${user.uid}`;
       const messagesRef = ref(db, `messages/${chatId}`);
@@ -757,14 +746,14 @@
         }
 
         const messages = snapshot.val();
+        const userData = friendSnap.val();
         const messageIds = Object.keys(messages).sort((a, b) => messages[a].timestamp - messages[b].timestamp);
         lastMessageId = messageIds[0];
 
         for (const mid of messageIds) {
           const msg = messages[mid];
           const isSent = msg.sender === user.uid;
-          const dataToUse = isSent ? userData : friendSnap.val();
-          renderMessage(msg, isSent, dataToUse, mid, chatId, user.uid);
+          renderMessage(msg, isSent, userData, mid, chatId, user.uid);
           if (!isSent && !msg.read) {
             await update(ref(db, `messages/${chatId}/${mid}`), { read: true });
           }
@@ -787,11 +776,11 @@
               .slice(0, 20);
             if (messageIds.length) {
               lastMessageId = messageIds[messageIds.length - 1];
+              const userData = friendSnap.val();
               for (const mid of messageIds) {
                 const msg = messages[mid];
                 const isSent = msg.sender === user.uid;
-                const dataToUse = isSent ? userData : friendSnap.val();
-                renderMessage(msg, isSent, dataToUse, mid, chatId, user.uid);
+                renderMessage(msg, isSent, userData, mid, chatId, user.uid);
               }
             }
           } catch (error) {
