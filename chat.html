@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://www.gstatic.com https://cdn.tailwindcss.com https://cdnjs.cloudflare.com; style-src 'self' https://cdn.tailwindcss.com 'unsafe-inline'; img-src 'self' https://res.cloudinary.com; connect-src 'self' https://fire-b-a8878.firebaseio.com https://api.cloudinary.com;">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://www.gstatic.com https://cdn.tailwindcss.com https://cdnjs.cloudflare.com; style-src 'self' https://cdn.tailwindcss.com 'unsafe-inline'; img-src 'self' https://res.cloudinary.com https://www.gravatar.com; connect-src 'self' https://fire-b-a8878.firebaseio.com https://api.cloudinary.com;">
   <title>BanterBox - Chat</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
@@ -127,6 +127,9 @@
       cursor: pointer;
       transition: transform 0.2s ease, background 0.2s ease;
       user-select: none;
+      display: flex;
+      align-items: flex-start;
+      gap: 0.5rem;
     }
     .message:hover {
       transform: scale(1.02);
@@ -136,6 +139,7 @@
       color: white;
       margin-left: auto;
       border-bottom-right-radius: 4px;
+      flex-direction: row-reverse;
     }
     .message.received {
       background: #f9fafb;
@@ -167,6 +171,9 @@
     }
     .message-text {
       word-break: break-word;
+    }
+    .message-content {
+      flex-grow: 1;
     }
     .message-time {
       font-size: 0.75rem;
@@ -200,6 +207,21 @@
       border-radius: 8px;
       margin-top: 0.5rem;
       cursor: zoom-in;
+    }
+    .message-avatar {
+      width: 40px;
+      height: 40px;
+      border-radius: 9999px;
+      border: 2px solid #ef4444;
+      object-fit: cover;
+      transition: transform 0.3s ease;
+      cursor: pointer;
+    }
+    .message-avatar:hover {
+      transform: scale(1.05);
+    }
+    .message-avatar.dark {
+      border-color: #dc2626;
     }
     .delete-modal {
       position: fixed;
@@ -567,6 +589,7 @@
       document.querySelectorAll('.message.sent').forEach(el => el.classList.toggle('dark', isDark));
       document.querySelectorAll('.message.received').forEach(el => el.classList.toggle('dark', isDark));
       document.querySelectorAll('.message-time.received').forEach(el => el.classList.toggle('dark', isDark));
+      document.querySelectorAll('.message-avatar').forEach(el => el.classList.toggle('dark', isDark));
       document.querySelector('.message-list').classList.toggle('dark', isDark);
       typingIndicator.classList.toggle('dark', isDark);
       deleteModal.classList.toggle('dark', isDark);
@@ -660,22 +683,27 @@
       }
     }
 
-    function renderMessage(message, isSent, userData, messageId, chatId, userId) {
+    function renderMessage(message, isSent, userData, senderData, friendData, messageId, chatId, userId) {
       const div = document.createElement("div");
       div.className = `message ${isSent ? 'sent' : 'received'} ${message.replyTo ? 'reply' : ''} ${message.pinned ? 'pinned' : ''}`;
       if (isSent) div.classList.add('dark');
       const messageText = message.text ? decryptMessage(message.text) : '';
       const replyText = message.replyTo ? (message.replyText || 'Replied message') : '';
+      const avatarUrl = isSent ? (senderData.photoURL || 'https://www.gravatar.com/avatar?d=mp') : (friendData.photoURL || 'https://www.gravatar.com/avatar?d=mp');
+      const avatarAlt = isSent ? `${senderData.name || 'User'}'s avatar` : `${friendData.name || 'Friend'}'s avatar`;
       const content = message.image 
         ? `<img src="${message.image}?w=300&h=300&c=fill" class="message-image" alt="Shared image" />`
         : `<p class="message-text" ${message.replyTo ? `data-reply="${replyText}"` : ''}>${messageText}</p>`;
       const readReceipt = isSent ? (message.read ? 'read' : '') : '';
       div.innerHTML = `
-        ${content}
-        <p class="message-time ${isSent ? '' : 'received'}">
-          ${timeAgo(message.timestamp)}
-          ${isSent ? `<svg class="read-receipt ${readReceipt}" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z"/></svg>` : ''}
-        </p>
+        <img src="${avatarUrl}" class="message-avatar" alt="${avatarAlt}" tabindex="0" />
+        <div class="message-content">
+          ${content}
+          <p class="message-time ${isSent ? '' : 'received'}">
+            ${timeAgo(message.timestamp)}
+            ${isSent ? `<svg class="read-receipt ${readReceipt}" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z"/></svg>` : ''}
+          </p>
+        </div>
       `;
 
       if (message.image) {
@@ -683,12 +711,24 @@
         img.addEventListener('click', () => showImageModal(message.image));
       }
 
+      const avatar = div.querySelector('.message-avatar');
+      avatar.addEventListener('click', () => {
+        location.href = `profile.html?uid=${isSent ? userId : friendData.uid}`;
+      });
+      avatar.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          location.href = `profile.html?uid=${isSent ? userId : friendData.uid}`;
+        }
+      });
+
       let touchStartX = 0;
       div.addEventListener('touchstart', (e) => {
+        if (e.target.classList.contains('message-avatar') || e.target.classList.contains('message-image')) return;
         e.preventDefault();
         touchStartX = e.touches[0].clientX;
       });
       div.addEventListener('touchend', (e) => {
+        if (e.target.classList.contains('message-avatar') || e.target.classList.contains('message-image')) return;
         const touchEndX = e.changedTouches[0].clientX;
         if (touchStartX - touchEndX > 50 && isSent) {
           showDeleteModal(messageId, chatId);
@@ -703,11 +743,13 @@
       let mouseStartX = 0;
       let isDragging = false;
       div.addEventListener('mousedown', (e) => {
+        if (e.target.classList.contains('message-avatar') || e.target.classList.contains('message-image')) return;
         e.preventDefault();
         isDragging = true;
         mouseStartX = e.clientX;
       });
       div.addEventListener('mouseup', (e) => {
+        if (e.target.classList.contains('message-avatar') || e.target.classList.contains('message-image')) return;
         if (isDragging) {
           const mouseEndX = e.clientX;
           if (mouseStartX - mouseEndX > 50 && isSent) {
@@ -722,7 +764,9 @@
         }
       });
       div.addEventListener('mousemove', (e) => {
-        if (isDragging) e.preventDefault();
+        if (isDragging && !e.target.classList.contains('message-avatar') && !e.target.classList.contains('message-image')) {
+          e.preventDefault();
+        }
       });
 
       messageList.appendChild(div);
@@ -770,7 +814,7 @@
         const touch2 = e.touches[1];
         const currentDistance = Math.hypot(touch1.clientX - touch2.clientX, touch1.clientY - touch2.clientY);
         const newScale = scale * (currentDistance / startDistance);
-        scale = Math.max(1, Math.min(newScale, 3)); // Limit zoom between 1x and 3x
+        scale = Math.max(1, Math.min(newScale, 3));
         fullImage.style.transform = `scale(${scale}) translate(${translateX}px, ${translateY}px)`;
         startDistance = currentDistance;
       } else if (e.touches.length === 1 && isPanning) {
@@ -791,12 +835,16 @@
         return;
       }
       profileLink.href = `profile.html?uid=${user.uid}&owner=true`;
+      let senderData, friendData;
       try {
-        const snap = await get(ref(db, `users/${user.uid}/settings`));
-        const settings = snap.val() || {};
+        const userSnap = await get(ref(db, `users/${user.uid}`));
+        senderData = userSnap.val() || { name: 'User', photoURL: 'https://www.gravatar.com/avatar?d=mp' };
+        const settingsSnap = await get(ref(db, `users/${user.uid}/settings`));
+        const settings = settingsSnap.val() || {};
         applyTheme(settings.theme || 'light');
       } catch (error) {
-        console.error('Error loading theme:', error);
+        console.error('Error loading user data or theme:', error);
+        showError("Failed to load user data.");
       }
 
       const urlParams = new URLSearchParams(window.location.search);
@@ -807,14 +855,22 @@
         return;
       }
 
-      const friendSnap = await get(ref(db, `users/${friendUid}`));
-      if (!friendSnap.exists()) {
-        showError("User not found.");
+      try {
+        const friendSnap = await get(ref(db, `users/${friendUid}`));
+        if (!friendSnap.exists()) {
+          showError("User not found.");
+          location.href = "friends.html";
+          return;
+        }
+        friendData = friendSnap.val();
+        chatTitle.textContent = friendData.name || "Friend";
+        profileLink.href = `profile.html?uid=${friendUid}`;
+      } catch (error) {
+        console.error('Error loading friend data:', error);
+        showError("Failed to load friend data.");
         location.href = "friends.html";
         return;
       }
-      chatTitle.textContent = friendSnap.val().name || "Friend";
-      profileLink.href = `profile.html?uid=${friendUid}`;
 
       const chatId = user.uid < friendUid ? `${user.uid}_${friendUid}` : `${friendUid}_${user.uid}`;
       const messagesRef = ref(db, `messages/${chatId}`);
@@ -854,14 +910,13 @@
         }
 
         const messages = snapshot.val();
-        const userData = friendSnap.val();
         const messageIds = Object.keys(messages).sort((a, b) => messages[a].timestamp - messages[b].timestamp);
         lastMessageId = messageIds[0];
 
         for (const mid of messageIds) {
           const msg = messages[mid];
           const isSent = msg.sender === user.uid;
-          renderMessage(msg, isSent, userData, mid, chatId, user.uid);
+          renderMessage(msg, isSent, null, senderData, friendData, mid, chatId, user.uid);
           if (!isSent && !msg.read) {
             await update(ref(db, `messages/${chatId}/${mid}`), { read: true });
           }
@@ -883,11 +938,10 @@
               .slice(0, 20);
             if (messageIds.length) {
               lastMessageId = messageIds[messageIds.length - 1];
-              const userData = friendSnap.val();
               for (const mid of messageIds) {
                 const msg = messages[mid];
                 const isSent = msg.sender === user.uid;
-                renderMessage(msg, isSent, userData, mid, chatId, user.uid);
+                renderMessage(msg, isSent, null, senderData, friendData, mid, chatId, user.uid);
               }
             }
           } catch (error) {
@@ -968,7 +1022,7 @@
             read: false
           });
           mediaInput.value = "";
-        } cloudinary.comcatch (error) {
+        } catch (error) {
           console.error("Error uploading image:", error);
           showError(`Failed to upload image: ${error.message}`);
         }
