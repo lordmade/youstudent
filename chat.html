@@ -7,7 +7,6 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
   <style>
-    /* Prevent text selection on long press */
     * {
       user-select: none;
       -webkit-user-select: none;
@@ -19,7 +18,7 @@
       background: #e5e5e5;
       min-height: 100vh;
       padding: 0;
-      transition: background 0.3s ease;
+      transition: background 0.3s ease, font-size 0.3s ease;
       overscroll-behavior: none;
     }
     body.dark {
@@ -55,7 +54,9 @@
       stroke: #dc2626;
     }
     .header {
-      background: #f9fafb;
+      background: linear-gradient(#f9fafb, #f9fafb) padding-box,
+                  linear-gradient(to right, #ef4444, #f97316) border-box;
+      border-bottom: 2px solid transparent;
       position: sticky;
       top: 40px;
       z-index: 900;
@@ -63,9 +64,6 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      border-bottom: 2px solid transparent;
-      background: linear-gradient(#f9fafb, #f9fafb) padding-box,
-                  linear-gradient(to right, #ef4444, #f97316) border-box;
     }
     .header.dark {
       background: linear-gradient(#374151, #374151) padding-box,
@@ -83,6 +81,10 @@
       border-radius: 9999px;
       object-fit: cover;
       border: 2px solid #ef4444;
+      transition: transform 0.2s ease;
+    }
+    .header-avatar:hover {
+      transform: scale(1.1);
     }
     .header-info {
       display: flex;
@@ -295,6 +297,12 @@
       border-radius: 8px;
       margin-top: 0.5rem;
       border: 1px solid #d1d5db;
+      cursor: pointer;
+      transition: transform 0.2s ease;
+      loading: lazy;
+    }
+    .message-image:hover {
+      transform: scale(1.05);
     }
     .message-image.dark {
       border-color: #4b5563;
@@ -318,73 +326,82 @@
     .message-reaction:hover {
       transform: scale(1.2);
     }
-    .delete-modal, .reaction-modal {
+    .delete-modal, .reaction-modal, .image-modal {
       position: fixed;
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%);
-      background: white;
-      border: 2px solid transparent;
       background: linear-gradient(white, white) padding-box,
                   linear-gradient(to right, #ef4444, #f97316) border-box;
+      border: 2px solid transparent;
       border-radius: 12px;
       padding: 1rem;
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
       z-index: 2000;
       max-width: 90%;
-      width: 300px;
       text-align: center;
       animation: slideIn 0.3s ease-out;
+      display: none;
     }
-    .delete-modal.dark, .reaction-modal.dark {
+    .delete-modal.dark, .reaction-modal.dark, .image-modal.dark {
       background: linear-gradient(#374151, #374151) padding-box,
                   linear-gradient(to right, #dc2626, #f97316) border-box;
       color: #e5e7eb;
     }
-    .delete-modal p {
+    .delete-modal p, .image-modal p {
       margin-bottom: 1rem;
       font-size: 0.9rem;
       color: #111827;
     }
-    .delete-modal.dark p {
+    .delete-modal.dark p, .image-modal.dark p {
       color: #e5e7eb;
     }
-    .delete-modal button {
+    .delete-modal button, .image-modal button {
       padding: 0.5rem 1.5rem;
       border-radius: 8px;
       font-size: 0.9rem;
       cursor: pointer;
       margin: 0 0.5rem;
       transition: background 0.2s ease, transform 0.2s ease;
+      position: relative;
+      overflow: hidden;
     }
-    .delete-modal .confirm-btn {
+    .delete-modal .confirm-btn, .image-modal .download-btn {
       background: #ef4444;
       color: white;
     }
-    .delete-modal .confirm-btn:hover {
+    .delete-modal .confirm-btn:hover, .image-modal .download-btn:hover {
       background: #dc2626;
       transform: scale(1.05);
     }
-    .delete-modal.dark .confirm-btn {
+    .delete-modal.dark .confirm-btn, .image-modal.dark .download-btn {
       background: #dc2626;
     }
-    .delete-modal.dark .confirm-btn:hover {
+    .delete-modal.dark .confirm-btn:hover, .image-modal.dark .download-btn:hover {
       background: #b91c1c;
     }
-    .delete-modal .cancel-btn {
+    .delete-modal .cancel-btn, .image-modal .close-btn {
       background: #e5e7eb;
       color: #374151;
     }
-    .delete-modal .cancel-btn:hover {
+    .delete-modal .cancel-btn:hover, .image-modal .close-btn:hover {
       background: #d1d5db;
       transform: scale(1.05);
     }
-    .delete-modal.dark .cancel-btn {
+    .delete-modal.dark .cancel-btn, .image-modal.dark .close-btn {
       background: #4b5563;
       color: #e5e7eb;
     }
-    .delete-modal.dark .cancel-btn:hover {
+    .delete-modal.dark .cancel-btn:hover, .image-modal.dark .close-btn:hover {
       background: #6b7280;
+    }
+    .image-modal img {
+      max-width: 100%;
+      max-height: 70vh;
+      border-radius: 8px;
+      object-fit: contain;
+      transform: scale(0.8);
+      animation: zoomIn 0.3s ease-out forwards;
     }
     .emoji-bottom-sheet {
       position: fixed;
@@ -396,7 +413,7 @@
       border-top-right-radius: 16px;
       padding: 1rem;
       box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.2);
-      z-index: 1900; /* Above input-container, below other modals */
+      z-index: 1900;
       max-width: 800px;
       margin: 0 auto;
       transform: translateY(100%);
@@ -411,13 +428,13 @@
       background: #374151;
       color: #e5e7eb;
     }
-    .emoji-grid {
+    .emoji-grid, .reaction-grid {
       display: grid;
       grid-template-columns: repeat(6, 1fr);
       gap: 0.5rem;
       padding: 0.5rem;
     }
-    .emoji-item {
+    .emoji-item, .reaction-item {
       font-size: 1.5rem;
       cursor: pointer;
       padding: 0.5rem;
@@ -425,17 +442,17 @@
       text-align: center;
       transition: background 0.2s ease;
     }
-    .emoji-item:hover {
+    .emoji-item:hover, .reaction-item:hover {
       background: #f3f4f6;
     }
-    .emoji-item.dark:hover {
+    .emoji-item.dark:hover, .reaction-item.dark:hover {
       background: #4b5563;
     }
     .modal-overlay {
       position: fixed;
       inset: 0;
       background: rgba(0, 0, 0, 0.5);
-      z-index: 1800; /* Below bottom sheet */
+      z-index: 1800;
       display: none;
       animation: fadeIn 0.3s ease-out;
     }
@@ -532,6 +549,25 @@
       width: 36px;
       height: 36px;
       transition: background 0.2s ease, transform 0.2s ease;
+      position: relative;
+      overflow: hidden;
+      min-height: 44px;
+    }
+    .send-btn::after, .media-btn::after, .emoji-btn::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 0;
+      height: 0;
+      background: rgba(255, 255, 255, 0.3);
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      transition: width 0.4s ease, height 0.4s ease;
+    }
+    .send-btn:active::after, .media-btn:active::after, .emoji-btn:active::after {
+      width: 100px;
+      height: 100px;
     }
     .send-btn:hover, .media-btn:hover, .emoji-btn:hover {
       background: #dc2626;
@@ -569,11 +605,22 @@
       right: 0;
       z-index: 850;
     }
+    .error-message.show {
+      display: block;
+    }
+    .error-message button {
+      color: #ef4444;
+      text-decoration: underline;
+      cursor: pointer;
+      background: none;
+      border: none;
+      margin-left: 0.5rem;
+    }
     .error-message.dark {
       color: #dc2626;
     }
-    .error-message.show {
-      display: block;
+    .error-message.dark button {
+      color: #dc2626;
     }
     .loading-overlay {
       position: fixed;
@@ -610,9 +657,9 @@
       from { opacity: 0; transform: translateY(-10px); }
       to { opacity: 1; transform: translateY(0); }
     }
-    @keyframes slideUp {
-      from { transform: translateY(100%); }
-      to { transform: translateY(0); }
+    @keyframes zoomIn {
+      from { transform: scale(0.8); opacity: 0; }
+      to { transform: scale(1); opacity: 1; }
     }
     @keyframes bounce {
       to { transform: translateY(-4px); }
@@ -681,13 +728,22 @@
         </svg>
       </button>
     </div>
-    <p id="media-error" class="error-message dark:error-message">Failed to upload image.</p>
+    <p id="media-error" class="error-message dark:error-message">
+      <span>Failed to upload image.</span>
+      <button id="media-retry-btn" class="retry-btn" aria-label="Retry image upload">Retry</button>
+    </p>
   </div>
 
   <div id="delete-modal" class="delete-modal dark:delete-modal" style="display: none;">
     <p>Delete this message?</p>
     <button class="confirm-btn" role="button" aria-label="Confirm delete">Delete</button>
     <button class="cancel-btn" role="button" aria-label="Cancel delete">Cancel</button>
+  </div>
+  <div id="image-modal" class="image-modal dark:image-modal" style="display: none;">
+    <img id="full-image" src="" alt="Full-screen image" />
+    <p>You are responsible for ensuring this image complies with copyright laws. See <a href="privacy.html" class="link dark:link">Privacy Policy</a>.</p>
+    <button class="download-btn" role="button" aria-label="Download image">Download</button>
+    <button class="close-btn" role="button" aria-label="Close image">Close</button>
   </div>
   <div id="emoji-bottom-sheet" class="emoji-bottom-sheet dark:emoji-bottom-sheet" style="display: none;">
     <div id="emoji-grid" class="emoji-grid"></div>
@@ -703,6 +759,8 @@
       <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4z"/>
     </svg>
   </div>
+
+  
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
@@ -740,14 +798,17 @@
     const deleteModal = document.getElementById("delete-modal");
     const emojiBottomSheet = document.getElementById("emoji-bottom-sheet");
     const reactionModal = document.getElementById("reaction-modal");
+    const imageModal = document.getElementById("image-modal");
+    const fullImage = document.getElementById("full-image");
     const modalOverlay = document.getElementById("modal-overlay");
     const inputContainer = document.getElementById("input-container");
     const mediaError = document.getElementById("media-error");
+    const mediaRetryBtn = document.getElementById("media-retry-btn");
     const headerAvatar = document.getElementById("header-avatar");
     const backBtn = document.querySelector(".back-btn");
     const emojiGrid = document.getElementById("emoji-grid");
 
-    // Emoji list (WhatsApp-like subset)
+    // Emoji list
     const emojis = ['😊', '😂', '❤️', '👍', '😢', '🙏', '😍', '🎉', '😎', '🔥'];
 
     // Encryption key (replace with secure key management in production)
@@ -771,9 +832,9 @@
     function showLoading() { loadingOverlay.classList.remove("hidden"); }
     function hideLoading() { loadingOverlay.classList.add("hidden"); }
     function showError(message) {
-      mediaError.textContent = message;
+      mediaError.querySelector('span').textContent = message;
       mediaError.classList.add("show");
-      setTimeout(hideError, 3000);
+      setTimeout(hideError, 5000);
     }
     function hideError() {
       mediaError.classList.remove("show");
@@ -796,7 +857,14 @@
       document.querySelectorAll('.message.received').forEach(el => el.classList.toggle('dark', isDark));
       document.querySelectorAll('.message-time.received').forEach(el => el.classList.toggle('dark', isDark));
       document.querySelectorAll('.back-btn, .search-icon, .profile-icon, .emoji-btn, .media-btn').forEach(el => el.classList.toggle('dark', isDark));
-      document.querySelectorAll('.delete-modal, .emoji-bottom-sheet, .reaction-modal').forEach(el => el.classList.toggle('dark', isDark));
+      document.querySelectorAll('.delete-modal, .emoji-bottom-sheet, .reaction-modal, .image-modal').forEach(el => el.classList.toggle('dark', isDark));
+      document.querySelectorAll('.link').forEach(el => el.classList.toggle('dark', isDark));
+      document.querySelectorAll('.error-message').forEach(el => el.classList.toggle('dark', isDark));
+    }
+
+    function applyFontSize(size) {
+      const root = document.documentElement;
+      root.style.fontSize = size === 'small' ? '14px' : size === 'large' ? '18px' : '16px';
     }
 
     function timeAgo(timestamp) {
@@ -846,9 +914,92 @@
           deleteModal.style.display = 'none';
           emojiBottomSheet.style.display = 'none';
           reactionModal.style.display = 'none';
+          imageModal.style.display = 'none';
           modalOverlay.classList.remove('active');
         }
       }, { once: true });
+
+      newConfirmBtn.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          newConfirmBtn.click();
+        }
+      });
+      newCancelBtn.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          newCancelBtn.click();
+        }
+      });
+    }
+
+    function showImageModal(imageUrl) {
+      fullImage.src = imageUrl;
+      imageModal.style.display = 'block';
+      modalOverlay.classList.add('active');
+
+      const downloadBtn = imageModal.querySelector('.download-btn');
+      const closeBtn = imageModal.querySelector('.close-btn');
+
+      const newDownloadBtn = downloadBtn.cloneNode(true);
+      const newCloseBtn = closeBtn.cloneNode(true);
+      downloadBtn.replaceWith(newDownloadBtn);
+      closeBtn.replaceWith(newCloseBtn);
+
+      newDownloadBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        showLoading();
+        try {
+          const response = await fetch(imageUrl);
+          if (!response.ok) throw new Error('Network error downloading image.');
+          const blob = await response.blob();
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `banterbox_image_${Date.now()}.jpg`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          window.URL.revokeObjectURL(url);
+          navigator.vibrate?.([50]);
+        } catch (error) {
+          console.error("Error downloading image:", error);
+          showError(`Failed to download image: ${error.message}`);
+        }
+        hideLoading();
+      });
+
+      newCloseBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        imageModal.style.display = 'none';
+        modalOverlay.classList.remove('active');
+        navigator.vibrate?.([50]);
+      });
+
+      newDownloadBtn.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          newDownloadBtn.click();
+        }
+      });
+      newCloseBtn.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          newCloseBtn.click();
+        }
+      });
+
+      // Swipe to close
+      let startY;
+      imageModal.addEventListener('touchstart', (e) => {
+        startY = e.touches[0].clientY;
+      });
+      imageModal.addEventListener('touchend', (e) => {
+        const endY = e.changedTouches[0].clientY;
+        if (endY - startY > 100) {
+          newCloseBtn.click();
+        }
+      });
     }
 
     function showEmojiBottomSheet() {
@@ -856,7 +1007,6 @@
       modalOverlay.classList.add('active');
       emojiBottomSheet.classList.add('active');
 
-      // Populate emoji grid
       emojiGrid.innerHTML = '';
       emojis.forEach(emoji => {
         const emojiItem = document.createElement('div');
@@ -869,6 +1019,13 @@
           emojiBottomSheet.style.display = 'none';
           modalOverlay.classList.remove('active');
           emojiBottomSheet.classList.remove('active');
+          navigator.vibrate?.([50]);
+        });
+        emojiItem.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            emojiItem.click();
+          }
         });
         emojiGrid.appendChild(emojiItem);
       });
@@ -888,9 +1045,16 @@
             await update(ref(db, `messages/${chatId}/${messageId}/reactions/${userId}`), emoji);
             reactionModal.style.display = 'none';
             modalOverlay.classList.remove('active');
+            navigator.vibrate?.([50]);
           } catch (error) {
             console.error("Error adding reaction:", error);
             showError("Failed to add reaction.");
+          }
+        });
+        reactionItem.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            reactionItem.click();
           }
         });
         reactionGrid.appendChild(reactionItem);
@@ -920,7 +1084,7 @@
       const messageText = message.text ? decryptMessage(message.text) : '';
       const replyText = message.replyTo ? (message.replyText || 'Replied message') : '';
       const content = message.image 
-        ? `<img src="${message.image}?w=200&h=200&c=fill" class="message-image dark:message-image" alt="Shared image" />`
+        ? `<img src="${message.image}?w=200&h=200&c=fill" class="message-image dark:message-image" alt="Shared image" role="button" aria-label="View or download image" />`
         : `<p class="message-text" ${message.replyTo ? `data-reply="${replyText}"` : ''}>${messageText}</p>`;
       const readReceipt = isSent ? (message.read ? 'read' : '') : '';
       const reactions = message.reactions ? Object.values(message.reactions).join(' ') : '';
@@ -933,7 +1097,32 @@
         </p>
       `;
 
-      // Swipe gestures
+      const image = div.querySelector('.message-image');
+      if (image) {
+        image.addEventListener('click', (e) => {
+          e.stopPropagation();
+          showImageModal(message.image);
+          navigator.vibrate?.([50]);
+        });
+        let downloadTimer;
+        image.addEventListener('touchstart', (e) => {
+          e.preventDefault();
+          downloadTimer = setTimeout(() => {
+            const downloadBtn = imageModal.querySelector('.download-btn');
+            showImageModal(message.image);
+            downloadBtn.click();
+          }, 300);
+        });
+        image.addEventListener('touchend', () => clearTimeout(downloadTimer));
+        image.addEventListener('touchmove', () => clearTimeout(downloadTimer));
+        image.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            showImageModal(message.image);
+          }
+        });
+      }
+
       let touchStartX = 0;
       div.addEventListener('touchstart', (e) => {
         e.preventDefault();
@@ -943,31 +1132,35 @@
         const touchEndX = e.changedTouches[0].clientX;
         if (touchStartX - touchEndX > 50 && isSent) {
           showDeleteModal(messageId, chatId);
+          navigator.vibrate?.([50]);
         } else if (touchEndX - touchStartX > 50) {
           messageInput.dataset.replyTo = messageId;
           messageInput.dataset.replyText = messageText.substring(0, 30) + (messageText.length > 30 ? '...' : '');
           inputContainer.classList.add('reply-active');
           inputContainer.dataset.reply = `${message.replyTo ? 'Replying to ' : ''}${messageInput.dataset.replyText}`;
           messageInput.focus();
+          navigator.vibrate?.([50]);
         }
       });
 
-      // Long press for reactions
       let pressTimer;
       div.addEventListener('touchstart', () => {
-        pressTimer = setTimeout(() => showReactionModal(messageId, chatId, userId), 500);
+        if (!image) {
+          pressTimer = setTimeout(() => showReactionModal(messageId, chatId, userId), 500);
+        }
       });
       div.addEventListener('touchend', () => clearTimeout(pressTimer));
       div.addEventListener('touchmove', () => clearTimeout(pressTimer));
 
-      // Mouse-based interactions
       let mouseStartX = 0;
       let isDragging = false;
       div.addEventListener('mousedown', (e) => {
         e.preventDefault();
-        isDragging = true;
-        mouseStartX = e.clientX;
-        pressTimer = setTimeout(() => showReactionModal(messageId, sher, userId), 500);
+        if (!image) {
+          isDragging = true;
+          mouseStartX = e.clientX;
+          pressTimer = setTimeout(() => showReactionModal(messageId, chatId, userId), 500);
+        }
       });
       div.addEventListener('mouseup', (e) => {
         clearTimeout(pressTimer);
@@ -975,12 +1168,14 @@
           const mouseEndX = e.clientX;
           if (mouseStartX - mouseEndX > 50 && isSent) {
             showDeleteModal(messageId, chatId);
+            navigator.vibrate?.([50]);
           } else if (mouseEndX - mouseStartX > 50) {
             messageInput.dataset.replyTo = messageId;
             messageInput.dataset.replyText = messageText.substring(0, 30) + (messageText.length > 30 ? '...' : '');
             inputContainer.classList.add('reply-active');
             inputContainer.dataset.reply = `${message.replyTo ? 'Replying to ' : ''}${messageInput.dataset.replyText}`;
             messageInput.focus();
+            navigator.vibrate?.([50]);
           }
           isDragging = false;
         }
@@ -997,6 +1192,7 @@
 
     let currentUser = null;
     let chatId = null;
+    let lastFiles = [];
 
     onAuthStateChanged(auth, async user => {
       if (!user) {
@@ -1008,10 +1204,11 @@
       try {
         const snap = await get(ref(db, `users/${user.uid}/settings`));
         const settings = snap.val() || {};
-        applyTheme(settings.theme || 'light');
+        applyTheme(settings.theme || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
+        applyFontSize(settings.fontSize || 'medium');
       } catch (error) {
-        console.error('Error loading theme:', error);
-        showError('Error loading theme.');
+        console.error('Error loading settings:', error);
+        showError('Error loading settings.');
       }
 
       const urlParams = new URLSearchParams(window.location.search);
@@ -1022,7 +1219,6 @@
         return;
       }
 
-      // Check if user is blocked
       const blockedSnap = await get(ref(db, `users/${user.uid}/blocked/${friendUid}`));
       if (blockedSnap.exists()) {
         showError("This user is blocked.");
@@ -1050,14 +1246,12 @@
       let lastMessageId = null;
       let loadingMore = false;
 
-      // Listen for friend status updates
       onValue(ref(db, `users/${friendUid}`), (snap) => {
         const data = snap.val();
         chatStatus.textContent = data.presence === 'online' ? 'online' : timeAgo(data.lastSeen);
         chatStatus.classList.toggle('online', data.presence === 'online');
       });
 
-      // Toggle search bar
       searchIcon.addEventListener('click', toggleSearchBar);
       document.addEventListener('click', (e) => {
         if (!searchBar.contains(e.target) && e.target !== searchIcon) {
@@ -1072,7 +1266,6 @@
         }
       });
 
-      // Message search with highlighting
       searchInput.addEventListener('input', () => {
         const query = searchInput.value.toLowerCase().trim();
         let firstMatch = null;
@@ -1094,7 +1287,6 @@
         if (firstMatch) firstMatch.scrollIntoView({ behavior: 'smooth', block: 'center' });
       });
 
-      // Typing indicator
       messageInput.addEventListener('input', async () => {
         await set(ref(db, `typing/${chatId}/${user.uid}`), true);
         setTimeout(async () => {
@@ -1109,7 +1301,6 @@
         typingIndicator.classList.toggle('active', snapshot.val());
       });
 
-      // Load messages
       showLoading();
       onValue(messagesRef, async (snapshot) => {
         messageList.innerHTML = "";
@@ -1134,7 +1325,6 @@
         hideLoading();
       });
 
-      // Infinite scroll for older messages
       messageList.addEventListener('scroll', async () => {
         if (messageList.scrollTop === 0 && !loadingMore && lastMessageId) {
           loadingMore = true;
@@ -1194,6 +1384,7 @@
           delete messageInput.dataset.replyText;
           inputContainer.classList.remove('reply-active');
           delete inputContainer.dataset.reply;
+          navigator.vibrate?.([50]);
         } catch (error) {
           console.error("Error sending message:", error);
           showError("Failed to send message.");
@@ -1201,8 +1392,8 @@
         hideLoading();
       });
 
-      mediaInput.addEventListener("change", async (e) => {
-        const files = e.target.files;
+      async function uploadMedia() {
+        const files = lastFiles.length ? lastFiles : mediaInput.files;
         if (!files.length) return;
         for (const file of files) {
           if (!file.type.startsWith('image/')) {
@@ -1237,6 +1428,7 @@
               timestamp: Date.now(),
               read: false
             });
+            navigator.vibrate?.([50]);
           } catch (error) {
             console.error("Error uploading image:", error);
             showError(`Failed to upload image: ${error.message}`);
@@ -1244,10 +1436,21 @@
           hideLoading();
         }
         mediaInput.value = "";
+        lastFiles = [];
+      }
+
+      mediaInput.addEventListener("change", async (e) => {
+        lastFiles = Array.from(e.target.files);
+        await uploadMedia();
+      });
+
+      mediaRetryBtn.addEventListener('click', async () => {
+        await uploadMedia();
       });
 
       mediaBtn.addEventListener("click", () => {
         mediaInput.click();
+        navigator.vibrate?.([50]);
       });
 
       emojiBtn.addEventListener('click', showEmojiBottomSheet);
