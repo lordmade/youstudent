@@ -702,6 +702,7 @@
   object-fit: cover;
   border-top: 1px solid #e5e7eb;
   border-bottom: 1px solid #e5e7eb;
+  display: block; /* Ensure proper rendering */
 }
 
 .status-card.dark .status-image {
@@ -745,6 +746,38 @@
 
 .dark .carousel-dot:hover {
   background: #b91c1c;
+}
+    .status-video {
+  flex: 0 0 100%;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  border-top: 1px solid #e5e7eb;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.status-card.dark .status-video {
+  border-top: 1px solid #4b5563;
+  border-bottom: 1px solid #4b5563;
+}
+
+/* Ensure videos are responsive and fit within the carousel */
+.status-video::-webkit-media-controls {
+  background: rgba(0, 0, 0, 0.5); /* Semi-transparent controls for visibility */
+}
+
+.status-video::-webkit-media-controls-panel {
+  border-radius: 8px;
+}
+
+/* Optional: Hide controls by default, show on hover/tap */
+.status-video:not(:hover)::-webkit-media-controls {
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.status-video:hover::-webkit-media-controls {
+  opacity: 1;
 }
   </style>
 </head>
@@ -1423,11 +1456,11 @@
     });
   }
 
-  function renderStatusCard(statusId, status, userData) {
+function renderStatusCard(statusId, status, userData) {
   const existingCard = statusesList.querySelector(`[data-sid="${statusId}"]`);
   
   if (existingCard) {
-    // Update existing card logic (same as before)
+    // Update existing card logic
     const reactionCount = status.reactions ? Object.keys(status.reactions).length : 0;
     const hasReacted = status.reactions && status.reactions[currentUserUid];
     const commentCount = status.comments ? Object.keys(status.comments).length : 0;
@@ -1455,7 +1488,7 @@
   const reactionCount = status.reactions ? Object.keys(status.reactions).length : 0;
   const hasReacted = status.reactions && status.reactions[currentUserUid];
   const commentCount = status.comments ? Object.keys(status.comments).length : 0;
-  const imageUrls = Array.isArray(status.imageUrls) ? status.imageUrls : status.imageUrl ? [status.imageUrl] : [];
+  const mediaUrls = Array.isArray(status.mediaUrls) ? status.mediaUrls : status.imageUrl ? [{ url: status.imageUrl, type: 'image' }] : [];
 
   card.innerHTML = `
     ${status.userId === currentUserUid ? `
@@ -1470,16 +1503,27 @@
         <p class="status-time">${timeAgo(status.timestamp)}</p>
       </div>
     </div>
-    ${imageUrls.length > 0 ? `
+    ${mediaUrls.length > 0 ? `
       <div class="relative status-carousel-container">
         <div class="status-carousel" data-sid="${statusId}">
-          ${imageUrls.map((url, index) => `
-            <img src="${url}?w=420&h=420&c=fill" alt="Status image ${index + 1}" class="status-image" style="transform: translateX(${index * 100}%);" loading="lazy" />
-          `).join('')}
+          ${mediaUrls.map((media, index) => {
+            if (media.type === 'video') {
+              return `
+                <video class="status-video" src="${media.url}" playsinline muted loop preload="auto" aria-label="Status video ${index + 1}">
+                  <source src="${media.url}" type="video/mp4">
+                  Your browser does not support the video tag.
+                </video>
+              `;
+            } else {
+              return `
+                <img src="${media.url}?w=420&h=420&c=fill" alt="Status image ${index + 1}" class="status-image" style="transform: translateX(${index * 100}%);" loading="lazy" />
+              `;
+            }
+          }).join('')}
         </div>
-        ${imageUrls.length > 1 ? `
+        ${mediaUrls.length > 1 ? `
           <div class="carousel-dots flex justify-center gap-2 py-2">
-            ${imageUrls.map((_, index) => `
+            ${mediaUrls.map((_, index) => `
               <span class="carousel-dot ${index === 0 ? 'active' : ''}" data-index="${index}"></span>
             `).join('')}
           </div>
@@ -1502,7 +1546,7 @@
     </div>
   `;
 
-  // Event listeners for reaction, comment, delete, and double-tap (same as before)
+  // Event listeners for reaction, comment, delete, and double-tap
   const reactionBtn = card.querySelector(".reaction-btn");
   const commentBtn = card.querySelector(".comment-btn");
   const deleteIcon = card.querySelector(".delete-icon");
@@ -1576,12 +1620,22 @@
       const now = Date.now();
       if (now - lastTap < 300) {
         toggleReaction();
+      } else {
+        // Toggle video play/pause on single tap
+        const video = imageContainer.querySelector(`.status-video:nth-child(${currentIndex + 1})`);
+        if (video) {
+          if (video.paused) {
+            video.play().catch((error) => console.error("Error playing video:", error));
+          } else {
+            video.pause();
+          }
+        }
       }
       lastTap = now;
     });
 
     // Carousel functionality
-    if (imageUrls.length > 1) {
+    if (mediaUrls.length > 1) {
       const carousel = card.querySelector(".status-carousel");
       const dots = card.querySelectorAll(".carousel-dot");
       let currentIndex = 0;
@@ -1589,6 +1643,8 @@
       let isDragging = false;
 
       const updateCarousel = (index) => {
+        // Pause all videos when switching
+        card.querySelectorAll(".status-video").forEach(video => video.pause());
         carousel.style.transform = `translateX(-${index * 100}%)`;
         dots.forEach((dot, i) => {
           dot.classList.toggle("active", i === index);
@@ -1605,7 +1661,7 @@
         const currentX = e.touches[0].clientX;
         const diffX = startX - currentX;
         if (Math.abs(diffX) > 50) {
-          if (diffX > 0 && currentIndex < imageUrls.length - 1) {
+          if (diffX > 0 && currentIndex < mediaUrls.length - 1) {
             currentIndex++;
           } else if (diffX < 0 && currentIndex > 0) {
             currentIndex--;
@@ -1630,6 +1686,7 @@
 
   return card;
 }
+
       
           
 
