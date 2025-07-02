@@ -218,7 +218,7 @@
     .status-card.dark .status-image {
       border-top: 1px solid #4b5563;
       border-bottom: 1px solid #4b5563;
-    }
+  }
     .status-text {
       font-size: 0.9rem;
       color: #374151;
@@ -286,7 +286,9 @@
       transform: translate(-50%, -50%) scale(0);
       width: 80px;
       height: 80px;
-      color: #ef4444;
+      color
+
+: #ef4444;
       opacity: 0;
       animation: doubleTap 0.6s ease forwards;
       pointer-events: none;
@@ -571,7 +573,7 @@
     .modal {
       background: white;
       padding: 1rem;
-      border-radius: 8px;
+      border-radius: 8 savour: 8px;
       box-shadow: 0 3px 8px rgba(0,0,0,0.2);
       max-width: 360px;
       width: 100%;
@@ -871,6 +873,9 @@
       try {
         await remove(ref(db, `statuses/${statusId}`));
         deleteStatusModal.classList.add("hidden");
+        // Remove the card from the DOM immediately to prevent duplication
+        const card = ownStatusesList.querySelector(`[data-sid="${statusId}"]`) || statusesList.querySelector(`[data-sid="${statusId}"]`);
+        if (card) card.remove();
       } catch (error) {
         console.error("Error deleting status:", error);
         alert("Failed to delete status.");
@@ -1154,8 +1159,38 @@
   }
 
   function renderStatusCard(statusId, status, userData, isOwnStatus = false) {
+    const existingCard = isOwnStatus
+      ? ownStatusesList.querySelector(`[data-sid="${statusId}"]`)
+      : statusesList.querySelector(`[data-sid="${statusId}"]`);
+    
+    if (existingCard) {
+      // Update existing card instead of creating a new one
+      const reactionCount = status.reactions ? Object.keys(status.reactions).length : 0;
+      const hasReacted = status.reactions && status.reactions[currentUserUid];
+      const commentCount = status.comments ? Object.keys(status.comments).length : 0;
+      
+      if (!isOwnStatus) {
+        const reactionBtn = existingCard.querySelector(".reaction-btn");
+        const reactionCountElement = existingCard.querySelector(".reaction-count");
+        const commentCountElement = existingCard.querySelector(".comment-count");
+        
+        if (reactionBtn) {
+          reactionBtn.classList.toggle("reacted", hasReacted);
+          reactionBtn.setAttribute("fill", hasReacted ? "#ef4444" : "none");
+        }
+        if (reactionCountElement) {
+          reactionCountElement.textContent = `${reactionCount} love${reactionCount !== 1 ? 's' : ''}`;
+        }
+        if (commentCountElement) {
+          commentCountElement.textContent = `${commentCount} comment${commentCount !== 1 ? 's' : ''}`;
+        }
+        return existingCard;
+      }
+    }
+
     const card = document.createElement("div");
     card.className = `status-card ${isOwnStatus ? 'flex-none w-56' : ''}`;
+    card.dataset.sid = statusId; // Add data-sid for identification
     const reactionCount = status.reactions ? Object.keys(status.reactions).length : 0;
     const hasReacted = status.reactions && status.reactions[currentUserUid];
     const commentCount = status.comments ? Object.keys(status.comments).length : 0;
@@ -1219,19 +1254,20 @@
         showLoading();
         try {
           const reactionRef = ref(db, `statuses/${statusId}/reactions/${currentUserUid}`);
+          const statusRef = ref(db, `statuses/${statusId}`);
+          const snapshot = await get(statusRef);
+          const statusData = snapshot.val();
+          const hasReacted = statusData?.reactions?.[currentUserUid];
           if (hasReacted) {
             await remove(reactionRef);
-            reactionBtn.classList.remove("reacted");
-            reactionBtn.removeAttribute("fill");
           } else {
             await set(reactionRef, true);
-            reactionBtn.classList.add("reacted", "liked");
-            reactionBtn.setAttribute("fill", "#ef4444");
             if (imageContainer) {
               const heart = imageContainer.querySelector(".double-tap-heart");
               heart.classList.remove("hidden");
               setTimeout(() => heart.classList.add("hidden"), 600);
             }
+            reactionBtn.classList.add("liked");
             setTimeout(() => reactionBtn.classList.remove("liked"), 300);
           }
         } catch (error) {
@@ -1281,6 +1317,10 @@
     const usersRef = ref(db, "users");
 
     onValue(statusesRef, async (statusesSnap) => {
+      // Clear existing cards to prevent duplication
+      ownStatusesList.innerHTML = "";
+      statusesList.innerHTML = "";
+      
       if (!statusesSnap.exists()) {
         noOwnStatusesMessage.classList.remove("hidden");
         noStatusesMessage.classList.remove("hidden");
@@ -1320,6 +1360,7 @@
       let hasOwnStatuses = false;
       let hasFriendStatuses = false;
 
+      // Render own statuses
       for (const statusId in statuses) {
         const status = statuses[statusId];
         if (status.userId === uid) {
@@ -1330,6 +1371,7 @@
         }
       }
 
+      // Render friends' statuses
       for (const statusId in statuses) {
         const status = statuses[statusId];
         const userId = status.userId;
