@@ -518,24 +518,6 @@
       color: #dc2626;
       transform: scale(1.1);
     }
-    /* New styles for verified icon */
-    .verified-icon {
-      width: 16px;
-      height: 16px;
-      margin-left: 0.5rem;
-      color: #ef4444;
-      vertical-align: middle;
-      transition: color 0.2s ease;
-    }
-    .verified-icon.dark {
-      color: #dc2626;
-    }
-    .verified-icon:hover {
-      color: #dc2626;
-    }
-    .verified-icon.dark:hover {
-      color: #b91c1c;
-    }
     #no-friends-message, #no-groups-message, #no-statuses-message, #no-services-message {
       color: #555;
       font-size: 0.9rem;
@@ -853,7 +835,7 @@
     document.querySelector('.header').classList.toggle('dark', isDark);
     document.querySelector('.tab-nav').classList.toggle('dark', isDark);
     document.querySelectorAll('.friend-card, .status-card, .service-card').forEach(el => el.classList.toggle('dark', isDark));
-    document.querySelectorAll('.status-text, .service-description, .sponsored-text, .posted-by, .service-cta, .reaction-btn, .reaction-count, .comment-btn, .comment-count, .verified-icon').forEach(el => el.classList.toggle('dark', isDark));
+    document.querySelectorAll('.status-text, .service-description, .sponsored-text, .posted-by, .service-cta, .reaction-btn, .reaction-count, .comment-btn, .comment-count').forEach(el => el.classList.toggle('dark', isDark));
     document.querySelectorAll('.last-seen, .status-time, .member-count, .service-time, .comment-time').forEach(el => el.classList.toggle('dark', isDark));
     document.querySelectorAll('#no-friends-message, #no-groups-message, #no-statuses-message, #no-services-message').forEach(el => el.classList.toggle('dark', isDark));
     document.querySelectorAll('.tab-nav button').forEach(el => el.classList.toggle('dark', isDark));
@@ -1281,36 +1263,45 @@
     div.className = "friend-card";
     div.innerHTML = `
       <div class="flex items-center">
-        <img src="${avatarUrl}" alt="${group.name} avatar" class="group-avatar friend-avatar" />
+        <img src="${avatarUrl}" alt="${group.name} avatar" class="group-avatar" />
         <div class="group-info">
           <h4 class="font-bold text-sm dark:text-gray-100">${group.name}</h4>
-          <p class="member-count dark:member-count">${memberCount} member${memberCount !== 1 ? 's' : ''}</p>
-          <p class="last-seen dark:last-seen">Created: ${timeAgo(group.createdAt)}</p>
+          <p class="member-count">${memberCount} member${memberCount !== 1 ? 's' : ''}</p>
+          <p class="last-seen">Created: ${timeAgo(group.createdAt)}</p>
         </div>
-        ${group.creator === currentUserUid ? `
-          <svg class="delete-icon" data-gid="${gid}" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
-          </svg>
-        ` : ''}
+        <svg class="delete-icon ml-auto self-start" data-gid="${gid}" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
+        </svg>
       </div>
     `;
-    div.onclick = () => { window.location.href = `chat.html?gid=${gid}`; };
-    if (group.creator === currentUserUid) {
-      div.querySelector(".delete-icon")?.addEventListener("click", async (e) => {
-        e.stopPropagation();
-        if (confirm("Are you sure you want to delete this group?")) {
-          showLoading();
-          try {
-            await remove(ref(db, `groups/${gid}`));
-            div.remove();
-          } catch (error) {
-            console.error("Error deleting group:", error);
-            alert("Failed to delete group.");
+    div.querySelector(".delete-icon").addEventListener("click", async (e) => {
+      e.stopPropagation();
+      if (confirm("Are you sure you want to leave this group?")) {
+        showLoading();
+        try {
+          const groupRef = ref(db, `groups/${gid}`);
+          const snapshot = await get(groupRef);
+          const groupData = snapshot.val();
+          if (groupData && groupData.members) {
+            delete groupData.members[currentUserUid];
+            if (Object.keys(groupData.members).length === 0) {
+              await remove(groupRef);
+            } else {
+              await update(groupRef, { members: groupData.members });
+            }
           }
-          hideLoading();
+        } catch (error) {
+          console.error("Error leaving group:", error);
+          alert("Failed to leave group.");
         }
-      });
-    }
+        hideLoading();
+      }
+    });
+    div.addEventListener("click", (e) => {
+      if (!e.target.closest(".delete-icon")) {
+        window.location.href = `group.html?gid=${gid}`;
+      }
+    });
     return div;
   }
 
@@ -1320,17 +1311,17 @@
     noGroupsMessage.classList.add("hidden");
 
     const groupsRef = ref(db, "groups");
-    onValue(groupsRef, (snap) => {
-      if (!snap.exists()) {
+    onValue(groupsRef, (groupsSnap) => {
+      if (!groupsSnap.exists()) {
         noGroupsMessage.classList.remove("hidden");
         hideLoading();
         return;
       }
 
+      const groups = groupsSnap.val();
       groupsList.innerHTML = "";
-      const groups = snap.val();
-      let hasGroups = false;
 
+      let hasGroups = false;
       for (const gid in groups) {
         const group = groups[gid];
         if (group.members && group.members[uid]) {
@@ -1347,95 +1338,149 @@
     });
   }
 
-  function renderStatusCard(statusId, status, userData, isOwnStatus = false) {
-    const reactions = status.reactions || {};
-    const reactionCount = Object.keys(reactions).length;
-    const hasReacted = reactions[currentUserUid] || false;
-    const comments = status.comments || {};
-    const commentCount = Object.keys(comments).length;
+  function renderStatusCard(statusId, status, userData) {
+    const existingCard = statusesList.querySelector(`[data-sid="${statusId}"]`);
+    
+    if (existingCard) {
+      const reactionCount = status.reactions ? Object.keys(status.reactions).length : 0;
+      const hasReacted = status.reactions && status.reactions[currentUserUid];
+      const commentCount = status.comments ? Object.keys(status.comments).length : 0;
+      
+      const reactionBtn = existingCard.querySelector(".reaction-btn");
+      const reactionCountElement = existingCard.querySelector(".reaction-count");
+      const commentCountElement = existingCard.querySelector(".comment-count");
+      
+      if (reactionBtn) {
+        reactionBtn.classList.toggle("reacted", hasReacted);
+        reactionBtn.setAttribute("fill", hasReacted ? "#ef4444" : "none");
+      }
+      if (reactionCountElement) {
+        reactionCountElement.textContent = `${reactionCount} love${reactionCount !== 1 ? 's' : ''}`;
+      }
+      if (commentCountElement) {
+        commentCountElement.textContent = `${commentCount} comment${commentCount !== 1 ? 's' : ''}`;
+      }
+      return existingCard;
+    }
 
     const card = document.createElement("div");
     card.className = "status-card";
     card.dataset.sid = statusId;
+    const reactionCount = status.reactions ? Object.keys(status.reactions).length : 0;
+    const hasReacted = status.reactions && status.reactions[currentUserUid];
+    const commentCount = status.comments ? Object.keys(status.comments).length : 0;
+
     card.innerHTML = `
-      ${isOwnStatus ? `
+      ${status.userId === currentUserUid ? `
         <svg class="delete-icon" data-sid="${statusId}" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
         </svg>
       ` : ''}
       <div class="status-header">
         <img src="${userData.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${userData.name || 'User'} avatar" class="status-avatar" />
-        <div class="status-info dark:status-info">
+        <div class="status-info">
           <h4>${userData.name || "User"}</h4>
-          <p class="status-time dark:status-time">${timeAgo(status.createdAt)}</p>
+          <p class="status-time">${timeAgo(status.timestamp)}</p>
         </div>
       </div>
       ${status.imageUrl ? `
-        <img src="${status.imageUrl}?w=420&h=420&c=fill" alt="Status image" class="status-image dark:status-image" loading="lazy" />
+        <div class="relative">
+          <img src="${status.imageUrl}?w=420&h=420&c=fill" alt="Status image" class="status-image" loading="lazy" />
+          <svg class="double-tap-heart hidden" viewBox="0 0 24 24" fill="#ef4444" stroke="none">
+            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+          </svg>
+        </div>
       ` : ''}
-      ${status.text ? `<p class="status-text dark:status-text">${status.text}</p>` : ''}
+      ${status.text ? `<p class="status-text">${status.text}</p>` : ''}
       <div class="status-footer">
-        <svg class="reaction-btn dark:reaction-btn ${hasReacted ? 'reacted' : ''}" data-sid="${statusId}" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <svg class="reaction-btn ${hasReacted ? 'reacted' : ''}" data-sid="${statusId}" width="28" height="28" viewBox="0 0 24 24" fill="${hasReacted ? '#ef4444' : 'none'}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
         </svg>
-        <span class="reaction-count dark:reaction-count">${reactionCount}</span>
-        <svg class="comment-btn dark:comment-btn" data-sid="${statusId}" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <p class="reaction-count">${reactionCount} love${reactionCount !== 1 ? 's' : ''}</p>
+        <svg class="comment-btn" data-sid="${statusId}" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
         </svg>
-        <span class="comment-count dark:comment-count">${commentCount}</span>
+        <p class="reaction-count comment-count">${commentCount} comment${commentCount !== 1 ? 's' : ''}</p>
       </div>
     `;
-    if (isOwnStatus) {
-      card.querySelector(".delete-icon")?.addEventListener("click", async (e) => {
+    const reactionBtn = card.querySelector(".reaction-btn");
+    const commentBtn = card.querySelector(".comment-btn");
+    const deleteIcon = card.querySelector(".delete-icon");
+    const imageContainer = card.querySelector(".relative");
+
+    const toggleReaction = async () => {
+      showLoading();
+      try {
+        const reactionRef = ref(db, `statuses/${statusId}/reactions/${currentUserUid}`);
+        const statusRef = ref(db, `statuses/${statusId}`);
+        const snapshot = await get(statusRef);
+        const statusData = snapshot.val();
+        const hasReacted = statusData?.reactions?.[currentUserUid];
+        
+        if (hasReacted) {
+          await remove(reactionRef);
+          if (statusData.userId !== currentUserUid) {
+            await remove(ref(db, `notifications/${statusData.userId}/${statusId}/reactions/${currentUserUid}`));
+          }
+        } else {
+          await set(reactionRef, true);
+          if (statusData.userId !== currentUserUid) {
+            const notifRef = ref(db, `notifications/${statusData.userId}/${statusId}/reactions/${currentUserUid}`);
+            await set(notifRef, {
+              type: 'reaction',
+              userId: currentUserUid,
+              timestamp: Date.now(),
+              read: false
+            });
+          }
+          if (imageContainer) {
+            const heart = imageContainer.querySelector(".double-tap-heart");
+            heart.classList.remove("hidden");
+            setTimeout(() => heart.classList.add("hidden"), 600);
+          }
+          reactionBtn.classList.add("liked");
+          setTimeout(() => reactionBtn.classList.remove("liked"), 300);
+        }
+      } catch (error) {
+        console.error("Error toggling reaction:", error);
+        alert("Failed to update reaction.");
+      }
+      hideLoading();
+    };
+
+    if (reactionBtn) {
+      reactionBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        toggleReaction();
+      });
+    }
+
+    if (commentBtn) {
+      commentBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        showCommentSheet(statusId);
+      });
+    }
+
+    if (deleteIcon) {
+      deleteIcon.addEventListener("click", (e) => {
         e.stopPropagation();
         showDeleteStatusModal(statusId);
       });
     }
-    card.querySelector(".reaction-btn")?.addEventListener("click", async (e) => {
-      e.stopPropagation();
-      showLoading();
-      const reactionRef = ref(db, `statuses/${statusId}/reactions/${currentUserUid}`);
-      try {
-        if (hasReacted) {
-          await remove(reactionRef);
-          if (status.userId !== currentUserUid) {
-            await remove(ref(db, `notifications/${status.userId}/${statusId}/reactions/${currentUserUid}`));
-          }
-        } else {
-          await set(reactionRef, { timestamp: Date.now() });
-          if (status.userId !== currentUserUid) {
-            const notifRef = ref(db, `notifications/${status.userId}/${statusId}/reactions/${currentUserUid}`);
-            await set(notifRef, { type: 'reaction', userId: currentUserUid, timestamp: Date.now(), read: false });
-          }
-          const btn = e.target.closest(".reaction-btn");
-          btn.classList.add("liked");
-          setTimeout(() => btn.classList.remove("liked"), 300);
-          if (status.imageUrl) {
-            const heart = document.createElement("svg");
-            heart.className = "double-tap-heart";
-            heart.innerHTML = `<path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>`;
-            card.appendChild(heart);
-            setTimeout(() => heart.remove(), 600);
+
+    if (imageContainer) {
+      let lastTap = 0;
+      imageContainer.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const now = Date.now();
+        if (now - lastTap < 300) {
+          toggleReaction();
         }
-      } catch (error) {
-        console.error("Error toggling reaction:", error);
-        alert("Failed to toggle reaction.");
-      }
-      hideLoading();
-    });
-    card.querySelector(".comment-btn")?.addEventListener("click", (e) => {
-      e.stopPropagation();
-      showCommentSheet(statusId);
-    });
-    let lastTap = 0;
-    card.addEventListener("click", (e) => {
-      if (e.target.closest(".delete-icon") || e.target.closest(".reaction-btn") || e.target.closest(".comment-btn")) return;
-      const now = Date.now();
-      if (now - lastTap < 300 && status.imageUrl) {
-        card.querySelector(".reaction-btn")?.click();
-      }
-      lastTap = now;
-    });
+        lastTap = now;
+      });
+    }
+
     return card;
   }
 
@@ -1444,15 +1489,12 @@
     statusesList.innerHTML = "";
     noStatusesMessage.classList.add("hidden");
 
-    const friendsRef = ref(db, `friends/${uid}`);
-    const usersRef = ref(db, "users");
     const statusesRef = ref(db, "statuses");
-
-    const friendsSnap = await get(friendsRef);
-    const friendUids = friendsSnap.exists() ? Object.keys(friendsSnap.val()) : [];
-    friendUids.push(uid);
+    const usersRef = ref(db, "users");
 
     onValue(statusesRef, async (statusesSnap) => {
+      statusesList.innerHTML = "";
+      
       if (!statusesSnap.exists()) {
         noStatusesMessage.classList.remove("hidden");
         hideLoading();
@@ -1462,17 +1504,31 @@
       const usersSnap = await get(usersRef);
       const users = usersSnap.exists() ? usersSnap.val() : {};
       const statuses = statusesSnap.val();
-      statusesList.innerHTML = "";
-      let hasStatuses = false;
+      const friendUids = new Set();
 
+      const chatsRef = ref(db, "chats");
+      const chatsSnap = await get(chatsRef);
+      if (chatsSnap.exists()) {
+        const chats = chatsSnap.val();
+        for (const chatId in chats) {
+          const participants = chats[chatId].participants || {};
+          if (participants[uid]) {
+            for (const friendUid in participants) {
+              if (friendUid !== uid) friendUids.add(friendUid);
+            }
+          }
+        }
+      }
+
+      let hasStatuses = false;
       for (const statusId in statuses) {
         const status = statuses[statusId];
-        if (friendUids.includes(status.userId) || status.userId === uid) {
+        const userId = status.userId;
+        if (userId === uid || friendUids.has(userId)) {
           hasStatuses = true;
-          const userData = users[status.userId] || {};
-          const isOwnStatus = status.userId === uid;
-          const statusCard = renderStatusCard(statusId, status, userData, isOwnStatus);
-          statusesList.appendChild(statusCard);
+          const userData = users[userId] || {};
+          const card = renderStatusCard(statusId, status, userData);
+          statusesList.appendChild(card);
         }
       }
 
@@ -1495,16 +1551,16 @@
       ` : ''}
       <div class="service-header">
         <img src="${userData.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${userData.name || 'User'} avatar" class="service-avatar" />
-        <div class="service-info dark:service-info">
-          <h4>${userData.name || "User"} ${isOwnService ? '<svg class="verified-icon dark:verified-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.99 3.01L19 5l1.99 3.01L22 12l-2.01 3.99L19 19l-3.01 1.99L12 22l-3.99-2.01L5 19l-1.99-3.01L2 12l2.01-3.99L5 5l3.01-1.99L12 2zm-1.71 13.29l-2.83-2.83a1 1 0 0 0-1.41 1.41l3.54 3.54a1 1 0 0 0 1.41 0l7.07-7.07a1 1 0 0 0-1.41-1.41l-6.37 6.36z"/></svg>' : ''}</h4>
-          <p class="service-time dark:service-time">${timeAgo(service.createdAt)}</p>
+        <div class="service-info">
+          <h4>${service.name || "Service"} by ${userData.name || "User"}</h4>
+          <p class="service-time">${timeAgo(service.createdAt)}</p>
         </div>
       </div>
       ${service.imageUrl ? `
-        <img src="${service.imageUrl}?w=420&h=420&c=fill" alt="Service image" class="service-image dark:service-image" loading="lazy" />
+        <img src="${service.imageUrl}?w=420&h=420&c=fill" alt="Service image" class="service-image" loading="lazy" />
       ` : ''}
-      ${service.description ? `<p class="service-description dark:service-description">${service.description}</p>` : ''}
-      <button class="service-cta dark:service-cta" data-sid="${serviceId}">Learn More</button>
+      ${service.description ? `<p class="service-description">${service.description}</p>` : ''}
+      <button class="service-cta" data-sid="${serviceId}">Learn More</button>
     `;
     if (isOwnService) {
       card.querySelector(".delete-icon")?.addEventListener("click", async (e) => {
@@ -1544,8 +1600,8 @@
       const services = servicesSnap.val();
 
       servicesList.innerHTML = "";
-      let hasServices = false;
 
+      let hasServices = false;
       for (const serviceId in services) {
         const service = services[serviceId];
         const userData = users[service.userId] || {};
@@ -1561,7 +1617,6 @@
       hideLoading();
     });
   }
-
 </script>
 </body>
 </html>
