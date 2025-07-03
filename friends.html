@@ -128,27 +128,27 @@
     }
     .status-card {
       background: #fff;
-      border: 1px solid #e5e7eb;
-      border-radius: 8px;
+      border: 1px solid transparent;
+      border-radius: 12px;
       margin-bottom: 1rem;
       padding: 0;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
       position: relative;
       cursor: pointer;
-      transition: transform 0.2s ease;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+      background: linear-gradient(to right, #fff, #fff) padding-box, linear-gradient(to right, #ff2d55, #ff8e53) border-box;
     }
     .status-card.dark {
-      background: #1f2937;
-      border-color: #4b5563;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+      background: #1f2937 linear-gradient(to right, #1f2937, #1f2937) padding-box, linear-gradient(to right, #ff6b6b, #ff8e53) border-box;
+      border-color: transparent;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
     }
     .status-card:hover, .status-card:focus-within {
       transform: translateY(-2px);
-      outline: 2px solid #ff2d55;
-      outline-offset: 2px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
     }
     .status-card.dark:hover, .status-card.dark:focus-within {
-      outline-color: #ff6b6b;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
     }
     .friend-avatar, .group-avatar, .status-avatar, .service-avatar {
       width: 32px;
@@ -275,6 +275,8 @@
       aspect-ratio: 1 / 1;
       object-fit: cover;
       display: block;
+      border-radius: 8px 8px 0 0;
+      transition: opacity 0.3s ease;
     }
     .status-footer {
       display: flex;
@@ -284,7 +286,7 @@
     }
     .reaction-btn, .comment-btn, .share-btn {
       cursor: pointer;
-      transition: transform 0.2s ease;
+      transition: transform 0.2s ease, fill 0.2s ease;
       width: 24px;
       height: 24px;
       fill: none;
@@ -318,9 +320,16 @@
       right: 0.75rem;
       padding: 0.25rem;
       color: #374151;
+      transition: color 0.2s ease;
+    }
+    .status-menu-btn:hover {
+      color: #ff2d55;
     }
     .status-menu-btn.dark {
       color: #d1d5db;
+    }
+    .status-menu-btn.dark:hover {
+      color: #ff6b6b;
     }
     .delete-icon {
       width: 20px;
@@ -1135,6 +1144,20 @@
       const statusesRef = ref(db, "statuses");
       const usersRef = ref(db, "users");
 
+      // Set up Intersection Observer for video autoplay
+      const observer = new IntersectionObserver((entries) => {
+        entries.forEach((entry) => {
+          const video = entry.target.querySelector(".status-video");
+          if (video) {
+            if (entry.isIntersecting) {
+              video.play().catch((error) => console.error("Error auto-playing video:", error));
+            } else {
+              video.pause();
+            }
+          }
+        });
+      }, { threshold: 0.5 });
+
       onValue(statusesRef, async (statusesSnap) => {
         statusesList.innerHTML = "";
         noStatusesMessage.classList.add("hidden");
@@ -1208,6 +1231,7 @@
             ${status.text ? `<p class="status-text dark:status-text"><span class="font-semibold">${userData.name || "User"}</span> ${status.text}</p>` : ""}
           `;
 
+          // Video click to toggle play/pause
           if (status.mediaUrls && status.mediaUrls[0]?.type === "video") {
             const video = statusCard.querySelector(".status-video");
             video.addEventListener("click", (e) => {
@@ -1221,21 +1245,10 @@
                 video.pause();
               }
             });
-
-            statusCard.addEventListener("mouseenter", () => {
-              video.play().catch((error) => console.error("Error auto-playing video:", error));
-            });
-            statusCard.addEventListener("focus", () => {
-              video.play().catch((error) => console.error("Error auto-playing video:", error));
-            });
-            statusCard.addEventListener("mouseleave", () => {
-              video.pause();
-            });
-            statusCard.addEventListener("blur", () => {
-              video.pause();
-            });
+            observer.observe(statusCard);
           }
 
+          // Single tap/click to redirect
           statusCard.onclick = (e) => {
             if (!e.target.closest(".reaction-btn, .comment-btn, .share-btn, .status-menu-btn, .status-video")) {
               window.location.href = `post.html?sid=${statusId}`;
@@ -1251,6 +1264,7 @@
             }
           };
 
+          // Double-tap to like
           let lastTap = 0;
           statusCard.addEventListener("touchend", (e) => {
             const currentTime = new Date().getTime();
