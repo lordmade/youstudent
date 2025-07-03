@@ -536,7 +536,7 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
     import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
-    import { getDatabase, ref, get, update, onValue, push, set, off } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
+    import { getDatabase, ref, get, set, onValue, push, off } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
@@ -834,6 +834,9 @@
         const reactions = status.reactions || {};
         likeCount.textContent = Object.keys(reactions).length;
         likeBtn.classList.toggle('liked', !!reactions[currentUser.uid]);
+        const comments = status.comments || {};
+        commentCount.textContent = Object.keys(comments).length;
+        renderComments(comments);
         const userData = await getUserData(postUserId);
         profileAvatar.src = userData.photoURL || 'https://www.gravatar.com/avatar?d=mp';
         profileUsername.textContent = userData.name || 'User';
@@ -916,22 +919,25 @@
     }
 
     async function toggleLike() {
-      if (!currentUser || !statusId) return;
+      if (!currentUser || !statusId) {
+        showAlert('Cannot like post: User or post ID is missing.');
+        return;
+      }
       try {
         const reactionRef = ref(db, `statuses/${statusId}/reactions/${currentUser.uid}`);
         const snap = await get(reactionRef);
         if (snap.exists()) {
-          await update(reactionRef, null);
+          await set(reactionRef, null); // Use set(null) to remove reaction
           likeBtn.classList.remove('liked');
         } else {
-          await update(reactionRef, { timestamp: Date.now() });
+          await set(reactionRef, { timestamp: Date.now() });
           likeBtn.classList.add('liked');
           doubleTapHeart.classList.remove('hidden');
           setTimeout(() => doubleTapHeart.classList.add('hidden'), 500);
         }
       } catch (error) {
-        console.error('Error toggling like:', error);
-        showAlert('Failed to update like.');
+        console.error('Error toggling like:', error.message, error.code);
+        showAlert(`Failed to update like: ${error.message}`);
       }
     }
 
@@ -970,10 +976,15 @@
           const reactions = status.reactions || {};
           likeCount.textContent = Object.keys(reactions).length;
           likeBtn.classList.toggle('liked', !!reactions[user.uid]);
+          const comments = status.comments || {};
+          commentCount.textContent = Object.keys(comments).length;
+          renderComments(comments);
+
           const userData = await getUserData(postUserId);
           profileAvatar.src = userData.photoURL || 'https://www.gravatar.com/avatar?d=mp';
           profileUsername.textContent = userData.name || 'User';
 
+          addFriendBtn.classList.add('hidden');
           if (postUserId !== user.uid) {
             const chatSnap = await get(ref(db, `chats`));
             const chats = chatSnap.val() || {};
