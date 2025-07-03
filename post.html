@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BanterBox - Post</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    * {
+      user-select: none;
+      -webkit-user-select: none;
+      -moz-user-select: none;
+      -ms-user-select: none;
+    }
+    body {
+      background: #000;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      margin: 0;
+      padding: 0;
+      min-height: 100vh;
+      overscroll-behavior: none;
+    }
+    body.dark {
+      background: #111827;
+    }
+    .container {
+      max-width: 1080px;
+      margin: 0 auto;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+    .media-container {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      position: relative;
+    }
+    .media-container img,
+    .media-container video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      max-height: 100vh;
+    }
+    .back-btn {
+      position: absolute;
+      top: 1rem;
+      left: 1rem;
+      z-index: 20;
+      color: #fff;
+      background: rgba(0, 0, 0, 0.5);
+      border-radius: 9999px;
+      padding: 0.5rem;
+      transition: background 0.2s ease;
+    }
+    .back-btn:hover {
+      background: rgba(0, 0, 0, 0.7);
+    }
+    .action-buttons {
+      position: absolute;
+      top: 50%;
+      right: 1rem;
+      transform: translateY(-50%);
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+      z-index: 20;
+    }
+    .action-btn {
+      background: rgba(0, 0, 0, 0.5);
+      border-radius: 9999px;
+      padding: 0.5rem;
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.25rem;
+      font-size: 0.75rem;
+      font-weight: 600;
+      transition: background 0.2s ease, color 0.2s ease;
+    }
+    .action-btn:hover {
+      background: rgba(0, 0, 0, 0.7);
+    }
+    .action-btn.liked svg {
+      fill: #ef4444;
+      stroke: #ef4444;
+    }
+    .action-btn.liked.dark svg {
+      fill: #dc2626;
+      stroke: #dc2626;
+    }
+    .action-btn svg {
+      width: 24px;
+      height: 24px;
+    }
+    .mute-toggle-icon {
+      position: absolute;
+      bottom: 1rem;
+      right: 1rem;
+      background: rgba(0, 0, 0, 0.6);
+      border-radius: 50%;
+      padding: 4px;
+      width: 24px;
+      height: 24px;
+      cursor: pointer;
+      transition: background 0.2s ease;
+    }
+    .mute-toggle-icon:hover {
+      background: rgba(0, 0, 0, 0.8);
+    }
+    .error-message {
+      position: absolute;
+      bottom: 1rem;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0, 0, 0, 0.7);
+      color: #ef4444;
+      font-size: 0.75rem;
+      padding: 0.5rem 1rem;
+      border-radius: 8px;
+      display: none;
+      animation: fadeIn 0.3s ease;
+    }
+    .error-message.dark {
+      color: #dc2626;
+    }
+    .error-message.show {
+      display: block;
+    }
+    .fade-in {
+      animation: fadeIn 0.5s ease-in-out;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+  </style>
+</head>
+<body>
+  <div class="container fade-in">
+    <button class="back-btn" onclick="history.back()" aria-label="Back to profile">
+      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+      </svg>
+    </button>
+    <div class="media-container" role="region" aria-label="Post media">
+      <div id="media-content"></div>
+      <svg id="mute-toggle-icon" class="mute-toggle-icon hidden" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path class="mute-icon" d="M11 5L6 9H2v6h4l5 4V5zM19.07 4.93a10 10 0 010 14.14M15.54 8.46a5 5 0 010 7.07"/>
+        <path class="unmute-icon hidden" d="M11 5L6 9H2v6h4l5 4V5z"/>
+      </svg>
+    </div>
+    <div class="action-buttons">
+      <button id="like-btn" class="action-btn" aria-label="Like post">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/>
+        </svg>
+        <span id="like-count">0</span>
+      </button>
+      <button id="comment-btn" class="action-btn" aria-label="Comment on post">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/>
+        </svg>
+        <span id="comment-count">0</span>
+      </button>
+      <button id="add-friend-btn" class="action-btn hidden" aria-label="Add friend">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+        </svg>
+        <span>Add Friend</span>
+      </button>
+    </div>
+    <div id="error-message" class="error-message dark:error-message" role="alert">
+      <span>Failed to load post.</span>
+    </div>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
+    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
+    import { getDatabase, ref, get, update, onValue } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
+      authDomain: "fire-b-a8878.firebaseapp.com",
+      databaseURL: "https://fire-b-a8878.firebaseio.com",
+      projectId: "fire-b-a8878",
+      storageBucket: "fire-b-a8878.appspot.com",
+      messagingSenderId: "658673187627",
+      appId: "1:658673187627:web:6e4c29af661785f0afa36e"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth();
+    const db = getDatabase();
+
+    const mediaContent = document.getElementById('media-content');
+    const muteToggleIcon = document.getElementById('mute-toggle-icon');
+    const likeBtn = document.getElementById('like-btn');
+    const commentBtn = document.getElementById('comment-btn');
+    const addFriendBtn = document.getElementById('add-friend-btn');
+    const likeCount = document.getElementById('like-count');
+    const commentCount = document.getElementById('comment-count');
+    const errorMessage = document.getElementById('error-message');
+
+    let currentUser;
+    let postUserId;
+    let statusId;
+
+    function showError(message) {
+      errorMessage.querySelector('span').textContent = message;
+      errorMessage.classList.add('show');
+    }
+    function hideError() {
+      errorMessage.classList.remove('show');
+    }
+
+    function applyTheme(themeValue) {
+      const isDark = themeValue === 'dark';
+      document.body.classList.toggle('dark', isDark);
+      errorMessage.classList.toggle('dark', isDark);
+      likeBtn.classList.toggle('dark', isDark);
+    }
+
+    function renderMedia(status) {
+      const mediaUrls = Array.isArray(status.mediaUrls) ? status.mediaUrls : status.imageUrl ? [{ url: status.imageUrl, type: 'image' }] : [];
+      const media = mediaUrls[0] || { type: 'image', url: '' };
+      mediaContent.innerHTML = '';
+      if (media.type === 'video') {
+        mediaContent.innerHTML = `
+          <video src="${media.url}" muted autoplay loop class="status-video" playsinline preload="metadata"></video>
+        `;
+        const video = mediaContent.querySelector('.status-video');
+        muteToggleIcon.classList.remove('hidden');
+        video.addEventListener('canplay', () => {
+          video.play().catch(error => {
+            console.error('Error auto-playing video:', error);
+            showError('Failed to play video.');
+          });
+        });
+        muteToggleIcon.addEventListener('click', () => {
+          video.muted = !video.muted;
+          muteToggleIcon.querySelector('.mute-icon').classList.toggle('hidden', !video.muted);
+          muteToggleIcon.querySelector('.unmute-icon').classList.toggle('hidden', video.muted);
+        });
+        document.addEventListener('visibilitychange', () => {
+          if (document.hidden) {
+            video.pause();
+          } else {
+            video.play().catch(error => console.error('Error resuming video:', error));
+          }
+        });
+      } else {
+        mediaContent.innerHTML = `
+          <img src="${media.url}?w=1080&h=1920&c=fill" alt="Post" loading="lazy" />
+        `;
+        muteToggleIcon.classList.add('hidden');
+      }
+    }
+
+    onAuthStateChanged(auth, async user => {
+      if (!user) {
+        location.href = 'signup.html';
+        return;
+      }
+      currentUser = user;
+      statusId = new URLSearchParams(location.search).get('sid');
+      if (!statusId) {
+        showError('Invalid post ID.');
+        return;
+      }
+
+      try {
+        const settingsSnap = await get(ref(db, `users/${user.uid}/settings`));
+        const settings = settingsSnap.val() || {};
+        applyTheme(settings.theme || 'light');
+
+        onValue(ref(db, `statuses/${statusId}`), snap => {
+          if (!snap.exists()) {
+            showError('Post not found.');
+            return;
+          }
+          const status = snap.val();
+          postUserId = status.userId;
+          renderMedia(status);
+          const reactions = status.reactions || {};
+          likeCount.textContent = Object.keys(reactions).length;
+          likeBtn.classList.toggle('liked', !!reactions[user.uid]);
+          commentCount.textContent = status.comments ? Object.keys(status.comments).length : 0;
+
+          if (postUserId !== user.uid) {
+            get(ref(db, `chats`)).then(chatSnap => {
+              const chats = chatSnap.val() || {};
+              const isFriend = Object.values(chats).some(chat =>
+                chat.participants?.[user.uid] && chat.participants?.[postUserId]
+              );
+              if (!isFriend) {
+                addFriendBtn.classList.remove('hidden');
+              }
+            });
+          }
+        });
+      } catch (error) {
+        console.error('Error loading post:', error);
+        showError(`Failed to load post: ${error.message}`);
+      }
+    });
+
+    likeBtn.addEventListener('click', async () => {
+      if (!currentUser || !statusId) return;
+      try {
+        const reactionRef = ref(db, `statuses/${statusId}/reactions/${currentUser.uid}`);
+        const snap = await get(reactionRef);
+        if (snap.exists()) {
+          await update(reactionRef, null);
+          likeBtn.classList.remove('liked');
+        } else {
+          await update(reactionRef, { timestamp: Date.now() });
+          likeBtn.classList.add('liked');
+        }
+      } catch (error) {
+        console.error('Error toggling like:', error);
+        showError('Failed to update like.');
+      }
+    });
+
+    likeBtn.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        likeBtn.click();
+      }
+    });
+
+    commentBtn.addEventListener('click', () => {
+      if (statusId) {
+        location.href = `chat.html?sid=${statusId}`;
+      }
+    });
+
+    commentBtn.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        commentBtn.click();
+      }
+    });
+
+    addFriendBtn.addEventListener('click', () => {
+      if (postUserId) {
+        location.href = `chat.html?uid=${postUserId}`;
+      }
+    });
+
+    addFriendBtn.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        addFriendBtn.click();
+      }
+    });
+  </script>
+</body>
+</html>
