@@ -147,24 +147,80 @@
     .mute-toggle-icon:hover {
       background: rgba(0, 0, 0, 0.8);
     }
-    .error-message {
+    .swipe-text {
       position: absolute;
       bottom: 1rem;
-      left: 50%;
-      transform: translateX(-50%);
+      left: 1rem;
       background: rgba(0, 0, 0, 0.7);
-      color: #ef4444;
-      font-size: 0.75rem;
+      color: #fff;
+      font-size: 0.875rem;
+      font-weight: 600;
       padding: 0.5rem 1rem;
       border-radius: 8px;
+      opacity: 0;
+      transform: translateY(10px);
+      transition: opacity 0.3s ease, transform 0.3s ease;
+      z-index: 20;
+    }
+    .swipe-text.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .swipe-text.dark {
+      background: rgba(255, 255, 255, 0.1);
+    }
+    .alert-dialog {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: #fff;
+      border-radius: 12px;
+      padding: 1.5rem;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      z-index: 40;
+      max-width: 90%;
+      width: 400px;
       display: none;
+      flex-direction: column;
+      gap: 1rem;
       animation: fadeIn 0.3s ease;
     }
-    .error-message.dark {
-      color: #dc2626;
+    .alert-dialog.show {
+      display: flex;
     }
-    .error-message.show {
-      display: block;
+    .alert-dialog.dark {
+      background: #374151;
+    }
+    .alert-title {
+      font-size: 1rem;
+      font-weight: 600;
+      color: #111827;
+    }
+    .alert-title.dark {
+      color: #e5e7eb;
+    }
+    .alert-message {
+      font-size: 0.875rem;
+      color: #374151;
+    }
+    .alert-message.dark {
+      color: #d1d5db;
+    }
+    .alert-button {
+      background: linear-gradient(to right, #ef4444, #f97316);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 0.5rem 1rem;
+      font-size: 0.875rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s ease;
+      align-self: flex-end;
+    }
+    .alert-button:hover {
+      background: linear-gradient(to right, #dc2626, #ea580c);
     }
     .bottom-sheet {
       position: fixed;
@@ -219,6 +275,7 @@
       margin-bottom: 1rem;
     }
     .comment-item {
+      comment-item {
       display: flex;
       gap: 0.5rem;
       align-items: flex-start;
@@ -318,8 +375,8 @@
     <div class="media-container" role="region" aria-label="Post media">
       <div id="media-content"></div>
       <svg id="mute-toggle-icon" class="mute-toggle-icon hidden" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path class="mute-icon" d="M11 5L6 9H2v6h4l5 4V5zM19.07 4.93a10 10 0 010 14.14M15.54 8.46a5 5 0 010 7.07"/>
-        <path class="unmute-icon hidden" d="M11 5L6 9H2v6h4l5 4V5z"/>
+        <path class="mute-icon hidden" d="M11 5L6 9H2v6h4l5 4V5zM19.07 4.93a10 10 0 010 14.14M15.54 8.46a5 5 0 010 7.07"/>
+        <path class="unmute-icon" d="M11 5L6 9H2v6h4l5 4V5z"/>
       </svg>
     </div>
     <div class="action-buttons">
@@ -342,8 +399,10 @@
         <span>Add Friend</span>
       </button>
     </div>
-    <div id="error-message" class="error-message dark:error-message" role="alert">
-      <span>Failed to load post.</span>
+    <div id="alert-dialog" class="alert-dialog dark:alert-dialog" role="alertdialog" aria-labelledby="alert-title" aria-describedby="alert-message">
+      <h2 id="alert-title" class="alert-title dark:alert-title">Error</h2>
+      <p id="alert-message" class="alert-message dark:alert-message"></p>
+      <button id="alert-close" class="alert-button" aria-label="Close alert">OK</button>
     </div>
     <div id="comments-sheet" class="bottom-sheet dark:bottom-sheet" role="dialog" aria-label="Comments">
       <div class="bottom-sheet-header">
@@ -356,6 +415,7 @@
         <button id="comment-submit" class="comment-submit" aria-label="Post comment">Post</button>
       </div>
     </div>
+    <div id="swipe-text" class="swipe-text" role="status" aria-live="polite"></div>
   </div>
 
   <script type="module">
@@ -384,7 +444,9 @@
     const addFriendBtn = document.getElementById('add-friend-btn');
     const likeCount = document.getElementById('like-count');
     const commentCount = document.getElementById('comment-count');
-    const errorMessage = document.getElementById('error-message');
+    const alertDialog = document.getElementById('alert-dialog');
+    const alertMessage = document.getElementById('alert-message');
+    const alertClose = document.getElementById('alert-close');
     const profileContainer = document.querySelector('.profile-container');
     const profileAvatar = document.getElementById('profile-avatar');
     const profileUsername = document.getElementById('profile-username');
@@ -393,26 +455,35 @@
     const commentInput = document.getElementById('comment-input');
     const commentSubmit = document.getElementById('comment-submit');
     const closeComments = document.getElementById('close-comments');
+    const container = document.querySelector('.container');
+    const swipeText = document.getElementById('swipe-text');
 
     let currentUser;
     let postUserId;
     let statusId;
     let userCache = {};
+    let statusHistory = [];
+    let historyIndex = -1;
 
-    function showError(message) {
-      errorMessage.querySelector('span').textContent = message;
-      errorMessage.classList.add('show');
+    function showAlert(message) {
+      alertMessage.textContent = message;
+      alertDialog.classList.add('show');
+      alertClose.focus();
     }
-    function hideError() {
-      errorMessage.classList.remove('show');
+
+    function hideAlert() {
+      alertDialog.classList.remove('show');
     }
 
     function applyTheme(themeValue) {
       const isDark = themeValue === 'dark';
       document.body.classList.toggle('dark', isDark);
-      errorMessage.classList.toggle('dark', isDark);
+      alertDialog.classList.toggle('dark', isDark);
       likeBtn.classList.toggle('dark', isDark);
       commentsSheet.classList.toggle('dark', isDark);
+      swipeText.classList.toggle('dark', isDark);
+      document.querySelectorAll('.alert-title').forEach(el => el.classList.toggle('dark', isDark));
+      document.querySelectorAll('.alert-message').forEach(el => el.classList.toggle('dark', isDark));
       document.querySelectorAll('.bottom-sheet-title').forEach(el => el.classList.toggle('dark', isDark));
       document.querySelectorAll('.bottom-sheet-close').forEach(el => el.classList.toggle('dark', isDark));
       document.querySelectorAll('.comment-item').forEach(el => el.classList.toggle('dark', isDark));
@@ -447,15 +518,16 @@
       mediaContent.innerHTML = '';
       if (media.type === 'video') {
         mediaContent.innerHTML = `
-          <video src="${media.url}" muted autoplay loop class="status-video" playsinline preload="metadata"></video>
+          <video src="${media.url}" autoplay loop class="status-video" playsinline preload="metadata"></video>
         `;
         const video = mediaContent.querySelector('.status-video');
+        video.muted = false; // Unmute by default
         muteToggleIcon.classList.remove('hidden');
         video.addEventListener('canplay', () => {
           if (!commentsSheet.classList.contains('open')) {
             video.play().catch(error => {
               console.error('Error auto-playing video:', error);
-              showError('Failed to play video.');
+              showAlert('Failed to play video.');
             });
           }
         });
@@ -524,6 +596,112 @@
       }
     }
 
+    function showSwipeText(message) {
+      swipeText.textContent = message;
+      swipeText.classList.add('show');
+      setTimeout(() => {
+        swipeText.classList.remove('show');
+      }, 2000); // Hide after 2 seconds
+    }
+
+    async function loadStatus(newStatusId, isPrevious = false) {
+      try {
+        const statusSnap = await get(ref(db, `statuses/${newStatusId}`));
+        if (!statusSnap.exists()) {
+          showAlert('Post not found.');
+          return;
+        }
+        const status = statusSnap.val();
+        postUserId = status.userId;
+        statusId = newStatusId;
+
+        // Update history
+        if (!isPrevious) {
+          // For next status, add to history and increment index
+          if (historyIndex < statusHistory.length - 1) {
+            statusHistory = statusHistory.slice(0, historyIndex + 1);
+          }
+          statusHistory.push(newStatusId);
+          historyIndex++;
+        }
+
+        // Update URL
+        history.pushState({}, '', `?sid=${statusId}`);
+
+        // Render status
+        renderMedia(status);
+        const reactions = status.reactions || {};
+        likeCount.textContent = Object.keys(reactions).length;
+        likeBtn.classList.toggle('liked', !!reactions[currentUser.uid]);
+        const comments = status.comments || {};
+        commentCount.textContent = Object.keys(comments).length;
+        renderComments(comments);
+
+        const userData = await getUserData(postUserId);
+        profileAvatar.src = userData.photoURL || 'https://www.gravatar.com/avatar?d=mp';
+        profileUsername.textContent = userData.name || 'User';
+
+        // Update friend button visibility
+        addFriendBtn.classList.add('hidden');
+        if (postUserId !== currentUser.uid) {
+          const chatSnap = await get(ref(db, `chats`));
+          const chats = chatSnap.val() || {};
+          const isFriend = Object.values(chats).some(chat =>
+            chat.participants?.[currentUser.uid] && chat.participants?.[postUserId]
+          );
+          if (!isFriend) {
+            addFriendBtn.classList.remove('hidden');
+          }
+        }
+
+        // Show swipe text
+        showSwipeText(isPrevious ? 'Previous Post' : 'Next Post');
+      } catch (error) {
+        console.error('Error loading status:', error);
+        showAlert('Failed to load post.');
+      }
+    }
+
+    async function loadNextRandomStatus() {
+      try {
+        const statusesRef = ref(db, 'statuses');
+        const snap = await get(statusesRef);
+        const statuses = snap.val();
+        if (!statuses) {
+          showAlert('No statuses available.');
+          return;
+        }
+
+        // Get array of status IDs
+        const statusIds = Object.keys(statuses);
+        // Filter out the current status
+        const availableStatusIds = statusIds.filter(id => id !== statusId);
+        if (availableStatusIds.length === 0) {
+          showAlert('No other statuses available.');
+          return;
+        }
+
+        // Select a random status ID
+        const randomIndex = Math.floor(Math.random() * availableStatusIds.length);
+        const newStatusId = availableStatusIds[randomIndex];
+
+        await loadStatus(newStatusId);
+      } catch (error) {
+        console.error('Error loading random status:', error);
+        showAlert('Failed to load next post.');
+      }
+    }
+
+    async function loadPreviousStatus() {
+      if (historyIndex <= 0) {
+        showAlert('No previous post available.');
+        return;
+      }
+      historyIndex--;
+      const previousStatusId = statusHistory[historyIndex];
+      await loadStatus(previousStatusId, true);
+    }
+
     onAuthStateChanged(auth, async user => {
       if (!user) {
         location.href = 'signup.html';
@@ -532,7 +710,7 @@
       currentUser = user;
       statusId = new URLSearchParams(location.search).get('sid');
       if (!statusId) {
-        showError('Invalid post ID.');
+        showAlert('Invalid post ID.');
         return;
       }
 
@@ -541,9 +719,13 @@
         const settings = settingsSnap.val() || {};
         applyTheme(settings.theme || 'light');
 
+        // Initialize history with current status
+        statusHistory.push(statusId);
+        historyIndex = 0;
+
         onValue(ref(db, `statuses/${statusId}`), async snap => {
           if (!snap.exists()) {
-            showError('Post not found.');
+            showAlert('Post not found.');
             return;
           }
           const status = snap.val();
@@ -573,7 +755,7 @@
         });
       } catch (error) {
         console.error('Error loading post:', error);
-        showError(`Failed to load post: ${error.message}`);
+        showAlert(`Failed to load post: ${error.message}`);
       }
     });
 
@@ -604,7 +786,7 @@
         }
       } catch (error) {
         console.error('Error toggling like:', error);
-        showError('Failed to update like.');
+        showAlert('Failed to update like.');
       }
     });
 
@@ -648,15 +830,32 @@
       }
     });
 
+    alertClose.addEventListener('click', hideAlert);
+
+    alertClose.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        hideAlert();
+      }
+    });
+
     document.addEventListener('click', (e) => {
       if (!commentsSheet.contains(e.target) && !commentBtn.contains(e.target)) {
         closeBottomSheet();
       }
+      if (!alertDialog.contains(e.target) && alertDialog.classList.contains('show')) {
+        hideAlert();
+      }
     });
 
     document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && commentsSheet.classList.contains('open')) {
-        closeBottomSheet();
+      if (e.key === 'Escape') {
+        if (commentsSheet.classList.contains('open')) {
+          closeBottomSheet();
+        }
+        if (alertDialog.classList.contains('show')) {
+          hideAlert();
+        }
       }
     });
 
@@ -672,7 +871,7 @@
         commentInput.value = '';
       } catch (error) {
         console.error('Error adding comment:', error);
-        showError('Failed to post comment.');
+        showAlert('Failed to post comment.');
       }
     });
 
@@ -680,6 +879,32 @@
       if (e.key === 'Enter') {
         e.preventDefault();
         commentSubmit.click();
+      }
+    });
+
+    // Swipe gesture handling
+    let touchStartY = 0;
+    let touchStartX = 0;
+
+    container.addEventListener('touchstart', (e) => {
+      touchStartY = e.changedTouches[0].screenY;
+      touchStartX = e.changedTouches[0].screenX;
+    });
+
+    container.addEventListener('touchend', (e) => {
+      const touchEndY = e.changedTouches[0].screenY;
+      const deltaY = touchStartY - touchEndY;
+      const deltaX = touchStartX - e.changedTouches[0].screenX;
+      if (Math.abs(deltaY) > 50 && Math.abs(deltaY) > Math.abs(deltaX)) {
+        if (!commentsSheet.classList.contains('open') && !alertDialog.classList.contains('show')) {
+          if (deltaY < 0) {
+            // Swipe up (negative deltaY) for next status
+            loadNextRandomStatus();
+          } else {
+            // Swipe down (positive deltaY) for previous status
+            loadPreviousStatus();
+          }
+        }
       }
     });
   </script>
