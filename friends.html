@@ -1610,7 +1610,7 @@ function renderStatusCard(statusId, status, userData) {
               `;
             } else {
               return `
-                <img src="${media.url}?w=420&h=420&c=fill" alt="Status image ${index + 1}" class="status-image" style="transform: translateX(${index * 100}%);" loading="lazy" />
+                <img src="${media.url}?w=420&h=420&c=fill" alt="Status image ${index + 1}" class="status-image" loading="lazy" />
               `;
             }
           }).join('')}
@@ -1645,7 +1645,8 @@ function renderStatusCard(statusId, status, userData) {
   const deleteIcon = card.querySelector(".delete-icon");
   const imageContainer = card.querySelector(".status-carousel-container");
 
-  const toggleReaction = async () => {
+  const toggleReaction = async (e) => {
+    e.stopPropagation();
     showLoading();
     try {
       const reactionRef = ref(db, `statuses/${statusId}/reactions/${currentUserUid}`);
@@ -1686,16 +1687,13 @@ function renderStatusCard(statusId, status, userData) {
   };
 
   if (reactionBtn) {
-    reactionBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      toggleReaction();
-    });
+    reactionBtn.addEventListener("click", toggleReaction);
   }
 
   if (commentBtn) {
     commentBtn.addEventListener("click", (e) => {
       e.stopPropagation();
-      showCommentSheet(statusId);
+      window.location.href = `post.html?sid=${statusId}`;
     });
   }
 
@@ -1706,17 +1704,23 @@ function renderStatusCard(statusId, status, userData) {
     });
   }
 
+  card.addEventListener("click", (e) => {
+    if (!e.target.closest(".reaction-btn, .delete-icon, .mute-toggle-icon, .carousel-dot")) {
+      window.location.href = `post.html?sid=${statusId}`;
+    }
+  });
+
   if (imageContainer) {
     let lastTap = 0;
     imageContainer.addEventListener("click", (e) => {
       e.stopPropagation();
       const now = Date.now();
       if (now - lastTap < 300) {
-        toggleReaction();
+        toggleReaction(e);
       } else {
         const video = imageContainer.querySelector(`.status-video:nth-child(${currentIndex + 1})`);
         if (video) {
-          video.muted = !video.muted; // Toggle mute state
+          video.muted = !video.muted;
           const muteIcon = imageContainer.querySelector(`.status-video:nth-child(${currentIndex + 1}) ~ .mute-toggle-icon`);
           if (muteIcon) {
             muteIcon.querySelector(".mute-icon").classList.toggle("hidden", !video.muted);
@@ -1772,9 +1776,7 @@ function renderStatusCard(statusId, status, userData) {
 
         const video = card.querySelector(`.status-video:nth-child(${index + 1})`);
         if (video) {
-          video.play().catch((error) => {
-            console.error("Error auto-playing video:", error);
-          });
+          video.play().catch((error) => console.error("Error auto-playing video:", error));
         }
       };
 
@@ -1810,7 +1812,8 @@ function renderStatusCard(statusId, status, userData) {
       });
 
       dots.forEach((dot, index) => {
-        dot.addEventListener("click", () => {
+        dot.addEventListener("click", (e) => {
+          e.stopPropagation();
           currentIndex = index;
           updateCarousel(currentIndex);
         });
@@ -1870,7 +1873,6 @@ function renderStatusCard(statusId, status, userData) {
 
   return card;
 }
-
 
   
           
