@@ -212,7 +212,7 @@
       border-top: 2px solid transparent;
       transition: color 0.2s ease, border-color 0.2s ease;
     }
-    .tab-nav button.active {
+    .tab-nav button.active39 {
       color: #ef4444;
       border-top-color: #ef4444;
     }
@@ -533,7 +533,7 @@
       post.dataset.sid = statusId;
       post.innerHTML = `
         ${media.type === 'video' ? `
-          <video src="${media.url}" muted class="status-video" playsinline preload="metadata"></video>
+          <video src="${media.url}" muted autoplay loop class="status-video" playsinline preload="metadata"></video>
           <svg class="mute-toggle-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path class="mute-icon" d="M11 5L6 9H2v6h4l5 4V5zM19.07 4.93a10 10 0 010 14.14M15.54 8.46a5 5 0 010 7.07"/>
             <path class="unmute-icon hidden" d="M11 5L6 9H2v6h4l5 4V5z"/>
@@ -549,18 +549,22 @@
       if (media.type === 'video') {
         const video = post.querySelector('.status-video');
         const muteIcon = post.querySelector('.mute-toggle-icon');
+        video.addEventListener('canplay', () => {
+          if (document.getElementById('tab-posts').classList.contains('active')) {
+            video.play().catch(error => console.error('Error auto-playing video:', error));
+          }
+        });
         muteIcon.addEventListener('click', (e) => {
           e.stopPropagation();
           video.muted = !video.muted;
           muteIcon.querySelector('.mute-icon').classList.toggle('hidden', !video.muted);
           muteIcon.querySelector('.unmute-icon').classList.toggle('hidden', video.muted);
-          if (!video.muted && video.paused) {
-            video.play().catch(error => console.error('Error playing video:', error));
-          }
         });
       }
-      post.addEventListener('click', () => {
-        location.href = `post.html?sid=${statusId}`;
+      post.addEventListener('click', (e) => {
+        if (e.target !== post.querySelector('.mute-toggle-icon')) {
+          location.href = `post.html?sid=${statusId}`;
+        }
       });
       return post;
     }
@@ -861,6 +865,16 @@
           btn.classList.add('active');
           btn.setAttribute('aria-selected', 'true');
           document.getElementById(`tab-${btn.dataset.tab}`).classList.remove('hidden');
+          // Pause videos when switching tabs
+          if (btn.dataset.tab !== 'posts') {
+            document.querySelectorAll('.status-video').forEach(video => video.pause());
+          } else {
+            document.querySelectorAll('.status-video').forEach(video => {
+              if (video.readyState >= 2) {
+                video.play().catch(error => console.error('Error auto-playing video:', error));
+              }
+            });
+          }
         });
       });
     });
