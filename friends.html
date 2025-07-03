@@ -1386,7 +1386,7 @@ const noInboxMessage = document.getElementById("no-inbox-message");
     }
   }
 
- function renderFriend(uid, data, unreadCount, lastMessageTime, lastMessageText) {
+function renderFriend(uid, data, unreadCount, lastMessageTime, lastMessageText, tabType) {
   const card = document.createElement("div");
   card.className = `friend-card ${unreadCount > 0 ? "unread" : ""}`;
   card.setAttribute("role", "button");
@@ -1396,15 +1396,37 @@ const noInboxMessage = document.getElementById("no-inbox-message");
   // Determine online status (assuming data.presence is available from Firebase)
   const isOnline = data.presence === "online";
   const statusDot = isOnline
-    ? '<span class="status-dot online" aria-label="Online"></span>'
-    : '<span class="status-dot offline" aria-label="Offline"></span>';
+    ? '<span class="status-dot online dark:status-dot" aria-label="Online"></span>'
+    : '<span class="status-dot offline dark:status-dot" aria-label="Offline"></span>';
 
-  // Truncate last message text for preview (if provided)
+  // Truncate last message text for preview (only for Inbox tab)
   const messagePreview = lastMessageText
     ? lastMessageText.length > 30
       ? lastMessageText.substring(0, 27) + "..."
       : lastMessageText
     : "No messages yet";
+
+  // Conditionally render content based on tabType
+  const friendInfoContent = tabType === "friends"
+    ? `
+        <h4 class="friend-name">${data.name || "Friend"}</h4>
+        ${lastMessageTime
+          ? `<p class="last-seen dark:last-seen">${timeAgo(lastMessageTime)}</p>`
+          : ""}
+      `
+    : `
+        <div class="flex items-center justify-between">
+          <h4 class="friend-name">${data.name || "Friend"}</h4>
+          ${lastMessageTime
+            ? `<p class="last-seen dark:last-seen">${timeAgo(lastMessageTime)}</p>`
+            : ""}
+        </div>
+        <p class="last-message dark:last-message">
+          ${unreadCount > 0
+            ? `<span class="font-semibold">${messagePreview}</span>`
+            : messagePreview}
+        </p>
+      `;
 
   card.innerHTML = `
     <div class="flex items-center relative">
@@ -1414,27 +1436,13 @@ const noInboxMessage = document.getElementById("no-inbox-message");
   } avatar" class="friend-avatar" />
         ${statusDot}
       </div>
-      <div class="friend-info">
-        <div class="flex items-center justify-between">
-          <h4 class="friend-name">${data.name || "Friend"}</h4>
-          ${
-            lastMessageTime
-              ? `<p class="last-seen dark:last-seen">${timeAgo(
-                  lastMessageTime
-                )}</p>`
-              : ""
-          }
-        </div>
-        <p class="last-message dark:last-message">${
-          unreadCount > 0
-            ? `<span class="font-semibold">${messagePreview}</span>`
-            : messagePreview
-        }</p>
+      <div class="friend-info dark:friend-info">
+        ${friendInfoContent}
       </div>
     </div>
     ${
       unreadCount > 0
-        ? `<span class="unread-badge animate-pulse">${unreadCount}</span>`
+        ? `<span class="unread-badge dark:unread-badge animate-pulse">${unreadCount}</span>`
         : ""
     }
   `;
@@ -1455,8 +1463,6 @@ const noInboxMessage = document.getElementById("no-inbox-message");
   return card;
 }
 
-
-  
 async function loadFriends(uid) {
   showLoading();
   friendsList.innerHTML = "";
@@ -1509,13 +1515,72 @@ async function loadFriends(uid) {
 
       if (friendUids.size === 0) {
         noFriendsMessage.classList.remove("hidden");
-    noInboxMessage.classList.remove("hidden");
-    inboxBadge.textContent = "0";
-    inboxBadge.classList.add("hidden");
-    hideLoading();
-    return;
-  }
+        noInboxMessage.classList.remove("hidden");
+        inboxBadge.textContent = "0";
+        inboxBadge.classList.add("hidden");
+        hideLoading();
+        return;
+      }
 
+      friendUids.forEach(friendUid => {
+        const userData = users[friendUid] || {};
+        const chatId = uid < friendUid ? `${uid}_${friendUid}` : `${friendUid}_${uid}`;
+        const messagesRef = ref(db, `messages/${chatId}`);
+
+        onValue(messagesRef, (msgSnap) => {
+          const msgs = msgSnap.val() || {};
+          let unreadCount = 0;
+          let lastMessageTime = null;
+          let lastMessageText = null;
+          let hasMessages = false;
+
+          const messageArray = Object.entries(msgs).sort((a, b) => (b[1].timestamp || 0) - (a[1].timestamp || 0));
+          if (messageArray.length > 0) {
+            hasMessages = true;
+            const [_, latestMessage] = messageArray[0];
+            lastMessageTime = latestMessage.timestamp;
+            lastMessageText = latestMessage.text;
+            if (latestMessage.sender === friendUid && !latestMessage.read && latestMessage.timestamp > Date.now() - 10000) {
+              showMessagePopup(friendUid, latestMessage.text);
+            }
+          }
+
+          for (const mid in msgs) {
+            const m = msgs[mid];
+            if (m.sender === friendUid && !m.read) unreadCount++;
+          }
+
+          totalUnreadCount += unreadCount;
+
+          // Update Friends list (no last message preview)
+          let existing = [...friendsList.children].find(c =>
+            c.onclick && c.onclick.toString().includes(`chat.html?uid=${friendUid}`));
+          if (existing) friendsList.removeChild(existing);
+          const friendCard = renderFriend(friendUid, userData, unreadCount, lastMessageTime, lastMessageText, "friends");
+          friendsList.appendChild(friendCard);
+
+          // Update Inbox list (with last message preview, only for friends with messages)
+          if (hasMessages) {
+            existing = [...inboxList.children].find(c =>
+              c.onclick && c.onclick.toString().includes(`chat.html?uid=${friendUid}`));
+            if (existing) inboxList.removeChild(existing);
+            const inboxCard = renderFriend(friendUid, userData, unreadCount, lastMessageTime, lastMessageText, "inbox");
+            inboxList.appendChild(inboxCard);
+          }
+
+          // Update the inbox unread badge
+          inboxBadge.textContent = totalUnreadCount;
+          inboxBadge.classList.toggle("hidden", totalUnreadCount === 0);
+        }, { onlyOnce: false });
+      });
+
+      if (inboxList.children.length === 0) {
+        noInboxMessage.classList.remove("hidden");
+      }
+      hideLoading();
+    }, { onlyOnce: false });
+  }, { onlyOnce: false });
+}
   friendUids.forEach(friendUid => {
     const userData = users[friendUid] || {};
     const chatId = uid < friendUid ? `${uid}_${friendUid}` : `${friendUid}_${uid}`;
