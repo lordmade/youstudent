@@ -871,19 +871,20 @@
 
 <div class="tab-panel active" id="tab-chat">
   <div class="chat-subtab-nav">
-    <button class="active" data-subtab="friends" role="tab" aria-selected="true">
-      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4a4 4 0 100 8 4 4 0 000-8zm-7 8a4 4 0 100 8 4 4 0 000-8zm14 0a4 4 0 100 8 4 4 0 000-8z"/>
-      </svg>
-      Friends
-    </button>
-    <button data-subtab="inbox" role="tab" aria-selected="false">
-      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
-      </svg>
-      Inbox
-    </button>
-  </div>
+  <button class="active" data-subtab="friends" role="tab" aria-selected="true">
+    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4a4 4 0 100 8 4 4 0 000-8zm-7 8a4 4 0 100 8 4 4 0 000-8zm14 0a4 4 0 100 8 4 4 0 000-8z"/>
+    </svg>
+    Friends
+  </button>
+  <button data-subtab="inbox" role="tab" aria-selected="false">
+    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+    </svg>
+    Inbox
+    <span id="inbox-unread-badge" class="notification-badge dark:notification-badge hidden">0</span>
+  </button>
+</div>
   <div class="chat-subtab-panel active" id="subtab-friends">
     <h2 class="text-base font-semibold mt-3 mb-2 dark:text-gray-100">Your Friends</h2>
     <div id="friends-list" aria-live="polite" aria-relevant="additions"></div>
@@ -1456,7 +1457,7 @@ const noInboxMessage = document.getElementById("no-inbox-message");
 
 
   
- async function loadFriends(uid) {
+async function loadFriends(uid) {
   showLoading();
   friendsList.innerHTML = "";
   inboxList.innerHTML = "";
@@ -1465,16 +1466,20 @@ const noInboxMessage = document.getElementById("no-inbox-message");
 
   const chatsRef = ref(db, "chats");
   const usersRef = ref(db, "users");
+  const inboxBadge = document.getElementById("inbox-unread-badge");
 
   onValue(chatsRef, async (chatsSnap) => {
     friendsList.innerHTML = "";
     inboxList.innerHTML = "";
     noFriendsMessage.classList.add("hidden");
     noInboxMessage.classList.add("hidden");
+    let totalUnreadCount = 0;
 
     if (!chatsSnap.exists()) {
       noFriendsMessage.classList.remove("hidden");
       noInboxMessage.classList.remove("hidden");
+      inboxBadge.textContent = "0";
+      inboxBadge.classList.add("hidden");
       hideLoading();
       return;
     }
@@ -1483,6 +1488,8 @@ const noInboxMessage = document.getElementById("no-inbox-message");
       if (!usersSnap.exists()) {
         noFriendsMessage.classList.remove("hidden");
         noInboxMessage.classList.remove("hidden");
+        inboxBadge.textContent = "0";
+        inboxBadge.classList.add("hidden");
         hideLoading();
         return;
       }
@@ -1502,61 +1509,71 @@ const noInboxMessage = document.getElementById("no-inbox-message");
 
       if (friendUids.size === 0) {
         noFriendsMessage.classList.remove("hidden");
-        noInboxMessage.classList.remove("hidden");
-        hideLoading();
-        return;
+    noInboxMessage.classList.remove("hidden");
+    inboxBadge.textContent = "0";
+    inboxBadge.classList.add("hidden");
+    hideLoading();
+    return;
+  }
+
+  friendUids.forEach(friendUid => {
+    const userData = users[friendUid] || {};
+    const chatId = uid < friendUid ? `${uid}_${friendUid}` : `${friendUid}_${uid}`;
+    const messagesRelChat = ref(db, `messages/${chatId}`);
+
+    onValue(messagesRelChat, (msgSnap) => {
+      const msgs = msgSnap.val() || {};
+      let unreadCount = 0;
+      let lastMessageTime = null;
+      let lastMessageText = null;
+      let hasMessages = false;
+
+      const messageArray = Object.entries(msgs).sort((a, b) => (b[1].timestamp || 0) - (a[1].timestamp || 0));
+      if (messageArray.length > 0) {
+        hasMessages = true;
+        const [_, latestMessage] = messageArray[0];
+        lastMessageTime = latestMessage.timestamp;
+        lastMessageText = latestMessage.text;
+        if (latestMessage.sender === friendUid && !latestMessage.read && latestMessage.timestamp > Date.now() - 10000) {
+          showMessagePopup(friendUid, latestMessage.text);
+        }
       }
 
-      friendUids.forEach(friendUid => {
-        const userData = users[friendUid] || {};
-        const chatId = uid < friendUid ? `${uid}_${friendUid}` : `${friendUid}_${uid}`;
-        const messagesRefChat = ref(db, `messages/${chatId}`);
-
-        onValue(messagesRefChat, (msgSnap) => {
-          const msgs = msgSnap.val() || {};
-          let unreadCount = 0;
-          let lastMessageTime = null;
-          let hasMessages = false;
-
-          const messageArray = Object.entries(msgs).sort((a, b) => (b[1].timestamp || 0) - (a[1].timestamp || 0));
-          if (messageArray.length > 0) {
-            hasMessages = true;
-            const [_, latestMessage] = messageArray[0];
-            lastMessageTime = latestMessage.timestamp;
-            if (latestMessage.sender === friendUid && !latestMessage.read && latestMessage.timestamp > Date.now() - 10000) {
-              showMessagePopup(friendUid, latestMessage.text);
-            }
-          }
-
-          for (const mid in msgs) {
-            const m = msgs[mid];
-            if (m.sender === friendUid && !m.read) unreadCount++;
-          }
-
-          // Update Friends list
-          let existing = [...friendsList.children].find(c =>
-            c.onclick && c.onclick.toString().includes(`chat.html?uid=${friendUid}`));
-          if (existing) friendsList.removeChild(existing);
-          const friendCard = renderFriend(friendUid, userData, unreadCount, lastMessageTime);
-          friendsList.appendChild(friendCard);
-
-          // Update Inbox list (only for friends with messages)
-          if (hasMessages) {
-            existing = [...inboxList.children].find(c =>
-              c.onclick && c.onclick.toString().includes(`chat.html?uid=${friendUid}`));
-            if (existing) inboxList.removeChild(existing);
-            const inboxCard = renderFriend(friendUid, userData, unreadCount, lastMessageTime);
-            inboxList.appendChild(inboxCard);
-          }
-        });
-      });
-
-      if (inboxList.children.length === 0) {
-        noInboxMessage.classList.remove("hidden");
+      for (const mid in msgs) {
+        const m = msgs[mid];
+        if (m.sender === friendUid && !m.read) unreadCount++;
       }
-      hideLoading();
-    });
+
+      totalUnreadCount += unreadCount; // Accumulate total unread messages
+
+      // Update Friends list
+      let existing = [...friendsList.children].find(c =>
+        c.onclick && c.onclick.toString().includes(`chat.html?uid=${friendUid}`));
+      if (existing) friendsList.removeChild(existing);
+      const friendCard = renderFriend(friendUid, userData, unreadCount, lastMessageTime, lastMessageText);
+      friendsList.appendChild(friendCard);
+
+      // Update Inbox list (only for friends with messages)
+      if (hasMessages) {
+        existing = [...inboxList.children].find(c =>
+          c.onclick && c.onclick.toString().includes(`chat.html?uid=${friendUid}`));
+        if (existing) inboxList.removeChild(existing);
+        const inboxCard = renderFriend(friendUid, userData, unreadCount, lastMessageTime, lastMessageText);
+        inboxList.appendChild(inboxCard);
+      }
+
+      // Update the inbox unread badge
+      inboxBadge.textContent = totalUnreadCount;
+      inboxBadge.classList.toggle("hidden", totalUnreadCount === 0);
+    }, { onlyOnce: false }); // Ensure real-time updates
   });
+
+  if (inboxList.children.length === 0) {
+    noInboxMessage.classList.remove("hidden");
+  }
+  hideLoading();
+}, { onlyOnce: false }); // Ensure real-time updates for chats
+});
 }
 
 
