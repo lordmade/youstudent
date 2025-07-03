@@ -425,6 +425,60 @@
     .alert-button:hover {
       transform: scale(1.05);
     }
+    .bottom-sheet {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: #fff;
+      border-top-left-radius: 16px;
+      border-top-right-radius: 16px;
+      box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.2);
+      z-index: 40;
+      padding: 1.5rem;
+      display: none;
+      flex-direction: column;
+      gap: 1rem;
+      animation: slideUpBottom 0.3s ease;
+    }
+    .bottom-sheet.show {
+      display: flex;
+    }
+    .bottom-sheet.dark {
+      background: #374151;
+    }
+    .bottom-sheet-btn {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.75rem;
+      font-size: 1rem;
+      font-weight: 600;
+      color: #374151;
+      background: #f3f4f6;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.2s ease, transform 0.2s ease;
+    }
+    .bottom-sheet-btn:hover {
+      background: #e5e7eb;
+      transform: scale(1.02);
+    }
+    .bottom-sheet-btn.dark {
+      color: #e5e7eb;
+      background: #4b5563;
+    }
+    .bottom-sheet-btn.dark:hover {
+      background: #6b7280;
+    }
+    .bottom-sheet-btn svg {
+      width: 24px;
+      height: 24px;
+      stroke: #374151;
+    }
+    .bottom-sheet-btn.dark svg {
+      stroke: #e5e7eb;
+    }
     .loading-spinner {
       position: fixed;
       top: 50%;
@@ -450,6 +504,10 @@
       from { opacity: 0; transform: translate(-50%, -40%); }
       to { opacity: 1; transform: translate(-50%, -50%); }
     }
+    @keyframes slideUpBottom {
+      from { opacity: 0; transform: translateY(100%); }
+      to { opacity: 1; transform: translateY(0); }
+    }
     @keyframes spin {
       to { transform: translate(-50%, -50%) rotate(360deg); }
     }
@@ -468,6 +526,11 @@
         <button id="add-friend-btn" class="p-2 rounded-full bg-gray-100 dark:bg-gray-700" aria-label="Add friend">
           <svg class="w-5 h-5 text-gray-900 dark:text-gray-100" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+          </svg>
+        </button>
+        <button id="action-btn" class="p-2 rounded-full bg-gray-100 dark:bg-gray-700" aria-label="Open actions">
+          <svg class="w-5 h-5 text-gray-900 dark:text-gray-100" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"/>
           </svg>
         </button>
         <button id="profile-btn" class="p-2 rounded-full bg-gray-100 dark:bg-gray-700" aria-label="View profile">
@@ -514,6 +577,27 @@
         <button id="alert-cancel" class="alert-button" aria-label="Cancel action">Cancel</button>
       </div>
     </div>
+    <div id="bottom-sheet" class="bottom-sheet dark:bottom-sheet" role="dialog" aria-label="Action options">
+      <button id="post-btn" class="bottom-sheet-btn dark:bottom-sheet-btn" aria-label="Create a post">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+        </svg>
+        Create Post
+      </button>
+      <button id="search-friends-btn" class="bottom-sheet-btn dark:bottom-sheet-btn" aria-label="Search for friends">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/>
+        </svg>
+        Search for Friends
+      </button>
+      <button id="start-live-btn" class="bottom-sheet-btn dark:bottom-sheet-btn" aria-label="Start live stream">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+        </svg>
+        Start Live
+      </button>
+    </div>
+    <input type="file" id="media-upload" accept="image/*,video/*" multiple hidden />
     <div class="loading-spinner dark:loading-spinner" id="loading-spinner"></div>
   </div>
 
@@ -521,6 +605,7 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
     import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
     import { getDatabase, ref, get, set, update, remove, onValue, push } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
+    import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-storage.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
@@ -535,6 +620,7 @@
     const app = initializeApp(firebaseConfig);
     const auth = getAuth();
     const db = getDatabase();
+    const storage = getStorage();
 
     const friendsList = document.getElementById("friends-list");
     const inboxList = document.getElementById("inbox-list");
@@ -555,7 +641,13 @@
     const alertCancel = document.getElementById("alert-cancel");
     const loadingSpinner = document.getElementById("loading-spinner");
     const addFriendBtn = document.getElementById("add-friend-btn");
+    const actionBtn = document.getElementById("action-btn");
     const profileBtn = document.getElementById("profile-btn");
+    const bottomSheet = document.getElementById("bottom-sheet");
+    const postBtn = document.getElementById("post-btn");
+    const searchFriendsBtn = document.getElementById("search-friends-btn");
+    const startLiveBtn = document.getElementById("start-live-btn");
+    const mediaUpload = document.getElementById("media-upload");
 
     let currentUserUid = null;
     let currentFilter = "all";
@@ -582,10 +674,19 @@
       alertCancel.onclick = () => alertDialog.classList.remove("show");
     }
 
+    function showBottomSheet() {
+      bottomSheet.classList.add("show");
+    }
+
+    function hideBottomSheet() {
+      bottomSheet.classList.remove("show");
+    }
+
     function applyTheme(themeValue) {
       const isDark = themeValue === "dark";
       document.body.classList.toggle("dark", isDark);
       alertDialog.classList.toggle("dark", isDark);
+      bottomSheet.classList.toggle("dark", isDark);
       loadingSpinner.classList.toggle("dark", isDark);
       document.querySelectorAll(".tab").forEach((el) => el.classList.toggle("dark", isDark));
       document.querySelectorAll(".filter-btn").forEach((el) => el.classList.toggle("dark", isDark));
@@ -619,6 +720,7 @@
       document.querySelectorAll(".no-content-message").forEach((el) => el.classList.toggle("dark", isDark));
       document.querySelectorAll(".alert-title").forEach((el) => el.classList.toggle("dark", isDark));
       document.querySelectorAll(".alert-message").forEach((el) => el.classList.toggle("dark", isDark));
+      document.querySelectorAll(".bottom-sheet-btn").forEach((el) => el.classList.toggle("dark", isDark));
     }
 
     function timeAgo(timestamp) {
@@ -662,6 +764,56 @@
         }
       } catch (error) {
         console.error("Error marking messages as read:", error);
+      }
+    }
+
+    async function uploadMediaFiles(files, statusId) {
+      const mediaUrls = [];
+      for (const file of files) {
+        const fileType = file.type.startsWith("image/") ? "image" : file.type.startsWith("video/") ? "video" : null;
+        if (!fileType) continue;
+        const fileRef = storageRef(storage, `statuses/${statusId}/${file.name}`);
+        try {
+          await uploadBytes(fileRef, file);
+          const url = await getDownloadURL(fileRef);
+          mediaUrls.push({ url, type: fileType });
+        } catch (error) {
+          console.error("Error uploading file:", error);
+          throw error;
+        }
+      }
+      return mediaUrls;
+    }
+
+    async function createStatus(mediaUrls) {
+      try {
+        const statusId = push(ref(db, "statuses")).key;
+        const statusData = {
+          userId: currentUserUid,
+          timestamp: Date.now(),
+          mediaUrls,
+        };
+        await set(ref(db, `statuses/${statusId}`), statusData);
+
+        // Notify friends
+        const friendsSnap = await get(ref(db, `users/${currentUserUid}/friends`));
+        if (friendsSnap.exists()) {
+          const friends = friendsSnap.val();
+          const updates = {};
+          for (const friendUid in friends) {
+            const notifRef = push(ref(db, `notifications/${friendUid}/${statusId}`));
+            updates[notifRef.path] = {
+              type: "status",
+              userId: currentUserUid,
+              timestamp: Date.now(),
+              read: false,
+            };
+          }
+          await update(ref(db), updates);
+        }
+      } catch (error) {
+        console.error("Error creating status:", error);
+        throw error;
       }
     }
 
@@ -1228,10 +1380,13 @@
           statusCard.setAttribute("aria-label", `View status by ${userData.name || 'User'}`);
 
           let mediaContent = "";
-          if (status.imageUrl) {
-            mediaContent = `<img src="${status.imageUrl}" alt="Status image" class="status-image" loading="lazy" />`;
-          } else if (status.mediaUrls && status.mediaUrls.length > 0 && status.mediaUrls[0].type === "video") {
-            mediaContent = `<video src="${status.mediaUrls[0].url}" class="status-video" muted loop playsinline></video>`;
+          if (status.mediaUrls && status.mediaUrls.length > 0) {
+            const media = status.mediaUrls[0];
+            if (media.type === "image") {
+              mediaContent = `<img src="${media.url}" alt="Status image" class="status-image" loading="lazy" />`;
+            } else if (media.type === "video") {
+              mediaContent = `<video src="${media.url}" class="status-video" muted loop playsinline></video>`;
+            }
           }
 
           statusCard.innerHTML = `
@@ -1387,18 +1542,17 @@
         });
 
         const statusCards = await Promise.all(statusPromises);
+
+        // Sort statuses by timestamp (newest first)
         statusCards.sort((a, b) => {
-          const aTime = statuses[a.dataset.sid].timestamp || 0;
-          const bTime = statuses[b.dataset.sid].timestamp || 0;
+          const aTime = statuses[a.dataset.sid]?.timestamp || 0;
+          const bTime = statuses[b.dataset.sid]?.timestamp || 0;
           return bTime - aTime;
         });
 
-        statusCards.forEach((card) => {
-          statusesList.appendChild(card);
-          hasStatuses = true;
-        });
+        statusCards.forEach((card) => statusesList.appendChild(card));
 
-        noStatusesMessage.classList.toggle("hidden", hasStatuses);
+        noStatusesMessage.classList.toggle("hidden", statusCards.length > 0);
         hideLoading();
       });
     }
@@ -1408,101 +1562,134 @@
       liveList.innerHTML = "";
       noLiveMessage.classList.add("hidden");
 
+      const liveRef = ref(db, "liveStreams");
       const usersRef = ref(db, "users");
 
-      onValue(usersRef, async (usersSnap) => {
+      onValue(liveRef, async (liveSnap) => {
         liveList.innerHTML = "";
         noLiveMessage.classList.add("hidden");
 
-        if (!usersSnap.exists()) {
+        if (!liveSnap.exists()) {
           noLiveMessage.classList.remove("hidden");
           hideLoading();
           return;
         }
 
-        const users = usersSnap.val();
+        const usersSnap = await get(usersRef);
+        const users = usersSnap.exists() ? usersSnap.val() : {};
+        const liveStreams = liveSnap.val();
         let hasLive = false;
 
-        const livePromises = Object.entries(users).map(async ([userId, userData]) => {
-          if (userData.live && userId !== uid) {
+        for (const liveId in liveStreams) {
+          const live = liveStreams[liveId];
+          if (live.active) {
+            hasLive = true;
+            const userData = users[live.userId] || { name: "Unknown", photoURL: null };
             const liveCard = document.createElement("div");
             liveCard.className = "live-card dark:live-card";
-            liveCard.dataset.uid = userId;
             liveCard.setAttribute("role", "button");
             liveCard.setAttribute("tabindex", "0");
-            liveCard.setAttribute("aria-label", `Join live stream by ${userData.name || 'User'}`);
+            liveCard.setAttribute("aria-label", `Join live stream by ${userData.name || "User"}`);
+            liveCard.dataset.lid = liveId;
 
             liveCard.innerHTML = `
-              <div class="live-badge dark:live-badge">Live</div>
-              <div class="flex items-center">
+              <div class="flex items-center relative">
                 <img src="${userData.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${userData.name || 'User'} avatar" class="live-avatar" loading="lazy" />
                 <div class="live-info">
-                  <h4 class="live-username dark:live-username">${userData.name || "User"}</h4>
-                  <p class="live-time dark:live-time">Streaming now</p>
+                  <div class="flex items-center justify-between">
+                    <h4 class="live-username dark:live-username">${userData.name || "User"}</h4>
+                    <p class="live-time dark:live-time">${timeAgo(live.timestamp)}</p>
+                  </div>
+                  <span class="live-badge dark:live-badge">LIVE</span>
+                  <a href="live.html?lid=${liveId}" class="live-cta dark:live-cta">Join Live</a>
                 </div>
               </div>
-              <a href="live.html?uid=${userId}" class="live-cta dark:live-cta">Join Live</a>
             `;
 
-            liveCard.onclick = (e) => {
-              if (!e.target.closest(".live-cta")) {
-                window.location.href = `live.html?uid=${userId}`;
-              }
+            liveCard.onclick = () => {
+              window.location.href = `live.html?lid=${liveId}`;
             };
 
             liveCard.onkeydown = (e) => {
               if (e.key === "Enter" || e.key === "Space") {
                 e.preventDefault();
-                if (!e.target.closest(".live-cta")) {
-                  window.location.href = `live.html?uid=${userId}`;
-                }
+                window.location.href = `live.html?lid=${liveId}`;
               }
             };
 
-            return liveCard;
+            liveList.appendChild(liveCard);
           }
-          return null;
-        });
-
-        const liveCards = (await Promise.all(livePromises)).filter((card) => card !== null);
-
-        liveCards.forEach((card) => {
-          liveList.appendChild(card);
-          hasLive = true;
-        });
+        }
 
         noLiveMessage.classList.toggle("hidden", hasLive);
         hideLoading();
       });
     }
 
-    onAuthStateChanged(auth, async (user) => {
-      if (!user) {
-        location.href = "signup.html";
-        return;
-      }
-      currentUserUid = user.uid;
+    // Handle bottom sheet actions
+    actionBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      showBottomSheet();
+    });
 
+    postBtn.addEventListener("click", () => {
+      mediaUpload.click();
+      hideBottomSheet();
+    });
+
+    mediaUpload.addEventListener("change", async (e) => {
+      const files = Array.from(e.target.files);
+      if (files.length === 0) return;
+
+      showLoading();
       try {
-        const settingsSnap = await get(ref(db, `users/${user.uid}/settings`));
-        const settings = settingsSnap.val() || {};
-        applyTheme(settings.theme || "light");
-
-        loadFriends(user.uid);
-        loadGroups(user.uid);
-        loadStatuses(user.uid);
-        loadLiveStreams(user.uid);
-
-        onValue(ref(db, `users/${user.uid}/settings`), (snap) => {
-          if (snap.exists()) {
-            const settings = snap.val();
-            applyTheme(settings.theme || "light");
-          }
-        });
+        const statusId = push(ref(db, "statuses")).key;
+        const mediaUrls = await uploadMediaFiles(files, statusId);
+        if (mediaUrls.length > 0) {
+          await createStatus(mediaUrls);
+          showAlert("Success", "Your status has been posted!");
+        } else {
+          showAlert("Error", "No valid media files selected.");
+        }
       } catch (error) {
-        console.error("Error initializing:", error);
-        showAlert("Error", "Failed to load data.");
+        console.error("Error posting status:", error);
+        showAlert("Error", "Failed to post status.");
+      } finally {
+        hideLoading();
+        mediaUpload.value = ""; // Reset file input
       }
+    });
+
+    searchFriendsBtn.addEventListener("click", () => {
+      hideBottomSheet();
+      window.location.href = "add-friend.html";
+    });
+
+    startLiveBtn.addEventListener("click", () => {
+      hideBottomSheet();
+      window.location.href = `live.html?uid=${currentUserUid}&start=true`;
+    });
+
+    // Close bottom sheet on outside click
+    document.addEventListener("click", (e) => {
+      if (!bottomSheet.contains(e.target) && !actionBtn.contains(e.target)) {
+        hideBottomSheet();
+      }
+    });
+
+    // Close bottom sheet on Escape key
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") {
+        hideBottomSheet();
+      }
+    });
+
+    addFriendBtn.addEventListener("click", () => {
+      window.location.href = "add-friend.html";
+    });
+
+    profileBtn.addEventListener("click", () => {
+      window.location.href = `profile.html?uid=${currentUserUid}`;
     });
 
     tabs.forEach((tab) => {
@@ -1513,10 +1700,21 @@
         });
         tab.classList.add("active");
         tab.setAttribute("aria-selected", "true");
-        currentTab = tab.dataset.tab;
         document.querySelectorAll(".tab-content").forEach((content) => {
-          content.classList.toggle("active", content.id === `${currentTab}-tab`);
+          content.classList.remove("active");
         });
+        document.getElementById(`${tab.dataset.tab}-tab`).classList.add("active");
+        currentTab = tab.dataset.tab;
+
+        if (currentTab === "chat") {
+          loadFriends(currentUserUid);
+        } else if (currentTab === "groups") {
+          loadGroups(currentUserUid);
+        } else if (currentTab === "statuses") {
+          loadStatuses(currentUserUid);
+        } else if (currentTab === "live") {
+          loadLiveStreams(currentUserUid);
+        }
       });
 
       tab.addEventListener("keydown", (e) => {
@@ -1527,46 +1725,45 @@
       });
     });
 
-    filterButtons.forEach((btn) => {
-      btn.addEventListener("click", () => {
-        filterButtons.forEach((b) => b.classList.remove("active"));
-        btn.classList.add("active");
-        currentFilter = btn.dataset.filter;
-        if (currentTab === "chat") {
-          loadFriends(currentUserUid);
-        }
-      });
-
-      btn.addEventListener("keydown", (e) => {
-        if (e.key === "Enter" || e.key === "Space") {
-          e.preventDefault();
-          btn.click();
-        }
+    filterButtons.forEach((button) => {
+      button.addEventListener("click", () => {
+        filterButtons.forEach((btn) => btn.classList.remove("active"));
+        button.classList.add("active");
+        currentFilter = button.dataset.filter;
+        loadFriends(currentUserUid);
       });
     });
 
-    addFriendBtn.addEventListener("click", () => {
-      window.location.href = "add-friend.html";
-    });
+    onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        currentUserUid = user.uid;
+        const userRef = ref(db, `users/${user.uid}`);
+        const userSnap = await get(userRef);
+        let userData = userSnap.exists() ? userSnap.val() : {};
 
-    profileBtn.addEventListener("click", () => {
-      window.location.href = `index.html?uid=${currentUserUid}&owner=true`;
-    });
+        if (!userData.name) {
+          userData = {
+            name: user.displayName || "User",
+            photoURL: user.photoURL || "https://www.gravatar.com/avatar?d=mp",
+            presence: "online",
+            theme: userData.theme || "light",
+          };
+          await set(userRef, userData);
+        } else if (userData.presence !== "online") {
+          await update(userRef, { presence: "online" });
+        }
 
-    document.addEventListener("click", (e) => {
-      if (!e.target.closest(".context-menu-btn, .status-menu-btn")) {
-        document.querySelectorAll(".context-menu").forEach((menu) => {
-          menu.classList.add("hidden");
+        applyTheme(userData.theme || "light");
+        loadFriends(user.uid);
+        loadGroups(user.uid);
+        loadStatuses(user.uid);
+        loadLiveStreams(user.uid);
+
+        window.addEventListener("beforeunload", () => {
+          update(userRef, { presence: "offline" });
         });
-      }
-      if (!alertDialog.contains(e.target) && alertDialog.classList.contains("show")) {
-        alertDialog.classList.remove("show");
-      }
-    });
-
-    document.addEventListener("keydown", (e) => {
-      if (e.key === "Escape" && alertDialog.classList.contains("show")) {
-        alertDialog.classList.remove("show");
+      } else {
+        window.location.href = "login.html";
       }
     });
   </script>
