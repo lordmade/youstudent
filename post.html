@@ -48,6 +48,40 @@
       object-fit: cover;
       max-height: 100vh;
     }
+    .carousel {
+      display: flex;
+      width: 100%;
+      height: 100%;
+      transition: transform 0.3s ease;
+    }
+    .carousel-item {
+      flex: 0 0 100%;
+      width: 100%;
+      height: 100%;
+    }
+    .carousel-indicators {
+      position: absolute;
+      bottom: 2rem;
+      display: flex;
+      gap: 0.5rem;
+      z-index: 20;
+    }
+    .carousel-dot {
+      width: 8px;
+      height: 8px;
+      background: rgba(255, 255, 255, 0.5);
+      border-radius: 50%;
+      transition: background 0.2s ease;
+    }
+    .carousel-dot.active {
+      background: #fff;
+    }
+    .carousel-dot.dark {
+      background: rgba(255, 255, 255, 0.3);
+    }
+    .carousel-dot.dark.active {
+      background: #e5e7eb;
+    }
     .profile-container {
       position: absolute;
       top: 1rem;
@@ -132,6 +166,10 @@
       width: 24px;
       height: 24px;
     }
+    .friend-btn svg {
+      width: 28px;
+      height: 28px;
+    }
     .mute-toggle-icon {
       position: absolute;
       bottom: 1rem;
@@ -147,7 +185,7 @@
     .mute-toggle-icon:hover {
       background: rgba(0, 0, 0, 0.8);
     }
-    .swipe-text {
+    .swipe-text, .post-text {
       position: absolute;
       bottom: 1rem;
       left: 1rem;
@@ -161,12 +199,14 @@
       transform: translateY(10px);
       transition: opacity 0.3s ease, transform 0.3s ease;
       z-index: 20;
+      max-width: 80%;
+      word-break: break-word;
     }
-    .swipe-text.show {
+    .swipe-text.show, .post-text.show {
       opacity: 1;
       transform: translateY(0);
     }
-    .swipe-text.dark {
+    .swipe-text.dark, .post-text.dark {
       background: rgba(255, 255, 255, 0.1);
     }
     .alert-dialog {
@@ -401,9 +441,10 @@
       </svg>
     </button>
     <div class="media-container" role="region" aria-label="Post media">
-      <div id="media-content"></div>
+      <div id="media-content" class="carousel"></div>
+      <div id="carousel-indicators" class="carousel-indicators"></div>
       <svg id="mute-toggle-icon" class="mute-toggle-icon hidden" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path class="mute-icon hidden" d="M11 5L6 9W2v6h4l5 4V5zM19.07 4.93a10 10 0 010 14.14M15.54 8.46a5 5 0 010 7.07"/>
+        <path class="mute-icon hidden" d="M11 5L6 9H2v6h4l5 4V5zM19.07 4.93a10 10 0 010 14.14M15.54 8.46a5 5 0 010 7.07"/>
         <path class="unmute-icon" d="M11 5L6 9H2v6h4l5 4V5z"/>
       </svg>
     </div>
@@ -420,11 +461,10 @@
         </svg>
         <span id="comment-count">0</span>
       </button>
-      <button id="add-friend-btn" class="action-btn hidden" aria-label="Add friend">
+      <button id="add-friend-btn" class="action-btn friend-btn hidden" aria-label="Add friend">
         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
         </svg>
-        <span>Add Friend</span>
       </button>
     </div>
     <div id="alert-dialog" class="alert-dialog dark:alert-dialog" role="alertdialog" aria-labelledby="alert-title" aria-describedby="alert-message">
@@ -445,12 +485,13 @@
       </div>
     </div>
     <div id="swipe-text" class="swipe-text" role="status" aria-live="polite"></div>
+    <div id="post-text" class="post-text" role="status" aria-live="polite"></div>
   </div>
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
     import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
-    import { getDatabase, ref, get, update, onValue, push } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
+    import { getDatabase, ref, get, update, onValue, push, set } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
@@ -467,6 +508,7 @@
     const db = getDatabase();
 
     const mediaContent = document.getElementById('media-content');
+    const carouselIndicators = document.getElementById('carousel-indicators');
     const muteToggleIcon = document.getElementById('mute-toggle-icon');
     const likeBtn = document.getElementById('like-btn');
     const commentBtn = document.getElementById('comment-btn');
@@ -486,6 +528,7 @@
     const closeComments = document.getElementById('close-comments');
     const container = document.querySelector('.container');
     const swipeText = document.getElementById('swipe-text');
+    const postText = document.getElementById('post-text');
 
     let currentUser;
     let postUserId;
@@ -493,6 +536,8 @@
     let userCache = {};
     let statusHistory = [];
     let historyIndex = -1;
+    let currentMediaIndex = 0;
+    let mediaItems = [];
 
     function showAlert(message) {
       alertMessage.textContent = message;
@@ -511,6 +556,7 @@
       likeBtn.classList.toggle('dark', isDark);
       commentsSheet.classList.toggle('dark', isDark);
       swipeText.classList.toggle('dark', isDark);
+      postText.classList.toggle('dark', isDark);
       document.querySelectorAll('.alert-title').forEach(el => el.classList.toggle('dark', isDark));
       document.querySelectorAll('.alert-message').forEach(el => el.classList.toggle('dark', isDark));
       document.querySelectorAll('.bottom-sheet-title').forEach(el => el.classList.toggle('dark', isDark));
@@ -523,6 +569,7 @@
       document.querySelectorAll('.comment-input-container').forEach(el => el.classList.toggle('dark', isDark));
       document.querySelectorAll('.comment-submit').forEach(el => el.classList.toggle('dark', isDark));
       document.querySelectorAll('.profile-avatar').forEach(el => el.classList.toggle('dark', isDark));
+      document.querySelectorAll('.carousel-dot').forEach(el => el.classList.toggle('dark', isDark));
     }
 
     function timeAgo(timestamp) {
@@ -544,13 +591,37 @@
     }
 
     function renderMedia(status) {
-      const mediaUrls = Array.isArray(status.mediaUrls) ? status.mediaUrls : status.imageUrl ? [{ url: status.imageUrl, type: 'image' }] : [];
-      const media = mediaUrls[0] || { type: 'image', url: '' };
+      mediaItems = Array.isArray(status.mediaUrls) ? status.mediaUrls : status.imageUrl ? [{ url: status.imageUrl, type: 'image' }] : [];
+      currentMediaIndex = 0;
       mediaContent.innerHTML = '';
-      if (media.type === 'video') {
-        mediaContent.innerHTML = `
-          <video src="${media.url}" autoplay loop class="status-video" playsinline preload="metadata"></video>
-        `;
+      carouselIndicators.innerHTML = '';
+
+      if (mediaItems.length === 0) {
+        mediaContent.innerHTML = '<div class="carousel-item"><img src="https://via.placeholder.com/1080x1920" alt="Placeholder" /></div>';
+        muteToggleIcon.classList.add('hidden');
+        return;
+      }
+
+      mediaItems.forEach((media, index) => {
+        const itemDiv = document.createElement('div');
+        itemDiv.className = 'carousel-item';
+        if (media.type === 'video') {
+          itemDiv.innerHTML = `
+            <video src="${media.url}" ${index === 0 ? 'autoplay' : ''} loop class="status-video" playsinline preload="metadata"></video>
+          `;
+        } else {
+          itemDiv.innerHTML = `
+            <img src="${media.url}?w=1080&h=1920&c=fill" alt="Post" loading="lazy" />
+          `;
+        }
+        mediaContent.appendChild(itemDiv);
+
+        const dot = document.createElement('div');
+        dot.className = `carousel-dot ${index === 0 ? 'active' : ''}`;
+        carouselIndicators.appendChild(dot);
+      });
+
+      if (mediaItems[currentMediaIndex].type === 'video') {
         const video = mediaContent.querySelector('.status-video');
         video.muted = false; // Unmute by default
         muteToggleIcon.classList.remove('hidden');
@@ -567,17 +638,41 @@
           muteToggleIcon.querySelector('.mute-icon').classList.toggle('hidden', !video.muted);
           muteToggleIcon.querySelector('.unmute-icon').classList.toggle('hidden', video.muted);
         });
-        document.addEventListener('visibilitychange', () => {
-          if (document.hidden || commentsSheet.classList.contains('open')) {
-            video.pause();
-          } else {
-            video.play().catch(error => console.error('Error resuming video:', error));
-          }
-        });
       } else {
-        mediaContent.innerHTML = `
-          <img src="${media.url}?w=1080&h=1920&c=fill" alt="Post" loading="lazy" />
-        `;
+        muteToggleIcon.classList.add('hidden');
+      }
+
+      // Show post text if available
+      if (status.text) {
+        postText.textContent = status.text;
+        postText.classList.add('show');
+      } else {
+        postText.classList.remove('show');
+      }
+
+      updateCarousel();
+    }
+
+    function updateCarousel() {
+      mediaContent.style.transform = `translateX(-${currentMediaIndex * 100}%)`;
+      document.querySelectorAll('.carousel-dot').forEach((dot, index) => {
+        dot.classList.toggle('active', index === currentMediaIndex);
+      });
+
+      const videoElements = mediaContent.querySelectorAll('.status-video');
+      videoElements.forEach((video, index) => {
+        if (index === currentMediaIndex) {
+          video.muted = false;
+          if (!commentsSheet.classList.contains('open')) {
+            video.play().catch(error => console.error('Error playing video:', error));
+          }
+          muteToggleIcon.classList.remove('hidden');
+        } else {
+          video.pause();
+          video.currentTime = 0;
+        }
+      });
+      if (mediaItems[currentMediaIndex].type !== 'video') {
         muteToggleIcon.classList.add('hidden');
       }
     }
@@ -600,14 +695,10 @@
             <span class="comment-timestamp dark:comment-timestamp">${timeAgo(comment.timestamp)}</span>
           </div>
         `;
-        return commentDiv;
-      })).then(commentDivs => {
-        commentDivs.sort((a, b) => {
-          const aTime = comments[Object.keys(comments)[commentDivs.indexOf(a)]].timestamp || 0;
-          const bTime = comments[Object.keys(comments)[commentDivs.indexOf(b)]].timestamp || 0;
-          return aTime - bTime;
-        });
-        commentDivs.forEach(div => commentsList.appendChild(div));
+        return { div: commentDiv, timestamp: comment.timestamp || 0 };
+      })).then(commentItems => {
+        commentItems.sort((a, b) => a.timestamp - b.timestamp);
+        commentItems.forEach(item => commentsList.appendChild(item.div));
       });
     }
 
@@ -648,7 +739,6 @@
 
         // Update history
         if (!isPrevious) {
-          // For next status, add to history and increment index
           if (historyIndex < statusHistory.length - 1) {
             statusHistory = statusHistory.slice(0, historyIndex + 1);
           }
@@ -736,6 +826,24 @@
       await loadStatus(previousStatusId, true);
     }
 
+    async function addFriend(targetUserId) {
+      try {
+        const chatRef = ref(db, `chats/${currentUser.uid}_${targetUserId}`);
+        await set(chatRef, {
+          participants: {
+            [currentUser.uid]: true,
+            [targetUserId]: true
+          },
+          createdAt: Date.now()
+        });
+        addFriendBtn.classList.add('hidden');
+        showSwipeText('Friend added!');
+      } catch (error) {
+        console.error('Error adding friend:', error);
+        showAlert('Failed to add friend.');
+      }
+    }
+
     onAuthStateChanged(auth, async user => {
       if (!user) {
         location.href = 'signup.html';
@@ -765,7 +873,6 @@
           const status = snap.val();
           // Check if status has media
           if (!status.mediaUrls && !status.imageUrl) {
-            // If no media, load next random status
             await loadNextRandomStatus();
             return;
           }
@@ -850,7 +957,7 @@
 
     addFriendBtn.addEventListener('click', () => {
       if (postUserId) {
-        location.href = `chat.html?uid=${postUserId}`;
+        addFriend(postUserId);
       }
     });
 
@@ -909,6 +1016,7 @@
           timestamp: Date.now()
         });
         commentInput.value = '';
+        // Comments are updated via onValue listener
       } catch (error) {
         console.error('Error adding comment:', error);
         showAlert('Failed to post comment.');
@@ -923,25 +1031,41 @@
     });
 
     // Swipe gesture handling
-    let touchStartY = 0;
     let touchStartX = 0;
+    let touchStartY = 0;
 
     container.addEventListener('touchstart', (e) => {
-      touchStartY = e.changedTouches[0].screenY;
       touchStartX = e.changedTouches[0].screenX;
+      touchStartY = e.changedTouches[0].screenY;
     });
 
     container.addEventListener('touchend', (e) => {
+      const touchEndX = e.changedTouches[0].screenX;
       const touchEndY = e.changedTouches[0].screenY;
+      const deltaX = touchStartX - touchEndX;
       const deltaY = touchStartY - touchEndY;
-      const deltaX = touchStartX - e.changedTouches[0].screenX;
-      if (Math.abs(deltaY) > 50 && Math.abs(deltaY) > Math.abs(deltaX)) {
+
+      if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 50) {
+        // Horizontal swipe
+        if (!commentsSheet.classList.contains('open') && !alertDialog.classList.contains('show')) {
+          if (deltaX > 0 && currentMediaIndex < mediaItems.length - 1) {
+            // Swipe right (next media)
+            currentMediaIndex++;
+            updateCarousel();
+          } else if (deltaX < 0 && currentMediaIndex > 0) {
+            // Swipe left (previous media)
+            currentMediaIndex--;
+            updateCarousel();
+          }
+        }
+      } else if (Math.abs(deltaY) > 50) {
+        // Vertical swipe
         if (!commentsSheet.classList.contains('open') && !alertDialog.classList.contains('show')) {
           if (deltaY < 0) {
-            // Swipe up (negative deltaY) for next status
+            // Swipe up (next status)
             loadNextRandomStatus();
           } else {
-            // Swipe down (positive deltaY) for previous status
+            // Swipe down (previous status)
             loadPreviousStatus();
           }
         }
