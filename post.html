@@ -491,7 +491,7 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
     import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
-    import { getDatabase, ref, get, update, onValue, push, set } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
+    import { getDatabase, ref, get, update, onValue, push, set, off } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
@@ -538,6 +538,7 @@
     let historyIndex = -1;
     let currentMediaIndex = 0;
     let mediaItems = [];
+    let commentsListener = null;
 
     function showAlert(message) {
       alertMessage.textContent = message;
@@ -584,10 +585,15 @@
 
     async function getUserData(uid) {
       if (userCache[uid]) return userCache[uid];
-      const snap = await get(ref(db, `users/${uid}`));
-      const data = snap.val() || { name: 'User', photoURL: 'https://www.gravatar.com/avatar?d=mp' };
-      userCache[uid] = data;
-      return data;
+      try {
+        const snap = await get(ref(db, `users/${uid}`));
+        const data = snap.val() || { name: 'User', photoURL: 'https://www.gravatar.com/avatar?d=mp' };
+        userCache[uid] = data;
+        return data;
+      } catch (error) {
+        console.error('Error fetching user data:', error);
+        return { name: 'User', photoURL: 'https://www.gravatar.com/avatar?d=mp' };
+      }
     }
 
     function renderMedia(status) {
@@ -599,6 +605,7 @@
       if (mediaItems.length === 0) {
         mediaContent.innerHTML = '<div class="carousel-item"><img src="https://via.placeholder.com/1080x1920" alt="Placeholder" /></div>';
         muteToggleIcon.classList.add('hidden');
+        postText.classList.remove('show');
         return;
       }
 
@@ -623,7 +630,7 @@
 
       if (mediaItems[currentMediaIndex].type === 'video') {
         const video = mediaContent.querySelector('.status-video');
-        video.muted = false; // Unmute by default
+        video.muted = false;
         muteToggleIcon.classList.remove('hidden');
         video.addEventListener('canplay', () => {
           if (!commentsSheet.classList.contains('open')) {
@@ -677,13 +684,13 @@
       }
     }
 
-    function renderComments(comments) {
+    async function renderComments(comments) {
       commentsList.innerHTML = '';
       if (!comments) {
         commentsList.innerHTML = '<p class="comment-text dark:comment-text">No comments yet</p>';
         return;
       }
-      Promise.all(Object.entries(comments).map(async ([commentId, comment]) => {
+      const commentItems = await Promise.all(Object.entries(comments).map(async ([commentId, comment]) => {
         const userData = await getUserData(comment.userId);
         const commentDiv = document.createElement('div');
         commentDiv.className = 'comment-item dark:comment-item';
@@ -696,10 +703,9 @@
           </div>
         `;
         return { div: commentDiv, timestamp: comment.timestamp || 0 };
-      })).then(commentItems => {
-        commentItems.sort((a, b) => a.timestamp - b.timestamp);
-        commentItems.forEach(item => commentsList.appendChild(item.div));
-      });
+      }));
+      commentItems.sort((a, b) => a.timestamp - b.timestamp);
+      commentItems.forEach(item => commentsList.appendChild(item.div));
     }
 
     function openBottomSheet() {
@@ -707,6 +713,19 @@
       commentInput.focus();
       const video = mediaContent.querySelector('.status-video');
       if (video) video.pause();
+
+      // Set up real-time comments listener
+      if (statusId) {
+        const commentsRef = ref(db, `statuses/${statusId}/comments`);
+        commentsListener = onValue(commentsRef, (snap) => {
+          const comments = snap.val();
+          commentCount.textContent = comments ? Object.keys(comments).length : 0;
+          renderComments(comments);
+        }, (error) => {
+          console.error('Error listening to comments:', error);
+          showAlert('Failed to load comments.');
+        });
+      }
     }
 
     function closeBottomSheet() {
@@ -716,6 +735,11 @@
       if (video && !document.hidden) {
         video.play().catch(error => console.error('Error resuming video:', error));
       }
+      // Remove comments listener
+      if (commentsListener) {
+        off(ref(db, `statuses/${statusId}/comments`));
+        commentsListener = null;
+      }
     }
 
     function showSwipeText(message) {
@@ -723,7 +747,7 @@
       swipeText.classList.add('show');
       setTimeout(() => {
         swipeText.classList.remove('show');
-      }, 2000); // Hide after 2 seconds
+      }, 2000);
     }
 
     async function loadStatus(newStatusId, isPrevious = false) {
@@ -754,10 +778,6 @@
         const reactions = status.reactions || {};
         likeCount.textContent = Object.keys(reactions).length;
         likeBtn.classList.toggle('liked', !!reactions[currentUser.uid]);
-        const comments = status.comments || {};
-        commentCount.textContent = Object.keys(comments).length;
-        renderComments(comments);
-
         const userData = await getUserData(postUserId);
         profileAvatar.src = userData.photoURL || 'https://www.gravatar.com/avatar?d=mp';
         profileUsername.textContent = userData.name || 'User';
@@ -798,14 +818,12 @@
           (Array.isArray(status.mediaUrls) && status.mediaUrls.length > 0) || status.imageUrl
         );
         const statusIds = mediaStatuses.map(([id]) => id);
-        // Filter out the current status
         const availableStatusIds = statusIds.filter(id => id !== statusId);
         if (availableStatusIds.length === 0) {
           showAlert('No other media posts available.');
           return;
         }
 
-        // Select a random status ID
         const randomIndex = Math.floor(Math.random() * availableStatusIds.length);
         const newStatusId = availableStatusIds[randomIndex];
 
@@ -861,7 +879,6 @@
         const settings = settingsSnap.val() || {};
         applyTheme(settings.theme || 'light');
 
-        // Initialize history with current status
         statusHistory.push(statusId);
         historyIndex = 0;
 
@@ -871,7 +888,6 @@
             return;
           }
           const status = snap.val();
-          // Check if status has media
           if (!status.mediaUrls && !status.imageUrl) {
             await loadNextRandomStatus();
             return;
@@ -881,10 +897,6 @@
           const reactions = status.reactions || {};
           likeCount.textContent = Object.keys(reactions).length;
           likeBtn.classList.toggle('liked', !!reactions[user.uid]);
-          const comments = status.comments || {};
-          commentCount.textContent = Object.keys(comments).length;
-          renderComments(comments);
-
           const userData = await getUserData(postUserId);
           profileAvatar.src = userData.photoURL || 'https://www.gravatar.com/avatar?d=mp';
           profileUsername.textContent = userData.name || 'User';
@@ -899,6 +911,9 @@
               addFriendBtn.classList.remove('hidden');
             }
           }
+        }, (error) => {
+          console.error('Error listening to status:', error);
+          showAlert('Failed to load post.');
         });
       } catch (error) {
         console.error('Error loading post:', error);
@@ -1016,7 +1031,6 @@
           timestamp: Date.now()
         });
         commentInput.value = '';
-        // Comments are updated via onValue listener
       } catch (error) {
         console.error('Error adding comment:', error);
         showAlert('Failed to post comment.');
@@ -1030,7 +1044,6 @@
       }
     });
 
-    // Swipe gesture handling
     let touchStartX = 0;
     let touchStartY = 0;
 
@@ -1046,26 +1059,20 @@
       const deltaY = touchStartY - touchEndY;
 
       if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 50) {
-        // Horizontal swipe
         if (!commentsSheet.classList.contains('open') && !alertDialog.classList.contains('show')) {
           if (deltaX > 0 && currentMediaIndex < mediaItems.length - 1) {
-            // Swipe right (next media)
             currentMediaIndex++;
             updateCarousel();
           } else if (deltaX < 0 && currentMediaIndex > 0) {
-            // Swipe left (previous media)
             currentMediaIndex--;
             updateCarousel();
           }
         }
       } else if (Math.abs(deltaY) > 50) {
-        // Vertical swipe
         if (!commentsSheet.classList.contains('open') && !alertDialog.classList.contains('show')) {
           if (deltaY < 0) {
-            // Swipe up (next status)
             loadNextRandomStatus();
           } else {
-            // Swipe down (previous status)
             loadPreviousStatus();
           }
         }
