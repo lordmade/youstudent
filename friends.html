@@ -871,20 +871,19 @@
 
 <div class="tab-panel active" id="tab-chat">
   <div class="chat-subtab-nav">
-  <button class="active" data-subtab="friends" role="tab" aria-selected="true">
-    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4a4 4 0 100 8 4 4 0 000-8zm-7 8a4 4 0 100 8 4 4 0 000-8zm14 0a4 4 0 100 8 4 4 0 000-8z"/>
-    </svg>
-    Friends
-  </button>
-  <button data-subtab="inbox" role="tab" aria-selected="false">
-    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
-    </svg>
-    Inbox
-    <span id="inbox-unread-badge" class="notification-badge dark:notification-badge hidden">0</span>
-  </button>
-</div>
+    <button class="active" data-subtab="friends" role="tab" aria-selected="true">
+      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4a4 4 0 100 8 4 4 0 000-8zm-7 8a4 4 0 100 8 4 4 0 000-8zm14 0a4 4 0 100 8 4 4 0 000-8z"/>
+      </svg>
+      Friends
+    </button>
+    <button data-subtab="inbox" role="tab" aria-selected="false">
+      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+      </svg>
+      Inbox
+    </button>
+  </div>
   <div class="chat-subtab-panel active" id="subtab-friends">
     <h2 class="text-base font-semibold mt-3 mb-2 dark:text-gray-100">Your Friends</h2>
     <div id="friends-list" aria-live="polite" aria-relevant="additions"></div>
@@ -1386,7 +1385,7 @@ const noInboxMessage = document.getElementById("no-inbox-message");
     }
   }
 
-function renderFriend(uid, data, unreadCount, lastMessageTime, lastMessageText, tabType) {
+ function renderFriend(uid, data, unreadCount, lastMessageTime, lastMessageText) {
   const card = document.createElement("div");
   card.className = `friend-card ${unreadCount > 0 ? "unread" : ""}`;
   card.setAttribute("role", "button");
@@ -1396,37 +1395,15 @@ function renderFriend(uid, data, unreadCount, lastMessageTime, lastMessageText, 
   // Determine online status (assuming data.presence is available from Firebase)
   const isOnline = data.presence === "online";
   const statusDot = isOnline
-    ? '<span class="status-dot online dark:status-dot" aria-label="Online"></span>'
-    : '<span class="status-dot offline dark:status-dot" aria-label="Offline"></span>';
+    ? '<span class="status-dot online" aria-label="Online"></span>'
+    : '<span class="status-dot offline" aria-label="Offline"></span>';
 
-  // Truncate last message text for preview (only for Inbox tab)
+  // Truncate last message text for preview (if provided)
   const messagePreview = lastMessageText
     ? lastMessageText.length > 30
       ? lastMessageText.substring(0, 27) + "..."
       : lastMessageText
     : "No messages yet";
-
-  // Conditionally render content based on tabType
-  const friendInfoContent = tabType === "friends"
-    ? `
-        <h4 class="friend-name">${data.name || "Friend"}</h4>
-        ${lastMessageTime
-          ? `<p class="last-seen dark:last-seen">${timeAgo(lastMessageTime)}</p>`
-          : ""}
-      `
-    : `
-        <div class="flex items-center justify-between">
-          <h4 class="friend-name">${data.name || "Friend"}</h4>
-          ${lastMessageTime
-            ? `<p class="last-seen dark:last-seen">${timeAgo(lastMessageTime)}</p>`
-            : ""}
-        </div>
-        <p class="last-message dark:last-message">
-          ${unreadCount > 0
-            ? `<span class="font-semibold">${messagePreview}</span>`
-            : messagePreview}
-        </p>
-      `;
 
   card.innerHTML = `
     <div class="flex items-center relative">
@@ -1436,13 +1413,27 @@ function renderFriend(uid, data, unreadCount, lastMessageTime, lastMessageText, 
   } avatar" class="friend-avatar" />
         ${statusDot}
       </div>
-      <div class="friend-info dark:friend-info">
-        ${friendInfoContent}
+      <div class="friend-info">
+        <div class="flex items-center justify-between">
+          <h4 class="friend-name">${data.name || "Friend"}</h4>
+          ${
+            lastMessageTime
+              ? `<p class="last-seen dark:last-seen">${timeAgo(
+                  lastMessageTime
+                )}</p>`
+              : ""
+          }
+        </div>
+        <p class="last-message dark:last-message">${
+          unreadCount > 0
+            ? `<span class="font-semibold">${messagePreview}</span>`
+            : messagePreview
+        }</p>
       </div>
     </div>
     ${
       unreadCount > 0
-        ? `<span class="unread-badge dark:unread-badge animate-pulse">${unreadCount}</span>`
+        ? `<span class="unread-badge animate-pulse">${unreadCount}</span>`
         : ""
     }
   `;
@@ -1463,7 +1454,9 @@ function renderFriend(uid, data, unreadCount, lastMessageTime, lastMessageText, 
   return card;
 }
 
-async function loadFriends(uid) {
+
+  
+ async function loadFriends(uid) {
   showLoading();
   friendsList.innerHTML = "";
   inboxList.innerHTML = "";
@@ -1472,20 +1465,16 @@ async function loadFriends(uid) {
 
   const chatsRef = ref(db, "chats");
   const usersRef = ref(db, "users");
-  const inboxBadge = document.getElementById("inbox-unread-badge");
 
   onValue(chatsRef, async (chatsSnap) => {
     friendsList.innerHTML = "";
     inboxList.innerHTML = "";
     noFriendsMessage.classList.add("hidden");
     noInboxMessage.classList.add("hidden");
-    let totalUnreadCount = 0;
 
     if (!chatsSnap.exists()) {
       noFriendsMessage.classList.remove("hidden");
       noInboxMessage.classList.remove("hidden");
-      inboxBadge.textContent = "0";
-      inboxBadge.classList.add("hidden");
       hideLoading();
       return;
     }
@@ -1494,8 +1483,6 @@ async function loadFriends(uid) {
       if (!usersSnap.exists()) {
         noFriendsMessage.classList.remove("hidden");
         noInboxMessage.classList.remove("hidden");
-        inboxBadge.textContent = "0";
-        inboxBadge.classList.add("hidden");
         hideLoading();
         return;
       }
@@ -1516,8 +1503,6 @@ async function loadFriends(uid) {
       if (friendUids.size === 0) {
         noFriendsMessage.classList.remove("hidden");
         noInboxMessage.classList.remove("hidden");
-        inboxBadge.textContent = "0";
-        inboxBadge.classList.add("hidden");
         hideLoading();
         return;
       }
@@ -1525,13 +1510,12 @@ async function loadFriends(uid) {
       friendUids.forEach(friendUid => {
         const userData = users[friendUid] || {};
         const chatId = uid < friendUid ? `${uid}_${friendUid}` : `${friendUid}_${uid}`;
-        const messagesRef = ref(db, `messages/${chatId}`);
+        const messagesRefChat = ref(db, `messages/${chatId}`);
 
-        onValue(messagesRef, (msgSnap) => {
+        onValue(messagesRefChat, (msgSnap) => {
           const msgs = msgSnap.val() || {};
           let unreadCount = 0;
           let lastMessageTime = null;
-          let lastMessageText = null;
           let hasMessages = false;
 
           const messageArray = Object.entries(msgs).sort((a, b) => (b[1].timestamp || 0) - (a[1].timestamp || 0));
@@ -1539,7 +1523,6 @@ async function loadFriends(uid) {
             hasMessages = true;
             const [_, latestMessage] = messageArray[0];
             lastMessageTime = latestMessage.timestamp;
-            lastMessageText = latestMessage.text;
             if (latestMessage.sender === friendUid && !latestMessage.read && latestMessage.timestamp > Date.now() - 10000) {
               showMessagePopup(friendUid, latestMessage.text);
             }
@@ -1550,95 +1533,30 @@ async function loadFriends(uid) {
             if (m.sender === friendUid && !m.read) unreadCount++;
           }
 
-          totalUnreadCount += unreadCount;
-
-          // Update Friends list (no last message preview)
+          // Update Friends list
           let existing = [...friendsList.children].find(c =>
             c.onclick && c.onclick.toString().includes(`chat.html?uid=${friendUid}`));
           if (existing) friendsList.removeChild(existing);
-          const friendCard = renderFriend(friendUid, userData, unreadCount, lastMessageTime, lastMessageText, "friends");
+          const friendCard = renderFriend(friendUid, userData, unreadCount, lastMessageTime);
           friendsList.appendChild(friendCard);
 
-          // Update Inbox list (with last message preview, only for friends with messages)
+          // Update Inbox list (only for friends with messages)
           if (hasMessages) {
             existing = [...inboxList.children].find(c =>
               c.onclick && c.onclick.toString().includes(`chat.html?uid=${friendUid}`));
             if (existing) inboxList.removeChild(existing);
-            const inboxCard = renderFriend(friendUid, userData, unreadCount, lastMessageTime, lastMessageText, "inbox");
+            const inboxCard = renderFriend(friendUid, userData, unreadCount, lastMessageTime);
             inboxList.appendChild(inboxCard);
           }
-
-          // Update the inbox unread badge
-          inboxBadge.textContent = totalUnreadCount;
-          inboxBadge.classList.toggle("hidden", totalUnreadCount === 0);
-        }, { onlyOnce: false });
+        });
       });
 
       if (inboxList.children.length === 0) {
         noInboxMessage.classList.remove("hidden");
       }
       hideLoading();
-    }, { onlyOnce: false });
-  }, { onlyOnce: false });
-}
-  friendUids.forEach(friendUid => {
-    const userData = users[friendUid] || {};
-    const chatId = uid < friendUid ? `${uid}_${friendUid}` : `${friendUid}_${uid}`;
-    const messagesRelChat = ref(db, `messages/${chatId}`);
-
-    onValue(messagesRelChat, (msgSnap) => {
-      const msgs = msgSnap.val() || {};
-      let unreadCount = 0;
-      let lastMessageTime = null;
-      let lastMessageText = null;
-      let hasMessages = false;
-
-      const messageArray = Object.entries(msgs).sort((a, b) => (b[1].timestamp || 0) - (a[1].timestamp || 0));
-      if (messageArray.length > 0) {
-        hasMessages = true;
-        const [_, latestMessage] = messageArray[0];
-        lastMessageTime = latestMessage.timestamp;
-        lastMessageText = latestMessage.text;
-        if (latestMessage.sender === friendUid && !latestMessage.read && latestMessage.timestamp > Date.now() - 10000) {
-          showMessagePopup(friendUid, latestMessage.text);
-        }
-      }
-
-      for (const mid in msgs) {
-        const m = msgs[mid];
-        if (m.sender === friendUid && !m.read) unreadCount++;
-      }
-
-      totalUnreadCount += unreadCount; // Accumulate total unread messages
-
-      // Update Friends list
-      let existing = [...friendsList.children].find(c =>
-        c.onclick && c.onclick.toString().includes(`chat.html?uid=${friendUid}`));
-      if (existing) friendsList.removeChild(existing);
-      const friendCard = renderFriend(friendUid, userData, unreadCount, lastMessageTime, lastMessageText);
-      friendsList.appendChild(friendCard);
-
-      // Update Inbox list (only for friends with messages)
-      if (hasMessages) {
-        existing = [...inboxList.children].find(c =>
-          c.onclick && c.onclick.toString().includes(`chat.html?uid=${friendUid}`));
-        if (existing) inboxList.removeChild(existing);
-        const inboxCard = renderFriend(friendUid, userData, unreadCount, lastMessageTime, lastMessageText);
-        inboxList.appendChild(inboxCard);
-      }
-
-      // Update the inbox unread badge
-      inboxBadge.textContent = totalUnreadCount;
-      inboxBadge.classList.toggle("hidden", totalUnreadCount === 0);
-    }, { onlyOnce: false }); // Ensure real-time updates
+    });
   });
-
-  if (inboxList.children.length === 0) {
-    noInboxMessage.classList.remove("hidden");
-  }
-  hideLoading();
-}, { onlyOnce: false }); // Ensure real-time updates for chats
-});
 }
 
 
@@ -2198,4 +2116,4 @@ function renderStatusCard(statusId, status, userData) {
   }
 </script>
 </body>
-</html>
+</html>show the received message count on inbox tab on chat tab
