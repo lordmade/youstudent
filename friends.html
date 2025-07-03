@@ -69,6 +69,51 @@
   .tab-panel.active {
     display: block;
   }
+    .chat-subtab-nav {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  padding: 0.5rem 0;
+  background: white;
+  border-bottom: 1px solid #e5e7eb;
+  margin-bottom: 0.75rem;
+}
+.chat-subtab-nav.dark {
+  background: #374151;
+  border-bottom: 1px solid #4b5563;
+}
+.chat-subtab-nav button {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: #555;
+  border-bottom: 2px solid transparent;
+  transition: color 0.2s ease, border-color 0.2s ease;
+}
+.chat-subtab-nav button.active {
+  color: #ef4444;
+  border-color: #ef4444;
+}
+.chat-subtab-nav button.dark {
+  color: #e5e7eb;
+}
+.chat-subtab-nav button.dark.active {
+  color: #ef4444;
+}
+.chat-subtab-nav svg {
+  width: 20px;
+  height: 20px;
+}
+.chat-subtab-panel {
+  display: none;
+  padding: 0.75rem;
+}
+.chat-subtab-panel.active {
+  display: block;
+}
   .friend-card {
     background: white;
     border-radius: 12px;
@@ -758,10 +803,32 @@
 <div id="message-popup" class="message-popup hidden"></div>
 
 <div class="tab-panel active" id="tab-chat">
-  <h2 class="text-base font-semibold mt-3 mb-2 dark:text-gray-100">Your Friends</h2>
-  <div id="friends-list" aria-live="polite" aria-relevant="additions"></div>
-  <p id="no-friends-message" class="text-center hidden">No friends yet.</p>
+  <div class="chat-subtab-nav">
+    <button class="active" data-subtab="friends" role="tab" aria-selected="true">
+      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4a4 4 0 100 8 4 4 0 000-8zm-7 8a4 4 0 100 8 4 4 0 000-8zm14 0a4 4 0 100 8 4 4 0 000-8z"/>
+      </svg>
+      Friends
+    </button>
+    <button data-subtab="inbox" role="tab" aria-selected="false">
+      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+      </svg>
+      Inbox
+    </button>
+  </div>
+  <div class="chat-subtab-panel active" id="subtab-friends">
+    <h2 class="text-base font-semibold mt-3 mb-2 dark:text-gray-100">Your Friends</h2>
+    <div id="friends-list" aria-live="polite" aria-relevant="additions"></div>
+    <p id="no-friends-message" class="text-center hidden">No friends yet.</p>
+  </div>
+  <div class="chat-subtab-panel" id="subtab-inbox">
+    <h2 class="text-base font-semibold mt-3 mb-2 dark:text-gray-100">Inbox</h2>
+    <div id="inbox-list" aria-live="polite" aria-relevant="additions"></div>
+    <p id="no-inbox-message" class="text-center hidden">No conversations yet.</p>
+  </div>
 </div>
+  
 <div class="tab-panel" id="tab-groups">
   <h2 class="text-base font-semibold mt-3 mb-2 dark:text-gray-100">Your Groups</h2>
   <div id="groups-list" aria-live="polite" aria-relevant="additions"></div>
@@ -892,6 +959,10 @@
   const commentSubmit = document.getElementById("comment-submit");
   const notificationBadge = document.getElementById("notification-badge");
   const notificationLink = document.getElementById("notification-link");
+  const subtabBtns = document.querySelectorAll(".chat-subtab-nav button");
+const subtabPanels = document.querySelectorAll(".chat-subtab-panel");
+const inboxList = document.getElementById("inbox-list");
+const noInboxMessage = document.getElementById("no-inbox-message");
   const messagePopup = document.getElementById("message-popup");
   let currentUserUid = null;
   let currentStatusId = null;
@@ -899,25 +970,25 @@
   function showLoading() { loadingOverlay.classList.remove("hidden"); }
   function hideLoading() { loadingOverlay.classList.add("hidden"); }
 
-  function applyTheme(themeValue) {
-    const isDark = themeValue === 'dark';
-    document.body.classList.toggle('dark', isDark);
-    document.querySelector('.header').classList.toggle('dark', isDark);
-    document.querySelector('.tab-nav').classList.toggle('dark', isDark);
-    document.querySelectorAll('.friend-card, .status-card, .service-card').forEach(el => el.classList.toggle('dark', isDark));
-    document.querySelectorAll('.status-text, .service-description, .sponsored-text, .posted-by, .service-cta, .reaction-btn, .reaction-count, .comment-btn, .comment-count').forEach(el => el.classList.toggle('dark', isDark));
-    document.querySelectorAll('.last-seen, .status-time, .member-count, .service-time, .comment-time').forEach(el => el.classList.toggle('dark', isDark));
-    document.querySelectorAll('#no-friends-message, #no-groups-message, #no-statuses-message, #no-services-message').forEach(el => el.classList.toggle('dark', isDark));
-    document.querySelectorAll('.tab-nav button').forEach(el => el.classList.toggle('dark', isDark));
-    document.querySelectorAll('.text-base').forEach(el => el.classList.toggle('dark:text-gray-100', isDark));
-    document.querySelectorAll('.modal').forEach(el => el.classList.toggle('dark', isDark));
-    document.querySelectorAll('.modal-btn-cancel').forEach(el => el.classList.toggle('dark', isDark));
-    document.querySelectorAll('.status-info, .friend-info, .service-info, .comment-content, .comment-username, .comment-text').forEach(el => el.classList.toggle('dark', isDark));
-    document.querySelectorAll('.notification-icon, .notification-badge').forEach(el => el.classList.toggle('dark', isDark));
-    document.querySelectorAll('.message-popup, .message-popup-username, .message-popup-text').forEach(el => el.classList.toggle('dark', isDark));
-    floatingBtn.classList.toggle('dark', isDark);
-    commentSheet.classList.toggle('dark', isDark);
-  }
+ function applyTheme(themeValue) {
+  const isDark = themeValue === 'dark';
+  document.body.classList.toggle('dark', isDark);
+  document.querySelector('.header').classList.toggle('dark', isDark);
+  document.querySelector('.tab-nav').classList.toggle('dark', isDark);
+  document.querySelector('.chat-subtab-nav')?.classList.toggle('dark', isDark);
+  document.querySelectorAll('.friend-card, .status-card, .service-card').forEach(el => el.classList.toggle('dark', isDark));
+  document.querySelectorAll('.status-text, .service-description, .sponsored-text, .posted-by, .service-cta, .reaction-btn, .reaction-count, .comment-btn, .comment-count').forEach(el => el.classList.toggle('dark', isDark));
+  document.querySelectorAll('.last-seen, .status-time, .member-count, .service-time, .comment-time').forEach(el => el.classList.toggle('dark', isDark));
+  document.querySelectorAll('#no-friends-message, #no-groups-message, #no-statuses-message, #no-services-message, #no-inbox-message').forEach(el => el.classList.toggle('dark', isDark));
+  document.querySelectorAll('.tab-nav button, .chat-subtab-nav button').forEach(el => el.classList.toggle('dark', isDark));
+  document.querySelectorAll('.modal').forEach(el => el.classList.toggle('dark', isDark));
+  document.querySelectorAll('.modal-btn-cancel').forEach(el => el.classList.toggle('dark', isDark));
+  document.querySelectorAll('.status-info, .friend-info, .service-info, .comment-content, .comment-username, .comment-text').forEach(el => el.classList.toggle('dark', isDark));
+  document.querySelectorAll('.notification-icon, .notification-badge').forEach(el => el.classList.toggle('dark', isDark));
+  document.querySelectorAll('.message-popup, .message-popup-username, .message-popup-text').forEach(el => el.classList.toggle('dark', isDark));
+  floatingBtn.classList.toggle('dark', isDark);
+  commentSheet.classList.toggle('dark', isDark);
+}
 
   onAuthStateChanged(auth, async user => {
     if (!user) {
@@ -991,6 +1062,22 @@
       }
     });
   });
+
+  subtabBtns.forEach((btn) => {
+  btn.addEventListener("click", () => {
+    subtabBtns.forEach(b => {
+      b.classList.remove("active");
+      b.setAttribute("aria-selected", "false");
+    });
+    subtabPanels.forEach(p => p.classList.remove("active"));
+
+    btn.classList.add("active");
+    btn.setAttribute("aria-selected", "true");
+    document.getElementById(`subtab-${btn.dataset.subtab}`).classList.add("active");
+  });
+});
+
+  
 
   function timeAgo(timestamp) {
     if (!timestamp) return "";
@@ -1250,84 +1337,111 @@
     return card;
   }
 
-  async function loadFriends(uid) {
-    showLoading();
+ async function loadFriends(uid) {
+  showLoading();
+  friendsList.innerHTML = "";
+  inboxList.innerHTML = "";
+  noFriendsMessage.classList.add("hidden");
+  noInboxMessage.classList.add("hidden");
+
+  const chatsRef = ref(db, "chats");
+  const usersRef = ref(db, "users");
+
+  onValue(chatsRef, async (chatsSnap) => {
     friendsList.innerHTML = "";
+    inboxList.innerHTML = "";
     noFriendsMessage.classList.add("hidden");
+    noInboxMessage.classList.add("hidden");
 
-    const chatsRef = ref(db, "chats");
-    const usersRef = ref(db, "users");
+    if (!chatsSnap.exists()) {
+      noFriendsMessage.classList.remove("hidden");
+      noInboxMessage.classList.remove("hidden");
+      hideLoading();
+      return;
+    }
 
-    onValue(chatsRef, async (chatsSnap) => {
-      if (!chatsSnap.exists()) {
+    onValue(usersRef, (usersSnap) => {
+      if (!usersSnap.exists()) {
         noFriendsMessage.classList.remove("hidden");
+        noInboxMessage.classList.remove("hidden");
         hideLoading();
         return;
       }
-      onValue(usersRef, (usersSnap) => {
-        if (!usersSnap.exists()) {
-          noFriendsMessage.classList.remove("hidden");
-          hideLoading();
-          return;
-        }
 
-        friendsList.innerHTML = "";
-        const chats = chatsSnap.val();
-        const users = usersSnap.val();
-        const friendUids = new Set();
+      const chats = chatsSnap.val();
+      const users = usersSnap.val();
+      const friendUids = new Set();
 
-        for (const chatId in chats) {
-          const participants = chats[chatId].participants || {};
-          if (participants[uid]) {
-            for (const friendUid in participants) {
-              if (friendUid !== uid) friendUids.add(friendUid);
-            }
+      for (const chatId in chats) {
+        const participants = chats[chatId].participants || {};
+        if (participants[uid]) {
+          for (const friendUid in participants) {
+            if (friendUid !== uid) friendUids.add(friendUid);
           }
         }
+      }
 
-        if (friendUids.size === 0) {
-          noFriendsMessage.classList.remove("hidden");
-          hideLoading();
-          return;
-        }
-
-        friendUids.forEach(friendUid => {
-          const userData = users[friendUid] || {};
-          const chatId = uid < friendUid ? `${uid}_${friendUid}` : `${friendUid}_${uid}`;
-          const messagesRefChat = ref(db, `messages/${chatId}`);
-
-          onValue(messagesRefChat, (msgSnap) => {
-            const msgs = msgSnap.val() || {};
-            let unreadCount = 0;
-            let lastMessageTime = null;
-
-            const messageArray = Object.entries(msgs).sort((a, b) => (b[1].timestamp || 0) - (a[1].timestamp || 0));
-            if (messageArray.length > 0) {
-              const [_, latestMessage] = messageArray[0];
-              lastMessageTime = latestMessage.timestamp;
-              if (latestMessage.sender === friendUid && !latestMessage.read && latestMessage.timestamp > Date.now() - 10000) {
-                showMessagePopup(friendUid, latestMessage.text);
-              }
-            }
-
-            for (const mid in msgs) {
-              const m = msgs[mid];
-              if (m.sender === friendUid && !m.read) unreadCount++;
-            }
-
-            const existing = [...friendsList.children].find(c =>
-              c.onclick && c.onclick.toString().includes(`chat.html?uid=${friendUid}`));
-            if (existing) friendsList.removeChild(existing);
-
-            const card = renderFriend(friendUid, userData, unreadCount, lastMessageTime);
-            friendsList.appendChild(card);
-          });
-        });
+      if (friendUids.size === 0) {
+        noFriendsMessage.classList.remove("hidden");
+        noInboxMessage.classList.remove("hidden");
         hideLoading();
-      }, { onlyOnce: true });
-    }, { onlyOnce: true });
-  }
+        return;
+      }
 
+      friendUids.forEach(friendUid => {
+        const userData = users[friendUid] || {};
+        const chatId = uid < friendUid ? `${uid}_${friendUid}` : `${friendUid}_${uid}`;
+        const messagesRefChat = ref(db, `messages/${chatId}`);
+
+        onValue(messagesRefChat, (msgSnap) => {
+          const msgs = msgSnap.val() || {};
+          let unreadCount = 0;
+          let lastMessageTime = null;
+          let hasMessages = false;
+
+          const messageArray = Object.entries(msgs).sort((a, b) => (b[1].timestamp || 0) - (a[1].timestamp || 0));
+          if (messageArray.length > 0) {
+            hasMessages = true;
+            const [_, latestMessage] = messageArray[0];
+            lastMessageTime = latestMessage.timestamp;
+            if (latestMessage.sender === friendUid && !latestMessage.read && latestMessage.timestamp > Date.now() - 10000) {
+              showMessagePopup(friendUid, latestMessage.text);
+            }
+          }
+
+          for (const mid in msgs) {
+            const m = msgs[mid];
+            if (m.sender === friendUid && !m.read) unreadCount++;
+          }
+
+          // Update Friends list
+          let existing = [...friendsList.children].find(c =>
+            c.onclick && c.onclick.toString().includes(`chat.html?uid=${friendUid}`));
+          if (existing) friendsList.removeChild(existing);
+          const friendCard = renderFriend(friendUid, userData, unreadCount, lastMessageTime);
+          friendsList.appendChild(friendCard);
+
+          // Update Inbox list (only for friends with messages)
+          if (hasMessages) {
+            existing = [...inboxList.children].find(c =>
+              c.onclick && c.onclick.toString().includes(`chat.html?uid=${friendUid}`));
+            if (existing) inboxList.removeChild(existing);
+            const inboxCard = renderFriend(friendUid, userData, unreadCount, lastMessageTime);
+            inboxList.appendChild(inboxCard);
+          }
+        });
+      });
+
+      if (inboxList.children.length === 0) {
+        noInboxMessage.classList.remove("hidden");
+      }
+      hideLoading();
+    });
+  });
+}
+
+
+  
   function renderGroupCard(gid, group, currentUserUid) {
     const memberCount = group.members ? Object.keys(group.members).length : 0;
     const avatarUrl = group.avatar || `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(group.name)}`;
