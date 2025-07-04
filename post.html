@@ -133,7 +133,7 @@
     }
 
     .add-status-btn:hover {
-      transform:OWL translateX(-50%) scale(1.05);
+      transform: translateX(-50%) scale(1.05);
       background: var(--primary-dark);
       box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
     }
@@ -200,6 +200,53 @@
       font-weight: 600;
     }
 
+    .notifications-container {
+      position: absolute;
+      top: 1rem;
+      left: 8rem; /* Adjust based on username length */
+      z-index: 20;
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+      background: var(--primary);
+      border-radius: 9999px;
+      padding: 0.25rem 0.5rem;
+      cursor: pointer;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .notifications-container:hover {
+      transform: scale(1.1);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    }
+
+    .notifications-container:focus-visible {
+      outline: 2px solid var(--primary-dark);
+      outline-offset: 2px;
+    }
+
+    .notifications-icon {
+      width: 20px;
+      height: 20px;
+      color: #fff;
+    }
+
+    .notifications-unread-count {
+      background: #fff;
+      color: var(--primary);
+      font-size: 0.75rem;
+      font-weight: 600;
+      border-radius: 9999px;
+      padding: 0.1rem 0.4rem;
+      min-width: 20px;
+      text-align: center;
+    }
+
+    .dark .notifications-unread-count {
+      background: var(--text-dark);
+      color: var(--primary-dark);
+    }
+
     .chat-btn {
       position: absolute;
       top: 4rem;
@@ -210,6 +257,10 @@
       border-radius: 9999px;
       padding: 0.5rem;
       transition: transform 0.2s ease, background 0.2s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
     }
 
     .chat-btn:hover {
@@ -220,6 +271,25 @@
     .chat-btn:focus-visible {
       outline: 2px solid var(--primary);
       outline-offset: 2px;
+    }
+
+    .chat-unread-count {
+      position: absolute;
+      top: -8px;
+      right: -8px;
+      background: var(--primary);
+      color: #fff;
+      font-size: 0.75rem;
+      font-weight: 600;
+      border-radius: 9999px;
+      padding: 0.1rem 0.4rem;
+      min-width: 20px;
+      text-align: center;
+    }
+
+    .dark .chat-unread-count {
+      background: var(--primary-dark);
+      color: var(--text-dark);
     }
 
     .action-buttons {
@@ -681,10 +751,17 @@
       <img id="profile-avatar" src="https://www.gravatar.com/avatar?d=mp" alt="User avatar" class="profile-avatar" loading="lazy" />
       <span id="profile-username" class="profile-username">User</span>
     </div>
+    <div class="notifications-container" role="button" tabindex="0" aria-label="View notifications">
+      <svg class="notifications-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
+      </svg>
+      <span id="notifications-unread-count" class="notifications-unread-count">0</span>
+    </div>
     <button class="chat-btn" aria-label="Chat with user">
       <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/>
       </svg>
+      <span id="chat-unread-count" class="chat-unread-count hidden">0</span>
     </button>
     <div class="media-container" role="region" aria-label="Post media">
       <div id="media-content" class="carousel"></div>
@@ -784,6 +861,9 @@
     const addFriendBtn = document.getElementById('add-friend-btn');
     const addStatusBtn = document.getElementById('add-status-btn');
     const chatBtn = document.querySelector('.chat-btn');
+    const chatUnreadCount = document.getElementById('chat-unread-count');
+    const notificationsContainer = document.querySelector('.notifications-container');
+    const notificationsUnreadCount = document.getElementById('notifications-unread-count');
     const likeCount = document.getElementById('like-count');
     const commentCount = document.getElementById('comment-count');
     const alertDialog = document.getElementById('alert-dialog');
@@ -810,10 +890,13 @@
     let currentMediaIndex = 0;
     let mediaItems = [];
     let commentsListener = null;
+    let notificationsListener = null;
+    let chatListener = null;
     let lastTap = 0;
     let isMuted = false;
     let availableStatusIds = [];
     let viewedStatusIds = [];
+    let lastNotificationTimestamp = 0;
 
     function showAlert(message) {
       alertMessage.textContent = message;
@@ -855,6 +938,9 @@
       alertDialog.classList.toggle('dark', isDark);
       addStatusBtn.classList.toggle('dark', isDark);
       chatBtn.classList.toggle('dark', isDark);
+      notificationsContainer.classList.toggle('dark', isDark);
+      notificationsUnreadCount.classList.toggle('dark', isDark);
+      chatUnreadCount.classList.toggle('dark', isDark);
     }
 
     function timeAgo(timestamp) {
@@ -1089,6 +1175,62 @@
       }
     }
 
+    async function setupNotificationsListener() {
+      if (!currentUser) return;
+      const statusesRef = ref(db, `statuses/${currentUser.uid}`);
+      notificationsListener = onValue(statusesRef, (snap) => {
+        let unreadCount = 0;
+        const statuses = snap.val();
+        if (statuses) {
+          Object.entries(statuses).forEach(([statusId, status]) => {
+            // Count unread likes
+            if (status.reactions) {
+              Object.entries(status.reactions).forEach(([userId, reaction]) => {
+                if (userId !== currentUser.uid && reaction.timestamp > lastNotificationTimestamp) {
+                  unreadCount++;
+                }
+              });
+            }
+            // Count unread comments
+            if (status.comments) {
+              Object.entries(status.comments).forEach(([commentId, comment]) => {
+                if (comment.userId !== currentUser.uid && comment.timestamp > lastNotificationTimestamp) {
+                  unreadCount++;
+                }
+              });
+            }
+          });
+        }
+        notificationsUnreadCount.textContent = unreadCount;
+        notificationsUnreadCount.classList.toggle('hidden', unreadCount === 0);
+      }, (error) => {
+        console.error('Error listening to notifications:', error);
+        showAlert('Failed to load notifications.');
+      });
+    }
+
+    async function setupChatListener() {
+      if (!currentUser || !postUserId) return;
+      const chatId = [currentUser.uid, postUserId].sort().join('_');
+      const chatRef = ref(db, `chats/${chatId}/messages`);
+      chatListener = onValue(chatRef, (snap) => {
+        let unreadCount = 0;
+        const messages = snap.val();
+        if (messages) {
+          Object.values(messages).forEach(message => {
+            if (message.senderId === postUserId && !message.read && message.timestamp > lastNotificationTimestamp) {
+              unreadCount++;
+            }
+          });
+        }
+        chatUnreadCount.textContent = unreadCount;
+        chatUnreadCount.classList.toggle('hidden', unreadCount === 0);
+      }, (error) => {
+        console.error('Error listening to chat messages:', error);
+        showAlert('Failed to load chat messages.');
+      });
+    }
+
     async function loadStatus(newStatusId, isPrevious = false) {
       showSpinner();
       try {
@@ -1137,10 +1279,14 @@
         profileAvatar.src = userData.profilePicture || 'https://www.gravatar.com/avatar?d=mp';
         profileUsername.textContent = userData.username || 'User';
 
+        // Adjust notifications-container position based on username length
+        const usernameWidth = profileUsername.offsetWidth;
+        notificationsContainer.style.left = `${1 + (usernameWidth + 40) / 16}rem`;
+
         addFriendBtn.classList.add('hidden');
         if (postUserId !== currentUser.uid) {
           const chatSnap = await get(ref(db, `chats`));
-          const chats = snap.val() || {};
+          const chats = chatSnap.val() || {};
           const isFriend = Object.values(chats).some(chat =>
             chat.participants?.[currentUser.uid] && chat.participants?.[postUserId]
           );
@@ -1148,6 +1294,13 @@
             addFriendBtn.classList.remove('hidden');
           }
         }
+
+        // Setup chat listener for the new postUserId
+        if (chatListener) {
+          off(ref(db, `chats/${[currentUser.uid, postUserId].sort().join('_')}/messages`));
+          chatListener = null;
+        }
+        setupChatListener();
 
         showSwipeText(isPrevious ? 'Previous Post' : 'Next Post');
       } catch (error) {
@@ -1272,6 +1425,12 @@
         const settings = settingsSnap.val() || {};
         applyTheme(settings.theme || 'light');
 
+        // Get last notification timestamp
+        const lastNotifSnap = await get(ref(db, `users/${user.uid}/lastNotificationTimestamp`));
+        lastNotificationTimestamp = lastNotifSnap.val() || 0;
+
+        setupNotificationsListener();
+
         availableStatusIds = await fetchAvailableStatuses();
         if (availableStatusIds.length === 0) {
           showAlert('No media posts available.');
@@ -1288,6 +1447,25 @@
       }
     });
 
+    notificationsContainer.addEventListener('click', async () => {
+      try {
+        await set(ref(db, `users/${currentUser.uid}/lastNotificationTimestamp`), Date.now());
+        notificationsUnreadCount.textContent = '0';
+        notificationsUnreadCount.classList.add('hidden');
+        location.href = 'notifications.html';
+      } catch (error) {
+        console.error('Error updating notification timestamp:', error);
+        showAlert('Failed to process notifications.');
+      }
+    });
+
+    notificationsContainer.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        notificationsContainer.click();
+      }
+    });
+
     profileContainer.addEventListener('click', () => {
       if (postUserId) {
         location.href = `profile.html?uid=${postUserId}${postUserId === currentUser.uid ? '&owner=true' : ''}`;
@@ -1301,9 +1479,20 @@
       }
     });
 
-    chatBtn.addEventListener('click', () => {
+    chatBtn.addEventListener('click', async () => {
       if (postUserId) {
-        location.href = `chat.html?uid=${postUserId}`;
+        try {
+          const chatId = [currentUser.uid, postUserId].sort().join('_');
+          await update(ref(db, `chats/${chatId}/messages`), {
+            read: true
+          });
+          chatUnreadCount.textContent = '0';
+          chatUnreadCount.classList.add('hidden');
+          location.href = `chat.html?uid=${postUserId}`;
+        } catch (error) {
+          console.error('Error marking messages as read:', error);
+          showAlert('Failed to open chat.');
+        }
       }
     });
 
@@ -1471,7 +1660,7 @@
       const deltaY = touchStartY - touchEndY;
 
       if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 50) {
-        if (!commentsSheet.classList.contains('open') && !alertDialog.classList.contains('show') && !addStatusBtn.contains(e.target) && !chatBtn.contains(e.target)) {
+        if (!commentsSheet.classList.contains('open') && !alertDialog.classList.contains('show') && !addStatusBtn.contains(e.target) && !chatBtn.contains(e.target) && !notificationsContainer.contains(e.target)) {
           if (deltaX > 0 && currentMediaIndex < mediaItems.length - 1) {
             currentMediaIndex++;
             updateCarousel();
@@ -1486,7 +1675,7 @@
           }
         }
       } else if (Math.abs(deltaY) > 50) {
-        if (!commentsSheet.classList.contains('open') && !alertDialog.classList.contains('show') && !addStatusBtn.contains(e.target) && !chatBtn.contains(e.target)) {
+        if (!commentsSheet.classList.contains('open') && !alertDialog.classList.contains('show') && !addStatusBtn.contains(e.target) && !chatBtn.contains(e.target) && !notificationsContainer.contains(e.target)) {
           if (deltaY < 0) {
             loadNextRandomStatus();
           } else {
