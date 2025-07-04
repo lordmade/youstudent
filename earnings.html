@@ -76,6 +76,12 @@
         .error-message.show {
             display: block;
         }
+        .profile-img {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            object-fit: cover;
+        }
         @keyframes fadeIn {
             from { opacity: 0; transform: translateY(10px); }
             to { opacity: 1; transform: translateY(0); }
@@ -153,7 +159,7 @@
         </div>
 
         <!-- Claim History -->
-        <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg fade-in">
+        <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg mb-8 fade-in">
             <h2 class="text-2xl font-semibold mb-4 text-gray-800 dark:text-gray-200">Claim History</h2>
             <table class="earnings-table w-full">
                 <thead>
@@ -163,6 +169,21 @@
                     </tr>
                 </thead>
                 <tbody id="claim-history-table"></tbody>
+            </table>
+        </div>
+
+        <!-- Users Overview -->
+        <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg fade-in">
+            <h2 class="text-2xl font-semibold mb-4 text-gray-800 dark:text-gray-200">Users Overview</h2>
+            <table class="earnings-table w-full">
+                <thead>
+                    <tr class="border-b dark:border-gray-700">
+                        <th>Profile</th>
+                        <th>Username</th>
+                        <th>Total Posts</th>
+                    </tr>
+                </thead>
+                <tbody id="users-table"></tbody>
             </table>
         </div>
     </div>
@@ -190,6 +211,7 @@
         const themeToggle = document.getElementById('theme-toggle');
         const postsTable = document.getElementById('posts-table');
         const claimHistoryTable = document.getElementById('claim-history-table');
+        const usersTable = document.getElementById('users-table');
         const totalPlatformViewsEl = document.getElementById('total-platform-views');
         const totalViewsEl = document.getElementById('total-views');
         const totalEarningsEl = document.getElementById('total-earnings');
@@ -298,7 +320,6 @@
                 }
             });
 
-            // Generate all dates in range
             const dates = [];
             const impressions = [];
             if (period === 'all') {
@@ -334,7 +355,7 @@
                 let totalPlatformViews = 0;
                 if (snapshot.exists()) {
                     const allStatuses = snapshot.val();
-                    console.log('All statuses:', allStatuses); // Debug
+                    console.log('All statuses:', allStatuses);
                     Object.values(allStatuses).forEach(userPosts => {
                         Object.values(userPosts).forEach(post => {
                             totalPlatformViews += post.impressions || 0;
@@ -350,6 +371,38 @@
             }
         }
 
+        // Fetch users and their post counts
+        async function fetchUsersOverview() {
+            try {
+                const [usersSnapshot, statusesSnapshot] = await Promise.all([
+                    get(ref(db, 'users')),
+                    get(ref(db, 'statuses'))
+                ]);
+                usersTable.innerHTML = '';
+                if (usersSnapshot.exists()) {
+                    const users = usersSnapshot.val();
+                    const statuses = statusesSnapshot.val() || {};
+                    console.log('Users:', users, 'Statuses:', statuses);
+                    Object.entries(users).forEach(([uid, user]) => {
+                        const postCount = statuses[uid] ? Object.keys(statuses[uid]).length : 0;
+                        const row = document.createElement('tr');
+                        row.className = 'hover:bg-gray-50 dark:hover:bg-gray-700';
+                        row.innerHTML = `
+                            <td>
+                                <img src="${user.profilePicture || 'https://via.placeholder.com/40'}" class="profile-img" alt="${user.username}'s profile picture">
+                            </td>
+                            <td>${user.username || 'Unknown'}</td>
+                            <td>${postCount}</td>
+                        `;
+                        usersTable.appendChild(row);
+                    });
+                }
+            } catch (error) {
+                console.error('Error fetching users overview:', error);
+                usersTable.innerHTML = `<tr><td colspan="3" class="text-center text-red-600 dark:text-red-400">Failed to load users</td></tr>`;
+            }
+        }
+
         // Load all data
         async function loadData(userId) {
             try {
@@ -360,13 +413,12 @@
                 ]);
 
                 const posts = postsSnapshot.val() || {};
-                console.log('User posts:', posts); // Debug
+                console.log('User posts:', posts);
                 let totalViews = 0;
                 let totalEarnings = 0;
 
                 postsTable.innerHTML = '';
 
-                // Render table
                 Object.entries(posts).forEach(([postId, post]) => {
                     const impressions = post.impressions || 0;
                     totalViews += impressions;
@@ -390,23 +442,19 @@
                     postsTable.appendChild(row);
                 });
 
-                // Initialize chart
                 initializeChart([], []);
                 updateChart(posts, '7days');
 
-                // Update summary
                 totalViewsEl.textContent = totalViews;
                 totalEarningsEl.textContent = `R${totalEarnings.toFixed(2)}`;
                 claimableEarningsEl.textContent = `R${totalEarnings.toFixed(2)}`;
 
-                // Enable claim button
                 if (totalEarnings >= CLAIM_THRESHOLD) {
                     claimBtn.disabled = false;
                     claimBtn.classList.remove('disabled-btn');
                     claimBtn.classList.add('bg-gradient-to-r', 'from-red-600', 'to-orange-500', 'hover:from-red-700', 'hover:to-orange-600');
                 }
 
-                // Fetch and display claim history
                 const claims = claimsSnapshot.val() || {};
                 claimHistoryTable.innerHTML = '';
                 Object.entries(claims).forEach(([_, claim]) => {
@@ -418,15 +466,14 @@
                     claimHistoryTable.appendChild(row);
                 });
 
-                // Fetch total platform views
                 await fetchTotalPlatformViews();
+                await fetchUsersOverview();
             } catch (error) {
                 console.error('Error fetching posts or claims:', error);
                 errorMessage.classList.add('show');
             }
         }
 
-        // Auth state listener
         auth.onAuthStateChanged(user => {
             if (!user) {
                 window.location.href = 'signup.html';
@@ -436,10 +483,8 @@
             const userId = user.uid;
             loadData(userId);
 
-            // Retry button
             retryBtn.addEventListener('click', () => loadData(userId));
 
-            // Filter buttons
             filterButtons.forEach(btn => {
                 btn.addEventListener('click', () => {
                     filterButtons.forEach(b => b.classList.remove('active'));
@@ -451,7 +496,6 @@
                 });
             });
 
-            // Claim earnings
             claimBtn.addEventListener('click', () => {
                 if (totalEarningsEl.textContent.replace('R', '') >= CLAIM_THRESHOLD) {
                     const claimData = {
@@ -474,7 +518,6 @@
             });
         });
 
-        // IntersectionObserver for tracking impressions
         function setupImpressionTracking() {
             const observer = new IntersectionObserver((entries) => {
                 entries.forEach(entry => {
@@ -488,7 +531,6 @@
                     }
                 });
             }, { threshold: 0.5 });
-            // Call in pages like post.html: observer.observe(mediaContent);
         }
     </script>
 </body>
