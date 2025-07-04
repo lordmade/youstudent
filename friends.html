@@ -844,7 +844,46 @@
   background: rgba(0, 0, 0, 0.8);
   transform: scale(1.1);
 }
-    
+  .status-footer {
+  display: flex;
+  align-items: center;
+  padding: 0.5rem 1rem;
+  gap: 0.75rem;
+  flex-wrap: wrap; /* Allow wrapping for smaller screens */
+}
+
+.impression-btn {
+  width: 28px;
+  height: 28px;
+  color: #6b7280;
+  cursor: default; /* Non-interactive, just for display */
+  transition: transform 0.2s ease, color 0.2s ease;
+}
+
+.impression-btn.dark {
+  color: #9ca3af;
+}
+
+.impression-count {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #374151;
+}
+
+.impression-count.dark {
+  color: #d1d5db;
+}
+
+.reaction-btn.pulse {
+  animation: heartPulse 0.3s ease;
+}
+
+/* Ensure existing heartPulse animation is suitable */
+@keyframes heartPulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.3); }
+  100% { transform: scale(1.1); }
+}  
 </style>    
         
 </head>
@@ -1653,10 +1692,12 @@ function renderStatusCard(statusId, status, userData) {
     const reactionCount = status.reactions ? Object.keys(status.reactions).length : 0;
     const hasReacted = status.reactions && status.reactions[currentUserUid];
     const commentCount = status.comments ? Object.keys(status.comments).length : 0;
+    const impressionCount = status.impressions || 0;
     
     const reactionBtn = existingCard.querySelector(".reaction-btn");
     const reactionCountElement = existingCard.querySelector(".reaction-count");
     const commentCountElement = existingCard.querySelector(".comment-count");
+    const impressionCountElement = existingCard.querySelector(".impression-count");
     
     if (reactionBtn) {
       reactionBtn.classList.toggle("reacted", hasReacted);
@@ -1668,6 +1709,9 @@ function renderStatusCard(statusId, status, userData) {
     if (commentCountElement) {
       commentCountElement.textContent = `${commentCount} comment${commentCount !== 1 ? 's' : ''}`;
     }
+    if (impressionCountElement) {
+      impressionCountElement.textContent = `${impressionCount} view${impressionCount !== 1 ? 's' : ''}`;
+    }
     return existingCard;
   }
 
@@ -1677,6 +1721,7 @@ function renderStatusCard(statusId, status, userData) {
   const reactionCount = status.reactions ? Object.keys(status.reactions).length : 0;
   const hasReacted = status.reactions && status.reactions[currentUserUid];
   const commentCount = status.comments ? Object.keys(status.comments).length : 0;
+  const impressionCount = status.impressions || 0;
   const mediaUrls = Array.isArray(status.mediaUrls) ? status.mediaUrls : status.imageUrl ? [{ url: status.imageUrl, type: 'image' }] : [];
 
   card.innerHTML = `
@@ -1699,7 +1744,7 @@ function renderStatusCard(statusId, status, userData) {
             if (media.type === 'video') {
               return `
                 <div class="relative">
-                  <video class="status-video" src="${media.url}" playsinline muted loop preload="auto" aria-label="Status video ${index + 1}">
+                  <video class="status-video" src="${media.url}" poster="${media.thumbnailUrl || 'https://via.placeholder.com/420x420'}" playsinline muted loop preload="metadata" aria-label="Status video ${index + 1}">
                     <source src="${media.url}" type="video/mp4">
                     Your browser does not support the video tag.
                   </video>
@@ -1738,6 +1783,11 @@ function renderStatusCard(statusId, status, userData) {
         <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
       </svg>
       <p class="reaction-count comment-count">${commentCount} comment${commentCount !== 1 ? 's' : ''}</p>
+      <svg class="impression-btn" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+        <circle cx="12" cy="12" r="3"/>
+      </svg>
+      <p class="reaction-count impression-count">${impressionCount} view${impressionCount !== 1 ? 's' : ''}</p>
     </div>
   `;
 
@@ -1777,8 +1827,8 @@ function renderStatusCard(statusId, status, userData) {
           heart.classList.remove("hidden");
           setTimeout(() => heart.classList.add("hidden"), 600);
         }
-        reactionBtn.classList.add("liked");
-        setTimeout(() => reactionBtn.classList.remove("liked"), 300);
+        reactionBtn.classList.add("pulse");
+        setTimeout(() => reactionBtn.classList.remove("pulse"), 300);
       }
     } catch (error) {
       console.error("Error toggling reaction:", error);
@@ -1974,7 +2024,6 @@ function renderStatusCard(statusId, status, userData) {
 
   return card;
 }
-
   
           
 
