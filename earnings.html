@@ -4,129 +4,251 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Earnings - BanterBox</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Cantarell, sans-serif;
-            background: linear-gradient(to bottom, #f3f4f6, #e5e7eb);
-            min-height: 100vh;
+        :root {
+            --primary: #ff3b3b;
+            --primary-dark: #d32f2f;
+            --background-light: #f8fafc;
+            --background-dark: #0f172a;
+            --card-light: #ffffff;
+            --card-dark: #1e293b;
+            --text-light: #1e293b;
+            --text-dark: #e2e8f0;
+            --border-light: #e5e7eb;
+            --border-dark: #374151;
+        }
+
+        * {
             margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
-        .dark body {
-            background: linear-gradient(to bottom, #1f2937, #111827);
-            color: #f3f4f6;
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(180deg, var(--background-light) 0%, #e0e7ff 100%);
+            min-height: 100vh;
+            transition: background 0.3s ease, color 0.3s ease;
         }
+
+        body.dark {
+            background: linear-gradient(180deg, var(--background-dark) 0%, #1e293b 100%);
+            color: var(--text-dark);
+        }
+
         .container {
             max-width: 1200px;
-            margin: 0 auto;
+            margin: 1rem auto;
             padding: 1rem;
         }
-        .status-card img, .status-card video {
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+            background: var(--card-light);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+            padding: 1rem;
+            border-radius: 12px;
+        }
+
+        .dark .header {
+            background: var(--card-dark);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+
+        .card {
+            background: var(--card-light);
+            border-radius: 16px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .dark .card {
+            background: var(--card-dark);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        .card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
+        }
+
+        .status-card img,
+        .status-card video {
             object-fit: cover;
             width: 100%;
             height: 100%;
             border-radius: 8px;
         }
-        .earnings-table th, .earnings-table td {
-            padding: 16px;
+
+        .earnings-table th,
+        .earnings-table td {
+            padding: 1rem;
             text-align: left;
-            border-bottom: 1px solid #e5e7eb;
+            border-bottom: 1px solid var(--border-light);
         }
-        .dark .earnings-table th, .dark .earnings-table td {
-            border-bottom-color: #374151;
+
+        .dark .earnings-table th,
+        .dark .earnings-table td {
+            border-bottom: 1px solid var(--border-dark);
         }
-        .disabled-btn {
+
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 0.95rem;
+            transition: all 0.2s ease;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-dark);
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
+        }
+
+        .btn-primary:disabled {
             background: #d1d5db;
             cursor: not-allowed;
             opacity: 0.6;
+            transform: none;
+            box-shadow: none;
         }
+
+        .filter-btn {
+            padding: 0.5rem 1rem;
+            border-radius: 9999px;
+            font-weight: 600;
+            font-size: 0.9rem;
+            color: var(--text-light);
+            background: var(--border-light);
+            transition: all 0.2s ease;
+        }
+
+        .dark .filter-btn {
+            color: var(--text-dark);
+            background: var(--border-dark);
+        }
+
+        .filter-btn.active {
+            background: var(--primary);
+            color: white;
+        }
+
+        .filter-btn:hover {
+            background: var(--primary-dark);
+            color: white;
+            transform: translateY(-1px);
+        }
+
         .chart-container {
             position: relative;
             max-width: 100%;
             height: 350px;
         }
-        .fade-in {
-            animation: fadeIn 0.5s ease-in;
-        }
-        .hover-scale:hover {
-            transform: scale(1.05);
-            transition: transform 0.2s ease;
-        }
-        .filter-btn {
-            padding: 8px 16px;
-            border-radius: 9999px;
-            font-weight: 600;
-            transition: all 0.2s ease;
-        }
-        .filter-btn.active {
-            background: linear-gradient(to right, #ff2d55, #ff8e53);
-            color: #fff;
-        }
+
         .error-message {
-            color: #ff2d55;
+            font-size: 0.85rem;
+            color: var(--primary);
             text-align: center;
             margin-top: 1rem;
-            display: none;
+            opacity: 0;
+            transition: opacity 0.3s ease;
         }
+
         .error-message.show {
-            display: block;
+            opacity: 1;
         }
+
+        .error-message button {
+            color: var(--primary);
+            text-decoration: underline;
+            cursor: pointer;
+            background: none;
+            border: none;
+        }
+
+        .dark .error-message button {
+            color: var(--primary-dark);
+        }
+
+        .fade-in {
+            animation: fadeIn 0.5s ease-in-out;
+        }
+
         @keyframes fadeIn {
             from { opacity: 0; transform: translateY(10px); }
             to { opacity: 1; transform: translateY(0); }
+        }
+
+        .btn:focus-visible,
+        .filter-btn:focus-visible {
+            outline: 2px solid var(--primary);
+            outline-offset: 2px;
         }
     </style>
 </head>
 <body class="min-h-screen">
     <div class="container">
         <!-- Header -->
-        <header class="flex justify-between items-center mb-8">
-            <h1 class="text-3xl font-bold text-red-600 dark:text-red-400">Earnings Dashboard</h1>
+        <header class="header dark:header">
+            <h1 class="text-2xl font-bold text-[var(--text-light)] dark:text-[var(--text-dark)]">Earnings Dashboard</h1>
             <div class="flex items-center space-x-4">
-                <button id="theme-toggle" class="p-2 rounded-full bg-gray-200 dark:bg-gray-700 hover-scale" aria-label="Toggle theme">
+                <button id="theme-toggle" class="btn btn-primary" aria-label="Toggle theme">
                     <i class="fas fa-moon dark:fa-sun"></i>
                 </button>
-                <button onclick="location.href='profile.html?owner=true'" class="p-2 rounded-full bg-gray-200 dark:bg-gray-700 hover-scale" aria-label="Back to profile">
+                <button onclick="location.href='profile.html?owner=true'" class="btn btn-primary" aria-label="Back to profile">
                     <i class="fas fa-user"></i>
                 </button>
             </div>
         </header>
 
         <!-- Summary Section -->
-        <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg mb-8 fade-in">
-            <h2 class="text-2xl font-semibold mb-6 text-gray-800 dark:text-gray-200">Earnings Summary</h2>
-            <div class="grid grid-cols-1 sm:grid-cols-4 gap-6">
-                <div class="p-6 bg-red-50 dark:bg-red-900 rounded-lg hover-scale">
-                    <p class="text-sm text-gray-600 dark:text-gray-300">Total Platform Views</p>
-                    <p id="total-platform-views" class="text-3xl font-bold text-red-600 dark:text-red-400">0</p>
+        <div class="card fade-in">
+            <h2 class="text-xl font-semibold mb-6 text-[var(--text-light)] dark:text-[var(--text-dark)]">Earnings Summary</h2>
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                <div class="p-6 bg-[var(--card-light)] dark:bg-[var(--card-dark)] rounded-lg hover-scale">
+                    <p class="text-sm text-[#6b7280] dark:text-[#9ca3af]">Total Platform Views</p>
+                    <p id="total-platform-views" class="text-3xl font-bold text-[var(--primary)] dark:text-[var(--primary-dark)]">0</p>
                 </div>
-                <div class="p-6 bg-red-50 dark:bg-red-900 rounded-lg hover-scale">
-                    <p class="text-sm text-gray-600 dark:text-gray-300">Your Total Views</p>
-                    <p id="total-views" class="text-3xl font-bold text-red-600 dark:text-red-400">0</p>
+                <div class="p-6 bg-[var(--card-light)] dark:bg-[var(--card-dark)] rounded-lg hover-scale">
+                    <p class="text-sm text-[#6b7280] dark:text-[#9ca3af]">Your Total Views</p>
+                    <p id="total-views" class="text-3xl font-bold text-[var(--primary)] dark:text-[var(--primary-dark)]">0</p>
                 </div>
-                <div class="p-6 bg-red-50 dark:bg-red-900 rounded-lg hover-scale">
-                    <p class="text-sm text-gray-600 dark:text-gray-300">Total Earnings</p>
-                    <p id="total-earnings" class="text-3xl font-bold text-red-600 dark:text-red-400">R0.00</p>
+                <div class="p-6 bg-[var(--card-light)] dark:bg-[var(--card-dark)] rounded-lg hover-scale">
+                    <p class="text-sm text-[#6b7280] dark:text-[#9ca3af]">Total Earnings</p>
+                    <p id="total-earnings" class="text-3xl font-bold text-[var(--primary)] dark:text-[var(--primary-dark)]">R0.00</p>
                 </div>
-                <div class="p-6 bg-red-50 dark:bg-red-900 rounded-lg flex items-center justify-between">
+                <div class="p-6 bg-[var(--card-light)] dark:bg-[var(--card-dark)] rounded-lg flex items-center justify-between hover-scale">
                     <div>
-                        <p class="text-sm text-gray-600 dark:text-gray-300">Claimable Earnings</p>
-                        <p id="claimable-earnings" class="text-3xl font-bold text-red-600 dark:text-red-400">R0.00</p>
+                        <p class="text-sm text-[#6b7280] dark:text-[#9ca3af]">Claimable Earnings</p>
+                        <p id="claimable-earnings" class="text-3xl font-bold text-[var(--primary)] dark:text-[var(--primary-dark)]">R0.00</p>
                     </div>
-                    <button id="claim-btn" class="px-6 py-2 bg-red-600 text-white rounded-lg disabled-btn hover-scale" disabled aria-label="Claim earnings">Claim</button>
+                    <button id="claim-btn" class="btn btn-primary disabled:btn-primary" disabled aria-label="Claim earnings">Claim</button>
                 </div>
             </div>
-            <div id="error-message" class="error-message">Failed to load data. <button id="retry-btn" class="underline">Retry</button></div>
+            <div id="error-message" class="error-message" role="alert">
+                <span>Failed to load data.</span>
+                <button id="retry-btn" class="underline" aria-label="Retry loading data">Retry</button>
+            </div>
         </div>
 
         <!-- Impressions Graph -->
-        <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg mb-8 fade-in">
-            <h2 class="text-2xl font-semibold mb-4 text-gray-800 dark:text-gray-200">Impressions Over Time</h2>
+        <div class="card fade-in">
+            <h2 class="text-xl font-semibold mb-4 text-[var(--text-light)] dark:text-[var(--text-dark)]">Impressions Over Time</h2>
             <div class="flex space-x-4 mb-4">
                 <button class="filter-btn active" data-period="7days">7 Days</button>
                 <button class="filter-btn" data-period="30days">30 Days</button>
@@ -138,11 +260,11 @@
         </div>
 
         <!-- Posts Table -->
-        <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg mb-8 fade-in">
-            <h2 class="text-2xl font-semibold mb-4 text-gray-800 dark:text-gray-200">Your Posts</h2>
+        <div class="card fade-in">
+            <h2 class="text-xl font-semibold mb-4 text-[var(--text-light)] dark:text-[var(--text-dark)]">Your Posts</h2>
             <table class="earnings-table w-full">
                 <thead>
-                    <tr class="border-b dark:border-gray-700">
+                    <tr class="border-b dark:border-[var(--border-dark)]">
                         <th>Post</th>
                         <th>Impressions</th>
                         <th>Earnings</th>
@@ -153,11 +275,11 @@
         </div>
 
         <!-- Claim History -->
-        <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg fade-in">
-            <h2 class="text-2xl font-semibold mb-4 text-gray-800 dark:text-gray-200">Claim History</h2>
+        <div class="card fade-in">
+            <h2 class="text-xl font-semibold mb-4 text-[var(--text-light)] dark:text-[var(--text-dark)]">Claim History</h2>
             <table class="earnings-table w-full">
                 <thead>
-                    <tr class="border-b dark:border-gray-700">
+                    <tr class="border-b dark:border-[var(--border-dark)]">
                         <th>Date</th>
                         <th>Amount</th>
                     </tr>
@@ -168,24 +290,23 @@
     </div>
 
     <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
-        import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
-        import { getDatabase, ref, get, set } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js';
+        import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js';
+        import { getDatabase, ref, get, set, runTransaction } from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-database.js';
 
         const firebaseConfig = {
             apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
             authDomain: "fire-b-a8878.firebaseapp.com",
             databaseURL: "https://fire-b-a8878.firebaseio.com",
             projectId: "fire-b-a8878",
-            storageBucket: "fire-b-a8878.firebasestorage.app",
+            storageBucket: "fire-b-a8878.appspot.com",
             messagingSenderId: "658673187627",
-            appId: "1:658673187627:web:6e4c29af661785f0afa36e",
-            measurementId: "G-V4W97VMSKL"
+            appId: "1:658673187627:web:6e4c29af661785f0afa36e"
         };
 
         const app = initializeApp(firebaseConfig);
-        const auth = getAuth();
-        const db = getDatabase();
+        const auth = getAuth(app);
+        const db = getDatabase(app);
 
         const themeToggle = document.getElementById('theme-toggle');
         const postsTable = document.getElementById('posts-table');
@@ -211,6 +332,11 @@
             themeToggle.querySelector('i').classList.toggle('fa-moon');
             themeToggle.querySelector('i').classList.toggle('fa-sun');
             updateChartTheme();
+            // Save theme preference
+            const user = auth.currentUser;
+            if (user) {
+                set(ref(db, `users/${user.uid}/settings/theme`), document.body.classList.contains('dark') ? 'dark' : 'light');
+            }
         });
 
         // Chart.js Configuration
@@ -224,14 +350,14 @@
                     datasets: [{
                         label: 'Impressions',
                         data: impressions,
-                        borderColor: isDark ? '#f87171' : '#ff2d55',
-                        backgroundColor: isDark ? 'rgba(248, 113, 113, 0.3)' : 'rgba(255, 45, 85, 0.3)',
+                        borderColor: isDark ? '#f87171' : '#ff3b3b',
+                        backgroundColor: isDark ? 'rgba(248, 113, 113, 0.3)' : 'rgba(255, 59, 59, 0.3)',
                         fill: true,
                         tension: 0.4,
                         pointBackgroundColor: '#fff',
-                        pointBorderColor: isDark ? '#f87171' : '#ff2d55',
+                        pointBorderColor: isDark ? '#f87171' : '#ff3b3b',
                         pointHoverBackgroundColor: '#fff',
-                        pointHoverBorderColor: isDark ? '#f87171' : '#ff2d55'
+                        pointHoverBorderColor: isDark ? '#f87171' : '#ff3b3b'
                     }]
                 },
                 options: {
@@ -239,20 +365,20 @@
                     maintainAspectRatio: false,
                     scales: {
                         x: {
-                            title: { display: true, text: 'Date', color: isDark ? '#f3f4f6' : '#1f2937', font: { size: 14 } },
-                            ticks: { color: isDark ? '#f3f4f6' : '#1f2937' },
+                            title: { display: true, text: 'Date', color: isDark ? '#e2e8f0' : '#1e293b', font: { size: 14 } },
+                            ticks: { color: isDark ? '#e2e8f0' : '#1e293b' },
                             grid: { color: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)' }
                         },
                         y: {
-                            title: { display: true, text: 'Impressions', color: isDark ? '#f3f4f6' : '#1f2937', font: { size: 14 } },
-                            ticks: { color: isDark ? '#f3f4f6' : '#1f2937', stepSize: 10 },
+                            title: { display: true, text: 'Impressions', color: isDark ? '#e2e8f0' : '#1e293b', font: { size: 14 } },
+                            ticks: { color: isDark ? '#e2e8f0' : '#1e293b', stepSize: 10 },
                             grid: { color: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)' },
                             beginAtZero: true
                         }
                     },
                     plugins: {
-                        legend: { labels: { color: isDark ? '#f3f4f6' : '#1f2937', font: { size: 14 } } },
-                        tooltip: { backgroundColor: isDark ? '#1f2937' : '#fff', titleColor: isDark ? '#f3f4f6' : '#1f2937', bodyColor: isDark ? '#f3f4f6' : '#1f2937' }
+                        legend: { labels: { color: isDark ? '#e2e8f0' : '#1e293b', font: { size: 14 } } },
+                        tooltip: { backgroundColor: isDark ? '#1e293b' : '#fff', titleColor: isDark ? '#e2e8f0' : '#1e293b', bodyColor: isDark ? '#e2e8f0' : '#1e293b' }
                     },
                     animation: { duration: 1000, easing: 'easeInOutQuad' }
                 }
@@ -261,20 +387,20 @@
 
         function updateChartTheme() {
             const isDark = document.body.classList.contains('dark');
-            impressionsChart.data.datasets[0].borderColor = isDark ? '#f87171' : '#ff2d55';
-            impressionsChart.data.datasets[0].backgroundColor = isDark ? 'rgba(248, 113, 113, 0.3)' : 'rgba(255, 45, 85, 0.3)';
-            impressionsChart.data.datasets[0].pointBorderColor = isDark ? '#f87171' : '#ff2d55';
-            impressionsChart.data.datasets[0].pointHoverBorderColor = isDark ? '#f87171' : '#ff2d55';
-            impressionsChart.options.scales.x.title.color = isDark ? '#f3f4f6' : '#1f2937';
-            impressionsChart.options.scales.x.ticks.color = isDark ? '#f3f4f6' : '#1f2937';
+            impressionsChart.data.datasets[0].borderColor = isDark ? '#f87171' : '#ff3b3b';
+            impressionsChart.data.datasets[0].backgroundColor = isDark ? 'rgba(248, 113, 113, 0.3)' : 'rgba(255, 59, 59, 0.3)';
+            impressionsChart.data.datasets[0].pointBorderColor = isDark ? '#f87171' : '#ff3b3b';
+            impressionsChart.data.datasets[0].pointHoverBorderColor = isDark ? '#f87171' : '#ff3b3b';
+            impressionsChart.options.scales.x.title.color = isDark ? '#e2e8f0' : '#1e293b';
+            impressionsChart.options.scales.x.ticks.color = isDark ? '#e2e8f0' : '#1e293b';
             impressionsChart.options.scales.x.grid.color = isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
-            impressionsChart.options.scales.y.title.color = isDark ? '#f3f4f6' : '#1f2937';
-            impressionsChart.options.scales.y.ticks.color = isDark ? '#f3f4f6' : '#1f2937';
+            impressionsChart.options.scales.y.title.color = isDark ? '#e2e8f0' : '#1e293b';
+            impressionsChart.options.scales.y.ticks.color = isDark ? '#e2e8f0' : '#1e293b';
             impressionsChart.options.scales.y.grid.color = isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
-            impressionsChart.options.plugins.legend.labels.color = isDark ? '#f3f4f6' : '#1f2937';
-            impressionsChart.options.plugins.tooltip.backgroundColor = isDark ? '#1f2937' : '#fff';
-            impressionsChart.options.plugins.tooltip.titleColor = isDark ? '#f3f4f6' : '#1f2937';
-            impressionsChart.options.plugins.tooltip.bodyColor = isDark ? '#f3f4f6' : '#1f2937';
+            impressionsChart.options.plugins.legend.labels.color = isDark ? '#e2e8f0' : '#1e293b';
+            impressionsChart.options.plugins.tooltip.backgroundColor = isDark ? '#1e293b' : '#fff';
+            impressionsChart.options.plugins.tooltip.titleColor = isDark ? '#e2e8f0' : '#1e293b';
+            impressionsChart.options.plugins.tooltip.bodyColor = isDark ? '#e2e8f0' : '#1e293b';
             impressionsChart.update();
         }
 
@@ -298,7 +424,6 @@
                 }
             });
 
-            // Generate all dates in range
             const dates = [];
             const impressions = [];
             if (period === 'all') {
@@ -310,7 +435,7 @@
             } else {
                 const days = period === '7days' ? 7 : 30;
                 for (let i = days - 1; i >= 0; i--) {
-                    const date = new Date(now.setDate(now.getDate() - i)).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                    const date = new Date(Date.now() - i * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
                     dates.push(date);
                     impressions.push(impressionsByDate[date] || 0);
                 }
@@ -334,18 +459,17 @@
                 let totalPlatformViews = 0;
                 if (snapshot.exists()) {
                     const allStatuses = snapshot.val();
-                    console.log('All statuses:', allStatuses); // Debug
                     Object.values(allStatuses).forEach(userPosts => {
-                        Object.values(userPosts).forEach(post => {
-                            totalPlatformViews += post.impressions || 0;
-                        });
+                        totalPlatformViews += Object.values(userPosts).reduce((sum, post) => sum + (post.impressions || 0), 0);
                     });
                 }
-                totalPlatformViewsEl.textContent = totalPlatformViews;
+                totalPlatformViewsEl.textContent = totalPlatformViews.toLocaleString();
                 return totalPlatformViews;
             } catch (error) {
                 console.error('Error fetching total platform views:', error);
                 totalPlatformViewsEl.textContent = 'Error';
+                errorMessage.classList.add('show');
+                errorMessage.querySelector('span').textContent = 'Failed to load platform views.';
                 throw error;
             }
         }
@@ -354,19 +478,26 @@
         async function loadData(userId) {
             try {
                 errorMessage.classList.remove('show');
-                const [postsSnapshot, claimsSnapshot] = await Promise.all([
+                const [postsSnapshot, claimsSnapshot, settingsSnapshot] = await Promise.all([
                     get(ref(db, `statuses/${userId}`)),
-                    get(ref(db, `earnings/${userId}/claims`))
+                    get(ref(db, `earnings/${userId}/claims`)),
+                    get(ref(db, `users/${userId}/settings`))
                 ]);
 
+                // Apply theme from settings
+                const settings = settingsSnapshot.val() || {};
+                if (settings.theme === 'dark') {
+                    document.body.classList.add('dark');
+                    themeToggle.querySelector('i').classList.replace('fa-moon', 'fa-sun');
+                }
+
                 const posts = postsSnapshot.val() || {};
-                console.log('User posts:', posts); // Debug
                 let totalViews = 0;
                 let totalEarnings = 0;
 
                 postsTable.innerHTML = '';
 
-                // Render table
+                // Render posts table
                 Object.entries(posts).forEach(([postId, post]) => {
                     const impressions = post.impressions || 0;
                     totalViews += impressions;
@@ -374,17 +505,17 @@
                     totalEarnings += parseFloat(earnings);
 
                     const row = document.createElement('tr');
-                    row.className = 'hover:bg-gray-50 dark:hover:bg-gray-700';
+                    row.className = 'hover:bg-[var(--border-light)] dark:hover:bg-[var(--border-dark)]';
                     row.innerHTML = `
                         <td class="flex items-center space-x-3">
                             ${post.mediaUrls?.length ? 
                                 (post.mediaUrls[0].type === 'image' ? 
-                                    `<img src="${post.mediaUrls[0].url}" class="w-16 h-16 rounded-lg object-cover" alt="Post preview">` : 
+                                    `<img src="${post.mediaUrls[0].url}?w=64&h=64&c=fill" class="w-16 h-16 rounded-lg object-cover" alt="Post preview">` : 
                                     `<video src="${post.mediaUrls[0].url}" class="w-16 h-16 rounded-lg object-cover" muted></video>`) : 
-                                post.imageUrl ? `<img src="${post.imageUrl}" class="w-16 h-16 rounded-lg object-cover" alt="Post preview">` : 
-                                `<span class="text-gray-600 dark:text-gray-300">${post.text?.substring(0, 20) || 'No content'}...</span>`}
+                                post.imageUrl ? `<img src="${post.imageUrl}?w=64&h=64&c=fill" class="w-16 h-16 rounded-lg object-cover" alt="Post preview">` : 
+                                `<span class="text-[#6b7280] dark:text-[#9ca3af]">${post.text?.substring(0, 20) || 'No content'}...</span>`}
                         </td>
-                        <td>${impressions}</td>
+                        <td>${impressions.toLocaleString()}</td>
                         <td>R${earnings}</td>
                     `;
                     postsTable.appendChild(row);
@@ -395,15 +526,13 @@
                 updateChart(posts, '7days');
 
                 // Update summary
-                totalViewsEl.textContent = totalViews;
+                totalViewsEl.textContent = totalViews.toLocaleString();
                 totalEarningsEl.textContent = `R${totalEarnings.toFixed(2)}`;
                 claimableEarningsEl.textContent = `R${totalEarnings.toFixed(2)}`;
 
                 // Enable claim button
                 if (totalEarnings >= CLAIM_THRESHOLD) {
                     claimBtn.disabled = false;
-                    claimBtn.classList.remove('disabled-btn');
-                    claimBtn.classList.add('bg-gradient-to-r', 'from-red-600', 'to-orange-500', 'hover:from-red-700', 'hover:to-orange-600');
                 }
 
                 // Fetch and display claim history
@@ -423,11 +552,12 @@
             } catch (error) {
                 console.error('Error fetching posts or claims:', error);
                 errorMessage.classList.add('show');
+                errorMessage.querySelector('span').textContent = 'Failed to load data. Please try again.';
             }
         }
 
         // Auth state listener
-        auth.onAuthStateChanged(user => {
+        onAuthStateChanged(auth, user => {
             if (!user) {
                 window.location.href = 'signup.html';
                 return;
@@ -452,24 +582,24 @@
             });
 
             // Claim earnings
-            claimBtn.addEventListener('click', () => {
-                if (totalEarningsEl.textContent.replace('R', '') >= CLAIM_THRESHOLD) {
+            claimBtn.addEventListener('click', async () => {
+                const totalEarnings = parseFloat(totalEarningsEl.textContent.replace('R', ''));
+                if (totalEarnings >= CLAIM_THRESHOLD) {
                     const claimData = {
-                        amount: parseFloat(totalEarningsEl.textContent.replace('R', '')),
+                        amount: totalEarnings,
                         claimedAt: Date.now(),
                         status: 'pending'
                     };
-                    set(ref(db, `earnings/${userId}/claims/${Date.now()}`), claimData)
-                        .then(() => {
-                            alert('Earnings claim submitted! Processing may take a few days.');
-                            claimBtn.disabled = true;
-                            claimBtn.classList.add('disabled-btn');
-                            claimBtn.classList.remove('bg-gradient-to-r', 'from-red-600', 'to-orange-500');
-                        })
-                        .catch(error => {
-                            console.error('Error claiming earnings:', error);
-                            alert('Failed to submit claim. Please try again.');
-                        });
+                    try {
+                        await set(ref(db, `earnings/${userId}/claims/${Date.now()}`), claimData);
+                        alert('Earnings claim submitted! Processing may take a few days.');
+                        claimBtn.disabled = true;
+                        loadData(userId); // Refresh data
+                    } catch (error) {
+                        console.error('Error claiming earnings:', error);
+                        errorMessage.classList.add('show');
+                        errorMessage.querySelector('span').textContent = 'Failed to submit claim. Please try again.';
+                    }
                 }
             });
         });
@@ -482,7 +612,7 @@
                         const postId = entry.target.dataset.postId;
                         const userId = auth.currentUser?.uid;
                         if (userId && postId) {
-                            db.ref(`statuses/${userId}/${postId}/impressions`).transaction(current => (current || 0) + 1);
+                            runTransaction(ref(db, `statuses/${userId}/${postId}/impressions`), current => (current || 0) + 1);
                             observer.unobserve(entry.target);
                         }
                     }
