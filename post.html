@@ -231,6 +231,10 @@
       z-index: 20;
       max-width: 80%;
       word-break: break-word;
+      display: none;
+    }
+    .swipe-text.show, .post-text.show {
+      display: block;
     }
     .swipe-text {
       opacity: 0;
@@ -322,7 +326,7 @@
       width: 40px;
       height: 4px;
       background: #d1d5db;
-      border-radius: 2 Sistine
+      border-radius: 2px;
     }
     .bottom-sheet.dark .bottom-sheet-handle {
       background: #4b5563;
@@ -450,6 +454,26 @@
     .comment-submit:hover {
       transform: scale(1.05);
     }
+    .loading-spinner {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 20;
+      display: none;
+    }
+    .loading-spinner.show {
+      display: block;
+    }
+    .loading-spinner svg {
+      width: 48px;
+      height: 48px;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
     @keyframes slideUp {
       from { opacity: 0; transform: translate(-50%, -40%); }
       to { opacity: 1; transform: translate(-50%, -50%); }
@@ -472,13 +496,19 @@
       <img id="profile-avatar" src="https://www.gravatar.com/avatar?d=mp" alt="User avatar" class="profile-avatar dark:profile-avatar" loading="lazy" />
       <span id="profile-username" class="profile-username">User</span>
     </div>
-   <button class="back-btn" onclick="location.href='friends.html'" aria-label="Back to friends">
-  <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-  </svg>
-</button>
+    <button class="back-btn" onclick="location.href='friends.html'" aria-label="Back to friends">
+      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+      </svg>
+    </button>
     <div class="media-container" role="region" aria-label="Post media">
       <div id="media-content" class="carousel"></div>
+      <div id="loading-spinner" class="loading-spinner" aria-label="Loading">
+        <svg viewBox="0 0 50 50" fill="none" stroke="#fff" stroke-width="4">
+          <circle cx="25" cy="25" r="20" stroke-opacity="0.3"/>
+          <circle cx="25" cy="25" r="20" stroke-dasharray="90 150" stroke-linecap="round"/>
+        </svg>
+      </div>
       <div id="carousel-indicators" class="carousel-indicators"></div>
       <svg id="mute-toggle-icon" class="mute-toggle-icon hidden" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path class="mute-icon hidden" d="M11 5L6 9H2v6h4l5 4V5zM19.07 4.93a10 10 0 010 14.14M15.54 8.46a5 5 0 010 7.07"/>
@@ -535,7 +565,7 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
     import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
-    import { getDatabase, ref, get, set, onValue, push, off } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
+    import { getDatabase, ref, get, set, onValue, push, off, update } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
@@ -553,6 +583,7 @@
 
     const mediaContainer = document.querySelector('.media-container');
     const mediaContent = document.getElementById('media-content');
+    const loadingSpinner = document.getElementById('loading-spinner');
     const carouselIndicators = document.getElementById('carousel-indicators');
     const muteToggleIcon = document.getElementById('mute-toggle-icon');
     const playPauseIcon = document.getElementById('play-pause-icon');
@@ -587,7 +618,7 @@
     let mediaItems = [];
     let commentsListener = null;
     let lastTap = 0;
-    let isMuted = false; // Track mute state
+    let isMuted = false;
 
     function showAlert(message) {
       alertMessage.textContent = message;
@@ -597,6 +628,14 @@
 
     function hideAlert() {
       alertDialog.classList.remove('show');
+    }
+
+    function showSpinner() {
+      loadingSpinner.classList.add('show');
+    }
+
+    function hideSpinner() {
+      loadingSpinner.classList.remove('show');
     }
 
     function applyTheme(themeValue) {
@@ -652,50 +691,59 @@
       });
     }
 
-   function renderMedia(status) {
-  mediaItems = Array.isArray(status.mediaUrls) ? status.mediaUrls : status.imageUrl ? [{ url: status.imageUrl, type: 'image' }] : [];
-  currentMediaIndex = 0;
-  mediaContent.innerHTML = '';
-  carouselIndicators.innerHTML = '';
+    function renderMedia(status) {
+      mediaItems = Array.isArray(status.mediaUrls) ? status.mediaUrls : status.imageUrl ? [{ url: status.imageUrl, type: 'image' }] : [];
+      currentMediaIndex = 0;
+      mediaContent.innerHTML = '';
+      carouselIndicators.innerHTML = '';
 
-  // Display associated text if it exists
-  if (status.text && status.text.trim()) {
-    postText.textContent = status.text;
-    postText.classList.add('show');
-  } else {
-    postText.textContent = '';
-    postText.classList.remove('show');
-  }
+      // Display associated text if it exists
+      if (status.text && status.text.trim()) {
+        postText.textContent = status.text;
+        postText.classList.add('show');
+      } else {
+        postText.textContent = '';
+        postText.classList.remove('show');
+      }
 
-  if (mediaItems.length === 0) {
-    mediaContent.innerHTML = '<div class="carousel-item"><img src="https://via.placeholder.com/1080x1920" alt="Placeholder" /></div>';
-    muteToggleIcon.classList.add('hidden');
-    playPauseIcon.classList.add('hidden');
-    return;
-  }
+      if (mediaItems.length === 0) {
+        mediaContent.innerHTML = '<div class="carousel-item"><img src="https://via.placeholder.com/1080x1920" alt="Placeholder" /></div>';
+        muteToggleIcon.classList.add('hidden');
+        playPauseIcon.classList.add('hidden');
+        hideSpinner();
+        return;
+      }
 
-  mediaItems.forEach((media, index) => {
-    const itemDiv = document.createElement('div');
-    itemDiv.className = 'carousel-item';
-    if (media.type === 'video') {
-      itemDiv.innerHTML = `
-        <video src="${media.url}" class="status-video" playsinline preload="metadata"></video>
-      `;
-    } else {
-      itemDiv.innerHTML = `
-        <img src="${media.url}?w=1080&h=1920&c=fill" alt="Post" loading="lazy" />
-      `;
+      mediaItems.forEach((media, index) => {
+        const itemDiv = document.createElement('div');
+        itemDiv.className = 'carousel-item';
+        if (media.type === 'video') {
+          itemDiv.innerHTML = `
+            <video src="${media.url}" class="status-video" playsinline preload="metadata"></video>
+          `;
+        } else {
+          itemDiv.innerHTML = `
+            <img src="${media.url}?w=1080&h=1920&c=fill" alt="Post" loading="lazy" />
+          `;
+        }
+        mediaContent.appendChild(itemDiv);
+      });
+
+      // Add buffering listeners for videos
+      const videoElements = mediaContent.querySelectorAll('.status-video');
+      videoElements.forEach(video => {
+        video.addEventListener('waiting', () => showSpinner());
+        video.addEventListener('canplay', () => hideSpinner());
+        video.addEventListener('error', () => {
+          hideSpinner();
+          showAlert('Failed to load video.');
+        });
+      });
+
+      updateCarousel();
+      updateVideoControls();
+      hideSpinner();
     }
-    mediaContent.appendChild(itemDiv);
-
-    const dot = document.createElement('div');
-    dot.className = `carousel-dot ${index === 0 ? 'active' : ''}`;
-    carouselIndicators.appendChild(dot);
-  });
-
-  updateCarousel();
-  updateVideoControls();
-}
 
     function updateVideoControls() {
       const videoElements = mediaContent.querySelectorAll('.status-video');
@@ -712,10 +760,11 @@
         video.addEventListener('play', () => {
           playPauseIcon.querySelector('.play-icon').classList.add('hidden');
           playPauseIcon.querySelector('.pause-icon').classList.remove('hidden');
+          hideSpinner();
         });
         video.addEventListener('pause', () => {
           playPauseIcon.querySelector('.play-icon').classList.remove('hidden');
-          UplayPauseIcon.querySelector('.pause-icon').classList.add('hidden');
+          playPauseIcon.querySelector('.pause-icon').classList.add('hidden');
         });
 
         if (!commentsSheet.classList.contains('open') && !document.hidden) {
@@ -727,11 +776,12 @@
       } else {
         muteToggleIcon.classList.add('hidden');
         playPauseIcon.classList.add('hidden');
+        hideSpinner();
       }
     }
 
     function updateCarousel() {
-      pauseAllVideos(); // Pause all videos before updating
+      pauseAllVideos();
       mediaContent.style.transform = `translateX(-${currentMediaIndex * 100}%)`;
       document.querySelectorAll('.carousel-dot').forEach((dot, index) => {
         dot.classList.toggle('active', index === currentMediaIndex);
@@ -815,68 +865,71 @@
       }, 2000);
     }
 
-   async function loadStatus(newStatusId, isPrevious = false) {
-  try {
-    const statusRef = ref(db, `statuses/${newStatusId}`);
-    const statusSnap = await get(statusRef);
-    if (!statusSnap.exists()) {
-      showAlert('Post not found.');
-      return;
-    }
-    const status = statusSnap.val();
-    postUserId = status.userId;
-    statusId = newStatusId;
-
-    // Increment impressions (only for new views, not when navigating to previous status)
-    if (!isPrevious) {
+    async function loadStatus(newStatusId, isPrevious = false) {
+      showSpinner();
       try {
-        await update(statusRef, { impressions: (status.impressions || 0) + 1 });
+        const statusRef = ref(db, `statuses/${newStatusId}`);
+        const statusSnap = await get(statusRef);
+        if (!statusSnap.exists()) {
+          showAlert('Post not found.');
+          return;
+        }
+        const status = statusSnap.val();
+        postUserId = status.userId;
+        statusId = newStatusId;
+
+        if (!isPrevious) {
+          try {
+            await update(statusRef, { impressions: (status.impressions || 0) + 1 });
+          } catch (error) {
+            console.error('Error incrementing impressions:', error);
+          }
+        }
+
+        if (!isPrevious) {
+          if (historyIndex < statusHistory.length - 1) {
+            statusHistory = statusHistory.slice(0, historyIndex + 1);
+          }
+          statusHistory.push(newStatusId);
+          historyIndex++;
+        }
+
+        history.pushState({}, '', `?sid=${statusId}`);
+
+        renderMedia(status);
+        const reactions = status.reactions || {};
+        likeCount.textContent = Object.keys(reactions).length;
+        likeBtn.classList.toggle('liked', !!reactions[currentUser.uid]);
+        const comments = status.comments || {};
+        commentCount.textContent = Object.keys(comments).length;
+        renderComments(comments);
+        const userData = await getUserData(postUserId);
+        profileAvatar.src = userData.photoURL || 'https://www.gravatar.com/avatar?d=mp';
+        profileUsername.textContent = userData.name || 'User';
+
+        addFriendBtn.classList.add('hidden');
+        if (postUserId !== currentUser.uid) {
+          const chatSnap = await get(ref(db, `chats`));
+          const chats = chatSnap.val() || {};
+          const isFriend = Object.values(chats).some(chat =>
+            chat.participants?.[currentUser.uid] && chat.participants?.[postUserId]
+          );
+          if (!isFriend) {
+            addFriendBtn.classList.remove('hidden');
+          }
+        }
+
+        showSwipeText(isPrevious ? 'Previous Post' : 'Next Post');
       } catch (error) {
-        console.error('Error incrementing impressions:', error);
-        // Continue execution even if impressions update fails
+        console.error('Error loading status:', error);
+        showAlert('Failed to load post.');
+      } finally {
+        hideSpinner();
       }
     }
 
-    if (!isPrevious) {
-      if (historyIndex < statusHistory.length - 1) {
-        statusHistory = statusHistory.slice(0, historyIndex + 1);
-      }
-      statusHistory.push(newStatusId);
-      historyIndex++;
-    }
-
-    history.pushState({}, '', `?sid=${statusId}`);
-
-    renderMedia(status);
-    const reactions = status.reactions || {};
-    likeCount.textContent = Object.keys(reactions).length;
-    likeBtn.classList.toggle('liked', !!reactions[currentUser.uid]);
-    const comments = status.comments || {};
-    commentCount.textContent = Object.keys(comments).length;
-    renderComments(comments);
-    const userData = await getUserData(postUserId);
-    profileAvatar.src = userData.photoURL || 'https://www.gravatar.com/avatar?d=mp';
-    profileUsername.textContent = userData.name || 'User';
-
-    addFriendBtn.classList.add('hidden');
-    if (postUserId !== currentUser.uid) {
-      const chatSnap = await get(ref(db, `chats`));
-      const chats = chatSnap.val() || {};
-      const isFriend = Object.values(chats).some(chat =>
-        chat.participants?.[currentUser.uid] && chat.participants?.[postUserId]
-      );
-      if (!isFriend) {
-        addFriendBtn.classList.remove('hidden');
-      }
-    }
-
-    showSwipeText(isPrevious ? 'Previous Post' : 'Next Post');
-  } catch (error) {
-    console.error('Error loading status:', error);
-    showAlert('Failed to load post.');
-  }
-}
     async function loadNextRandomStatus() {
+      showSpinner();
       try {
         const statusesRef = ref(db, 'statuses');
         const snap = await get(statusesRef);
@@ -903,6 +956,8 @@
       } catch (error) {
         console.error('Error loading random status:', error);
         showAlert('Failed to load next post.');
+      } finally {
+        hideSpinner();
       }
     }
 
@@ -970,6 +1025,7 @@
       }
 
       try {
+        showSpinner();
         const settingsSnap = await get(ref(db, `users/${user.uid}/settings`));
         const settings = settingsSnap.val() || {};
         applyTheme(settings.theme || 'light');
@@ -1018,6 +1074,8 @@
       } catch (error) {
         console.error('Error loading post:', error);
         showAlert(`Failed to load post: ${error.message}`);
+      } finally {
+        hideSpinner();
       }
     });
 
