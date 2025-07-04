@@ -133,7 +133,7 @@
     }
 
     .add-status-btn:hover {
-      transform: translateX(-50%) scale(1.05);
+      transform:OWL translateX(-50%) scale(1.05);
       background: var(--primary-dark);
       box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
     }
@@ -200,7 +200,7 @@
       font-weight: 600;
     }
 
-    .back-btn {
+    .chat-btn {
       position: absolute;
       top: 4rem;
       left: 1rem;
@@ -212,12 +212,12 @@
       transition: transform 0.2s ease, background 0.2s ease;
     }
 
-    .back-btn:hover {
+    .chat-btn:hover {
       transform: scale(1.1);
       background: rgba(0, 0, 0, 0.7);
     }
 
-    .back-btn:focus-visible {
+    .chat-btn:focus-visible {
       outline: 2px solid var(--primary);
       outline-offset: 2px;
     }
@@ -681,9 +681,9 @@
       <img id="profile-avatar" src="https://www.gravatar.com/avatar?d=mp" alt="User avatar" class="profile-avatar" loading="lazy" />
       <span id="profile-username" class="profile-username">User</span>
     </div>
-    <button class="back-btn" onclick="location.href='friends.html'" aria-label="Back to friends">
+    <button class="chat-btn" aria-label="Chat with user">
       <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/>
       </svg>
     </button>
     <div class="media-container" role="region" aria-label="Post media">
@@ -783,6 +783,7 @@
     const commentBtn = document.getElementById('comment-btn');
     const addFriendBtn = document.getElementById('add-friend-btn');
     const addStatusBtn = document.getElementById('add-status-btn');
+    const chatBtn = document.querySelector('.chat-btn');
     const likeCount = document.getElementById('like-count');
     const commentCount = document.getElementById('comment-count');
     const alertDialog = document.getElementById('alert-dialog');
@@ -853,6 +854,7 @@
       likeBtn.classList.toggle('dark', isDark);
       alertDialog.classList.toggle('dark', isDark);
       addStatusBtn.classList.toggle('dark', isDark);
+      chatBtn.classList.toggle('dark', isDark);
     }
 
     function timeAgo(timestamp) {
@@ -865,629 +867,647 @@
       return new Date(timestamp).toLocaleString();
     }
 
-     async function getUserData(uid) {
-  if (userCache[uid]) return userCache[uid];
-  try {
-    const snap = await get(ref(db, `users/${uid}`));
-    const data = snap.val() || { username: 'User', profilePicture: 'https://www.gravatar.com/avatar?d=mp' };
-    userCache[uid] = data;
-    return data;
-  } catch (error) {
-    console.error('Error fetching user data:', error);
-    return { username: 'User', profilePicture: 'https://www.gravatar.com/avatar?d=mp' };
-  }
-}
-
-function pauseAllVideos() {
-  const videoElements = mediaContent.querySelectorAll('.status-video');
-  videoElements.forEach(video => {
-    video.pause();
-    video.currentTime = 0;
-  });
-}
-
-function renderMedia(status) {
-  mediaItems = Array.isArray(status.mediaUrls) ? status.mediaUrls : status.imageUrl ? [{ url: status.imageUrl, type: 'image' }] : [];
-  currentMediaIndex = 0;
-  mediaContent.innerHTML = '';
-  carouselIndicators.innerHTML = '';
-
-  if (status.text && status.text.trim()) {
-    postText.textContent = status.text;
-    postText.classList.add('show');
-  } else {
-    postText.textContent = '';
-    postText.classList.remove('show');
-  }
-
-  if (mediaItems.length === 0) {
-    mediaContent.innerHTML = '<div class="carousel-item"><img src="https://via.placeholder.com/1080x1920" alt="Placeholder" /></div>';
-    muteToggleIcon.classList.add('hidden');
-    playPauseIcon.classList.add('hidden');
-    hideSpinner();
-    return;
-  }
-
-  mediaItems.forEach((media, index) => {
-    const itemDiv = document.createElement('div');
-    itemDiv.className = 'carousel-item';
-    if (media.type === 'video') {
-      itemDiv.innerHTML = `
-        <video src="${media.url}" class="status-video" playsinline preload="metadata" data-post-id="${statusId}"></video>
-      `;
-    } else {
-      itemDiv.innerHTML = `
-        <img src="${media.url}?w=1080&h=1920&c=fill" alt="Post" loading="lazy" data-post-id="${statusId}" />
-      `;
-    }
-    mediaContent.appendChild(itemDiv);
-
-    const dot = document.createElement('div');
-    dot.className = `carousel-dot ${index === currentMediaIndex ? 'active' : ''}`;
-    carouselIndicators.appendChild(dot);
-  });
-
-  const videoElements = mediaContent.querySelectorAll('.status-video');
-  videoElements.forEach(video => {
-    video.addEventListener('waiting', () => showSpinner());
-    video.addEventListener('canplay', () => hideSpinner());
-    video.addEventListener('error', () => {
-      hideSpinner();
-      showAlert('Failed to load video.');
-    });
-  });
-
-  updateCarousel();
-  updateVideoControls();
-  setupImpressionTracking();
-  hideSpinner();
-}
-
-function updateVideoControls() {
-  const videoElements = mediaContent.querySelectorAll('.status-video');
-  if (mediaItems[currentMediaIndex]?.type === 'video') {
-    const video = videoElements[currentMediaIndex];
-    video.muted = isMuted;
-    muteToggleIcon.classList.remove('hidden');
-    muteToggleIcon.querySelector('.mute-icon').classList.toggle('hidden', !isMuted);
-    muteToggleIcon.querySelector('.unmute-icon').classList.toggle('hidden', isMuted);
-    playPauseIcon.classList.remove('hidden');
-    playPauseIcon.querySelector('.play-icon').classList.toggle('hidden', !video.paused);
-    playPauseIcon.querySelector('.pause-icon').classList.toggle('hidden', video.paused);
-
-    video.addEventListener('play', () => {
-      playPauseIcon.querySelector('.play-icon').classList.add('hidden');
-      playPauseIcon.querySelector('.pause-icon').classList.remove('hidden');
-      hideSpinner();
-    });
-    video.addEventListener('pause', () => {
-      playPauseIcon.querySelector('.play-icon').classList.remove('hidden');
-      playPauseIcon.querySelector('.pause-icon').classList.add('hidden');
-    });
-
-    if (!commentsSheet.classList.contains('open') && !document.hidden) {
-      video.play().catch(error => {
-        console.error('Error auto-playing video:', error);
-        showAlert('Failed to play video.');
-      });
-    }
-  } else {
-    muteToggleIcon.classList.add('hidden');
-    playPauseIcon.classList.add('hidden');
-    hideSpinner();
-  }
-}
-
-function updateCarousel() {
-  pauseAllVideos();
-  mediaContent.style.transform = `translateX(-${currentMediaIndex * 100}%)`;
-  document.querySelectorAll('.carousel-dot').forEach((dot, index) => {
-    dot.classList.toggle('active', index === currentMediaIndex);
-  });
-
-  if (mediaItems[currentMediaIndex]?.type === 'video') {
-    const video = mediaContent.querySelectorAll('.status-video')[currentMediaIndex];
-    video.muted = isMuted;
-    if (!commentsSheet.classList.contains('open') && !document.hidden) {
-      video.play().catch(error => {
-        console.error('Error playing video:', error);
-        showAlert('Failed to play video.');
-      });
-    }
-  }
-
-  updateVideoControls();
-}
-
-async function renderComments(comments) {
-  commentsList.innerHTML = '';
-  if (!comments) {
-    commentsList.innerHTML = '<p class="comment-text dark:comment-text">No comments yet</p>';
-    return;
-  }
-  const commentItems = await Promise.all(Object.entries(comments).map(async ([commentId, comment]) => {
-    const userData = await getUserData(comment.userId);
-    const commentDiv = document.createElement('div');
-    commentDiv.className = 'comment-item';
-    commentDiv.innerHTML = `
-      <img src="${userData.profilePicture || 'https://www.gravatar.com/avatar?d=mp'}" alt="${userData.username}'s avatar" class="comment-avatar" loading="lazy" />
-      <div class="comment-content">
-        <span class="comment-username">${userData.username}</span>
-        <p class="comment-text">${comment.text}</p>
-        <span class="comment-timestamp">${timeAgo(comment.timestamp)}</span>
-      </div>
-    `;
-    return { div: commentDiv, timestamp: comment.timestamp || 0 };
-  }));
-  commentItems.sort((a, b) => a.timestamp - b.timestamp);
-  commentItems.forEach(item => commentsList.appendChild(item.div));
-}
-
-function openBottomSheet() {
-  commentsSheet.classList.add('open');
-  commentInput.focus();
-  pauseAllVideos();
-  playPauseIcon.classList.add('show');
-  if (statusId) {
-    const commentsRef = ref(db, `statuses/${statusId}/comments`);
-    commentsListener = onValue(commentsRef, (snap) => {
-      const comments = snap.val();
-      commentCount.textContent = comments ? Object.keys(comments).length : 0;
-      renderComments(comments);
-    }, (error) => {
-      console.error('Error listening to comments:', error);
-      showAlert('Failed to load comments.');
-    });
-  }
-}
-
-function closeBottomSheet() {
-  commentsSheet.classList.remove('open');
-  commentInput.value = '';
-  if (mediaItems[currentMediaIndex]?.type === 'video' && !document.hidden) {
-    const video = mediaContent.querySelectorAll('.status-video')[currentMediaIndex];
-    video.play().catch(error => console.error('Error resuming video:', error));
-    playPauseIcon.classList.remove('show');
-  }
-  if (commentsListener) {
-    off(ref(db, `statuses/${statusId}/comments`));
-    commentsListener = null;
-  }
-}
-
-function showSwipeText(message) {
-  swipeText.textContent = message;
-  swipeText.classList.add('show');
-  setTimeout(() => {
-    swipeText.classList.remove('show');
-  }, 2000);
-}
-
-function shuffleArray(array) {
-  for (let i = array.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [array[i], array[j]] = [array[j], array[i]];
-  }
-  return array;
-}
-
-async function fetchAvailableStatuses() {
-  try {
-    const statusesRef = ref(db, 'statuses');
-    const snap = await get(statusesRef);
-    const statuses = snap.val();
-    if (!statuses) return [];
-    return Object.keys(statuses).filter(id => {
-      const status = statuses[id];
-      return (Array.isArray(status.mediaUrls) && status.mediaUrls.length > 0) || status.imageUrl;
-    });
-  } catch (error) {
-    console.error('Error fetching statuses:', error);
-    return [];
-  }
-}
-
-async function loadStatus(newStatusId, isPrevious = false) {
-  showSpinner();
-  try {
-    const statusRef = ref(db, `statuses/${newStatusId}`);
-    const statusSnap = await get(statusRef);
-    if (!statusSnap.exists()) {
-      showAlert('Post not found.');
-      return;
-    }
-    const status = statusSnap.val();
-    postUserId = status.userId;
-    statusId = newStatusId;
-
-    if (!isPrevious) {
+    async function getUserData(uid) {
+      if (userCache[uid]) return userCache[uid];
       try {
-        await runTransaction(ref(db, `statuses/${postUserId}/${newStatusId}/impressions`), current => (current || 0) + 1);
+        const snap = await get(ref(db, `users/${uid}`));
+        const data = snap.val() || { username: 'User', profilePicture: 'https://www.gravatar.com/avatar?d=mp' };
+        userCache[uid] = data;
+        return data;
       } catch (error) {
-        console.error('Error incrementing impressions:', error);
+        console.error('Error fetching user data:', error);
+        return { username: 'User', profilePicture: 'https://www.gravatar.com/avatar?d=mp' };
       }
     }
 
-    if (!isPrevious) {
-      if (historyIndex < statusHistory.length - 1) {
-        statusHistory = statusHistory.slice(0, historyIndex + 1);
-      }
-      statusHistory.push(newStatusId);
-      historyIndex++;
-      if (!viewedStatusIds.includes(newStatusId)) {
-        viewedStatusIds.push(newStatusId);
-        availableStatusIds = availableStatusIds.filter(id => id !== newStatusId);
-      }
-    } else {
-      historyIndex--;
+    function pauseAllVideos() {
+      const videoElements = mediaContent.querySelectorAll('.status-video');
+      videoElements.forEach(video => {
+        video.pause();
+        video.currentTime = 0;
+      });
     }
 
-    history.pushState({}, '', location.pathname);
+    function renderMedia(status) {
+      mediaItems = Array.isArray(status.mediaUrls) ? status.mediaUrls : status.imageUrl ? [{ url: status.imageUrl, type: 'image' }] : [];
+      currentMediaIndex = 0;
+      mediaContent.innerHTML = '';
+      carouselIndicators.innerHTML = '';
 
-    renderMedia(status);
-    const reactions = status.reactions || {};
-    likeCount.textContent = Object.keys(reactions).length;
-    likeBtn.classList.toggle('liked', !!reactions[currentUser.uid]);
-    const comments = status.comments || {};
-    commentCount.textContent = Object.keys(comments).length;
-    renderComments(comments);
-    const userData = await getUserData(postUserId);
-    profileAvatar.src = userData.profilePicture || 'https://www.gravatar.com/avatar?d=mp';
-    profileUsername.textContent = userData.username || 'User';
+      if (status.text && status.text.trim()) {
+        postText.textContent = status.text;
+        postText.classList.add('show');
+      } else {
+        postText.textContent = '';
+        postText.classList.remove('show');
+      }
 
-    addFriendBtn.classList.add('hidden');
-    if (postUserId !== currentUser.uid) {
-      const chatSnap = await get(ref(db, `chats`));
-      const chats = chatSnap.val() || {};
-      const isFriend = Object.values(chats).some(chat =>
-        chat.participants?.[currentUser.uid] && chat.participants?.[postUserId]
-      );
-      if (!isFriend) {
-        addFriendBtn.classList.remove('hidden');
+      if (mediaItems.length === 0) {
+        mediaContent.innerHTML = '<div class="carousel-item"><img src="https://via.placeholder.com/1080x1920" alt="Placeholder" /></div>';
+        muteToggleIcon.classList.add('hidden');
+        playPauseIcon.classList.add('hidden');
+        hideSpinner();
+        return;
+      }
+
+      mediaItems.forEach((media, index) => {
+        const itemDiv = document.createElement('div');
+        itemDiv.className = 'carousel-item';
+        if (media.type === 'video') {
+          itemDiv.innerHTML = `
+            <video src="${media.url}" class="status-video" playsinline preload="metadata" data-post-id="${statusId}"></video>
+          `;
+        } else {
+          itemDiv.innerHTML = `
+            <img src="${media.url}?w=1080&h=1920&c=fill" alt="Post" loading="lazy" data-post-id="${statusId}" />
+          `;
+        }
+        mediaContent.appendChild(itemDiv);
+
+        const dot = document.createElement('div');
+        dot.className = `carousel-dot ${index === currentMediaIndex ? 'active' : ''}`;
+        carouselIndicators.appendChild(dot);
+      });
+
+      const videoElements = mediaContent.querySelectorAll('.status-video');
+      videoElements.forEach(video => {
+        video.addEventListener('waiting', () => showSpinner());
+        video.addEventListener('canplay', () => hideSpinner());
+        video.addEventListener('error', () => {
+          hideSpinner();
+          showAlert('Failed to load video.');
+        });
+      });
+
+      updateCarousel();
+      updateVideoControls();
+      setupImpressionTracking();
+      hideSpinner();
+    }
+
+    function updateVideoControls() {
+      const videoElements = mediaContent.querySelectorAll('.status-video');
+      if (mediaItems[currentMediaIndex]?.type === 'video') {
+        const video = videoElements[currentMediaIndex];
+        video.muted = isMuted;
+        muteToggleIcon.classList.remove('hidden');
+        muteToggleIcon.querySelector('.mute-icon').classList.toggle('hidden', !isMuted);
+        muteToggleIcon.querySelector('.unmute-icon').classList.toggle('hidden', isMuted);
+        playPauseIcon.classList.remove('hidden');
+        playPauseIcon.querySelector('.play-icon').classList.toggle('hidden', !video.paused);
+        playPauseIcon.querySelector('.pause-icon').classList.toggle('hidden', video.paused);
+
+        video.addEventListener('play', () => {
+          playPauseIcon.querySelector('.play-icon').classList.add('hidden');
+          playPauseIcon.querySelector('.pause-icon').classList.remove('hidden');
+          hideSpinner();
+        });
+        video.addEventListener('pause', () => {
+          playPauseIcon.querySelector('.play-icon').classList.remove('hidden');
+          playPauseIcon.querySelector('.pause-icon').classList.add('hidden');
+        });
+
+        if (!commentsSheet.classList.contains('open') && !document.hidden) {
+          video.play().catch(error => {
+            console.error('Error auto-playing video:', error);
+            showAlert('Failed to play video.');
+          });
+        }
+      } else {
+        muteToggleIcon.classList.add('hidden');
+        playPauseIcon.classList.add('hidden');
+        hideSpinner();
       }
     }
 
-    showSwipeText(isPrevious ? 'Previous Post' : 'Next Post');
-  } catch (error) {
-    console.error('Error loading status:', error);
-    showAlert('Failed to load post.');
-  } finally {
-    hideSpinner();
-  }
-}
+    function updateCarousel() {
+      pauseAllVideos();
+      mediaContent.style.transform = `translateX(-${currentMediaIndex * 100}%)`;
+      document.querySelectorAll('.carousel-dot').forEach((dot, index) => {
+        dot.classList.toggle('active', index === currentMediaIndex);
+      });
 
-async function loadNextRandomStatus() {
-  showSpinner();
-  try {
-    if (availableStatusIds.length === 0) {
-      availableStatusIds = await fetchAvailableStatuses();
-      availableStatusIds = availableStatusIds.filter(id => !viewedStatusIds.includes(id));
-      if (availableStatusIds.length === 0) {
-        viewedStatusIds = [];
+      if (mediaItems[currentMediaIndex]?.type === 'video') {
+        const video = mediaContent.querySelectorAll('.status-video')[currentMediaIndex];
+        video.muted = isMuted;
+        if (!commentsSheet.classList.contains('open') && !document.hidden) {
+          video.play().catch(error => {
+            console.error('Error playing video:', error);
+            showAlert('Failed to play video.');
+          });
+        }
+      }
+
+      updateVideoControls();
+    }
+
+    async function renderComments(comments) {
+      commentsList.innerHTML = '';
+      if (!comments) {
+        commentsList.innerHTML = '<p class="comment-text dark:comment-text">No comments yet</p>';
+        return;
+      }
+      const commentItems = await Promise.all(Object.entries(comments).map(async ([commentId, comment]) => {
+        const userData = await getUserData(comment.userId);
+        const commentDiv = document.createElement('div');
+        commentDiv.className = 'comment-item';
+        commentDiv.innerHTML = `
+          <img src="${userData.profilePicture || 'https://www.gravatar.com/avatar?d=mp'}" alt="${userData.username}'s avatar" class="comment-avatar" loading="lazy" />
+          <div class="comment-content">
+            <span class="comment-username">${userData.username}</span>
+            <p class="comment-text">${comment.text}</p>
+            <span class="comment-timestamp">${timeAgo(comment.timestamp)}</span>
+          </div>
+        `;
+        return { div: commentDiv, timestamp: comment.timestamp || 0 };
+      }));
+      commentItems.sort((a, b) => a.timestamp - b.timestamp);
+      commentItems.forEach(item => commentsList.appendChild(item.div));
+    }
+
+    function openBottomSheet() {
+      commentsSheet.classList.add('open');
+      commentInput.focus();
+      pauseAllVideos();
+      playPauseIcon.classList.add('show');
+      if (statusId) {
+        const commentsRef = ref(db, `statuses/${statusId}/comments`);
+        commentsListener = onValue(commentsRef, (snap) => {
+          const comments = snap.val();
+          commentCount.textContent = comments ? Object.keys(comments).length : 0;
+          renderComments(comments);
+        }, (error) => {
+          console.error('Error listening to comments:', error);
+          showAlert('Failed to load comments.');
+        });
+      }
+    }
+
+    function closeBottomSheet() {
+      commentsSheet.classList.remove('open');
+      commentInput.value = '';
+      if (mediaItems[currentMediaIndex]?.type === 'video' && !document.hidden) {
+        const video = mediaContent.querySelectorAll('.status-video')[currentMediaIndex];
+        video.play().catch(error => console.error('Error resuming video:', error));
+        playPauseIcon.classList.remove('show');
+      }
+      if (commentsListener) {
+        off(ref(db, `statuses/${statusId}/comments`));
+        commentsListener = null;
+      }
+    }
+
+    function showSwipeText(message) {
+      swipeText.textContent = message;
+      swipeText.classList.add('show');
+      setTimeout(() => {
+        swipeText.classList.remove('show');
+      }, 2000);
+    }
+
+    function shuffleArray(array) {
+      for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+      }
+      return array;
+    }
+
+    async function fetchAvailableStatuses() {
+      try {
+        const statusesRef = ref(db, 'statuses');
+        const snap = await get(statusesRef);
+        const statuses = snap.val();
+        if (!statuses) return [];
+        return Object.keys(statuses).filter(id => {
+          const status = statuses[id];
+          return (Array.isArray(status.mediaUrls) && status.mediaUrls.length > 0) || status.imageUrl;
+        });
+      } catch (error) {
+        console.error('Error fetching statuses:', error);
+        return [];
+      }
+    }
+
+    async function loadStatus(newStatusId, isPrevious = false) {
+      showSpinner();
+      try {
+        const statusRef = ref(db, `statuses/${newStatusId}`);
+        const statusSnap = await get(statusRef);
+        if (!statusSnap.exists()) {
+          showAlert('Post not found.');
+          return;
+        }
+        const status = statusSnap.val();
+        postUserId = status.userId;
+        statusId = newStatusId;
+
+        if (!isPrevious) {
+          try {
+            await runTransaction(ref(db, `statuses/${postUserId}/${newStatusId}/impressions`), current => (current || 0) + 1);
+          } catch (error) {
+            console.error('Error incrementing impressions:', error);
+          }
+        }
+
+        if (!isPrevious) {
+          if (historyIndex < statusHistory.length - 1) {
+            statusHistory = statusHistory.slice(0, historyIndex + 1);
+          }
+          statusHistory.push(newStatusId);
+          historyIndex++;
+          if (!viewedStatusIds.includes(newStatusId)) {
+            viewedStatusIds.push(newStatusId);
+            availableStatusIds = availableStatusIds.filter(id => id !== newStatusId);
+          }
+        } else {
+          historyIndex--;
+        }
+
+        history.pushState({}, '', location.pathname);
+
+        renderMedia(status);
+        const reactions = status.reactions || {};
+        likeCount.textContent = Object.keys(reactions).length;
+        likeBtn.classList.toggle('liked', !!reactions[currentUser.uid]);
+        const comments = status.comments || {};
+        commentCount.textContent = Object.keys(comments).length;
+        renderComments(comments);
+        const userData = await getUserData(postUserId);
+        profileAvatar.src = userData.profilePicture || 'https://www.gravatar.com/avatar?d=mp';
+        profileUsername.textContent = userData.username || 'User';
+
+        addFriendBtn.classList.add('hidden');
+        if (postUserId !== currentUser.uid) {
+          const chatSnap = await get(ref(db, `chats`));
+          const chats = snap.val() || {};
+          const isFriend = Object.values(chats).some(chat =>
+            chat.participants?.[currentUser.uid] && chat.participants?.[postUserId]
+          );
+          if (!isFriend) {
+            addFriendBtn.classList.remove('hidden');
+          }
+        }
+
+        showSwipeText(isPrevious ? 'Previous Post' : 'Next Post');
+      } catch (error) {
+        console.error('Error loading status:', error);
+        showAlert('Failed to load post.');
+      } finally {
+        hideSpinner();
+      }
+    }
+
+    async function loadNextRandomStatus() {
+      showSpinner();
+      try {
+        if (availableStatusIds.length === 0) {
+          availableStatusIds = await fetchAvailableStatuses();
+          availableStatusIds = availableStatusIds.filter(id => !viewedStatusIds.includes(id));
+          if (availableStatusIds.length === 0) {
+            viewedStatusIds = [];
+            availableStatusIds = await fetchAvailableStatuses();
+            if (availableStatusIds.length === 0) {
+              showAlert('No media posts available.');
+              return;
+            }
+          }
+          availableStatusIds = shuffleArray(availableStatusIds);
+        }
+
+        const newStatusId = availableStatusIds[0];
+        await loadStatus(newStatusId);
+      } catch (error) {
+        console.error('Error loading random status:', error);
+        showAlert('Failed to load next post.');
+      } finally {
+        hideSpinner();
+      }
+    }
+
+    async function loadPreviousStatus() {
+      if (historyIndex <= 0) {
+        showAlert('No previous post available.');
+        return;
+      }
+      const previousStatusId = statusHistory[historyIndex - 1];
+      await loadStatus(previousStatusId, true);
+    }
+
+    async function addFriend(targetUserId) {
+      try {
+        const chatRef = ref(db, `chats/${currentUser.uid}_${targetUserId}`);
+        await set(chatRef, {
+          participants: {
+            [currentUser.uid]: true,
+            [targetUserId]: true
+          },
+          createdAt: Date.now()
+        });
+        addFriendBtn.classList.add('hidden');
+        showSwipeText('Friend added!');
+      } catch (error) {
+        console.error('Error adding friend:', error);
+        showAlert('Failed to add friend.');
+      }
+    }
+
+    async function toggleLike() {
+      if (!currentUser || !statusId) {
+        showAlert('Cannot like post: User or post ID is missing.');
+        return;
+      }
+      try {
+        const reactionRef = ref(db, `statuses/${statusId}/reactions/${currentUser.uid}`);
+        const snap = await get(reactionRef);
+        if (snap.exists()) {
+          await set(reactionRef, null);
+          likeBtn.classList.remove('liked');
+          likeCount.textContent = parseInt(likeCount.textContent) - 1;
+        } else {
+          await set(reactionRef, { timestamp: Date.now() });
+          likeBtn.classList.add('liked');
+          likeCount.textContent = parseInt(likeCount.textContent) + 1;
+          doubleTapHeart.classList.remove('hidden');
+          setTimeout(() => doubleTapHeart.classList.add('hidden'), 500);
+        }
+      } catch (error) {
+        console.error('Error toggling like:', error);
+        showAlert('Failed to update like.');
+      }
+    }
+
+    function setupImpressionTracking() {
+      const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting && statusId && postUserId) {
+            const postId = entry.target.dataset.postId;
+            if (postId && currentUser) {
+              runTransaction(ref(db, `statuses/${postUserId}/${postId}/impressions`), current => (current || 0) + 1)
+                .catch(error => {
+                  console.error('Error incrementing impressions:', error);
+                });
+              observer.unobserve(entry.target);
+            }
+          }
+        });
+      }, { threshold: 0.5 });
+
+      const mediaElements = mediaContent.querySelectorAll('.carousel-item img, .carousel-item video');
+      mediaElements.forEach(element => {
+        observer.observe(element);
+      });
+    }
+
+    onAuthStateChanged(auth, async user => {
+      if (!user) {
+        location.href = 'signup.html';
+        return;
+      }
+      currentUser = user;
+
+      try {
+        showSpinner();
+        const settingsSnap = await get(ref(db, `users/${user.uid}/settings`));
+        const settings = settingsSnap.val() || {};
+        applyTheme(settings.theme || 'light');
+
         availableStatusIds = await fetchAvailableStatuses();
         if (availableStatusIds.length === 0) {
           showAlert('No media posts available.');
+          hideSpinner();
           return;
         }
+        availableStatusIds = shuffleArray(availableStatusIds);
+        await loadNextRandomStatus();
+      } catch (error) {
+        console.error('Error initializing:', error);
+        showAlert('Failed to load posts.');
+      } finally {
+        hideSpinner();
       }
-      availableStatusIds = shuffleArray(availableStatusIds);
-    }
-
-    const newStatusId = availableStatusIds[0];
-    await loadStatus(newStatusId);
-  } catch (error) {
-    console.error('Error loading random status:', error);
-    showAlert('Failed to load next post.');
-  } finally {
-    hideSpinner();
-  }
-}
-
-async function loadPreviousStatus() {
-  if (historyIndex <= 0) {
-    showAlert('No previous post available.');
-    return;
-  }
-  const previousStatusId = statusHistory[historyIndex - 1];
-  await loadStatus(previousStatusId, true);
-}
-
-async function addFriend(targetUserId) {
-  try {
-    const chatRef = ref(db, `chats/${currentUser.uid}_${targetUserId}`);
-    await set(chatRef, {
-      participants: {
-        [currentUser.uid]: true,
-        [targetUserId]: true
-      },
-      createdAt: Date.now()
     });
-    addFriendBtn.classList.add('hidden');
-    showSwipeText('Friend added!');
-  } catch (error) {
-    console.error('Error adding friend:', error);
-    showAlert('Failed to add friend.');
-  }
-}
 
-async function toggleLike() {
-  if (!currentUser || !statusId) {
-    showAlert('Cannot like post: User or post ID is missing.');
-    return;
-  }
-  try {
-    const reactionRef = ref(db, `statuses/${statusId}/reactions/${currentUser.uid}`);
-    const snap = await get(reactionRef);
-    if (snap.exists()) {
-      await set(reactionRef, null);
-      likeBtn.classList.remove('liked');
-      likeCount.textContent = parseInt(likeCount.textContent) - 1;
-    } else {
-      await set(reactionRef, { timestamp: Date.now() });
-      likeBtn.classList.add('liked');
-      likeCount.textContent = parseInt(likeCount.textContent) + 1;
-      doubleTapHeart.classList.remove('hidden');
-      setTimeout(() => doubleTapHeart.classList.add('hidden'), 500);
-    }
-  } catch (error) {
-    console.error('Error toggling like:', error);
-    showAlert('Failed to update like.');
-  }
-}
+    profileContainer.addEventListener('click', () => {
+      if (postUserId) {
+        location.href = `profile.html?uid=${postUserId}${postUserId === currentUser.uid ? '&owner=true' : ''}`;
+      }
+    });
 
-function setupImpressionTracking() {
-  const observer = new IntersectionObserver((entries) => {
-    entries.forEach(entry => {
-      if (entry.isIntersecting && statusId && postUserId) {
-        const postId = entry.target.dataset.postId;
-        if (postId && currentUser) {
-          runTransaction(ref(db, `statuses/${postUserId}/${postId}/impressions`), current => (current || 0) + 1)
-            .catch(error => {
-              console.error('Error incrementing impressions:', error);
-            });
-          observer.unobserve(entry.target);
+    profileContainer.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        profileContainer.click();
+      }
+    });
+
+    chatBtn.addEventListener('click', () => {
+      if (postUserId) {
+        location.href = `chat.html?uid=${postUserId}`;
+      }
+    });
+
+    chatBtn.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        chatBtn.click();
+      }
+    });
+
+    likeBtn.addEventListener('click', toggleLike);
+
+    likeBtn.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        toggleLike();
+      }
+    });
+
+    commentBtn.addEventListener('click', () => {
+      openBottomSheet();
+    });
+
+    commentBtn.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        commentBtn.click();
+      }
+    });
+
+    addFriendBtn.addEventListener('click', () => {
+      if (postUserId) {
+        addFriend(postUserId);
+      }
+    });
+
+    addFriendBtn.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        addFriendBtn.click();
+      }
+    });
+
+    addStatusBtn.addEventListener('click', () => {
+      location.href = 'add-status.html';
+    });
+
+    addStatusBtn.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        location.href = 'add-status.html';
+      }
+    });
+
+    closeComments.addEventListener('click', closeBottomSheet);
+
+    closeComments.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        closeBottomSheet();
+      }
+    });
+
+    alertClose.addEventListener('click', hideAlert);
+
+    alertClose.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        hideAlert();
+      }
+    });
+
+    document.addEventListener('click', (e) => {
+      if (!commentsSheet.contains(e.target) && !commentBtn.contains(e.target)) {
+        closeBottomSheet();
+      }
+      if (!alertDialog.contains(e.target) && alertDialog.classList.contains('show')) {
+        hideAlert();
+      }
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        if (commentsSheet.classList.contains('open')) {
+          closeBottomSheet();
+        }
+        if (alertDialog.classList.contains('show')) {
+          hideAlert();
         }
       }
     });
-  }, { threshold: 0.5 });
 
-  const mediaElements = mediaContent.querySelectorAll('.carousel-item img, .carousel-item video');
-  mediaElements.forEach(element => {
-    observer.observe(element);
-  });
-}
-
-onAuthStateChanged(auth, async user => {
-  if (!user) {
-    location.href = 'signup.html';
-    return;
-  }
-  currentUser = user;
-
-  try {
-    showSpinner();
-    const settingsSnap = await get(ref(db, `users/${user.uid}/settings`));
-    const settings = settingsSnap.val() || {};
-    applyTheme(settings.theme || 'light');
-
-    availableStatusIds = await fetchAvailableStatuses();
-    if (availableStatusIds.length === 0) {
-      showAlert('No media posts available.');
-      hideSpinner();
-      return;
-    }
-    availableStatusIds = shuffleArray(availableStatusIds);
-    await loadNextRandomStatus();
-  } catch (error) {
-    console.error('Error initializing:', error);
-    showAlert('Failed to load posts.');
-  } finally {
-    hideSpinner();
-  }
-});
-
-profileContainer.addEventListener('click', () => {
-  if (postUserId) {
-    location.href = `profile.html?uid=${postUserId}${postUserId === currentUser.uid ? '&owner=true' : ''}`;
-  }
-});
-
-profileContainer.addEventListener('keypress', (e) => {
-  if (e.key === 'Enter' || e.key === ' ') {
-    e.preventDefault();
-    profileContainer.click();
-  }
-});
-
-likeBtn.addEventListener('click', toggleLike);
-
-likeBtn.addEventListener('keypress', (e) => {
-  if (e.key === 'Enter' || e.key === ' ') {
-    e.preventDefault();
-    toggleLike();
-  }
-});
-
-commentBtn.addEventListener('click', () => {
-  openBottomSheet();
-});
-
-commentBtn.addEventListener('keypress', (e) => {
-  if (e.key === 'Enter' || e.key === ' ') {
-    e.preventDefault();
-    commentBtn.click();
-  }
-});
-
-addFriendBtn.addEventListener('click', () => {
-  if (postUserId) {
-    addFriend(postUserId);
-  }
-});
-
-addFriendBtn.addEventListener('keypress', (e) => {
-  if (e.key === 'Enter' || e.key === ' ') {
-    e.preventDefault();
-    addFriendBtn.click();
-  }
-});
-
-addStatusBtn.addEventListener('click', () => {
-  location.href = 'add-status.html';
-});
-
-addStatusBtn.addEventListener('keypress', (e) => {
-  if (e.key === 'Enter' || e.key === ' ') {
-    e.preventDefault();
-    location.href = 'add-status.html';
-  }
-});
-
-closeComments.addEventListener('click', closeBottomSheet);
-
-closeComments.addEventListener('keypress', (e) => {
-  if (e.key === 'Enter' || e.key === ' ') {
-    e.preventDefault();
-    closeBottomSheet();
-  }
-});
-
-alertClose.addEventListener('click', hideAlert);
-
-alertClose.addEventListener('keypress', (e) => {
-  if (e.key === 'Enter' || e.key === ' ') {
-    e.preventDefault();
-    hideAlert();
-  }
-});
-
-document.addEventListener('click', (e) => {
-  if (!commentsSheet.contains(e.target) && !commentBtn.contains(e.target)) {
-    closeBottomSheet();
-  }
-  if (!alertDialog.contains(e.target) && alertDialog.classList.contains('show')) {
-    hideAlert();
-  }
-});
-
-document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') {
-    if (commentsSheet.classList.contains('open')) {
-      closeBottomSheet();
-    }
-    if (alertDialog.classList.contains('show')) {
-      hideAlert();
-    }
-  }
-});
-
-commentSubmit.addEventListener('click', async () => {
-  const text = commentInput.value.trim();
-  if (!text || !currentUser || !statusId) return;
-  try {
-    await push(ref(db, `statuses/${statusId}/comments`), {
-      userId: currentUser.uid,
-      text,
-      timestamp: Date.now()
+    commentSubmit.addEventListener('click', async () => {
+      const text = commentInput.value.trim();
+      if (!text || !currentUser || !statusId) return;
+      try {
+        await push(ref(db, `statuses/${statusId}/comments`), {
+          userId: currentUser.uid,
+          text,
+          timestamp: Date.now()
+        });
+        commentInput.value = '';
+      } catch (error) {
+        console.error('Error adding comment:', error);
+        showAlert('Failed to post comment.');
+      }
     });
-    commentInput.value = '';
-  } catch (error) {
-    console.error('Error adding comment:', error);
-    showAlert('Failed to post comment.');
-  }
-});
 
-commentInput.addEventListener('keypress', (e) => {
-  if (e.key === 'Enter') {
-    e.preventDefault();
-    commentSubmit.click();
-  }
-});
-
-mediaContainer.addEventListener('click', (e) => {
-  if (mediaItems[currentMediaIndex]?.type === 'video') {
-    const video = mediaContent.querySelectorAll('.status-video')[currentMediaIndex];
-    if (video) {
-      if (video.paused) {
-        video.play().catch(error => console.error('Error playing video:', error));
-        playPauseIcon.classList.add('show');
-      } else {
-        video.pause();
-        playPauseIcon.classList.add('show');
+    commentInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        commentSubmit.click();
       }
-      setTimeout(() => playPauseIcon.classList.remove('show'), 1000);
-    }
-  }
-});
+    });
 
-muteToggleIcon.addEventListener('click', () => {
-  if (mediaItems[currentMediaIndex]?.type === 'video') {
-    const video = mediaContent.querySelectorAll('.status-video')[currentMediaIndex];
-    isMuted = !isMuted;
-    video.muted = isMuted;
-    muteToggleIcon.querySelector('.mute-icon').classList.toggle('hidden', !isMuted);
-    muteToggleIcon.querySelector('.unmute-icon').classList.toggle('hidden', isMuted);
-  }
-});
-
-mediaContainer.addEventListener('touchstart', (e) => {
-  const now = new Date().getTime();
-  const timeSinceLastTap = now - lastTap;
-  if (timeSinceLastTap < 300 && timeSinceLastTap > 0) {
-    if (!commentsSheet.classList.contains('open') && !alertDialog.classList.contains('show')) {
-      toggleLike();
-    }
-  }
-  lastTap = now;
-});
-
-let touchStartX = 0;
-let touchStartY = 0;
-
-container.addEventListener('touchstart', (e) => {
-  touchStartX = e.changedTouches[0].screenX;
-  touchStartY = e.changedTouches[0].screenY;
-});
-
-container.addEventListener('touchend', (e) => {
-  const touchEndX = e.changedTouches[0].screenX;
-  const touchEndY = e.changedTouches[0].screenY;
-  const deltaX = touchStartX - touchEndX;
-  const deltaY = touchStartY - touchEndY;
-
-  if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 50) {
-    if (!commentsSheet.classList.contains('open') && !alertDialog.classList.contains('show') && !addStatusBtn.contains(e.target)) {
-      if (deltaX > 0 && currentMediaIndex < mediaItems.length - 1) {
-        currentMediaIndex++;
-        updateCarousel();
-      } else if (deltaX < 0 && currentMediaIndex > 0) {
-        currentMediaIndex--;
-        updateCarousel();
+    mediaContainer.addEventListener('click', (e) => {
+      if (mediaItems[currentMediaIndex]?.type === 'video') {
+        const video = mediaContent.querySelectorAll('.status-video')[currentMediaIndex];
+        if (video) {
+          if (video.paused) {
+            video.play().catch(error => console.error('Error playing video:', error));
+            playPauseIcon.classList.add('show');
+          } else {
+            video.pause();
+            playPauseIcon.classList.add('show');
+          }
+          setTimeout(() => playPauseIcon.classList.remove('show'), 1000);
+        }
       }
-    }
-  } else if (Math.abs(deltaY) > 50) {
-    if (!commentsSheet.classList.contains('open') && !alertDialog.classList.contains('show') && !addStatusBtn.contains(e.target)) {
-      if (deltaY < 0) {
-        loadNextRandomStatus();
-      } else {
-        loadPreviousStatus();
-      }
-    }
-  }
-});
+    });
 
-document.addEventListener('visibilitychange', () => {
-  if (mediaItems[currentMediaIndex]?.type === 'video') {
-    const video = mediaContent.querySelectorAll('.status-video')[currentMediaIndex];
-    if (document.hidden || commentsSheet.classList.contains('open')) {
-      video.pause();
-      playPauseIcon.classList.add('show');
-    } else {
-      video.play().catch(error => console.error('Error resuming video:', error));
-      playPauseIcon.classList.remove('show');
-    }
-  }
-});
+    muteToggleIcon.addEventListener('click', () => {
+      if (mediaItems[currentMediaIndex]?.type === 'video') {
+        const video = mediaContent.querySelectorAll('.status-video')[currentMediaIndex];
+        isMuted = !isMuted;
+        video.muted = isMuted;
+        muteToggleIcon.querySelector('.mute-icon').classList.toggle('hidden', !isMuted);
+        muteToggleIcon.querySelector('.unmute-icon').classList.toggle('hidden', isMuted);
+      }
+    });
+
+    mediaContainer.addEventListener('touchstart', (e) => {
+      const now = new Date().getTime();
+      const timeSinceLastTap = now - lastTap;
+      if (timeSinceLastTap < 300 && timeSinceLastTap > 0) {
+        if (!commentsSheet.classList.contains('open') && !alertDialog.classList.contains('show')) {
+          toggleLike();
+        }
+      }
+      lastTap = now;
+    });
+
+    let touchStartX = 0;
+    let touchStartY = 0;
+
+    container.addEventListener('touchstart', (e) => {
+      touchStartX = e.changedTouches[0].screenX;
+      touchStartY = e.changedTouches[0].screenY;
+    });
+
+    container.addEventListener('touchend', (e) => {
+      const touchEndX = e.changedTouches[0].screenX;
+      const touchEndY = e.changedTouches[0].screenY;
+      const deltaX = touchStartX - touchEndX;
+      const deltaY = touchStartY - touchEndY;
+
+      if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 50) {
+        if (!commentsSheet.classList.contains('open') && !alertDialog.classList.contains('show') && !addStatusBtn.contains(e.target) && !chatBtn.contains(e.target)) {
+          if (deltaX > 0 && currentMediaIndex < mediaItems.length - 1) {
+            currentMediaIndex++;
+            updateCarousel();
+          } else if (deltaX < 0 && currentMediaIndex === 0) {
+            // Swipe right to view profile
+            if (postUserId) {
+              location.href = `profile.html?uid=${postUserId}${postUserId === currentUser.uid ? '&owner=true' : ''}`;
+            }
+          } else if (deltaX < 0 && currentMediaIndex > 0) {
+            currentMediaIndex--;
+            updateCarousel();
+          }
+        }
+      } else if (Math.abs(deltaY) > 50) {
+        if (!commentsSheet.classList.contains('open') && !alertDialog.classList.contains('show') && !addStatusBtn.contains(e.target) && !chatBtn.contains(e.target)) {
+          if (deltaY < 0) {
+            loadNextRandomStatus();
+          } else {
+            loadPreviousStatus();
+          }
+        }
+      }
+    });
+
+    document.addEventListener('visibilitychange', () => {
+      if (mediaItems[currentMediaIndex]?.type === 'video') {
+        const video = mediaContent.querySelectorAll('.status-video')[currentMediaIndex];
+        if (document.hidden || commentsSheet.classList.contains('open')) {
+          video.pause();
+          playPauseIcon.classList.add('show');
+        } else {
+          video.play().catch(error => console.error('Error resuming video:', error));
+          playPauseIcon.classList.remove('show');
+        }
+      }
+    });
   </script>
 </body>
 </html>
