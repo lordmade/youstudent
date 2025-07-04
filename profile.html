@@ -6,6 +6,7 @@
   <title>BanterBox - Profile</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <style>
     * {
       user-select: none;
@@ -313,12 +314,17 @@
         </svg>
       </button>
       <h1 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Profile</h1>
-      <button onclick="location.href='settings.html'" class="text-red-500 dark:text-red-400 hover:text-red-600 dark:hover:text-red-300 flex items-center gap-2" aria-label="Go to settings">
-        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-        </svg>
-      </button>
+      <div class="flex items-center gap-2">
+        <button id="dashboard-btn" class="text-red-500 dark:text-red-400 hover:text-red-600 dark:hover:text-red-300 flex items-center gap-2 hidden" aria-label="Go to earnings dashboard">
+          <i class="fas fa-chart-line"></i>
+        </button>
+        <button onclick="location.href='settings.html'" class="text-red-500 dark:text-red-400 hover:text-red-600 dark:hover:text-red-300 flex items-center gap-2" aria-label="Go to settings">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+        </button>
+      </div>
     </header>
 
     <div class="avatar-container" role="region" aria-label="User profile">
@@ -467,8 +473,7 @@
     const statusVisibleToggle = document.getElementById('status-visible');
     const lastSeenVisibleToggle = document.getElementById('last-seen-visible');
     const formError = document.getElementById('form-error');
-    const retryBtn = document.getElementById('retry-btn');
-    const formRetryBtn = document.getElementById('form-retry-btn');
+    const retryBtn = document.getElementById('form-retry-btn');
     const postsGrid = document.getElementById('posts-grid');
     const noPosts = document.getElementById('no-posts');
     const postsCount = document.getElementById('posts-count');
@@ -476,6 +481,7 @@
     const followingCount = document.getElementById('following-count');
     const tabBtns = document.querySelectorAll('.tab-nav button');
     const tabPanels = document.querySelectorAll('.tab-panel');
+    const dashboardBtn = document.getElementById('dashboard-btn');
 
     let currentUser;
     let originalData = {};
@@ -572,31 +578,32 @@
       return post;
     }
 
-   function loadPosts(uid) {
-  postsGrid.innerHTML = '';
-  noPosts.classList.add('hidden');
-  onValue(ref(db, 'statuses'), snap => {
-    postsGrid.innerHTML = '';
-    if (!snap.exists()) {
-      noPosts.classList.remove('hidden');
-      postsCount.innerHTML = '<strong>0</strong> posts';
-      return;
+    function loadPosts(uid) {
+      postsGrid.innerHTML = '';
+      noPosts.classList.add('hidden');
+      onValue(ref(db, 'statuses'), snap => {
+        postsGrid.innerHTML = '';
+        if (!snap.exists()) {
+          noPosts.classList.remove('hidden');
+          postsCount.innerHTML = '<strong>0</strong> posts';
+          return;
+        }
+        const statuses = snap.val();
+        let postCount = 0;
+        const sortedPosts = Object.entries(statuses)
+          .filter(([_, status]) => status.userId === uid)
+          .sort((a, b) => (b[1].timestamp || 0) - (a[1].timestamp || 0));
+        sortedPosts.forEach(([statusId, status]) => {
+          postsGrid.appendChild(renderPost(statusId, status));
+          postCount++;
+        });
+        postsCount.innerHTML = `<strong>${postCount}</strong> post${postCount !== 1 ? 's' : ''}`;
+        if (postCount === 0) {
+          noPosts.classList.remove('hidden');
+        }
+      });
     }
-    const statuses = snap.val();
-    let postCount = 0;
-    const sortedPosts = Object.entries(statuses)
-      .filter(([_, status]) => status.userId === uid)
-      .sort((a, b) => (b[1].timestamp || 0) - (a[1].timestamp || 0));
-    sortedPosts.forEach(([statusId, status]) => {
-      postsGrid.appendChild(renderPost(statusId, status));
-      postCount++;
-    });
-    postsCount.innerHTML = `<strong>${postCount}</strong> post${postCount !== 1 ? 's' : ''}`;
-    if (postCount === 0) {
-      noPosts.classList.remove('hidden');
-    }
-  });
-}
+
     function loadFollowersFollowing(uid) {
       onValue(ref(db, 'chats'), snap => {
         let followers = 0;
@@ -683,6 +690,7 @@
             colorDark: '#1f2937',
             colorLight: '#ffffff'
           });
+          dashboardBtn.classList.remove('hidden'); // Show dashboard button for owner
         }
 
         loadPosts(uid);
@@ -704,10 +712,15 @@
         document.querySelector('.linked-devices').classList.add('hidden');
         avatarContainer.classList.remove('editable');
         avatarImg.classList.remove('editable');
+        dashboardBtn.classList.add('hidden'); // Hide dashboard button for non-owners
       } else {
         avatarContainer.classList.add('editable');
         avatarImg.classList.add('editable');
       }
+
+      dashboardBtn.addEventListener('click', () => {
+        location.href = 'earnings.html';
+      });
 
       if (isOwner) {
         avatarImg.addEventListener('click', () => {
