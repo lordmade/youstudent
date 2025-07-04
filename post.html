@@ -322,8 +322,7 @@
       width: 40px;
       height: 4px;
       background: #d1d5db;
-      border-radius: 2px;
-      margin: 0.5rem auto;
+      border-radius: 2 Sistine
     }
     .bottom-sheet.dark .bottom-sheet-handle {
       background: #4b5563;
@@ -588,6 +587,7 @@
     let mediaItems = [];
     let commentsListener = null;
     let lastTap = 0;
+    let isMuted = false; // Track mute state
 
     function showAlert(message) {
       alertMessage.textContent = message;
@@ -644,6 +644,14 @@
       }
     }
 
+    function pauseAllVideos() {
+      const videoElements = mediaContent.querySelectorAll('.status-video');
+      videoElements.forEach(video => {
+        video.pause();
+        video.currentTime = 0; // Reset to start to show first frame
+      });
+    }
+
     function renderMedia(status) {
       mediaItems = Array.isArray(status.mediaUrls) ? status.mediaUrls : status.imageUrl ? [{ url: status.imageUrl, type: 'image' }] : [];
       currentMediaIndex = 0;
@@ -663,7 +671,7 @@
         itemDiv.className = 'carousel-item';
         if (media.type === 'video') {
           itemDiv.innerHTML = `
-            <video src="${media.url}" ${index === 0 ? 'autoplay' : ''} loop class="status-video" playsinline preload="metadata"></video>
+            <video src="${media.url}" class="status-video" playsinline preload="metadata"></video>
           `;
         } else {
           itemDiv.innerHTML = `
@@ -677,68 +685,62 @@
         carouselIndicators.appendChild(dot);
       });
 
+      updateCarousel();
+      updateVideoControls();
+    }
+
+    function updateVideoControls() {
+      const videoElements = mediaContent.querySelectorAll('.status-video');
       if (mediaItems[currentMediaIndex].type === 'video') {
-        const video = mediaContent.querySelector('.status-video');
-        video.muted = false;
+        const video = videoElements[currentMediaIndex];
+        video.muted = isMuted;
         muteToggleIcon.classList.remove('hidden');
+        muteToggleIcon.querySelector('.mute-icon').classList.toggle('hidden', !isMuted);
+        muteToggleIcon.querySelector('.unmute-icon').classList.toggle('hidden', isMuted);
         playPauseIcon.classList.remove('hidden');
-        video.addEventListener('canplay', () => {
-          if (!commentsSheet.classList.contains('open')) {
-            video.play().catch(error => {
-              console.error('Error auto-playing video:', error);
-              showAlert('Failed to play video.');
-            });
-          }
-        });
+        playPauseIcon.querySelector('.play-icon').classList.toggle('hidden', !video.paused);
+        playPauseIcon.querySelector('.pause-icon').classList.toggle('hidden', video.paused);
+
         video.addEventListener('play', () => {
           playPauseIcon.querySelector('.play-icon').classList.add('hidden');
           playPauseIcon.querySelector('.pause-icon').classList.remove('hidden');
         });
         video.addEventListener('pause', () => {
           playPauseIcon.querySelector('.play-icon').classList.remove('hidden');
-          playPauseIcon.querySelector('.pause-icon').classList.add('hidden');
+          UplayPauseIcon.querySelector('.pause-icon').classList.add('hidden');
         });
+
+        if (!commentsSheet.classList.contains('open') && !document.hidden) {
+          video.play().catch(error => {
+            console.error('Error auto-playing video:', error);
+            showAlert('Failed to play video.');
+          });
+        }
       } else {
         muteToggleIcon.classList.add('hidden');
         playPauseIcon.classList.add('hidden');
       }
-
-      if (status.text) {
-        postText.textContent = status.text;
-        postText.classList.add('show');
-      } else {
-        postText.classList.remove('show');
-      }
-
-      updateCarousel();
     }
 
     function updateCarousel() {
+      pauseAllVideos(); // Pause all videos before updating
       mediaContent.style.transform = `translateX(-${currentMediaIndex * 100}%)`;
       document.querySelectorAll('.carousel-dot').forEach((dot, index) => {
         dot.classList.toggle('active', index === currentMediaIndex);
       });
 
-      const videoElements = mediaContent.querySelectorAll('.status-video');
-      videoElements.forEach((video, index) => {
-        if (index === currentMediaIndex) {
-          video.muted = false;
-          if (!commentsSheet.classList.contains('open')) {
-            video.play().catch(error => console.error('Error playing video:', error));
-          }
-          muteToggleIcon.classList.remove('hidden');
-          playPauseIcon.classList.remove('hidden');
-          playPauseIcon.querySelector('.play-icon').classList.toggle('hidden', !video.paused);
-          playPauseIcon.querySelector('.pause-icon').classList.toggle('hidden', video.paused);
-        } else {
-          video.pause();
-          video.currentTime = 0;
+      if (mediaItems[currentMediaIndex].type === 'video') {
+        const video = mediaContent.querySelectorAll('.status-video')[currentMediaIndex];
+        video.muted = isMuted;
+        if (!commentsSheet.classList.contains('open') && !document.hidden) {
+          video.play().catch(error => {
+            console.error('Error playing video:', error);
+            showAlert('Failed to play video.');
+          });
         }
-      });
-      if (mediaItems[currentMediaIndex].type !== 'video') {
-        muteToggleIcon.classList.add('hidden');
-        playPauseIcon.classList.add('hidden');
       }
+
+      updateVideoControls();
     }
 
     async function renderComments(comments) {
@@ -768,12 +770,8 @@
     function openBottomSheet() {
       commentsSheet.classList.add('open');
       commentInput.focus();
-      const video = mediaContent.querySelector('.status-video');
-      if (video) {
-        video.pause();
-        playPauseIcon.classList.add('show');
-      }
-
+      pauseAllVideos();
+      playPauseIcon.classList.add('show');
       if (statusId) {
         const commentsRef = ref(db, `statuses/${statusId}/comments`);
         commentsListener = onValue(commentsRef, (snap) => {
@@ -790,8 +788,8 @@
     function closeBottomSheet() {
       commentsSheet.classList.remove('open');
       commentInput.value = '';
-      const video = mediaContent.querySelector('.status-video');
-      if (video && !document.hidden) {
+      if (mediaItems[currentMediaIndex].type === 'video' && !document.hidden) {
+        const video = mediaContent.querySelectorAll('.status-video')[currentMediaIndex];
         video.play().catch(error => console.error('Error resuming video:', error));
         playPauseIcon.classList.remove('show');
       }
@@ -927,7 +925,7 @@
         const reactionRef = ref(db, `statuses/${statusId}/reactions/${currentUser.uid}`);
         const snap = await get(reactionRef);
         if (snap.exists()) {
-          await set(reactionRef, null); // Use set(null) to remove reaction
+          await set(reactionRef, null);
           likeBtn.classList.remove('liked');
         } else {
           await set(reactionRef, { timestamp: Date.now() });
@@ -1128,6 +1126,16 @@
       }
     });
 
+    muteToggleIcon.addEventListener('click', () => {
+      if (mediaItems[currentMediaIndex]?.type === 'video') {
+        const video = mediaContent.querySelectorAll('.status-video')[currentMediaIndex];
+        isMuted = !isMuted;
+        video.muted = isMuted;
+        muteToggleIcon.querySelector('.mute-icon').classList.toggle('hidden', !isMuted);
+        muteToggleIcon.querySelector('.unmute-icon').classList.toggle('hidden', isMuted);
+      }
+    });
+
     mediaContainer.addEventListener('touchstart', (e) => {
       const now = new Date().getTime();
       const timeSinceLastTap = now - lastTap;
@@ -1175,8 +1183,8 @@
     });
 
     document.addEventListener('visibilitychange', () => {
-      const video = mediaContent.querySelector('.status-video');
-      if (video) {
+      if (mediaItems[currentMediaIndex]?.type === 'video') {
+        const video = mediaContent.querySelectorAll('.status-video')[currentMediaIndex];
         if (document.hidden || commentsSheet.classList.contains('open')) {
           video.pause();
           playPauseIcon.classList.add('show');
