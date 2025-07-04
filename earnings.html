@@ -67,6 +67,15 @@
             background: linear-gradient(to right, #ff2d55, #ff8e53);
             color: #fff;
         }
+        .error-message {
+            color: #ff2d55;
+            text-align: center;
+            margin-top: 1rem;
+            display: none;
+        }
+        .error-message.show {
+            display: block;
+        }
         @keyframes fadeIn {
             from { opacity: 0; transform: translateY(10px); }
             to { opacity: 1; transform: translateY(0); }
@@ -112,6 +121,7 @@
                     <button id="claim-btn" class="px-6 py-2 bg-red-600 text-white rounded-lg disabled-btn hover-scale" disabled aria-label="Claim earnings">Claim</button>
                 </div>
             </div>
+            <div id="error-message" class="error-message">Failed to load data. <button id="retry-btn" class="underline">Retry</button></div>
         </div>
 
         <!-- Impressions Graph -->
@@ -187,6 +197,8 @@
         const claimBtn = document.getElementById('claim-btn');
         const impressionsChartCanvas = document.getElementById('impressions-chart');
         const filterButtons = document.querySelectorAll('.filter-btn');
+        const errorMessage = document.getElementById('error-message');
+        const retryBtn = document.getElementById('retry-btn');
 
         // Earnings Logic
         const R_PER_IMPRESSION = 2 / 30; // R2 per 30 impressions
@@ -322,6 +334,7 @@
                 let totalPlatformViews = 0;
                 if (snapshot.exists()) {
                     const allStatuses = snapshot.val();
+                    console.log('All statuses:', allStatuses); // Debug
                     Object.values(allStatuses).forEach(userPosts => {
                         Object.values(userPosts).forEach(post => {
                             totalPlatformViews += post.impressions || 0;
@@ -329,28 +342,25 @@
                     });
                 }
                 totalPlatformViewsEl.textContent = totalPlatformViews;
+                return totalPlatformViews;
             } catch (error) {
                 console.error('Error fetching total platform views:', error);
                 totalPlatformViewsEl.textContent = 'Error';
+                throw error;
             }
         }
 
-        auth.onAuthStateChanged(user => {
-            if (!user) {
-                window.location.href = 'signup.html';
-                return;
-            }
+        // Load all data
+        async function loadData(userId) {
+            try {
+                errorMessage.classList.remove('show');
+                const [postsSnapshot, claimsSnapshot] = await Promise.all([
+                    get(ref(db, `statuses/${userId}`)),
+                    get(ref(db, `earnings/${userId}/claims`))
+                ]);
 
-            const userId = user.uid;
-            const postsRef = ref(db, `statuses/${userId}`);
-            const earningsRef = ref(db, `earnings/${userId}`);
-
-            // Fetch and display posts, chart, claim history, and total platform views
-            Promise.all([
-                get(postsRef),
-                get(ref(db, `earnings/${userId}/claims`))
-            ]).then(([postsSnapshot, claimsSnapshot]) => {
                 const posts = postsSnapshot.val() || {};
+                console.log('User posts:', posts); // Debug
                 let totalViews = 0;
                 let totalEarnings = 0;
 
@@ -360,7 +370,7 @@
                 Object.entries(posts).forEach(([postId, post]) => {
                     const impressions = post.impressions || 0;
                     totalViews += impressions;
-                    const earnings = totalViews >= MIN_VIEWS ? (impressions * R_PER_IMPRESSION).toFixed(2) : 0;
+                    const earnings = impressions >= MIN_VIEWS ? (impressions * R_PER_IMPRESSION).toFixed(2) : 0;
                     totalEarnings += parseFloat(earnings);
 
                     const row = document.createElement('tr');
@@ -396,37 +406,6 @@
                     claimBtn.classList.add('bg-gradient-to-r', 'from-red-600', 'to-orange-500', 'hover:from-red-700', 'hover:to-orange-600');
                 }
 
-                // Filter buttons
-                filterButtons.forEach(btn => {
-                    btn.addEventListener('click', () => {
-                        filterButtons.forEach(b => b.classList.remove('active'));
-                        btn.classList.add('active');
-                        updateChart(posts, btn.dataset.period);
-                    });
-                });
-
-                // Claim earnings
-                claimBtn.addEventListener('click', () => {
-                    if (totalEarnings >= CLAIM_THRESHOLD) {
-                        const claimData = {
-                            amount: totalEarnings,
-                            claimedAt: Date.now(),
-                            status: 'pending'
-                        };
-                        set(ref(db, `earnings/${userId}/claims/${Date.now()}`), claimData)
-                            .then(() => {
-                                alert('Earnings claim submitted! Processing may take a few days.');
-                                claimBtn.disabled = true;
-                                claimBtn.classList.add('disabled-btn');
-                                claimBtn.classList.remove('bg-gradient-to-r', 'from-red-600', 'to-orange-500');
-                            })
-                            .catch(error => {
-                                console.error('Error claiming earnings:', error);
-                                alert('Failed to submit claim. Please try again.');
-                            });
-                    }
-                });
-
                 // Fetch and display claim history
                 const claims = claimsSnapshot.val() || {};
                 claimHistoryTable.innerHTML = '';
@@ -440,10 +419,58 @@
                 });
 
                 // Fetch total platform views
-                fetchTotalPlatformViews();
-            }).catch(error => {
+                await fetchTotalPlatformViews();
+            } catch (error) {
                 console.error('Error fetching posts or claims:', error);
-                alert('Failed to load earnings data.');
+                errorMessage.classList.add('show');
+            }
+        }
+
+        // Auth state listener
+        auth.onAuthStateChanged(user => {
+            if (!user) {
+                window.location.href = 'signup.html';
+                return;
+            }
+
+            const userId = user.uid;
+            loadData(userId);
+
+            // Retry button
+            retryBtn.addEventListener('click', () => loadData(userId));
+
+            // Filter buttons
+            filterButtons.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    filterButtons.forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    get(ref(db, `statuses/${userId}`)).then(snapshot => {
+                        const posts = snapshot.val() || {};
+                        updateChart(posts, btn.dataset.period);
+                    });
+                });
+            });
+
+            // Claim earnings
+            claimBtn.addEventListener('click', () => {
+                if (totalEarningsEl.textContent.replace('R', '') >= CLAIM_THRESHOLD) {
+                    const claimData = {
+                        amount: parseFloat(totalEarningsEl.textContent.replace('R', '')),
+                        claimedAt: Date.now(),
+                        status: 'pending'
+                    };
+                    set(ref(db, `earnings/${userId}/claims/${Date.now()}`), claimData)
+                        .then(() => {
+                            alert('Earnings claim submitted! Processing may take a few days.');
+                            claimBtn.disabled = true;
+                            claimBtn.classList.add('disabled-btn');
+                            claimBtn.classList.remove('bg-gradient-to-r', 'from-red-600', 'to-orange-500');
+                        })
+                        .catch(error => {
+                            console.error('Error claiming earnings:', error);
+                            alert('Failed to submit claim. Please try again.');
+                        });
+                }
             });
         });
 
