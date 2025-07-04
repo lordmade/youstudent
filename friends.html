@@ -1083,7 +1083,7 @@
     document.querySelector('.tab-nav').classList.toggle('dark', isDark);
     document.querySelector('.chat-subtab-nav')?.classList.toggle('dark', isDark);
     document.querySelectorAll('.friend-card, .status-card, .service-card').forEach(el => el.classList.toggle('dark', isDark));
-    document.querySelectorAll('.status-text, .service-description, .sponsored-text, .posted-by, .service-cta, .reaction-btn, .reaction-count, .comment-btn, .comment-count').forEach(el => el.classList.toggle('dark', isDark));
+    document.querySelectorAll('.status-text, .service-description, .sponsored-text, .posted-by, .service-cta, .reaction-btn, .reaction-count, .comment-btn, .comment-count, .impression-btn, .impression-count').forEach(el => el.classList.toggle('dark', isDark));
     document.querySelectorAll('.last-seen, .status-time, .member-count, .service-time, .comment-time').forEach(el => el.classList.toggle('dark', isDark));
     document.querySelectorAll('#no-friends-message, #no-groups-message, #no-statuses-message, #no-services-message, #no-inbox-message').forEach(el => el.classList.toggle('dark', isDark));
     document.querySelectorAll('.tab-nav button, .chat-subtab-nav button').forEach(el => el.classList.toggle('dark', isDark));
@@ -1427,7 +1427,7 @@
     card.setAttribute("role", "button");
     card.setAttribute("tabindex", "0");
     card.setAttribute("aria-label", `Chat with ${data.name || "Friend"}`);
-    card.dataset.uid = uid; // Add data-uid for unique identification
+    card.dataset.uid = uid;
 
     const isOnline = data.presence === "online";
     const statusDot = isOnline
@@ -1451,7 +1451,7 @@
             <h4 class="friend-name">${data.name || "Friend"}</h4>
             ${isInbox && lastMessageTime ? `<p class="last-seen dark:last-seen">${timeAgo(lastMessageTime)}</p>` : ""}
           </div>
-         
+          ${isInbox ? `<p class="last-message dark:last-message">${unreadCount > 0 ? `<span class="font-semibold">${messagePreview}</span>` : messagePreview}</p>` : ""}
         </div>
         ${isInbox && unreadCount > 0 ? `<span class="unread-badge animate-pulse">${unreadCount}</span>` : ""}
       </div>
@@ -1501,7 +1501,6 @@
         const users = usersSnap.val();
         const friendData = [];
 
-        // Collect friend data and their latest messages
         for (const chatId in chats) {
           const participants = chats[chatId].participants || {};
           if (participants[uid]) {
@@ -1531,14 +1530,11 @@
           return;
         }
 
-        // Sort friends by last message time (newest first, null times last)
         friendData.sort((a, b) => (b.lastMessageTime || 0) - (a.lastMessageTime || 0));
 
-        // Clear lists to ensure no stale cards
         friendsList.innerHTML = "";
         inboxList.innerHTML = "";
 
-        // Process each friend and update or create cards
         for (const { uid: friendUid, lastMessageTime, lastMessageText } of friendData) {
           const userData = users[friendUid] || {};
           const chatId = uid < friendUid ? `${uid}_${friendUid}` : `${friendUid}_${uid}`;
@@ -1568,39 +1564,31 @@
               }
             }
 
-            // Update or create friend card in Friends tab
             let friendCard = friendsList.querySelector(`[data-uid="${friendUid}"]`);
             if (friendCard) {
-              // Update existing friend card
               const newFriendCard = renderFriend(friendUid, userData, unreadCount, null, null, false);
               friendsList.replaceChild(newFriendCard, friendCard);
             } else {
-              // Create new friend card
               friendCard = renderFriend(friendUid, userData, unreadCount, null, null, false);
               friendsList.appendChild(friendCard);
             }
 
-            // Update or create inbox card if there are messages
             if (hasMessages) {
               let inboxCard = inboxList.querySelector(`[data-uid="${friendUid}"]`);
               if (inboxCard) {
-                // Update existing inbox card
                 const newInboxCard = renderFriend(friendUid, userData, unreadCount, latestMessageTime, latestMessageText, true);
                 inboxList.replaceChild(newInboxCard, inboxCard);
               } else {
-                // Create new inbox card
                 inboxCard = renderFriend(friendUid, userData, unreadCount, latestMessageTime, latestMessageText, true);
                 inboxList.appendChild(inboxCard);
               }
             } else {
-              // Remove inbox card if no messages exist
               let inboxCard = inboxList.querySelector(`[data-uid="${friendUid}"]`);
               if (inboxCard) {
                 inboxList.removeChild(inboxCard);
               }
             }
 
-            // Re-sort friend cards in both lists
             const sortedFriendCards = Array.from(friendsList.children).sort((a, b) => {
               const aData = friendData.find(f => f.uid === a.dataset.uid);
               const bData = friendData.find(f => f.uid === b.dataset.uid);
@@ -1621,7 +1609,6 @@
             inboxList.innerHTML = "";
             sortedInboxCards.forEach(card => inboxList.appendChild(card));
 
-            // Update visibility of no-inbox message
             noInboxMessage.classList.toggle("hidden", inboxList.children.length > 0);
           });
         }
@@ -1715,6 +1702,24 @@
     });
   }
 
+  async function trackImpression(statusId, userId) {
+    try {
+      const impressionRef = ref(db, `statuses/${statusId}/impressions/users/${userId}`);
+      const impressionSnap = await get(impressionRef);
+      if (!impressionSnap.exists()) {
+        const statusRef = ref(db, `statuses/${statusId}`);
+        const statusSnap = await get(statusRef);
+        const statusData = statusSnap.val() || {};
+        const currentImpressions = statusData.impressionCount || 0;
+
+        await set(impressionRef, { timestamp: Date.now() });
+        await update(statusRef, { impressionCount: currentImpressions + 1 });
+      }
+    } catch (error) {
+      console.error("Error tracking impression:", error);
+    }
+  }
+
   function renderStatusCard(statusId, status, userData) {
     const existingCard = statusesList.querySelector(`[data-sid="${statusId}"]`);
     
@@ -1722,7 +1727,7 @@
       const reactionCount = status.reactions ? Object.keys(status.reactions).length : 0;
       const hasReacted = status.reactions && status.reactions[currentUserUid];
       const commentCount = status.comments ? Object.keys(status.comments).length : 0;
-      const impressionCount = status.impressions || 0;
+      const impressionCount = status.impressionCount || 0;
       
       const reactionBtn = existingCard.querySelector(".reaction-btn");
       const reactionCountElement = existingCard.querySelector(".reaction-count");
@@ -1751,7 +1756,7 @@
     const reactionCount = status.reactions ? Object.keys(status.reactions).length : 0;
     const hasReacted = status.reactions && status.reactions[currentUserUid];
     const commentCount = status.comments ? Object.keys(status.comments).length : 0;
-    const impressionCount = status.impressions || 0;
+    const impressionCount = status.impressionCount || 0;
     const mediaUrls = Array.isArray(status.mediaUrls) ? status.mediaUrls : status.imageUrl ? [{ url: status.imageUrl, type: 'image' }] : [];
 
     card.innerHTML = `
@@ -2014,10 +2019,13 @@
                     muteIcon.querySelector(".unmute-icon").classList.add("hidden");
                   }
                 });
-              } else if (mediaUrls[currentIndex].type === 'video') {
-                const video = card.querySelector(`.status-video:nth-child(${currentIndex + 1})`);
-                if (video) {
-                  video.play().catch((error) => console.error("Error auto-playing video:", error));
+              } else {
+                trackImpression(statusId, currentUserUid);
+                if (mediaUrls[currentIndex].type === 'video') {
+                  const video = card.querySelector(`.status-video:nth-child(${currentIndex + 1})`);
+                  if (video) {
+                    video.play().catch((error) => console.error("Error auto-playing video:", error));
+                  }
                 }
               }
             });
@@ -2032,6 +2040,7 @@
             (entries) => {
               entries.forEach((entry) => {
                 if (entry.isIntersecting) {
+                  trackImpression(statusId, currentUserUid);
                   video.play().catch((error) => console.error("Error auto-playing video:", error));
                 } else {
                   video.pause();
@@ -2049,6 +2058,18 @@
           );
           observer.observe(card);
         }
+      } else {
+        const observer = new IntersectionObserver(
+          (entries) => {
+            entries.forEach((entry) => {
+              if (entry.isIntersecting) {
+                trackImpression(statusId, currentUserUid);
+              }
+            });
+          },
+          { threshold: 0.5 }
+        );
+        observer.observe(card);
       }
     }
 
