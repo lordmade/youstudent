@@ -807,57 +807,67 @@
       }, 2000);
     }
 
-    async function loadStatus(newStatusId, isPrevious = false) {
+   async function loadStatus(newStatusId, isPrevious = false) {
+  try {
+    const statusRef = ref(db, `statuses/${newStatusId}`);
+    const statusSnap = await get(statusRef);
+    if (!statusSnap.exists()) {
+      showAlert('Post not found.');
+      return;
+    }
+    const status = statusSnap.val();
+    postUserId = status.userId;
+    statusId = newStatusId;
+
+    // Increment impressions (only for new views, not when navigating to previous status)
+    if (!isPrevious) {
       try {
-        const statusSnap = await get(ref(db, `statuses/${newStatusId}`));
-        if (!statusSnap.exists()) {
-          showAlert('Post not found.');
-          return;
-        }
-        const status = statusSnap.val();
-        postUserId = status.userId;
-        statusId = newStatusId;
-
-        if (!isPrevious) {
-          if (historyIndex < statusHistory.length - 1) {
-            statusHistory = statusHistory.slice(0, historyIndex + 1);
-          }
-          statusHistory.push(newStatusId);
-          historyIndex++;
-        }
-
-        history.pushState({}, '', `?sid=${statusId}`);
-
-        renderMedia(status);
-        const reactions = status.reactions || {};
-        likeCount.textContent = Object.keys(reactions).length;
-        likeBtn.classList.toggle('liked', !!reactions[currentUser.uid]);
-        const comments = status.comments || {};
-        commentCount.textContent = Object.keys(comments).length;
-        renderComments(comments);
-        const userData = await getUserData(postUserId);
-        profileAvatar.src = userData.photoURL || 'https://www.gravatar.com/avatar?d=mp';
-        profileUsername.textContent = userData.name || 'User';
-
-        addFriendBtn.classList.add('hidden');
-        if (postUserId !== currentUser.uid) {
-          const chatSnap = await get(ref(db, `chats`));
-          const chats = chatSnap.val() || {};
-          const isFriend = Object.values(chats).some(chat =>
-            chat.participants?.[currentUser.uid] && chat.participants?.[postUserId]
-          );
-          if (!isFriend) {
-            addFriendBtn.classList.remove('hidden');
-          }
-        }
-
-        showSwipeText(isPrevious ? 'Previous Post' : 'Next Post');
+        await update(statusRef, { impressions: (status.impressions || 0) + 1 });
       } catch (error) {
-        console.error('Error loading status:', error);
-        showAlert('Failed to load post.');
+        console.error('Error incrementing impressions:', error);
+        // Continue execution even if impressions update fails
       }
     }
 
+    if (!isPrevious) {
+      if (historyIndex < statusHistory.length - 1) {
+        statusHistory = statusHistory.slice(0, historyIndex + 1);
+      }
+      statusHistory.push(newStatusId);
+      historyIndex++;
+    }
+
+    history.pushState({}, '', `?sid=${statusId}`);
+
+    renderMedia(status);
+    const reactions = status.reactions || {};
+    likeCount.textContent = Object.keys(reactions).length;
+    likeBtn.classList.toggle('liked', !!reactions[currentUser.uid]);
+    const comments = status.comments || {};
+    commentCount.textContent = Object.keys(comments).length;
+    renderComments(comments);
+    const userData = await getUserData(postUserId);
+    profileAvatar.src = userData.photoURL || 'https://www.gravatar.com/avatar?d=mp';
+    profileUsername.textContent = userData.name || 'User';
+
+    addFriendBtn.classList.add('hidden');
+    if (postUserId !== currentUser.uid) {
+      const chatSnap = await get(ref(db, `chats`));
+      const chats = chatSnap.val() || {};
+      const isFriend = Object.values(chats).some(chat =>
+        chat.participants?.[currentUser.uid] && chat.participants?.[postUserId]
+      );
+      if (!isFriend) {
+        addFriendBtn.classList.remove('hidden');
+      }
+    }
+
+    showSwipeText(isPrevious ? 'Previous Post' : 'Next Post');
+  } catch (error) {
+    console.error('Error loading status:', error);
+    showAlert('Failed to load post.');
+  }
+}
     async function loadNextRandomStatus() {
       try {
         const statusesRef = ref(db, 'statuses');
