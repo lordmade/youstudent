@@ -235,7 +235,7 @@
       cursor: pointer;
       transition: transform 0.2s ease, box-shadow 0.2s ease;
       box-shadow: var(--shadow);
-      z-index: 20; /* Ensure it stays visible */
+      z-index: 20;
     }
 
     .notifications-container:hover {
@@ -707,6 +707,57 @@
       animation: spin 1s linear infinite;
     }
 
+    .live-btn {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: var(--primary);
+      color: #fff;
+      border-radius: 9999px;
+      padding: 0.5rem 1rem;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      margin-left: 1rem;
+      transition: transform 0.2s ease, background 0.2s ease;
+      box-shadow: var(--shadow);
+    }
+
+    .live-btn:hover {
+      transform: scale(1.05);
+      background: var(--primary-dark);
+    }
+
+    .live-btn:focus-visible {
+      outline: 2px solid var(--primary-dark);
+      outline-offset: 2px;
+    }
+
+    .dark .live-btn {
+      background: var(--primary-dark);
+    }
+
+    .dark .live-btn:hover {
+      background: var(--primary);
+    }
+
+    .live-icon {
+      width: 20px;
+      height: 20px;
+    }
+
+    .animated-love {
+      position: absolute;
+      bottom: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 40px;
+      height: 40px;
+      fill: #ff3b3b;
+      opacity: 0;
+      animation: loveRise 2s ease-out forwards;
+    }
+
     @keyframes spin {
       0% { transform: rotate(0deg); }
       100% { transform: rotate(360deg); }
@@ -734,6 +785,12 @@
       to { opacity: 1; transform: translateY(0); }
     }
 
+    @keyframes loveRise {
+      0% { bottom: 0; opacity: 0; transform: translateX(-50%) scale(0); }
+      20% { opacity: 1; transform: translateX(-50%) scale(1); }
+      100% { bottom: 80vh; opacity: 0; transform: translateX(-50%) scale(1.5); }
+    }
+
     @media (max-width: 640px) {
       .container {
         padding: 0;
@@ -759,6 +816,10 @@
         padding: 0.6rem 1rem;
         max-width: 90%;
       }
+      .live-btn {
+        padding: 0.4rem 0.8rem;
+        font-size: 0.85rem;
+      }
     }
   </style>
 </head>
@@ -769,6 +830,12 @@
         <img id="profile-avatar" src="https://www.gravatar.com/avatar?d=mp" alt="User avatar" class="profile-avatar" loading="lazy" />
         <span id="profile-username" class="profile-username">Loading...</span>
       </div>
+      <button id="live-btn" class="live-btn hidden" aria-label="Watch live stream">
+        <svg class="live-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M5 3v18l15-9z" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <span class="live-text">Watch Live</span>
+      </button>
     </div>
     <div class="notifications-container" role="button" tabindex="0" aria-label="View notifications">
       <svg class="notifications-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -891,6 +958,7 @@
     const container = document.querySelector('.container');
     const swipeText = document.getElementById('swipe-text');
     const postText = document.getElementById('post-text');
+    const liveBtn = document.getElementById('live-btn');
 
     let currentUser;
     let postUserId;
@@ -949,6 +1017,7 @@
       addStatusBtn.classList.toggle('dark', isDark);
       notificationsContainer.classList.toggle('dark', isDark);
       notificationsUnreadCount.classList.toggle('dark', isDark);
+      liveBtn.classList.toggle('dark', isDark);
     }
 
     function timeAgo(timestamp) {
@@ -1177,7 +1246,7 @@
     function shuffleArray(array) {
       for (let i = array.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
-        [array[i], array[j]] = [array[j], array[i]];
+        [array[i], array[j] = [array[j], array[i]];
       }
       return array;
     }
@@ -1242,6 +1311,12 @@
         const status = statusSnap.val();
         postUserId = status.userId;
         statusId = newStatusId;
+
+        // Check if the user is live
+        const userLiveRef = ref(db, `users/${postUserId}/isLive`);
+        const liveSnap = await get(userLiveRef);
+        const isLive = liveSnap.exists() && liveSnap.val() === true;
+        liveBtn.classList.toggle('hidden', !isLive);
 
         if (!isPrevious) {
           try {
@@ -1658,6 +1733,28 @@
           playPauseIcon.classList.remove('show');
         }
       }
+    });
+
+    // Live button click handler
+    liveBtn.addEventListener('click', () => {
+      if (postUserId) {
+        location.href = `live.html?uid=${postUserId}`;
+      }
+    });
+
+    // Double-tap or reaction effect for live button
+    let lastTapTime = 0;
+    liveBtn.addEventListener('touchstart', (e) => {
+      const currentTime = new Date().getTime();
+      const tapLength = currentTime - lastTapTime;
+      if (tapLength < 300 && tapLength > 0) {
+        const love = document.createElement('svg');
+        love.className = 'animated-love';
+        love.innerHTML = '<path d="M12 4.248c-3.148-5.402-12-3.825-12 2.944 0 4.661 5.571 9.427 12 15.808 6.43-6.381 12-11.147 12-15.808 0-6.792-8.875-8.306-12-2.944z"/>';
+        document.body.appendChild(love);
+        setTimeout(() => document.body.removeChild(love), 2000);
+      }
+      lastTapTime = currentTime;
     });
   </script>
 </body>
