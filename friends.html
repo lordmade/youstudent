@@ -1599,297 +1599,349 @@
       }
     }
 
-    function renderStatusCard(statusId, status, userData) {
-      const existingCard = statusesList.querySelector(`[data-sid="${statusId}"]`);
+    
+        
       
-      if (existingCard) {
-        const reactionCount = status.reactions ? Object.keys(status.reactions).length : 0;
-        const hasReacted = status.reactions && status.reactions[currentUserUid];
-        const commentCount = status.comments ? Object.keys(status.comments).length : 0;
-        const impressionCount = status.impressionCount || 0;
-        
-        const reactionBtn = existingCard.querySelector(".reaction-btn");
-        const reactionCountElement = existingCard.querySelector(".reaction-count");
-        const commentCountElement = existingCard.querySelector(".comment-count");
-        const impressionCountElement = existingCard.querySelector(".impression-count");
-        
-        if (reactionBtn) {
-          reactionBtn.classList.toggle("reacted", hasReacted);
-          reactionBtn.setAttribute("fill", hasReacted ? "#ef4444" : "none");
-        }
-        if (reactionCountElement) {
-          reactionCountElement.textContent = `${reactionCount} love${reactionCount !== 1 ? 's' : ''}`;
-        }
-        if (commentCountElement) {
-          commentCountElement.textContent = `${commentCount} comment${commentCount !== 1 ? 's' : ''}`;
-        }
-        if (impressionCountElement) {
-          impressionCountElement.textContent = `${impressionCount} view${impressionCount !== 1 ? 's' : ''}`;
-        }
-        return existingCard;
-      }
+          function renderStatusCard(statusId, status, userData) {
+  // Check for existing card to update instead of re-rendering
+  const existingCard = statusesList.querySelector(`[data-sid="${statusId}"]`);
+  if (existingCard) {
+    const reactionCount = status.reactions ? Object.keys(status.reactions).length : 0;
+    const hasReacted = status.reactions && status.reactions[currentUserUid];
+    const commentCount = status.comments ? Object.keys(status.comments).length : 0;
+    const impressionCount = status.impressionCount || 0;
 
-      const card = document.createElement("div");
-      card.className = "status-card";
-      card.dataset.sid = statusId;
-      const reactionCount = status.reactions ? Object.keys(status.reactions).length : 0;
-      const hasReacted = status.reactions && status.reactions[currentUserUid];
-      const commentCount = status.comments ? Object.keys(status.comments).length : 0;
-      const impressionCount = status.impressionCount || 0;
-      const mediaUrls = Array.isArray(status.mediaUrls) ? status.mediaUrls : status.imageUrl ? [{ url: status.imageUrl, type: 'image' }] : [];
+    const reactionBtn = existingCard.querySelector(".reaction-btn");
+    const reactionCountElement = existingCard.querySelector(".reaction-count");
+    const commentCountElement = existingCard.querySelector(".comment-count");
+    const impressionCountElement = existingCard.querySelector(".impression-count");
 
-      card.innerHTML = `
-        ${status.userId === currentUserUid ? `
-          <svg class="delete-icon" data-sid="${statusId}" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-label="Delete status">
-            <path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
-          </svg>` : ""}
-        <div class="status-header">
-          <img src="${userData.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${userData.name || 'User'} avatar" class="status-avatar" />
-          <div class="status-info dark:status-info">
-            <h4>${userData.name || 'User'}</h4>
-            <p class="status-time dark:status-time">${timeAgo(status.timestamp)}</p>
-          </div>
-        </div>
-        ${mediaUrls.length > 0 ? `
-          <div class="status-carousel-container">
-            <div class="status-carousel">
-              ${mediaUrls.map((media, index) => `
-                <div class="status-media" data-index="${index}">
-                  ${media.type === 'image' ? `
-                    <img src="${media.url}" alt="Status image" class="status-image" loading="lazy" />
-                  ` : `
-                    <video src="${media.url}" class="status-video" muted playsinline ${media.muted ? '' : 'loop autoplay'}></video>
-                    ${media.muted ? `
-                      <svg class="mute-toggle-icon" data-index="${index}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4-4A1 1 0 0111 6v12a1 1 0 01-1.414.586l-4-4zM16 12h4m-2-2v4"/>
-                      </svg>
-                    ` : `
-                      <svg class="mute-toggle-icon" data-index="${index}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4-4A1 1 0 0111 6v12a1 1 0 01-1.414.586l-4-4zM15 9a3 3 0 010 6"/>
-                      </svg>
-                    `}
-                  `}
-                </div>
-              `).join('')}
+    if (reactionBtn) {
+      reactionBtn.classList.toggle("reacted", hasReacted);
+      reactionBtn.setAttribute("fill", hasReacted ? "#ef4444" : "none");
+      reactionBtn.setAttribute("aria-pressed", hasReacted);
+    }
+    if (reactionCountElement) {
+      reactionCountElement.textContent = `${reactionCount} love${reactionCount !== 1 ? 's' : ''}`;
+    }
+    if (commentCountElement) {
+      commentCountElement.textContent = `${commentCount} comment${commentCount !== 1 ? 's' : ''}`;
+    }
+    if (impressionCountElement) {
+      impressionCountElement.textContent = `${impressionCount} view${impressionCount !== 1 ? 's' : ''}`;
+    }
+    return existingCard;
+  }
+
+  // Create new status card
+  const card = document.createElement("div");
+  card.className = "status-card";
+  card.dataset.sid = statusId;
+  card.setAttribute("role", "article");
+  card.setAttribute("aria-labelledby", `status-${statusId}-title`);
+  card.setAttribute("tabindex", "0"); // Make card focusable
+  const reactionCount = status.reactions ? Object.keys(status.reactions).length : 0;
+  const hasReacted = status.reactions && status.reactions[currentUserUid];
+  const commentCount = status.comments ? Object.keys(status.comments).length : 0;
+  const impressionCount = status.impressionCount || 0;
+  const mediaUrls = Array.isArray(status.mediaUrls) ? status.mediaUrls : status.imageUrl ? [{ url: status.imageUrl, type: 'image' }] : [];
+
+  card.innerHTML = `
+    ${status.userId === currentUserUid ? `
+      <svg class="delete-icon" data-sid="${statusId}" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-label="Delete status">
+        <path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
+      </svg>` : ""}
+    <div class="status-header">
+      <img src="${userData.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${userData.name || 'User'} avatar" class="status-avatar" loading="lazy" />
+      <div class="status-info dark:status-info">
+        <h4 id="status-${statusId}-title">${userData.name || 'User'}</h4>
+        <p class="status-time dark:status-time">${timeAgo(status.timestamp)}</p>
+      </div>
+    </div>
+    ${mediaUrls.length > 0 ? `
+      <div class="status-carousel-container">
+        <div class="status-carousel">
+          ${mediaUrls.map((media, index) => `
+            <div class="status-media" data-index="${index}">
+              ${media.type === 'image' ? `
+                <img src="${media.url}" alt="Status image" class="status-image" loading="lazy" />
+              ` : `
+                <video src="${media.url}" class="status-video" muted playsinline ${media.muted ? '' : 'loop autoplay'}></video>
+                ${media.muted ? `
+                  <svg class="mute-toggle-icon" data-index="${index}" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-label="Unmute video">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4-4A1 1 0 0111 6v12a1 1 0 01-1.414.586l-4-4zM16 12h4m-2-2v4"/>
+                  </svg>
+                ` : `
+                  <svg class="mute-toggle-icon" data-index="${index}" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-label="Mute video">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4-4A1 1 0 0111 6v12a1 1 0 01-1.414.586l-4-4zM15 9a3 3 0 010 6"/>
+                  </svg>
+                `}
+              `}
             </div>
-            ${mediaUrls.length > 1 ? `
-              <div class="carousel-dots">
-                ${mediaUrls.map((_, index) => `<span class="carousel-dot ${index === 0 ? 'active' : ''}" data-index="${index}"></span>`).join('')}
-              </div>
-            ` : ''}
+          `).join('')}
+        </div>
+        ${mediaUrls.length > 1 ? `
+          <div class="carousel-dots">
+            ${mediaUrls.map((_, index) => `<span class="carousel-dot ${index === 0 ? 'active' : ''}" data-index="${index}" role="button" aria-label="Go to media ${index + 1}"></span>`).join('')}
           </div>
         ` : ''}
-        ${status.text ? `<p class="status-text dark:status-text">${status.text}</p>` : ''}
-        <div class="status-footer">
-          <svg class="reaction-btn ${hasReacted ? 'reacted' : ''} dark:reaction-btn" fill="${hasReacted ? '#ef4444' : 'none'}" stroke="currentColor" viewBox="0 0 24 24" aria-label="Like status">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/>
-          </svg>
-          <span class="reaction-count dark:reaction-count">${reactionCount} love${reactionCount !== 1 ? 's' : ''}</span>
-          <svg class="comment-btn dark:comment-btn" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-label="Comment on status">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
-          </svg>
-          <span class="comment-count dark:comment-count">${commentCount} comment${commentCount !== 1 ? 's' : ''}</span>
-          <svg class="impression-btn dark:impression-btn" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-label="View impressions">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
-          </svg>
-          <span class="impression-count dark:impression-count">${impressionCount} view${impressionCount !== 1 ? 's' : ''}</span>
-        </div>
-        <svg class="double-tap-heart hidden" fill="#ef4444" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/>
-        </svg>
-      `;
+      </div>
+    ` : ''}
+    ${status.text ? `<p class="status-text dark:status-text">${status.text}</p>` : ''}
+    <div class="status-footer">
+      <svg class="reaction-btn ${hasReacted ? 'reacted' : ''} dark:reaction-btn" fill="${hasReacted ? '#ef4444' : 'none'}" stroke="currentColor" viewBox="0 0 24 24" role="button" aria-pressed="${hasReacted}" aria-label="Like status">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/>
+      </svg>
+      <span class="reaction-count dark:reaction-count">${reactionCount} love${reactionCount !== 1 ? 's' : ''}</span>
+      <svg class="comment-btn dark:comment-btn" fill="none" stroke="currentColor" viewBox="0 0 24 24" role="button" aria-label="Comment on status">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+      </svg>
+      <span class="comment-count dark:comment-count">${commentCount} comment${commentCount !== 1 ? 's' : ''}</span>
+      <svg class="impression-btn dark:impression-btn" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-label="View impressions">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+      </svg>
+      <span class="impression-count dark:impression-count">${impressionCount} view${impressionCount !== 1 ? 's' : ''}</span>
+    </div>
+    <svg class="double-tap-heart hidden" fill="#ef4444" viewBox="0 0 24 24" aria-hidden="true">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/>
+    </svg>
+  `;
 
-      if (status.userId === currentUserUid) {
-        const deleteIcon = card.querySelector(".delete-icon");
-        if (deleteIcon) {
-          deleteIcon.addEventListener("click", (e) => {
-            e.stopPropagation();
-            showDeleteStatusModal(statusId);
-          });
-        }
-      }
-
-      const reactionBtn = card.querySelector(".reaction-btn");
-      if (reactionBtn) {
-        reactionBtn.addEventListener("click", async (e) => {
-          e.stopPropagation();
-          try {
-            const reactionRef = ref(db, `statuses/${statusId}/reactions/${currentUserUid}`);
-            const statusRef = ref(db, `statuses/${statusId}`);
-            const statusSnap = await get(statusRef);
-            const statusData = statusSnap.val();
-
-            if (statusData.reactions && statusData.reactions[currentUserUid]) {
-              await remove(reactionRef);
-              await remove(ref(db, `notifications/${statusData.userId}/${statusId}/reactions/${currentUserUid}`));
-            } else {
-              reactionBtn.classList.add("liked");
-              await set(reactionRef, { timestamp: Date.now() });
-              if (statusData.userId !== currentUserUid) {
-                const notifRef = ref(db, `notifications/${statusData.userId}/${statusId}/reactions/${currentUserUid}`);
-                await set(notifRef, {
-                  type: 'reaction',
-                  userId: currentUserUid,
-                  timestamp: Date.now(),
-                  read: false
-                });
-              }
-            }
-          } catch (error) {
-            console.error("Error toggling reaction:", error);
-            alert("Failed to toggle reaction.");
-          }
-        });
-      }
-
-      let lastTap = 0;
-      card.addEventListener("click", async (e) => {
-        const now = Date.now();
-        const DOUBLE_TAP_THRESHOLD = 300;
-        if (now - lastTap < DOUBLE_TAP_THRESHOLD) {
-          const heart = card.querySelector(".double-tap-heart");
-          heart.classList.remove("hidden");
-          setTimeout(() => heart.classList.add("hidden"), 600);
-          if (!hasReacted) {
-            reactionBtn.click();
-          }
-        }
-        lastTap = now;
-
-        const commentBtn = e.target.closest(".comment-btn");
-        if (commentBtn) {
-          showCommentSheet(statusId);
-        }
+  // Handle delete icon for status owner
+  if (status.userId === currentUserUid) {
+    const deleteIcon = card.querySelector(".delete-icon");
+    if (deleteIcon) {
+      deleteIcon.addEventListener("click", (e) => {
+        e.stopPropagation();
+        showDeleteStatusModal(statusId);
       });
+    }
+  }
 
-      card.addEventListener("keydown", (e) => {
+  // Handle reaction button
+  const reactionBtn = card.querySelector(".reaction-btn");
+  if (reactionBtn) {
+    reactionBtn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      try {
+        const reactionRef = ref(db, `statuses/${statusId}/reactions/${currentUserUid}`);
+        const statusRef = ref(db, `statuses/${statusId}`);
+        const statusSnap = await get(statusRef);
+        const statusData = statusSnap.val();
+
+        if (statusData.reactions && statusData.reactions[currentUserUid]) {
+          await remove(reactionRef);
+          await remove(ref(db, `notifications/${statusData.userId}/${statusId}/reactions/${currentUserUid}`));
+        } else {
+          reactionBtn.classList.add("liked");
+          await set(reactionRef, { timestamp: Date.now() });
+          if (statusData.userId !== currentUserUid) {
+            const notifRef = ref(db, `notifications/${statusData.userId}/${statusId}/reactions/${currentUserUid}`);
+            await set(notifRef, {
+              type: 'reaction',
+              userId: currentUserUid,
+              timestamp: Date.now(),
+              read: false
+            });
+          }
+        }
+      } catch (error) {
+        console.error("Error toggling reaction:", error);
+        alert("Failed to toggle reaction.");
+      }
+    });
+  }
+
+  // Handle card click and double-tap
+  let lastTap = 0;
+  card.addEventListener("click", async (e) => {
+    // Prevent redirect on specific interactions
+    const commentBtn = e.target.closest(".comment-btn");
+    const deleteIcon = e.target.closest(".delete-icon");
+    const reactionBtn = e.target.closest(".reaction-btn");
+    const muteIcon = e.target.closest(".mute-toggle-icon");
+    const dot = e.target.closest(".carousel-dot");
+
+    if (commentBtn) {
+      showCommentSheet(statusId);
+      return;
+    }
+    if (deleteIcon || reactionBtn || muteIcon || dot) {
+      return;
+    }
+
+    const now = Date.now();
+    const DOUBLE_TAP_THRESHOLD = 300;
+    if (now - lastTap < DOUBLE_TAP_THRESHOLD) {
+      const heart = card.querySelector(".double-tap-heart");
+      heart.classList.remove("hidden");
+      setTimeout(() => heart.classList.add("hidden"), 600);
+      if (!hasReacted) {
+        reactionBtn.click();
+      }
+    }
+    lastTap = now;
+
+    // Redirect to post.html to play as a reel
+    window.location.href = `post.html?sid=${statusId}`;
+  });
+
+  // Handle keyboard navigation
+  card.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === "Space") {
+      e.preventDefault();
+      const commentBtn = card.querySelector(".comment-btn");
+      const reactionBtn = card.querySelector(".reaction-btn");
+      if (e.target === commentBtn) {
+        showCommentSheet(statusId);
+      } else if (e.target === reactionBtn) {
+        reactionBtn.click();
+      } else {
+        window.location.href = `post.html?sid=${statusId}`;
+      }
+    }
+  });
+
+  // Handle media carousel and interactions
+  if (mediaUrls.length > 0) {
+    trackImpression(statusId, currentUserUid);
+    const carousel = card.querySelector(".status-carousel");
+    const dots = card.querySelectorAll(".carousel-dot");
+    const videos = card.querySelectorAll(".status-video");
+    let currentIndex = 0;
+
+    function updateCarousel(index) {
+      carousel.style.transform = `translateX(-${index * 100}%)`;
+      dots.forEach((dot, i) => {
+        dot.classList.toggle("active", i === index);
+        dot.setAttribute("aria-current", i === index);
+      });
+      videos.forEach((video, i) => {
+        if (i === index) video.play();
+        else video.pause();
+      });
+    }
+
+    dots.forEach(dot => {
+      dot.addEventListener("click", () => {
+        currentIndex = parseInt(dot.dataset.index);
+        updateCarousel(currentIndex);
+      });
+      dot.addEventListener("keydown", (e) => {
         if (e.key === "Enter" || e.key === "Space") {
           e.preventDefault();
-          const commentBtn = card.querySelector(".comment-btn");
-          if (e.target === commentBtn) {
-            showCommentSheet(statusId);
-          } else {
-            reactionBtn.click();
-          }
+          currentIndex = parseInt(dot.dataset.index);
+          updateCarousel(currentIndex);
         }
       });
+    });
 
-      if (mediaUrls.length > 0) {
-        trackImpression(statusId, currentUserUid);
-        const carousel = card.querySelector(".status-carousel");
-        const dots = card.querySelectorAll(".carousel-dot");
-        const videos = card.querySelectorAll(".status-video");
-        let currentIndex = 0;
+    const muteIcons = card.querySelectorAll(".mute-toggle-icon");
+    muteIcons.forEach(icon => {
+      icon.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const index = parseInt(icon.dataset.index);
+        const video = videos[index];
+        video.muted = !video.muted;
+        icon.innerHTML = video.muted
+          ? `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4-4A1 1 0 0111 6v12a1 1 0 01-1.414.586l-4-4zM16 12h4m-2-2v4"/>`
+          : `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4-4A1 1 0 0111 6v12a1 1 0 01-1.414.586l-4-4zM15 9a3 3 0 010 6"/>`;
+        icon.setAttribute("aria-label", video.muted ? "Unmute video" : "Mute video");
+      });
+    });
 
-        function updateCarousel(index) {
-          carousel.style.transform = `translateX(-${index * 100}%)`;
-          dots.forEach((dot, i) => dot.classList.toggle("active", i === index));
-          videos.forEach((video, i) => {
-            if (i === index) video.play();
-            else video.pause();
-          });
-        }
+    let touchStartX = 0;
+    let touchEndX = 0;
 
-        dots.forEach(dot => {
-          dot.addEventListener("click", () => {
-            currentIndex = parseInt(dot.dataset.index);
-            updateCarousel(currentIndex);
-          });
-        });
+    card.addEventListener("touchstart", (e) => {
+      touchStartX = e.changedTouches[0].screenX;
+    });
 
-        const muteIcons = card.querySelectorAll(".mute-toggle-icon");
-        muteIcons.forEach(icon => {
-          icon.addEventListener("click", (e) => {
-            e.stopPropagation();
-            const index = parseInt(icon.dataset.index);
-            const video = videos[index];
-            video.muted = !video.muted;
-            icon.innerHTML = video.muted
-              ? `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4-4A1 1 0 0111 6v12a1 1 0 01-1.414.586l-4-4zM16 12h4m-2-2v4"/>`
-              : `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4-4A1 1 0 0111 6v12a1 1 0 01-1.414.586l-4-4zM15 9a3 3 0 010 6"/>`;
-          });
-        });
-
-        let touchStartX = 0;
-        let touchEndX = 0;
-
-        card.addEventListener("touchstart", (e) => {
-          touchStartX = e.changedTouches[0].screenX;
-        });
-
-        card.addEventListener("touchend", (e) => {
-          touchEndX = e.changedTouches[0].screenX;
-          const swipeDistance = touchEndX - touchStartX;
-          if (swipeDistance > 50 && currentIndex > 0) {
-            currentIndex--;
-            updateCarousel(currentIndex);
-          } else if (swipeDistance < -50 && currentIndex < mediaUrls.length - 1) {
-            currentIndex++;
-            updateCarousel(currentIndex);
-          }
-        });
+    card.addEventListener("touchend", (e) => {
+      touchEndX = e.changedTouches[0].screenX;
+      const swipeDistance = touchEndX - touchStartX;
+      if (swipeDistance > 50 && currentIndex > 0) {
+        currentIndex--;
+        updateCarousel(currentIndex);
+      } else if (swipeDistance < -50 && currentIndex < mediaUrls.length - 1) {
+        currentIndex++;
+        updateCarousel(currentIndex);
       }
+    });
+  }
 
-      return card;
-    }
-
+  return card;
+}
     async function loadStatuses(uid) {
-      showLoading();
-      statusesList.innerHTML = "";
-      noStatusesMessage.classList.add("hidden");
+  // Show loading spinner to indicate data is being fetched
+  showLoading();
+  statusesList.innerHTML = ""; // Clear existing content
+  noStatusesMessage.classList.add("hidden"); // Hide "no statuses" message
 
-      // Add skeleton loading
-      for (let i = 0; i < 3; i++) {
-        const skeleton = document.createElement("div");
-        skeleton.className = "status-card skeleton h-64 mb-4";
-        statusesList.appendChild(skeleton);
+  // Add skeleton loading placeholders for better UX
+  for (let i = 0; i < 3; i++) {
+    const skeleton = document.createElement("div");
+    skeleton.className = "status-card skeleton h-64 mb-4";
+    skeleton.setAttribute("aria-hidden", "true"); // Hide from screen readers
+    statusesList.appendChild(skeleton);
+  }
+
+  const statusesRef = ref(db, "statuses");
+  const usersRef = ref(db, "users");
+
+  try {
+    // Listen for real-time updates to statuses
+    onValue(statusesRef, async (statusesSnap) => {
+      statusesList.innerHTML = ""; // Clear skeleton loaders
+      if (!statusesSnap.exists()) {
+        noStatusesMessage.classList.remove("hidden"); // Show "no statuses" message
+        hideLoading();
+        return;
       }
 
-      const statusesRef = ref(db, "statuses");
-      const usersRef = ref(db, "users");
-      const friendsRef = ref(db, `users/${uid}/friends`);
+      // Fetch user data for status authors
+      const usersSnap = await get(usersRef);
+      const users = usersSnap.exists() ? usersSnap.val() : {};
+      const statuses = statusesSnap.val();
+      const statusArray = [];
 
-      onValue(statusesRef, async (statusesSnap) => {
-        if (!statusesSnap.exists()) {
-          noStatusesMessage.classList.remove("hidden");
-          hideLoading();
-          return;
-        }
+      // Collect all statuses (no friendship filter)
+      for (const statusId in statuses) {
+        const status = statuses[statusId];
+        statusArray.push({ id: statusId, ...status });
+      }
 
-        const usersSnap = await get(usersRef);
-        const users = usersSnap.exists() ? usersSnap.val() : {};
-        const friendsSnap = await get(friendsRef);
-        const friends = friendsSnap.exists() ? Object.keys(friendsSnap.val()) : [];
-        const statuses = statusesSnap.val();
-        const statusArray = [];
-
-        for (const statusId in statuses) {
-          const status = statuses[statusId];
-          if (status.userId === uid || friends.includes(status.userId)) {
-            statusArray.push({ id: statusId, ...status });
-          }
-        }
-
-        if (statusArray.length === 0) {
-          noStatusesMessage.classList.remove("hidden");
-          hideLoading();
-          return;
-        }
-
-        statusArray.sort((a, b) => b.timestamp - a.timestamp);
-        statusesList.innerHTML = "";
-
-        for (const status of statusArray) {
-          const userData = users[status.userId] || {};
-          const statusCard = renderStatusCard(status.id, status, userData);
-          statusesList.appendChild(statusCard);
-        }
-
+      if (statusArray.length === 0) {
+        noStatusesMessage.classList.remove("hidden");
         hideLoading();
-      });
-    }
+        return;
+      }
 
+      // Sort statuses by timestamp (newest first)
+      statusArray.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+
+      // Batch DOM updates for performance
+      const fragment = document.createDocumentFragment();
+      for (const status of statusArray) {
+        const userData = users[status.userId] || {};
+        const statusCard = renderStatusCard(status.id, status, userData);
+        fragment.appendChild(statusCard);
+      }
+      statusesList.appendChild(fragment);
+
+      hideLoading();
+    }, (error) => {
+      console.error("Error loading statuses:", error);
+      noStatusesMessage.classList.remove("hidden");
+      hideLoading();
+    });
+  } catch (error) {
+    console.error("Error setting up statuses listener:", error);
+    noStatusesMessage.classList.remove("hidden");
+    hideLoading();
+  }
+}
     function renderServiceCard(serviceId, service, userData) {
       const card = document.createElement("div");
       card.className = "service-card";
