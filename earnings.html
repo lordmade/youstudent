@@ -12,7 +12,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Cantarell, sans-serif;
             background: linear-gradient(to bottom, #f3f4f6, #e5e7eb);
             min-height: 100vh;
             margin: 0;
@@ -82,8 +82,8 @@
                 <button id="theme-toggle" class="p-2 rounded-full bg-gray-200 dark:bg-gray-700 hover-scale" aria-label="Toggle theme">
                     <i class="fas fa-moon dark:fa-sun"></i>
                 </button>
-                <button onclick="location.href='friends.html'" class="p-2 rounded-full bg-gray-200 dark:bg-gray-700 hover-scale" aria-label="Back to friends">
-                    <i class="fas fa-arrow-left"></i>
+                <button onclick="location.href='profile.html?owner=true'" class="p-2 rounded-full bg-gray-200 dark:bg-gray-700 hover-scale" aria-label="Back to profile">
+                    <i class="fas fa-user"></i>
                 </button>
             </div>
         </header>
@@ -91,9 +91,13 @@
         <!-- Summary Section -->
         <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg mb-8 fade-in">
             <h2 class="text-2xl font-semibold mb-6 text-gray-800 dark:text-gray-200">Earnings Summary</h2>
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-6">
+            <div class="grid grid-cols-1 sm:grid-cols-4 gap-6">
                 <div class="p-6 bg-red-50 dark:bg-red-900 rounded-lg hover-scale">
-                    <p class="text-sm text-gray-600 dark:text-gray-300">Total Views</p>
+                    <p class="text-sm text-gray-600 dark:text-gray-300">Total Platform Views</p>
+                    <p id="total-platform-views" class="text-3xl font-bold text-red-600 dark:text-red-400">0</p>
+                </div>
+                <div class="p-6 bg-red-50 dark:bg-red-900 rounded-lg hover-scale">
+                    <p class="text-sm text-gray-600 dark:text-gray-300">Your Total Views</p>
                     <p id="total-views" class="text-3xl font-bold text-red-600 dark:text-red-400">0</p>
                 </div>
                 <div class="p-6 bg-red-50 dark:bg-red-900 rounded-lg hover-scale">
@@ -176,6 +180,7 @@
         const themeToggle = document.getElementById('theme-toggle');
         const postsTable = document.getElementById('posts-table');
         const claimHistoryTable = document.getElementById('claim-history-table');
+        const totalPlatformViewsEl = document.getElementById('total-platform-views');
         const totalViewsEl = document.getElementById('total-views');
         const totalEarningsEl = document.getElementById('total-earnings');
         const claimableEarningsEl = document.getElementById('claimable-earnings');
@@ -310,6 +315,26 @@
             impressionsChart.update();
         }
 
+        // Calculate total platform views
+        async function fetchTotalPlatformViews() {
+            try {
+                const snapshot = await get(ref(db, 'statuses'));
+                let totalPlatformViews = 0;
+                if (snapshot.exists()) {
+                    const allStatuses = snapshot.val();
+                    Object.values(allStatuses).forEach(userPosts => {
+                        Object.values(userPosts).forEach(post => {
+                            totalPlatformViews += post.impressions || 0;
+                        });
+                    });
+                }
+                totalPlatformViewsEl.textContent = totalPlatformViews;
+            } catch (error) {
+                console.error('Error fetching total platform views:', error);
+                totalPlatformViewsEl.textContent = 'Error';
+            }
+        }
+
         auth.onAuthStateChanged(user => {
             if (!user) {
                 window.location.href = 'signup.html';
@@ -320,9 +345,12 @@
             const postsRef = ref(db, `statuses/${userId}`);
             const earningsRef = ref(db, `earnings/${userId}`);
 
-            // Fetch and display posts, chart, and claim history
-            get(postsRef).then(snapshot => {
-                const posts = snapshot.val() || {};
+            // Fetch and display posts, chart, claim history, and total platform views
+            Promise.all([
+                get(postsRef),
+                get(ref(db, `earnings/${userId}/claims`))
+            ]).then(([postsSnapshot, claimsSnapshot]) => {
+                const posts = postsSnapshot.val() || {};
                 let totalViews = 0;
                 let totalEarnings = 0;
 
@@ -400,20 +428,21 @@
                 });
 
                 // Fetch and display claim history
-                get(ref(db, `earnings/${userId}/claims`)).then(snapshot => {
-                    const claims = snapshot.val() || {};
-                    claimHistoryTable.innerHTML = '';
-                    Object.entries(claims).forEach(([_, claim]) => {
-                        const row = document.createElement('tr');
-                        row.innerHTML = `
-                            <td>${new Date(claim.claimedAt).toLocaleString()}</td>
-                            <td>R${claim.amount.toFixed(2)}</td>
-                        `;
-                        claimHistoryTable.appendChild(row);
-                    });
+                const claims = claimsSnapshot.val() || {};
+                claimHistoryTable.innerHTML = '';
+                Object.entries(claims).forEach(([_, claim]) => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${new Date(claim.claimedAt).toLocaleString()}</td>
+                        <td>R${claim.amount.toFixed(2)}</td>
+                    `;
+                    claimHistoryTable.appendChild(row);
                 });
+
+                // Fetch total platform views
+                fetchTotalPlatformViews();
             }).catch(error => {
-                console.error('Error fetching posts:', error);
+                console.error('Error fetching posts or claims:', error);
                 alert('Failed to load earnings data.');
             });
         });
