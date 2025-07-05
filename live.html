@@ -6,7 +6,7 @@
   <title>BanterBox - Live Stream</title>
   <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet" />
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdn.agora.io/sdk/web/AgoraRTC_N-latest.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@livekit/components-js@2.0.0/dist/livekit-components.js"></script>
   <style>
     body {
       font-family: 'Roboto', 'Segoe UI', sans-serif;
@@ -340,6 +340,7 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
     import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
     import { getDatabase, ref, get, set, onValue, push } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-database.js";
+    import { Room, RoomEvent, VideoPresets } from "https://cdn.jsdelivr.net/npm/livekit-client@2.0.0/dist/livekit-client.esm.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
@@ -355,9 +356,9 @@
     const auth = getAuth(app);
     const db = getDatabase(app);
 
-    // Agora Configuration
-    const AGORA_APP_ID = "77c6f0e34a7b40029f2dbec9b1d79de6"; // Your provided Agora App ID
-    const AGORA_TOKEN = null; // Set to null for testing; use server-generated token for production
+    // LiveKit Cloud Configuration
+    const LIVEKIT_URL = "wss://banterbox-g0q6pz4z.livekit.cloud"; // Your provided WebSocket URL
+    const LIVEKIT_TOKEN = null; // Generated server-side
 
     const usernameElement = document.getElementById("username");
     const liveVideo = document.getElementById("live-video");
@@ -371,7 +372,7 @@
 
     let currentUserId = null;
     let streamUserId = null;
-    let agoraClient = null;
+    let room = null;
     let localTracks = null;
     let isStreaming = false;
 
@@ -406,15 +407,59 @@
       document.documentElement.style.fontSize = size === 'small' ? '14px' : size === 'large' ? '18px' : '16px';
     }
 
+    async function generateLiveKitToken() {
+      try {
+        const response = await fetch('http://localhost:3000/livekit-token', { // Update with your server URL
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            room: streamUserId,
+            identity: currentUserId,
+            name: (await get(ref(db, `users/${currentUserId}`))).val()?.name || 'Anonymous'
+          })
+        });
+        const { token } = await response.json();
+        if (!token) throw new Error('Token generation failed');
+        return token;
+      } catch (error) {
+        console.error('Error generating LiveKit token:', error);
+        showError('Failed to generate token. Check server connection.');
+        return null;
+      }
+    }
+
     async function startStream() {
       try {
         showLoading();
-        agoraClient = AgoraRTC.createClient({ mode: 'live', codec: 'vp8' });
-        await agoraClient.setClientRole('host');
-        localTracks = await AgoraRTC.createMicrophoneAndCameraTracks();
-        liveVideo.srcObject = localTracks[1].getMediaStream(); // Display local video
-        await agoraClient.join(AGORA_APP_ID, streamUserId, AGORA_TOKEN, currentUserId);
-        await agoraClient.publish(localTracks);
+        const token = await generateLiveKitToken();
+        if (!token) return;
+
+        room = new Room({
+          adaptiveStream: true,
+          dynacast: true,
+          videoCaptureDefaults: { resolution: VideoPresets.h720 }
+        });
+
+        room.on(RoomEvent.TrackSubscribed, (track, publication, participant) => {
+          if (track.kind === 'video') {
+            liveVideo.srcObject = track.mediaStream;
+            hideError();
+          }
+          if (track.kind === 'audio') {
+            track.mediaStreamTrack.enabled = true;
+          }
+        });
+
+        room.on(RoomEvent.TrackUnsubscribed, () => {
+          liveVideo.srcObject = null;
+          showError("Stream has ended.");
+        });
+
+        await room.connect(LIVEKIT_URL, token);
+        localTracks = await room.localParticipant.setCameraEnabled(true);
+        localTracks = await room.localParticipant.setMicrophoneEnabled(true);
+        liveVideo.srcObject = localTracks[1].track.mediaStream; // Display local video
+        await room.localParticipant.publishTracks(localTracks);
         isStreaming = true;
 
         await set(ref(db, `liveStreams/${currentUserId}`), {
@@ -426,12 +471,24 @@
 
         liveControls.innerHTML = `
           <button class="control-btn dark:control-btn" id="stop-stream-btn">Stop Stream</button>
+          <button class="control-btn dark:control-btn" id="mute-audio-btn">Mute Audio</button>
+          <button class="control-btn dark:control-btn" id="mute-video-btn">Mute Video</button>
         `;
         document.getElementById("stop-stream-btn").addEventListener("click", stopStream);
+        document.getElementById("mute-audio-btn").addEventListener("click", () => {
+          const isMuted = room.localParticipant.audioTracks[0].isMuted;
+          room.localParticipant.setMicrophoneEnabled(!isMuted);
+          document.getElementById("mute-audio-btn").textContent = !isMuted ? "Mute Audio" : "Unmute Audio";
+        });
+        document.getElementById("mute-video-btn").addEventListener("click", () => {
+          const isMuted = room.localParticipant.videoTracks[0].isMuted;
+          room.localParticipant.setCameraEnabled(!isMuted);
+          document.getElementById("mute-video-btn").textContent = !isMuted ? "Mute Video" : "Unmute Video";
+        });
         hideError();
       } catch (error) {
         console.error('Error starting stream:', error);
-        showError("Failed to start stream. Please check camera, microphone permissions, or Agora App ID.");
+        showError("Failed to start stream. Please check camera, microphone permissions, or LiveKit Cloud.");
       } finally {
         hideLoading();
       }
@@ -440,12 +497,12 @@
     async function stopStream() {
       try {
         showLoading();
-        if (localTracks) {
-          localTracks.forEach(track => track.close());
-          await agoraClient.unpublish();
-          await agoraClient.leave();
+        if (room) {
+          await room.localParticipant.unpublishTracks(localTracks);
+          localTracks.forEach(track => track.stop());
+          await room.disconnect();
+          room = null;
           localTracks = null;
-          agoraClient = null;
         }
         liveVideo.srcObject = null;
         isStreaming = false;
@@ -473,31 +530,35 @@
     async function watchStream() {
       try {
         showLoading();
-        agoraClient = AgoraRTC.createClient({ mode: 'live', codec: 'vp8' });
-        await agoraClient.setClientRole('audience');
-        await agoraClient.join(AGORA_APP_ID, streamUserId, AGORA_TOKEN, currentUserId);
+        const token = await generateLiveKitToken();
+        if (!token) return;
 
-        agoraClient.on('user-published', async (user, mediaType) => {
-          await agoraClient.subscribe(user, mediaType);
-          if (mediaType === 'video') {
-            const remoteVideoTrack = user.videoTrack;
-            liveVideo.srcObject = remoteVideoTrack.getMediaStream();
+        room = new Room({
+          adaptiveStream: true,
+          dynacast: true
+        });
+
+        room.on(RoomEvent.TrackSubscribed, (track, publication, participant) => {
+          if (track.kind === 'video') {
+            liveVideo.srcObject = track.mediaStream;
+            hideError();
           }
-          if (mediaType === 'audio') {
-            user.audioTrack.play();
+          if (track.kind === 'audio') {
+            track.mediaStreamTrack.enabled = true;
           }
         });
 
-        agoraClient.on('user-unpublished', () => {
+        room.on(RoomEvent.TrackUnsubscribed, () => {
           liveVideo.srcObject = null;
           showError("Stream has ended.");
         });
 
+        await room.connect(LIVEKIT_URL, token);
         liveControls.innerHTML = '';
         hideError();
       } catch (error) {
         console.error('Error watching stream:', error);
-        showError("Failed to load stream. The stream may have ended or the App ID is incorrect.");
+        showError("Failed to load stream. The stream may have ended or LiveKit Cloud is unreachable.");
       } finally {
         hideLoading();
       }
