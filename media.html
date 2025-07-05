@@ -56,8 +56,8 @@
     .header-icon.dark { stroke: #dc2626; }
     .media-container {
       max-width: 1200px;
-      margin: 1rem auto;
-      padding: 1rem 1.5rem;
+      margin: 0 auto;
+      padding: 0 1.5rem;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -84,6 +84,7 @@
       width: 100vw;
       height: 50vh;
       aspect-ratio: 16/9;
+      margin-top: 0;
     }
     .media-content {
       width: 100%;
@@ -92,6 +93,7 @@
       position: absolute;
       top: 0;
       left: 0;
+      cursor: pointer;
     }
     .media-content.thumbnail {
       z-index: 1;
@@ -233,12 +235,62 @@
       max-width: 1200px;
       width: 100%;
       margin: 1rem 0;
-      padding: 1rem 1.5rem;
+      padding: 0 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
     }
+    .comment-list {
+      max-height: 30vh;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+    .comment {
+      background: white;
+      border-radius: 8px;
+      padding: 1rem;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+    }
+    .comment.dark {
+      background: #1e293b;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+    }
+    .comment-text {
+      font-size: 0.95rem;
+      color: #1e293b;
+      margin-bottom: 0.5rem;
+    }
+    .comment-text.dark { color: #e2e8f0; }
+    .comment-meta {
+      font-size: 0.85rem;
+      color: #64748b;
+    }
+    .comment-meta.dark { color: #94a3b8; }
+    .no-comments {
+      font-size: 0.95rem;
+      color: #64748b;
+      text-align: center;
+    }
+    .no-comments.dark { color: #94a3b8; }
     .comment-form {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: rgba(255, 255, 255, 0.95);
+      padding: 1rem 1.5rem;
       display: flex;
       gap: 0.5rem;
-      margin-bottom: 1.5rem;
+      z-index: 1000;
+      box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    .comment-form.dark {
+      background: rgba(30, 41, 59, 0.95);
+      box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.3);
     }
     .comment-input {
       flex: 1;
@@ -287,38 +339,6 @@
     .comment-submit.dark {
       background: linear-gradient(135deg, #dc2626, #f97316);
     }
-    .comment-list {
-      display: flex;
-      flex-direction: column;
-      gap: 1rem;
-    }
-    .comment {
-      background: white;
-      border-radius: 8px;
-      padding: 1rem;
-      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
-    }
-    .comment.dark {
-      background: #1e293b;
-      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
-    }
-    .comment-text {
-      font-size: 0.95rem;
-      color: #1e293b;
-      margin-bottom: 0.5rem;
-    }
-    .comment-text.dark { color: #e2e8f0; }
-    .comment-meta {
-      font-size: 0.85rem;
-      color: #64748b;
-    }
-    .comment-meta.dark { color: #94a3b8; }
-    .no-comments {
-      font-size: 0.95rem;
-      color: #64748b;
-      text-align: center;
-    }
-    .no-comments.dark { color: #94a3b8; }
     .comment-error {
       font-size: 0.9rem;
       color: #ef4444;
@@ -364,13 +384,13 @@
   <div class="media-container" id="media-container">
     <div id="media-card"></div>
     <div class="comment-section">
-      <form id="comment-form" class="comment-form" aria-label="Comment Form">
+      <div id="comment-list" class="comment-list"></div>
+      <p id="no-comments" class="no-comments dark:no-comments" style="display: none;">No comments yet.</p>
+      <form id="comment-form" class="comment-form dark:comment-form" aria-label="Comment Form">
         <input type="text" id="comment-input" class="comment-input dark:comment-input" placeholder="Add a comment..." maxlength="500" required aria-label="Comment Input"/>
         <button type="submit" class="comment-submit dark:comment-submit">Post</button>
       </form>
       <p id="comment-error" class="comment-error dark:comment-error" role="alert" aria-live="polite"></p>
-      <div id="comment-list" class="comment-list"></div>
-      <p id="no-comments" class="no-comments dark:no-comments" style="display: none;">No comments yet.</p>
     </div>
   </div>
   <div class="no-media dark:no-media" id="no-media" style="display: none;">Media not found.</div>
@@ -432,6 +452,7 @@
       document.querySelectorAll('.header-icon').forEach(icon => icon.classList.toggle('dark', isDark));
       document.querySelectorAll('.comment-input').forEach(input => input.classList.toggle('dark', isDark));
       document.querySelectorAll('.comment-submit').forEach(btn => btn.classList.toggle('dark', isDark));
+      document.querySelectorAll('.comment-form').forEach(form => form.classList.toggle('dark', isDark));
       document.querySelectorAll('.comment-error').forEach(err => err.classList.toggle('dark', isDark));
       document.querySelectorAll('.comment').forEach(comment => comment.classList.toggle('dark', isDark));
       document.querySelectorAll('.comment-text').forEach(text => text.classList.toggle('dark', isDark));
@@ -461,16 +482,13 @@
         const viewSnap = await get(viewRef);
         if (viewSnap.exists()) return; // User has already viewed this post
 
-        // Record user view
         await set(viewRef, { viewedAt: Date.now() });
 
-        // Increment impressions
         const impressionRef = ref(db, `media/${mediaId}/impressions`);
         const snapshot = await get(impressionRef);
         const currentImpressions = snapshot.val() || 0;
         await set(impressionRef, currentImpressions + 1);
 
-        // Update displayed impression count
         const impressionElement = document.querySelector('.impression-count');
         if (impressionElement) {
           impressionElement.innerHTML = `<svg viewBox="0 0 24 24"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z" fill="currentColor"/></svg> ${currentImpressions + 1}`;
@@ -547,15 +565,15 @@
 
         const mediaElement = media.resourceType === 'image'
           ? `<div class="media-content-container">
-               <img src="${media.url || 'https://via.placeholder.com/800x450'}" alt="${media.title || 'Media'} thumbnail" class="media-content" />
+               <img src="${media.url || 'https://via.placeholder.com/800x450'}" alt="${media.title || 'Media'} thumbnail" class="media-content" aria-label="Media content" />
              </div>`
           : `<div class="media-content-container">
-               <img src="${media.thumbnailUrl || 'https://via.placeholder.com/800x450'}" alt="${media.title || 'Media'} thumbnail" class="media-content thumbnail" />
-               <video src="${media.url}" class="media-content video" muted playsinline loop></video>
-               <svg class="video-spinner dark:video-spinner" viewBox="0 0 24 24">
+               <img src="${media.thumbnailUrl || 'https://via.placeholder.com/800x450'}" alt="${media.title || 'Media'} thumbnail" class="media-content thumbnail" aria-label="Video thumbnail" />
+               <video src="${media.url}" class="media-content video" muted playsinline loop aria-label="Video content"></video>
+               <svg class="video-spinner dark:video-spinner" viewBox="0 0 24 24" aria-hidden="true">
                  <circle cx="12" cy="12" r="10" />
                </svg>
-               <div class="play-button" id="play-button">
+               <div class="play-button" id="play-button" role="button" aria-label="Play video">
                  <svg viewBox="0 0 24 24">
                    <path d="M8 5v14l11-7z" fill="currentColor" />
                  </svg>
@@ -569,7 +587,7 @@
             <p class="media-posted-by dark:media-posted-by">Posted by ${user.name} | ${media.category || 'Other'}</p>
             <p class="media-timestamp dark:media-timestamp">${formatTimestamp(media.timestamp)}</p>
             <span class="impression-count dark:impression-count">
-              <svg viewBox="0 0 24 24">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z" fill="currentColor"/>
               </svg>
               ${media.impressions || 0}
@@ -614,8 +632,8 @@
         const video = mediaCard.querySelector('video.media-content');
         if (video) {
           const thumbnail = mediaCard.querySelector('img.media-content.thumbnail');
-          const spinner = mediaCard.querySelector('.video-spinner');
-          const playButton = mediaCard.querySelector('#play-button');
+          const spinner = card.querySelector('.video-spinner');
+          const playButton = card.querySelector('#play-button');
 
           video.addEventListener('canplay', () => {
             video.classList.add('ready');
@@ -645,6 +663,18 @@
             if (spinner) spinner.classList.remove('active');
           });
 
+          video.addEventListener('click', () => {
+            if (video.paused) {
+              video.play().catch(error => {
+                console.error('Error playing video:', error);
+                if (spinner) spinner.classList.add('active');
+                if (playButton) playButton.classList.add('active');
+              });
+            } else {
+              video.pause();
+            }
+          });
+
           video.addEventListener('focus', () => {
             video.play().catch(error => {
               console.error('Error playing video:', error);
@@ -662,7 +692,8 @@
           });
 
           if (playButton) {
-            playButton.addEventListener('click', () => {
+            playButton.addEventListener('click', (e) => {
+              e.stopPropagation(); // Prevent video click event
               video.play().catch(error => {
                 console.error('Error playing video:', error);
                 if (spinner) spinner.classList.add('active');
