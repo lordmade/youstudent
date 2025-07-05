@@ -612,9 +612,9 @@
   </div>
 
   <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
-    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
-    import { getDatabase, ref, get, set, remove, onValue } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
+    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
+    import { getDatabase, ref, get, set, remove, onValue } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-database.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
@@ -627,8 +627,8 @@
     };
 
     const app = initializeApp(firebaseConfig);
-    const auth = getAuth();
-    const db = getDatabase();
+    const auth = getAuth(app);
+    const db = getDatabase(app);
 
     const addFriendForm = document.getElementById("add-friend-form");
     const friendEmailInput = document.getElementById("friend-email");
@@ -636,7 +636,6 @@
     const suggestionsDropdown = document.getElementById("suggestions-dropdown");
     const blockFriendBtn = document.getElementById("block-friend");
     const loadingOverlay = document.getElementById("loading-overlay");
-    const backBtn = document.querySelector(".back-btn");
     const friendsList = document.getElementById("friends-list");
     const noFriends = document.getElementById("no-friends");
     const formBox = document.getElementById("form-box");
@@ -657,7 +656,6 @@
       const isDark = themeValue === 'dark';
       document.body.classList.toggle('dark', isDark);
       document.querySelector('.header').classList.toggle('dark', isDark);
-      document.querySelector('.header-title').classList.toggle('dark', isDark);
       document.querySelector('.categories').classList.toggle('dark', isDark);
       document.querySelectorAll('.category-btn').forEach(btn => btn.classList.toggle('dark', isDark));
       document.querySelector('.friends-list').classList.toggle('dark', isDark);
@@ -671,7 +669,6 @@
       document.querySelectorAll('.suggestion-email, .suggestion-mobile').forEach(el => el.classList.toggle('dark', isDark));
       document.querySelector('.friend-result').classList.toggle('dark', isDark);
       document.querySelectorAll('.btn-primary, .btn-block').forEach(el => el.classList.toggle('dark', isDark));
-      document.querySelector('.back-btn').classList.toggle('dark', isDark);
       document.querySelector('.add-friend-btn').classList.toggle('dark', isDark);
       document.querySelector('.loading-spinner circle').classList.toggle('dark', isDark);
       document.querySelector('.username').classList.toggle('dark', isDark);
@@ -697,7 +694,7 @@
     }
 
     function timeAgo(timestamp) {
-      const now = new Date('2025-07-05T10:18:00+02:00').getTime(); // 10:18 AM SAST, July 05, 2025
+      const now = new Date('2025-07-05T10:22:00+02:00').getTime(); // 10:22 AM SAST, July 05, 2025
       const diff = now - (timestamp || now);
       return diff < 86400000 ? 'recent' : 'old'; // Consider "recent" as within 24 hours
     }
@@ -718,76 +715,83 @@
       friendUids.clear();
       blockedUids.clear();
       unreadFriendIds.clear();
-      const chatsRef = ref(db, "chats");
-      const chatsSnap = await get(chatsRef);
-      if (chatsSnap.exists()) {
-        const chats = chatsSnap.val();
-        for (const chatId in chats) {
-          const participants = chats[chatId].participants || {};
-          if (participants[uid]) {
-            for (const friendUid in participants) {
-              if (friendUid !== uid) {
-                friendUids.add(friendUid);
-                // Check for unread messages
-                const messagesRef = ref(db, `chats/${chatId}/messages`);
-                onValue(messagesRef, (snap) => {
-                  const messages = snap.val() || {};
-                  const lastMessage = Object.values(messages).sort((a, b) => b.timestamp - a.timestamp)[0];
-                  if (lastMessage && !lastMessage.read && lastMessage.senderId !== uid && timeAgo(lastMessage.timestamp) === 'recent') {
-                    unreadFriendIds.add(friendUid);
-                  }
-                }, (error) => console.error('Error loading messages:', error));
+      try {
+        const chatsRef = ref(db, "chats");
+        const chatsSnap = await get(chatsRef);
+        if (chatsSnap.exists()) {
+          const chats = chatsSnap.val();
+          for (const chatId in chats) {
+            const participants = chats[chatId].participants || {};
+            if (participants[uid]) {
+              for (const friendUid in participants) {
+                if (friendUid !== uid) {
+                  friendUids.add(friendUid);
+                  const messagesRef = ref(db, `chats/${chatId}/messages`);
+                  onValue(messagesRef, (snap) => {
+                    const messages = snap.val() || {};
+                    const lastMessage = Object.values(messages).sort((a, b) => b.timestamp - a.timestamp)[0];
+                    if (lastMessage && !lastMessage.read && lastMessage.senderId !== uid && timeAgo(lastMessage.timestamp) === 'recent') {
+                      unreadFriendIds.add(friendUid);
+                    }
+                  }, (error) => console.error('Error loading messages:', error));
+                }
               }
             }
           }
         }
-      }
-      const blockedRef = ref(db, `users/${uid}/blocked`);
-      const blockedSnap = await get(blockedRef);
-      if (blockedSnap.exists()) {
-        const blocked = blockedSnap.val();
-        for (const blockedUid in blocked) {
-          blockedUids.add(blockedUid);
+        const blockedRef = ref(db, `users/${uid}/blocked`);
+        const blockedSnap = await get(blockedRef);
+        if (blockedSnap.exists()) {
+          const blocked = blockedSnap.val();
+          for (const blockedUid in blocked) {
+            blockedUids.add(blockedUid);
+          }
         }
+        renderFriendsList();
+      } catch (error) {
+        console.error('Error loading friends or blocked users:', error);
       }
-      renderFriendsList();
     }
 
     async function renderFriendsList(filter = 'all') {
       friendsList.innerHTML = '';
-      const usersRef = ref(db, "users");
-      const usersSnap = await get(usersRef);
-      const users = usersSnap.val() || {};
-      let filteredFriends = Array.from(friendUids).map(uid => ({ uid, user: users[uid] })).filter(item => item.user);
+      try {
+        const usersRef = ref(db, "users");
+        const usersSnap = await get(usersRef);
+        const users = usersSnap.val() || {};
+        let filteredFriends = Array.from(friendUids).map(uid => ({ uid, user: users[uid] })).filter(item => item.user);
 
-      if (filter === 'unread') {
-        filteredFriends = filteredFriends.filter(({ uid }) => unreadFriendIds.has(uid));
-      }
+        if (filter === 'unread') {
+          filteredFriends = filteredFriends.filter(({ uid }) => unreadFriendIds.has(uid));
+        }
 
-      if (filteredFriends.length === 0) {
-        noFriends.style.display = 'block';
+        if (filteredFriends.length === 0) {
+          noFriends.style.display = 'block';
+          formBox.style.display = filter === 'add' ? 'block' : 'none';
+          return;
+        }
+        noFriends.style.display = 'none';
         formBox.style.display = filter === 'add' ? 'block' : 'none';
-        return;
-      }
-      noFriends.style.display = 'none';
-      formBox.style.display = filter === 'add' ? 'block' : 'none';
 
-      filteredFriends.forEach(({ uid, user }) => {
-        const friendItem = document.createElement('div');
-        friendItem.className = 'friend-item';
-        friendItem.onclick = () => window.location.href = `chat.html?uid=${uid}`;
-        const statusClass = user.presence === 'online' ? 'online' : '';
-        friendItem.innerHTML = `
-          <img src="${user.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${user.name || 'Friend'} avatar" class="friend-avatar dark:friend-avatar" />
-          <div class="friend-info">
-            <div class="friend-name dark:friend-name">${user.name || 'Unknown'}</div>
-            <div class="friend-details">
-              <span class="friend-status ${statusClass} dark:friend-status ${statusClass}"></span>
+        filteredFriends.forEach(({ uid, user }) => {
+          const friendItem = document.createElement('div');
+          friendItem.className = 'friend-item';
+          friendItem.onclick = () => window.location.href = `chat.html?uid=${uid}`;
+          const statusClass = user.presence === 'online' ? 'online' : '';
+          friendItem.innerHTML = `
+            <img src="${user.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${user.name || 'Friend'} avatar" class="friend-avatar dark:friend-avatar" />
+            <div class="friend-info">
+              <div class="friend-name dark:friend-name">${user.name || 'Unknown'}</div>
+              <div class="friend-details">
+                <span class="friend-status ${statusClass} dark:friend-status ${statusClass}"></span>
+              </div>
             </div>
-          </div>
-        `;
-        friendsList.appendChild(friendItem);
-      });
+          `;
+          friendsList.appendChild(friendItem);
+        });
+      } catch (error) {
+        console.error('Error rendering friends list:', error);
+      }
     }
 
     async function showSuggestions(query) {
@@ -872,7 +876,7 @@
         blockFriendBtn.classList.add('hidden');
         selectedFriendUid = null;
         suggestionsDropdown.style.display = 'none';
-        renderFriendsList(categoryButtons[0].dataset.filter); // Refresh with current category
+        renderFriendsList(categoryButtons[0].dataset.filter);
       } catch (error) {
         console.error('Error blocking user:', error);
         friendResult.classList.add('error');
@@ -897,25 +901,30 @@
       categoryButtons.forEach(btn => btn.classList.toggle('active', btn.dataset.filter === category));
     }
 
-    onAuthStateChanged(auth, async user => {
+    onAuthStateChanged(auth, async (user) => {
       if (!user) {
-        location.href = "signup.html";
+        window.location.href = "signup.html";
         return;
       }
       currentUserUid = user.uid;
       try {
-        const userSnap = await get(ref(db, `users/${user.uid}`));
+        const userRef = ref(db, `users/${user.uid}`);
+        const userSnap = await get(userRef);
         const userData = userSnap.val() || {};
         usernameElement.textContent = userData.name || 'User';
-        const settingsSnap = await get(ref(db, `users/${user.uid}/settings`));
+
+        const settingsRef = ref(db, `users/${user.uid}/settings`);
+        const settingsSnap = await get(settingsRef);
         const settings = settingsSnap.val() || {};
         applyTheme(settings.theme || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
         applyFontSize(settings.fontSize || 'medium');
         await loadFriendsAndBlocked(user.uid);
       } catch (error) {
-        console.error('Error loading user data:', error);
-        friendResult.classList.add('error');
-        friendResult.textContent = 'Error loading data.';
+        console.error('Error loading user data or settings:', error);
+        usernameElement.textContent = 'User';
+        applyTheme(window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+        applyFontSize('medium');
+        await loadFriendsAndBlocked(user.uid); // Attempt to proceed with default settings
       }
     });
 
@@ -1003,7 +1012,7 @@
         suggestionsDropdown.style.display = 'none';
         blockFriendBtn.classList.add('hidden');
         selectedFriendUid = null;
-        renderFriendsList(categoryButtons[0].dataset.filter); // Refresh with current category
+        renderFriendsList(categoryButtons[0].dataset.filter);
         setTimeout(() => {
           window.location.href = "friends.html";
         }, 1000);
@@ -1020,10 +1029,6 @@
       if (selectedFriendUid && friendUids.has(selectedFriendUid)) {
         blockUser(selectedFriendUid);
       }
-    });
-
-    backBtn.addEventListener('click', () => {
-      window.history.back();
     });
 
     categoryButtons.forEach(btn => {
