@@ -394,6 +394,32 @@
       animation: loveRise 1s ease-out forwards;
     }
 
+    .song-text {
+      position: absolute;
+      bottom: 7rem;
+      left: 1.5rem;
+      background: linear-gradient(to right, rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.5));
+      color: #fff;
+      font-size: 0.9rem;
+      font-weight: 500;
+      padding: 0.75rem 1.25rem;
+      border-radius: 12px;
+      z-index: 20;
+      max-width: 85%;
+      word-break: break-word;
+      display: none;
+      box-shadow: var(--shadow);
+      animation: fadeIn 0.3s ease;
+    }
+
+    .song-text.show {
+      display: block;
+    }
+
+    .dark .song-text {
+      background: linear-gradient(to right, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.1));
+    }
+
     .swipe-text,
     .post-text {
       position: absolute;
@@ -432,6 +458,25 @@
     .dark .swipe-text,
     .dark .post-text {
       background: linear-gradient(to right, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.1));
+    }
+
+    .progress-bar {
+      position: absolute;
+      bottom: 5rem;
+      left: 1.5rem;
+      width: 85%;
+      height: 10px;
+      background: rgba(255, 255, 255, 0.3);
+      border-radius: 5px;
+      z-index: 20;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: var(--primary);
+      width: 0;
+      transition: width 0.1s linear;
     }
 
     .alert-dialog {
@@ -721,6 +766,43 @@
       animation: spin 1s linear infinite;
     }
 
+    .audio-controls {
+      position: absolute;
+      bottom: 1rem;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 20;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: rgba(0, 0, 0, 0.6);
+      padding: 0.5rem 1rem;
+      border-radius: 9999px;
+      box-shadow: var(--shadow);
+    }
+
+    .audio-controls button {
+      background: none;
+      border: none;
+      color: #fff;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: transform 0.2s ease;
+    }
+
+    .audio-controls button:hover {
+      transform: scale(1.1);
+    }
+
+    .audio-controls button:focus-visible {
+      outline: 2px solid var(--primary);
+      outline-offset: 2px;
+    }
+
+    .audio-controls audio {
+      display: none;
+    }
+
     @keyframes spin {
       0% { transform: rotate(0deg); }
       100% { transform: rotate(360deg); }
@@ -768,10 +850,17 @@
         padding: 0.6rem 1.2rem;
       }
       .swipe-text,
-      .post-text {
+      .post-text,
+      .song-text {
         font-size: 0.85rem;
         padding: 0.6rem 1rem;
         max-width: 90%;
+      }
+      .progress-bar {
+        width: 90%;
+      }
+      .audio-controls {
+        padding: 0.4rem 0.8rem;
       }
     }
   </style>
@@ -816,6 +905,13 @@
       <svg id="double-tap-heart" class="double-tap-heart hidden" viewBox="0 0 24 24" fill="white">
         <path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/>
       </svg>
+      <div id="audio-controls" class="audio-controls hidden">
+        <button id="pause-audio-btn" aria-label="Pause audio"><i class="fas fa-pause"></i></button>
+        <audio id="background-audio"></audio>
+      </div>
+      <div id="progress-bar" class="progress-bar">
+        <div id="progress-fill" class="progress-fill"></div>
+      </div>
     </div>
     <div class="action-buttons">
       <button id="like-btn" class="action-btn" aria-label="Like post">
@@ -855,6 +951,7 @@
     </div>
     <div id="swipe-text" class="swipe-text" role="status" aria-live="polite"></div>
     <div id="post-text" class="post-text" role="status" aria-live="polite"></div>
+    <div id="song-text" class="song-text" role="status" aria-live="polite"></div>
   </div>
 
   <script type="module">
@@ -905,6 +1002,12 @@
     const container = document.querySelector('.container');
     const swipeText = document.getElementById('swipe-text');
     const postText = document.getElementById('post-text');
+    const songText = document.getElementById('song-text');
+    const audioControls = document.getElementById('audio-controls');
+    const pauseAudioBtn = document.getElementById('pause-audio-btn');
+    const backgroundAudio = document.getElementById('background-audio');
+    const progressBar = document.getElementById('progress-bar');
+    const progressFill = document.getElementById('progress-fill');
 
     let currentUser;
     let postUserId;
@@ -921,6 +1024,8 @@
     let availableStatusIds = [];
     let viewedStatusIds = [];
     let lastNotificationTimestamp = 0;
+    let isAudioPlaying = false;
+    let progressTimer;
 
     function showAlert(message) {
       alertMessage.textContent = message;
@@ -957,12 +1062,15 @@
       document.querySelectorAll('.alert-title').forEach(el => el.classList.toggle('dark', isDark));
       swipeText.classList.toggle('dark', isDark);
       postText.classList.toggle('dark', isDark);
+      songText.classList.toggle('dark', isDark);
       commentsSheet.classList.toggle('dark', isDark);
       likeBtn.classList.toggle('dark', isDark);
       alertDialog.classList.toggle('dark', isDark);
       addStatusBtn.classList.toggle('dark', isDark);
       notificationsContainer.classList.toggle('dark', isDark);
       notificationsUnreadCount.classList.toggle('dark', isDark);
+      audioControls.classList.toggle('dark', isDark);
+      progressBar.classList.toggle('dark', isDark);
     }
 
     function timeAgo(timestamp) {
@@ -996,6 +1104,25 @@
       });
     }
 
+    function startProgressBar() {
+      let progress = 0;
+      progressFill.style.width = '0';
+      clearInterval(progressTimer);
+      progressTimer = setInterval(() => {
+        progress += 1;
+        progressFill.style.width = `${(progress / 30) * 100}%`;
+        if (progress >= 30) {
+          clearInterval(progressTimer);
+          loadNextRandomStatus();
+        }
+      }, 1000);
+    }
+
+    function stopProgressBar() {
+      clearInterval(progressTimer);
+      progressFill.style.width = '0';
+    }
+
     function renderMedia(status) {
       mediaItems = Array.isArray(status.mediaUrls) ? status.mediaUrls : status.imageUrl ? [{ url: status.imageUrl, type: 'image' }] : [];
       currentMediaIndex = 0;
@@ -1008,6 +1135,26 @@
       } else {
         postText.textContent = '';
         postText.classList.remove('show');
+      }
+
+      if (status.songName && status.songUrl) {
+        songText.textContent = `Song: ${status.songName}`;
+        songText.classList.add('show');
+        audioControls.classList.remove('hidden');
+        backgroundAudio.src = status.songUrl;
+        backgroundAudio.play().catch(error => {
+          console.error('Error auto-playing audio:', error);
+          showAlert('Failed to play audio.');
+        });
+        isAudioPlaying = true;
+        pauseAudioBtn.style.display = 'inline';
+        startProgressBar(); // Start 30-second progress bar
+      } else {
+        songText.textContent = '';
+        songText.classList.remove('show');
+        audioControls.classList.add('hidden');
+        backgroundAudio.src = '';
+        stopProgressBar();
       }
 
       if (mediaItems.length === 0) {
@@ -1068,7 +1215,7 @@
       if (mediaItems[currentMediaIndex]?.type === 'video') {
         const video = videoElements[currentMediaIndex];
         const thumbnail = thumbnailElements[currentMediaIndex];
-        video.muted = isMuted;
+        video.muted = isMuted || isAudioPlaying;
         muteToggleIcon.classList.remove('hidden');
         muteToggleIcon.querySelector('.mute-icon').classList.toggle('hidden', !isMuted);
         muteToggleIcon.querySelector('.unmute-icon').classList.toggle('hidden', isMuted);
@@ -1088,7 +1235,7 @@
           thumbnail.classList.add('show');
         });
 
-        if (!commentsSheet.classList.contains('open') && !document.hidden) {
+        if (!commentsSheet.classList.contains('open') && !document.hidden && !isAudioPlaying) {
           video.play().catch(error => {
             console.error('Error auto-playing video:', error);
             showAlert('Failed to play video.');
@@ -1111,8 +1258,8 @@
       if (mediaItems[currentMediaIndex]?.type === 'video') {
         const video = mediaContent.querySelectorAll('.status-video')[currentMediaIndex];
         const thumbnail = mediaContent.querySelectorAll('.thumbnail-placeholder')[currentMediaIndex];
-        video.muted = isMuted;
-        if (!commentsSheet.classList.contains('open') && !document.hidden) {
+        video.muted = isMuted || isAudioPlaying;
+        if (!commentsSheet.classList.contains('open') && !document.hidden && !isAudioPlaying) {
           video.play().catch(error => {
             console.error('Error playing video:', error);
             showAlert('Failed to play video.');
@@ -1152,6 +1299,9 @@
       commentsSheet.classList.add('open');
       commentInput.focus();
       pauseAllVideos();
+      backgroundAudio.pause();
+      isAudioPlaying = false;
+      stopProgressBar();
       playPauseIcon.classList.add('show');
       if (statusId) {
         const commentsRef = ref(db, `statuses/${statusId}/comments`);
@@ -1169,10 +1319,13 @@
     function closeBottomSheet() {
       commentsSheet.classList.remove('open');
       commentInput.value = '';
-      if (mediaItems[currentMediaIndex]?.type === 'video' && !document.hidden) {
+      if (mediaItems[currentMediaIndex]?.type === 'video' && !document.hidden && !isAudioPlaying) {
         const video = mediaContent.querySelectorAll('.status-video')[currentMediaIndex];
         video.play().catch(error => console.error('Error resuming video:', error));
         playPauseIcon.classList.remove('show');
+      }
+      if (isAudioPlaying) {
+        startProgressBar();
       }
       if (commentsListener) {
         off(ref(db, `statuses/${statusId}/comments`));
@@ -1324,6 +1477,7 @@
             availableStatusIds = await fetchAvailableStatuses();
             if (availableStatusIds.length === 0) {
               showAlert('No media posts available.');
+              hideSpinner();
               return;
             }
           }
@@ -1383,7 +1537,6 @@
           await set(reactionRef, { timestamp: Date.now() });
           likeBtn.classList.add('liked');
           likeCount.textContent = parseInt(likeCount.textContent) + 1;
-          // Trigger animated loves on like
           createAnimatedLoves();
         }
       } catch (error) {
@@ -1393,14 +1546,13 @@
     }
 
     function createAnimatedLoves() {
-      // Create multiple love SVGs for a fuller effect
       for (let i = 0; i < 3; i++) {
         const love = document.createElement('svg');
         love.className = 'animated-love';
         love.innerHTML = '<path d="M12 4.248c-3.148-5.402-12-3.825-12 2.944 0 4.661 5.571 9.427 12 15.808 6.43-6.381 12-11.147 12-15.808 0-6.792-8.875-8.306-12-2.944z"/>';
-        love.style.left = `${50 + (Math.random() - 0.5) * 40}%`; // Random horizontal offset
+        love.style.left = `${50 + (Math.random() - 0.5) * 40}%`;
         document.body.appendChild(love);
-        setTimeout(() => document.body.removeChild(love), 1000); // Remove after animation
+        setTimeout(() => document.body.removeChild(love), 1000);
       }
     }
 
@@ -1425,6 +1577,20 @@
         observer.observe(element);
       });
     }
+
+    pauseAudioBtn.addEventListener('click', () => {
+      backgroundAudio.pause();
+      isAudioPlaying = false;
+      stopProgressBar();
+      const videoElements = mediaContent.querySelectorAll('.status-video');
+      videoElements.forEach(video => {
+        video.muted = isMuted;
+        if (!commentsSheet.classList.contains('open') && !document.hidden) {
+          video.play().catch(error => console.error('Error resuming video:', error));
+        }
+      });
+      playPauseIcon.classList.remove('show');
+    });
 
     onAuthStateChanged(auth, async user => {
       if (!user) {
@@ -1601,10 +1767,10 @@
       if (mediaItems[currentMediaIndex]?.type === 'video') {
         const video = mediaContent.querySelectorAll('.status-video')[currentMediaIndex];
         if (video) {
-          if (video.paused) {
+          if (video.paused && !isAudioPlaying) {
             video.play().catch(error => console.error('Error playing video:', error));
             playPauseIcon.classList.add('show');
-          } else {
+          } else if (!video.paused) {
             video.pause();
             playPauseIcon.classList.add('show');
           }
@@ -1617,7 +1783,7 @@
       if (mediaItems[currentMediaIndex]?.type === 'video') {
         const video = mediaContent.querySelectorAll('.status-video')[currentMediaIndex];
         isMuted = !isMuted;
-        video.muted = isMuted;
+        video.muted = isMuted || isAudioPlaying;
         muteToggleIcon.querySelector('.mute-icon').classList.toggle('hidden', !isMuted);
         muteToggleIcon.querySelector('.unmute-icon').classList.toggle('hidden', isMuted);
       }
@@ -1679,7 +1845,10 @@
         if (document.hidden || commentsSheet.classList.contains('open')) {
           video.pause();
           playPauseIcon.classList.add('show');
-        } else {
+          backgroundAudio.pause();
+          isAudioPlaying = false;
+          stopProgressBar();
+        } else if (!isAudioPlaying) {
           video.play().catch(error => console.error('Error resuming video:', error));
           playPauseIcon.classList.remove('show');
         }
