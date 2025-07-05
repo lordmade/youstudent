@@ -6,6 +6,7 @@
   <title>BanterBox - Live Stream</title>
   <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet" />
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.agora.io/sdk/web/AgoraRTC_N-latest.js"></script>
   <style>
     body {
       font-family: 'Roboto', 'Segoe UI', sans-serif;
@@ -80,14 +81,6 @@
     .header-icon svg {
       width: 24px;
       height: 24px;
-    }
-    .live-container {
-      max-width: 1200px;
-      margin: 1rem auto;
-      padding: 1rem 1.5rem;
-      display: flex;
-      gap: 1.5rem;
-      flex-direction: column;
     }
     .live-video-container {
       position: relative;
@@ -362,6 +355,10 @@
     const auth = getAuth(app);
     const db = getDatabase(app);
 
+    // Agora Configuration
+    const AGORA_APP_ID = "77c6f0e34a7b40029f2dbec9b1d79de6"; // Replace with your Agora App ID
+    const AGORA_TOKEN = null; // Set to null for testing; use server-generated token for production
+
     const usernameElement = document.getElementById("username");
     const liveVideo = document.getElementById("live-video");
     const liveControls = document.getElementById("live-controls");
@@ -374,7 +371,8 @@
 
     let currentUserId = null;
     let streamUserId = null;
-    let mediaStream = null;
+    let agoraClient = null;
+    let localTracks = null;
     let isStreaming = false;
 
     function showLoading() { loadingOverlay.classList.remove("hidden"); }
@@ -411,8 +409,12 @@
     async function startStream() {
       try {
         showLoading();
-        mediaStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-        liveVideo.srcObject = mediaStream;
+        agoraClient = AgoraRTC.createClient({ mode: 'live', codec: 'vp8' });
+        await agoraClient.setClientRole('host');
+        localTracks = await AgoraRTC.createMicrophoneAndCameraTracks();
+        liveVideo.srcObject = localTracks[1].getMediaStream(); // Display local video
+        await agoraClient.join(AGORA_APP_ID, streamUserId, AGORA_TOKEN, currentUserId);
+        await agoraClient.publish(localTracks);
         isStreaming = true;
 
         await set(ref(db, `liveStreams/${currentUserId}`), {
@@ -429,7 +431,7 @@
         hideError();
       } catch (error) {
         console.error('Error starting stream:', error);
-        showError("Failed to start stream. Please check camera and microphone permissions.");
+        showError("Failed to start stream. Please check camera, microphone permissions, or Agora App ID.");
       } finally {
         hideLoading();
       }
@@ -438,9 +440,12 @@
     async function stopStream() {
       try {
         showLoading();
-        if (mediaStream) {
-          mediaStream.getTracks().forEach(track => track.stop());
-          mediaStream = null;
+        if (localTracks) {
+          localTracks.forEach(track => track.close());
+          await agoraClient.unpublish();
+          await agoraClient.leave();
+          localTracks = null;
+          agoraClient = null;
         }
         liveVideo.srcObject = null;
         isStreaming = false;
@@ -467,13 +472,32 @@
 
     async function watchStream() {
       try {
-        // Placeholder for watching a stream; replace with actual streaming service integration
-        liveVideo.src = `https://example.com/stream/${streamUserId}`; // Example URL
+        showLoading();
+        agoraClient = AgoraRTC.createClient({ mode: 'live', codec: 'vp8' });
+        await agoraClient.setClientRole('audience');
+        await agoraClient.join(AGORA_APP_ID, streamUserId, AGORA_TOKEN, currentUserId);
+
+        agoraClient.on('user-published', async (user, mediaType) => {
+          await agoraClient.subscribe(user, mediaType);
+          if (mediaType === 'video') {
+            const remoteVideoTrack = user.videoTrack;
+            liveVideo.srcObject = remoteVideoTrack.getMediaStream();
+          }
+          if (mediaType === 'audio') {
+            user.audioTrack.play();
+          }
+        });
+
+        agoraClient.on('user-unpublished', () => {
+          liveVideo.srcObject = null;
+          showError("Stream has ended.");
+        });
+
         liveControls.innerHTML = '';
         hideError();
       } catch (error) {
         console.error('Error watching stream:', error);
-        showError("Failed to load stream. The stream may have ended.");
+        showError("Failed to load stream. The stream may have ended or the App ID is incorrect.");
       } finally {
         hideLoading();
       }
@@ -575,7 +599,7 @@
           return;
         }
 
-        if (currentUserId === streamUserId && streamData.status === 'live') {
+        if (currentUserId === streamUserId && streamData.status !== 'live') {
           await startStream();
         } else {
           await watchStream();
