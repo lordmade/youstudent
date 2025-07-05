@@ -59,7 +59,8 @@
       margin: 1rem auto;
       padding: 1rem 1.5rem;
       display: flex;
-      justify-content: center;
+      flex-direction: column;
+      align-items: center;
     }
     .media-card {
       background: white;
@@ -67,8 +68,8 @@
       overflow: hidden;
       box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
       transition: transform 0.2s ease, box-shadow 0.2s ease;
-      max-width: 800px;
       width: 100%;
+      max-width: 1200px;
     }
     .media-card:hover {
       transform: translateY(-5px);
@@ -80,7 +81,8 @@
     }
     .media-content-container {
       position: relative;
-      width: 100%;
+      width: 100vw;
+      height: 50vh;
       aspect-ratio: 16/9;
     }
     .media-content {
@@ -227,8 +229,110 @@
       animation: dash 1.5s ease-in-out infinite;
     }
     .loading-spinner.dark circle { stroke: #dc2626; }
+    .comment-section {
+      max-width: 1200px;
+      width: 100%;
+      margin: 1rem 0;
+      padding: 1rem 1.5rem;
+    }
+    .comment-form {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1.5rem;
+    }
+    .comment-input {
+      flex: 1;
+      padding: 0.75rem 1rem;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      background: #f9fafb;
+    }
+    .comment-input.dark {
+      background: #4b5563;
+      border-color: #6b7280;
+      color: #e2e8f0;
+    }
+    .comment-input:focus {
+      outline: none;
+      border-color: #ef4444;
+      box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.2);
+    }
+    .comment-input.dark:focus {
+      border-color: #dc2626;
+      box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.2);
+    }
+    .comment-input.error {
+      border-color: #ef4444;
+      animation: shake 0.3s ease;
+    }
+    .comment-input.dark.error {
+      border-color: #dc2626;
+    }
+    .comment-submit {
+      padding: 0.75rem 1.5rem;
+      background: linear-gradient(135deg, #ef4444, #f97316);
+      color: white;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 0.95rem;
+      border: none;
+      cursor: pointer;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    .comment-submit:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 6px 20px rgba(239, 68, 68, 0.3);
+    }
+    .comment-submit.dark {
+      background: linear-gradient(135deg, #dc2626, #f97316);
+    }
+    .comment-list {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+    .comment {
+      background: white;
+      border-radius: 8px;
+      padding: 1rem;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+    }
+    .comment.dark {
+      background: #1e293b;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+    }
+    .comment-text {
+      font-size: 0.95rem;
+      color: #1e293b;
+      margin-bottom: 0.5rem;
+    }
+    .comment-text.dark { color: #e2e8f0; }
+    .comment-meta {
+      font-size: 0.85rem;
+      color: #64748b;
+    }
+    .comment-meta.dark { color: #94a3b8; }
+    .no-comments {
+      font-size: 0.95rem;
+      color: #64748b;
+      text-align: center;
+    }
+    .no-comments.dark { color: #94a3b8; }
+    .comment-error {
+      font-size: 0.9rem;
+      color: #ef4444;
+      text-align: center;
+      margin-top: 0.5rem;
+    }
+    .comment-error.dark { color: #dc2626; }
     @keyframes spin { to { transform: rotate(360deg); } }
     @keyframes dash { 0% { stroke-dashoffset: 80; } 50% { stroke-dashoffset: 20; } 100% { stroke-dashoffset: 80; } }
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-4px); }
+      75% { transform: translateX(4px); }
+    }
   </style>
 </head>
 <body>
@@ -257,7 +361,18 @@
     </div>
   </header>
 
-  <div class="media-container" id="media-container"></div>
+  <div class="media-container" id="media-container">
+    <div id="media-card"></div>
+    <div class="comment-section">
+      <form id="comment-form" class="comment-form" aria-label="Comment Form">
+        <input type="text" id="comment-input" class="comment-input dark:comment-input" placeholder="Add a comment..." maxlength="500" required aria-label="Comment Input"/>
+        <button type="submit" class="comment-submit dark:comment-submit">Post</button>
+      </form>
+      <p id="comment-error" class="comment-error dark:comment-error" role="alert" aria-live="polite"></p>
+      <div id="comment-list" class="comment-list"></div>
+      <p id="no-comments" class="no-comments dark:no-comments" style="display: none;">No comments yet.</p>
+    </div>
+  </div>
   <div class="no-media dark:no-media" id="no-media" style="display: none;">Media not found.</div>
 
   <div id="loading-overlay" class="loading-overlay hidden">
@@ -269,7 +384,7 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
     import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
-    import { getDatabase, ref, get, set } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-database.js";
+    import { getDatabase, ref, get, set, push } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-database.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
@@ -286,9 +401,15 @@
     const db = getDatabase(app);
 
     const mediaContainer = document.getElementById("media-container");
+    const mediaCardContainer = document.getElementById("media-card");
     const noMedia = document.getElementById("no-media");
     const loadingOverlay = document.getElementById("loading-overlay");
     const usernameElement = document.getElementById("username");
+    const commentForm = document.getElementById("comment-form");
+    const commentInput = document.getElementById("comment-input");
+    const commentError = document.getElementById("comment-error");
+    const commentList = document.getElementById("comment-list");
+    const noComments = document.getElementById("no-comments");
 
     let currentUserId = null;
 
@@ -309,6 +430,13 @@
       document.querySelectorAll('.video-spinner circle').forEach(circle => circle.classList.toggle('dark', isDark));
       document.querySelector('.username').classList.toggle('dark', isDark);
       document.querySelectorAll('.header-icon').forEach(icon => icon.classList.toggle('dark', isDark));
+      document.querySelectorAll('.comment-input').forEach(input => input.classList.toggle('dark', isDark));
+      document.querySelectorAll('.comment-submit').forEach(btn => btn.classList.toggle('dark', isDark));
+      document.querySelectorAll('.comment-error').forEach(err => err.classList.toggle('dark', isDark));
+      document.querySelectorAll('.comment').forEach(comment => comment.classList.toggle('dark', isDark));
+      document.querySelectorAll('.comment-text').forEach(text => text.classList.toggle('dark', isDark));
+      document.querySelectorAll('.comment-meta').forEach(meta => meta.classList.toggle('dark', isDark));
+      document.querySelectorAll('.no-comments').forEach(no => no.classList.toggle('dark', isDark));
     }
 
     function applyFontSize(size) {
@@ -320,7 +448,6 @@
       const now = new Date();
       const date = new Date(timestamp);
       const diff = Math.floor((now - date) / 1000); // Difference in seconds
-
       if (diff < 60) return `${diff} second${diff === 1 ? '' : 's'} ago`;
       if (diff < 3600) return `${Math.floor(diff / 60)} minute${Math.floor(diff / 60) === 1 ? '' : 's'} ago`;
       if (diff < 86400) return `${Math.floor(diff / 3600)} hour${Math.floor(diff / 3600) === 1 ? '' : 's'} ago`;
@@ -353,6 +480,46 @@
       }
     }
 
+    async function loadComments(mediaId) {
+      try {
+        const commentsRef = ref(db, `media/${mediaId}/comments`);
+        const commentsSnap = await get(commentsRef);
+        const comments = commentsSnap.val() || {};
+
+        commentList.innerHTML = '';
+        const commentArray = Object.entries(comments)
+          .map(([commentId, data]) => ({ commentId, ...data }))
+          .sort((a, b) => b.timestamp - a.timestamp);
+
+        if (commentArray.length === 0) {
+          noComments.style.display = 'block';
+          return;
+        }
+
+        noComments.style.display = 'none';
+        const userPromises = commentArray.map(comment => get(ref(db, `users/${comment.postedBy}`)));
+        const userSnaps = await Promise.all(userPromises);
+        const users = userSnaps.reduce((acc, snap, index) => {
+          acc[commentArray[index].postedBy] = snap.val() || { name: 'Unknown' };
+          return acc;
+        }, {});
+
+        commentArray.forEach(({ commentId, text, postedBy, timestamp }) => {
+          const commentElement = document.createElement('div');
+          commentElement.className = 'comment dark:comment';
+          commentElement.innerHTML = `
+            <p class="comment-text dark:comment-text">${text}</p>
+            <p class="comment-meta dark:comment-meta">By ${users[postedBy].name} • ${formatTimestamp(timestamp)}</p>
+          `;
+          commentList.appendChild(commentElement);
+        });
+      } catch (error) {
+        console.error('Error loading comments:', error);
+        noComments.style.display = 'block';
+        noComments.textContent = 'Error loading comments.';
+      }
+    }
+
     async function loadMedia(mediaId) {
       showLoading();
       try {
@@ -372,7 +539,7 @@
         const user = userSnap.val() || { name: 'Unknown' };
 
         noMedia.style.display = 'none';
-        mediaContainer.innerHTML = '';
+        mediaCardContainer.innerHTML = '';
 
         const mediaCard = document.createElement('div');
         mediaCard.className = 'media-card dark:media-card';
@@ -409,7 +576,9 @@
             </span>
           </div>
         `;
-        mediaContainer.appendChild(mediaCard);
+        mediaCardContainer.appendChild(mediaCard);
+
+        await loadComments(mediaId);
 
         const observer = new IntersectionObserver((entries) => {
           entries.forEach(entry => {
@@ -508,6 +677,44 @@
       }
       hideLoading();
     }
+
+    commentForm.onsubmit = async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      commentError.textContent = '';
+      commentInput.classList.remove('error');
+
+      const text = commentInput.value.trim();
+      if (!text) {
+        commentError.textContent = 'Please enter a comment.';
+        commentInput.classList.add('error');
+        return;
+      }
+
+      const urlParams = new URLSearchParams(window.location.search);
+      const mediaId = urlParams.get('mediaId');
+      if (!mediaId) {
+        commentError.textContent = 'Invalid media ID.';
+        return;
+      }
+
+      showLoading();
+      try {
+        const commentsRef = ref(db, `media/${mediaId}/comments`);
+        const newCommentRef = push(commentsRef);
+        await set(newCommentRef, {
+          text,
+          postedBy: currentUserId,
+          timestamp: Date.now()
+        });
+        commentInput.value = '';
+        await loadComments(mediaId);
+      } catch (error) {
+        console.error('Error posting comment:', error);
+        commentError.textContent = `Error posting comment: ${error.message || 'Unknown error'}`;
+      }
+      hideLoading();
+    };
 
     onAuthStateChanged(auth, async (user) => {
       if (!user) {
