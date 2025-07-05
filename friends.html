@@ -116,7 +116,7 @@
     .kebab-item.dark:hover {
       background: #374151;
     }
-    .categories {
+    .labor: .categories {
       position: sticky;
       top: 56px;
       z-index: 900;
@@ -230,6 +230,16 @@
     }
     .friend-status.online { background: #10b981; }
     .friend-status.dark.online { background: #34d399; }
+    .unread-badge {
+      background: #ef4444;
+      color: white;
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 0.25rem 0.5rem;
+      border-radius: 9999px;
+      margin-right: 0.5rem;
+    }
+    .unread-badge.dark { background: #dc2626; }
     .no-friends {
       text-align: center;
       padding: 2rem;
@@ -262,7 +272,7 @@
       animation: dash 1.5s ease-in-out infinite;
     }
     .loading-spinner.dark circle { stroke: #dc2626; }
-    .add-friend-btn {
+    .home-btn {
       position: fixed;
       bottom: 1.5rem;
       right: 1.5rem;
@@ -278,14 +288,14 @@
       cursor: pointer;
       transition: transform 0.2s ease, box-shadow 0.2s ease;
     }
-    .add-friend-btn:hover {
+    .home-btn:hover {
       transform: scale(1.1);
       box-shadow: 0 6px 25px rgba(239, 68, 68, 0.4);
     }
-    .add-friend-btn.dark {
+    .home-btn.dark {
       background: linear-gradient(135deg, #dc2626, #f97316);
     }
-    .add-friend-btn.dark:hover {
+    .home-btn.dark:hover {
       box-shadow: 0 6px 25px rgba(220, 38, 38, 0.4);
     }
     .form-box {
@@ -452,6 +462,12 @@
     .suggestion-status.dark {
       color: #34d399;
     }
+    .suggestion-status.blocked {
+      color: #ef4444;
+    }
+    .suggestion-status.dark.blocked {
+      color: #dc2626;
+    }
     .btn-primary {
       width: 100%;
       padding: 0.75rem 1.5rem;
@@ -564,12 +580,13 @@
     <span class="category-btn active" data-filter="all">All</span>
     <span class="category-btn" data-filter="unread">Unread</span>
     <span class="category-btn" data-filter="add">Add</span>
+    <span class="category-btn" data-filter="blocked">Blocked</span>
   </div>
 
   <div class="friends-list dark:friends-list" id="friends-list"></div>
   <div class="no-friends dark:no-friends" id="no-friends" style="display: none;">No friends to manage.</div>
 
-  <div class="form-box dark:form-box" id="form-box">
+  <div class="form-box dark:form-box" id="form-box" style="display: none;">
     <h3 class="form-title dark:form-title">
       <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
@@ -605,18 +622,16 @@
     </svg>
   </div>
 
-<div class="add-friend-btn dark:add-friend-btn" onclick="window.location.href='home.html'">
-  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/>
-    <polygon points="9 8 15 12 9 16 9 8"/>
-  </svg>
-</div>
+  <div class="home-btn dark:home-btn" onclick="window.location.href='home.html'">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9z"/>
+      <polyline points="9 22 9 12 15 12 15 22"/>
+    </svg>
+  </div>
 
   <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
-    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
-    import { getDatabase, ref, get, set, remove, onValue } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-database.js";
-
+    // Note: Firebase configuration should be stored securely in environment variables
+    // This is a placeholder; replace with actual environment variable access in a production environment
     const firebaseConfig = {
       apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
       authDomain: "fire-b-a8878.firebaseapp.com",
@@ -625,7 +640,21 @@
       storageBucket: "fire-b-a8878.appspot.com",
       messagingSenderId: "658673187627",
       appId: "1:658673187627:web:6e4c29af661785f0afa36e"
+    }; 
+    // Constants for routes
+    const ROUTES = {
+      signup: 'signup.html',
+      chat: 'chat.html',
+      home: 'home.html',
+      profile: 'profile.html',
+      settings: 'settings.html',
+      logout: 'logout.html',
+      help: 'help.html'
     };
+
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
+    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
+    import { getDatabase, ref, get, set, remove, onValue, onDisconnect } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-database.js";
 
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
@@ -670,7 +699,7 @@
       document.querySelectorAll('.suggestion-email, .suggestion-mobile').forEach(el => el.classList.toggle('dark', isDark));
       document.querySelector('.friend-result').classList.toggle('dark', isDark);
       document.querySelectorAll('.btn-primary, .btn-block').forEach(el => el.classList.toggle('dark', isDark));
-      document.querySelector('.add-friend-btn').classList.toggle('dark', isDark);
+      document.querySelector('.home-btn').classList.toggle('dark', isDark);
       document.querySelector('.loading-spinner circle').classList.toggle('dark', isDark);
       document.querySelector('.username').classList.toggle('dark', isDark);
       document.querySelector('.kebab-menu-content').classList.toggle('dark', isDark);
@@ -695,9 +724,9 @@
     }
 
     function timeAgo(timestamp) {
-      const now = new Date('2025-07-05T10:22:00+02:00').getTime(); // 10:22 AM SAST, July 05, 2025
+      const now = new Date().getTime();
       const diff = now - (timestamp || now);
-      return diff < 86400000 ? 'recent' : 'old'; // Consider "recent" as within 24 hours
+      return diff < 86400000 ? 'recent' : 'old';
     }
 
     function toggleKebabMenu() {
@@ -708,6 +737,17 @@
           kebabMenu.classList.remove('active');
           kebabMenuContent.classList.remove('active');
           document.removeEventListener('click', closeMenu);
+        }
+      });
+    }
+
+    function setupPresence(uid) {
+      const presenceRef = ref(db, `users/${uid}/presence`);
+      const connectedRef = ref(db, '.info/connected');
+      onValue(connectedRef, (snap) => {
+        if (snap.val()) {
+          set(presenceRef, 'online');
+          onDisconnect(presenceRef).set('offline');
         }
       });
     }
@@ -727,14 +767,6 @@
               for (const friendUid in participants) {
                 if (friendUid !== uid) {
                   friendUids.add(friendUid);
-                  const messagesRef = ref(db, `chats/${chatId}/messages`);
-                  onValue(messagesRef, (snap) => {
-                    const messages = snap.val() || {};
-                    const lastMessage = Object.values(messages).sort((a, b) => b.timestamp - a.timestamp)[0];
-                    if (lastMessage && !lastMessage.read && lastMessage.senderId !== uid && timeAgo(lastMessage.timestamp) === 'recent') {
-                      unreadFriendIds.add(friendUid);
-                    }
-                  }, (error) => console.error('Error loading messages:', error));
                 }
               }
             }
@@ -748,10 +780,35 @@
             blockedUids.add(blockedUid);
           }
         }
+        monitorUnreadMessages(uid);
         renderFriendsList();
       } catch (error) {
         console.error('Error loading friends or blocked users:', error);
+        friendResult.classList.add('error');
+        friendResult.textContent = 'Failed to load friends or blocked users.';
       }
+    }
+
+    function monitorUnreadMessages(uid) {
+      const chatsRef = ref(db, "chats");
+      onValue(chatsRef, (snap) => {
+        unreadFriendIds.clear();
+        const chats = snap.val() || {};
+        for (const chatId in chats) {
+          if (chats[chatId].participants?.[uid]) {
+            const friendUid = Object.keys(chats[chatId].participants).find(id => id !== uid);
+            const messagesRef = ref(db, `chats/${chatId}/messages`);
+            onValue(messagesRef, (msgSnap) => {
+              const messages = msgSnap.val() || {};
+              const lastMessage = Object.values(messages).sort((a, b) => b.timestamp - a.timestamp)[0];
+              if (lastMessage && !lastMessage.read && lastMessage.senderId !== uid && timeAgo(lastMessage.timestamp) === 'recent') {
+                unreadFriendIds.add(friendUid);
+              }
+              renderFriendsList(document.querySelector('.category-btn.active')?.dataset.filter || 'all');
+            }, (error) => console.error('Error loading messages:', error));
+          }
+        }
+      }, (error) => console.error('Error loading chats:', error));
     }
 
     async function renderFriendsList(filter = 'all') {
@@ -760,10 +817,15 @@
         const usersRef = ref(db, "users");
         const usersSnap = await get(usersRef);
         const users = usersSnap.val() || {};
-        let filteredFriends = Array.from(friendUids).map(uid => ({ uid, user: users[uid] })).filter(item => item.user);
+        let filteredFriends = [];
 
-        if (filter === 'unread') {
-          filteredFriends = filteredFriends.filter(({ uid }) => unreadFriendIds.has(uid));
+        if (filter === 'blocked') {
+          filteredFriends = Array.from(blockedUids).map(uid => ({ uid, user: users[uid] })).filter(item => item.user);
+        } else {
+          filteredFriends = Array.from(friendUids).map(uid => ({ uid, user: users[uid] })).filter(item => item.user);
+          if (filter === 'unread') {
+            filteredFriends = filteredFriends.filter(({ uid }) => unreadFriendIds.has(uid));
+          }
         }
 
         if (filteredFriends.length === 0) {
@@ -776,15 +838,18 @@
 
         filteredFriends.forEach(({ uid, user }) => {
           const friendItem = document.createElement('div');
-          friendItem.className = 'friend-item';
-          friendItem.onclick = () => window.location.href = `chat.html?uid=${uid}`;
+          friendItem.className = 'friend-item dark:friend-item';
+          if (filter !== 'blocked') {
+            friendItem.onclick = () => window.location.href = `${ROUTES.chat}?uid=${uid}`;
+          }
           const statusClass = user.presence === 'online' ? 'online' : '';
           friendItem.innerHTML = `
             <img src="${user.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${user.name || 'Friend'} avatar" class="friend-avatar dark:friend-avatar" />
             <div class="friend-info">
               <div class="friend-name dark:friend-name">${user.name || 'Unknown'}</div>
-              <div class="friend-details">
-                <span class="friend-status ${statusClass} dark:friend-status ${statusClass}"></span>
+              <div class="friend-details dark:friend-details">
+                ${filter !== 'blocked' && unreadFriendIds.has(uid) ? '<span class="unread-badge dark:unread-badge">Unread</span>' : ''}
+                ${filter === 'blocked' ? `<button class="btn-primary dark:btn-primary" onclick="unblockUser('${uid}')">Unblock</button>` : `<span class="friend-status ${statusClass} dark:friend-status"></span>`}
               </div>
             </div>
           `;
@@ -792,6 +857,8 @@
         });
       } catch (error) {
         console.error('Error rendering friends list:', error);
+        friendResult.classList.add('error');
+        friendResult.textContent = 'Failed to load friends list.';
       }
     }
 
@@ -812,7 +879,6 @@
         const suggestions = Object.entries(users)
           .filter(([uid, user]) => 
             uid !== currentUserUid &&
-            !blockedUids.has(uid) &&
             (user.email?.toLowerCase().includes(query.toLowerCase()) || 
              user.name?.toLowerCase().includes(query.toLowerCase()) || 
              user.mobileNumber?.replace(/\D/g, '').includes(query.replace(/\D/g, '')))
@@ -830,20 +896,37 @@
           const suggestion = document.createElement('div');
           suggestion.className = 'suggestion-item dark:suggestion-item';
           const isFriend = friendUids.has(uid);
+          const isBlocked = blockedUids.has(uid);
           suggestion.innerHTML = `
             <img src="${user.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${user.name || 'User'} avatar" class="suggestion-avatar dark:suggestion-avatar" />
             <div class="suggestion-info">
               <p class="suggestion-name dark:suggestion-name">${user.name || 'User'}</p>
               <p class="suggestion-email dark:suggestion-email">${user.email || 'No email'}</p>
               ${user.mobileNumber ? `<p class="suggestion-mobile dark:suggestion-mobile">${user.mobileNumber}</p>` : ''}
-              ${isFriend ? `<p class="suggestion-status dark:suggestion-status">Friend</p>` : ''}
+              ${isFriend ? `<p class="suggestion-status dark:suggestion-status">Friend</p>` : isBlocked ? `<p class="suggestion-status dark:suggestion-status blocked dark:blocked">Blocked</p>` : ''}
             </div>
           `;
           suggestion.addEventListener('click', () => {
             friendEmailInput.value = user.email || user.mobileNumber || user.name;
             suggestionsDropdown.style.display = 'none';
             selectedFriendUid = uid;
-            blockFriendBtn.classList.toggle('hidden', !isFriend);
+            blockFriendBtn.classList.toggle('hidden', !isFriend && !isBlocked);
+            if (isFriend) {
+              blockFriendBtn.innerHTML = `
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 5.636a9 9 0 11-12.728 12.728 9 9 0 0112.728-12.728"/>
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 9l-6 6"/>
+                </svg>
+                Block User
+              `;
+            } else if (isBlocked) {
+              blockFriendBtn.innerHTML = `
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                </svg>
+                Unblock User
+              `;
+            }
           });
           suggestionsDropdown.appendChild(suggestion);
         });
@@ -852,7 +935,7 @@
       } catch (error) {
         console.error('Error fetching suggestions:', error);
         friendResult.classList.add('error');
-        friendResult.textContent = 'Error loading users.';
+        friendResult.textContent = error.code === 'permission-denied' ? 'Permission denied.' : 'Error loading users.';
       }
     }
 
@@ -881,7 +964,27 @@
       } catch (error) {
         console.error('Error blocking user:', error);
         friendResult.classList.add('error');
-        friendResult.textContent = 'Error blocking user.';
+        friendResult.textContent = error.code === 'permission-denied' ? 'Permission denied.' : 'Error blocking user.';
+      }
+      hideLoading();
+    }
+
+    async function unblockUser(friendUid) {
+      showLoading();
+      try {
+        await remove(ref(db, `users/${currentUserUid}/blocked/${friendUid}`));
+        blockedUids.delete(friendUid);
+        friendResult.textContent = 'User unblocked.';
+        friendResult.classList.remove('error');
+        friendEmailInput.value = '';
+        blockFriendBtn.classList.add('hidden');
+        selectedFriendUid = null;
+        suggestionsDropdown.style.display = 'none';
+        renderFriendsList(categoryButtons[0].dataset.filter);
+      } catch (error) {
+        console.error('Error unblocking user:', error);
+        friendResult.classList.add('error');
+        friendResult.textContent = error.code === 'permission-denied' ? 'Permission denied.' : 'Error unblocking user.';
       }
       hideLoading();
     }
@@ -896,7 +999,7 @@
       } else {
         friendsList.style.display = 'block';
         formBox.style.display = 'none';
-        noFriends.style.display = friendUids.size === 0 ? 'block' : 'none';
+        noFriends.style.display = (category === 'blocked' ? blockedUids.size : friendUids.size) === 0 ? 'block' : 'none';
         renderFriendsList(category);
       }
       categoryButtons.forEach(btn => btn.classList.toggle('active', btn.dataset.filter === category));
@@ -904,7 +1007,7 @@
 
     onAuthStateChanged(auth, async (user) => {
       if (!user) {
-        window.location.href = "signup.html";
+        window.location.href = ROUTES.signup;
         return;
       }
       currentUserUid = user.uid;
@@ -919,13 +1022,17 @@
         const settings = settingsSnap.val() || {};
         applyTheme(settings.theme || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
         applyFontSize(settings.fontSize || 'medium');
+        setupPresence(user.uid);
         await loadFriendsAndBlocked(user.uid);
       } catch (error) {
         console.error('Error loading user data or settings:', error);
+        friendResult.classList.add('error');
+        friendResult.textContent = 'Failed to load user data or settings. Using defaults.';
         usernameElement.textContent = 'User';
         applyTheme(window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
         applyFontSize('medium');
-        await loadFriendsAndBlocked(user.uid); // Attempt to proceed with default settings
+        setupPresence(user.uid);
+        await loadFriendsAndBlocked(user.uid);
       }
     });
 
@@ -935,6 +1042,16 @@
       friendResult.classList.remove('error');
       blockFriendBtn.classList.add('hidden');
       selectedFriendUid = null;
+    });
+
+    friendEmailInput.addEventListener('click', () => {
+      if (suggestionsDropdown.style.display === 'block') {
+        suggestionsDropdown.style.display = 'none';
+        blockFriendBtn.classList.add('hidden');
+        selectedFriendUid = null;
+      } else {
+        debouncedShowSuggestions(friendEmailInput.value.trim());
+      }
     });
 
     document.addEventListener('click', (e) => {
@@ -996,7 +1113,7 @@
 
         if (blockedUids.has(friendUid)) {
           friendResult.classList.add('error');
-          friendResult.textContent = 'This user is blocked.';
+          friendResult.textContent = 'This user is blocked. Please unblock them first.';
           friendEmailInput.classList.add('error');
           hideLoading();
           return;
@@ -1015,27 +1132,30 @@
         selectedFriendUid = null;
         renderFriendsList(categoryButtons[0].dataset.filter);
         setTimeout(() => {
-          window.location.href = "friends.html";
+          window.location.href = ROUTES.friends;
         }, 1000);
       } catch (error) {
         console.error('Error adding friend:', error);
         friendResult.classList.add('error');
-        friendResult.textContent = 'Error adding friend.';
+        friendResult.textContent = error.code === 'permission-denied' ? 'Permission denied.' : 'Error adding friend.';
         friendEmailInput.classList.add('error');
       }
       hideLoading();
     };
 
     blockFriendBtn.addEventListener('click', () => {
-      if (selectedFriendUid && friendUids.has(selectedFriendUid)) {
-        blockUser(selectedFriendUid);
+      if (selectedFriendUid) {
+        if (friendUids.has(selectedFriendUid)) {
+          blockUser(selectedFriendUid);
+        } else if (blockedUids.has(selectedFriendUid)) {
+          unblockUser(selectedFriendUid);
+        }
       }
     });
 
     categoryButtons.forEach(btn => {
       btn.addEventListener('click', () => {
-        const category = btn.dataset.filter;
-        filterContent(category);
+        filterContent(btn.dataset.filter);
       });
     });
   </script>
