@@ -1443,74 +1443,75 @@
     }
 
     async function loadStatus(newStatusId, isPrevious = false) {
-      showSpinner();
+  showSpinner();
+  try {
+    const statusRef = ref(db, `statuses/${newStatusId}`);
+    const statusSnap = await get(statusRef);
+    if (!statusSnap.exists()) {
+      showAlert('Post not found.');
+      return;
+    }
+    const status = statusSnap.val();
+    postUserId = status.userId;
+    statusId = newStatusId;
+
+    if (!isPrevious) {
       try {
-        const statusRef = ref(db, `statuses/${newStatusId}`);
-        const statusSnap = await get(statusRef);
-        if (!statusSnap.exists()) {
-          showAlert('Post not found.');
-          return;
-        }
-        const status = statusSnap.val();
-        postUserId = status.userId;
-        statusId = newStatusId;
-
-        if (!isPrevious) {
-          try {
-            await runTransaction(ref(db, `statuses/${postUserId}/${newStatusId}/impressions`), current => (current || 0) + 1);
-          } catch (error) {
-            console.error('Error incrementing impressions:', error);
-          }
-        }
-
-        if (!isPrevious) {
-          if (historyIndex < statusHistory.length - 1) {
-            statusHistory = statusHistory.slice(0, historyIndex + 1);
-          }
-          statusHistory.push(newStatusId);
-          historyIndex++;
-          if (!viewedStatusIds.includes(newStatusId)) {
-            viewedStatusIds.push(newStatusId);
-            availableStatusIds = availableStatusIds.filter(id => id !== newStatusId);
-          }
-        } else {
-          historyIndex--;
-        }
-
-        history.pushState({}, '', location.pathname);
-
-        const userData = await getUserData(postUserId);
-        profileAvatar.src = userData.profilePicture || 'https://www.gravatar.com/avatar?d=mp';
-        profileUsername.textContent = userData.username || 'Unknown User';
-
-        renderMedia(status);
-        const reactions = status.reactions || {};
-        likeCount.textContent = Object.keys(reactions).length;
-        likeBtn.classList.toggle('liked', !!reactions[currentUser.uid]);
-        const comments = status.comments || {};
-        commentCount.textContent = Object.keys(comments).length;
-        renderComments(comments);
-
-        addFriendBtn.classList.add('hidden');
-        if (postUserId !== currentUser.uid) {
-          const chatSnap = await get(ref(db, `chats`));
-          const chats = chatSnap.val() || {};
-          const isFriend = Object.values(chats).some(chat =>
-            chat.participants?.[currentUser.uid] && chat.participants?.[postUserId]
-          );
-          if (!isFriend) {
-            addFriendBtn.classList.remove('hidden');
-          }
-        }
-
-        showSwipeText(isPrevious ? 'Previous Post' : 'Next Post');
+        await runTransaction(ref(db, `statuses/${postUserId}/${newStatusId}/impressions`), current => (current || 0) + 1);
       } catch (error) {
-        console.error('Error loading status:', error);
-        showAlert('Failed to load post.');
-      } finally {
-        hideSpinner();
+        console.error('Error incrementing impressions:', error);
       }
     }
+
+    if (!isPrevious) {
+      if (historyIndex < statusHistory.length - 1) {
+        statusHistory = statusHistory.slice(0, historyIndex + 1);
+      }
+      statusHistory.push(newStatusId);
+      historyIndex++;
+      if (!viewedStatusIds.includes(newStatusId)) {
+        viewedStatusIds.push(newStatusId);
+        availableStatusIds = availableStatusIds.filter(id => id !== newStatusId);
+      }
+    } else {
+      historyIndex--;
+    }
+
+    history.pushState({}, '', location.pathname);
+
+    // Fetch and display the owner's username
+    const userData = await getUserData(postUserId);
+    profileAvatar.src = userData.profilePicture || 'https://www.gravatar.com/avatar?d=mp';
+    profileUsername.textContent = userData.username || 'Unknown User';
+
+    renderMedia(status);
+    const reactions = status.reactions || {};
+    likeCount.textContent = Object.keys(reactions).length;
+    likeBtn.classList.toggle('liked', !!reactions[currentUser.uid]);
+    const comments = status.comments || {};
+    commentCount.textContent = Object.keys(comments).length;
+    renderComments(comments);
+
+    addFriendBtn.classList.add('hidden');
+    if (postUserId !== currentUser.uid) {
+      const chatSnap = await get(ref(db, `chats`));
+      const chats = chatSnap.val() || {};
+      const isFriend = Object.values(chats).some(chat =>
+        chat.participants?.[currentUser.uid] && chat.participants?.[postUserId]
+      );
+      if (!isFriend) {
+        addFriendBtn.classList.remove('hidden');
+      }
+    }
+
+    showSwipeText(isPrevious ? 'Previous Post' : 'Next Post');
+  } catch (error) {
+    console.error('Error loading status:', error);
+    showAlert('Failed to load post.');
+  } finally {
+    hideSpinner();
+  }
+}
 
     async function loadNextRandomStatus() {
       showSpinner();
@@ -1542,7 +1543,7 @@
 
     async function loadPreviousStatus() {
       if (historyIndex <= 0) {
-        showAlert('No previous post available.');
+        showAlert('No previous post available , swipe up to view next.');
         return;
       }
       const previousStatusId = statusHistory[historyIndex - 1];
