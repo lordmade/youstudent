@@ -161,18 +161,12 @@
     .friend-name.dark { color: #e5e7eb; }
     .friend-details {
       display: flex;
-      justify-content: space-between;
+      justify-content: flex-end;
       align-items: center;
       font-size: 0.85rem;
       color: #6b7280;
     }
     .friend-details.dark { color: #9ca3af; }
-    .friend-last-message {
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      max-width: 70%;
-    }
     .friend-timestamp {
       font-size: 0.75rem;
       opacity: 0.8;
@@ -264,9 +258,9 @@
   </header>
 
   <div class="categories dark:categories">
+    <span class="category-btn active" data-filter="all">All</span>
     <span class="category-btn" data-filter="online">Online</span>
     <span class="category-btn" data-filter="recent">Recent</span>
-    <span class="category-btn active" data-filter="all">All</span>
   </div>
 
   <div id="friends-list" class="friends-list dark:friends-list" aria-live="polite" aria-relevant="additions"></div>
@@ -328,7 +322,7 @@
     }
 
     function timeAgo(timestamp) {
-      const now = new Date('2025-07-05T09:32:00+02:00').getTime(); // Current time: 09:32 AM SAST, July 05, 2025
+      const now = new Date('2025-07-05T09:38:00+02:00').getTime(); // Current time: 09:38 AM SAST, July 05, 2025
       const diff = now - (timestamp || now);
       if (diff < 60000) return "just now";
       if (diff < 3600000) return `${Math.floor(diff / 60000)}m`;
@@ -346,23 +340,19 @@
       }
     }
 
-    function renderFriend(friendId, friendData, lastMessage) {
+    function renderFriend(friendId, friendData) {
       const div = document.createElement("div");
       div.className = "friend-item";
       div.onclick = () => window.location.href = `chat.html?uid=${friendId}`;
       const statusClass = friendData.presence === 'online' ? 'online' : '';
-      const lastMsgText = lastMessage ? decryptMessage(lastMessage.text || '') : '';
-      const lastMsgTime = lastMessage ? timeAgo(lastMessage.timestamp) : '';
       div.innerHTML = `
         <img src="${friendData.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${friendData.name || 'Friend'} avatar" class="friend-avatar dark:friend-avatar" />
         <div class="friend-info">
           <div class="friend-name dark:friend-name">${friendData.name || 'Unknown'}</div>
           <div class="friend-details">
-            <span class="friend-last-message">${lastMsgText.substring(0, 30)}${lastMsgText.length > 30 ? '...' : ''}</span>
-            <span class="friend-timestamp">${lastMsgTime}</span>
+            <span class="friend-status ${statusClass} dark:friend-status ${statusClass}"></span>
           </div>
         </div>
-        <span class="friend-status ${statusClass} dark:friend-status ${statusClass}"></span>
       `;
       friendsList.appendChild(div);
     }
@@ -376,14 +366,13 @@
           if (!snap.exists()) return;
           const friendData = snap.val();
           const isOnline = friendData.presence === 'online';
-          const hasRecentMessage = item.querySelector('.friend-timestamp').textContent !== '';
 
           switch (category) {
             case 'online':
               item.style.display = isOnline ? '' : 'none';
               break;
             case 'recent':
-              item.style.display = hasRecentMessage ? '' : 'none';
+              item.style.display = 'none'; // No message data, so hide recent tab
               break;
             case 'all':
               item.style.display = '';
@@ -419,21 +408,11 @@
           const friendSnap = await get(ref(db, `users/${friendId}`));
           if (friendSnap.exists()) {
             const friendDataItem = friendSnap.val();
-            const chatId = user.uid < friendId ? `${user.uid}_${friendId}` : `${friendId}_${user.uid}`;
-            const messagesRef = ref(db, `messages/${chatId}`);
-            const messagesSnap = await get(messagesRef);
-            const lastMessage = messagesSnap.exists() ? Object.values(messagesSnap.val()).sort((a, b) => b.timestamp - a.timestamp)[0] : null;
-            friendData.push({ friendId, friendData: friendDataItem, lastMessage });
+            friendData.push({ friendId, friendData: friendDataItem });
           }
         }
-        // Sort friends by latest message timestamp, with no messages at the bottom
-        friendData.sort((a, b) => {
-          const aTime = a.lastMessage ? a.lastMessage.timestamp : 0;
-          const bTime = b.lastMessage ? b.lastMessage.timestamp : 0;
-          return bTime - aTime;
-        });
-        friendData.forEach(({ friendId, friendData, lastMessage }) => renderFriend(friendId, friendData, lastMessage));
-        filterFriends('all'); // Initial filter
+        friendData.forEach(({ friendId, friendData }) => renderFriend(friendId, friendData));
+        filterFriends('all'); // Initial filter shows all friends
         hideLoading();
       }, error => {
         console.error('Error loading friends:', error);
