@@ -107,6 +107,7 @@
       box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
       transition: transform 0.2s ease, box-shadow 0.2s ease;
       cursor: pointer;
+      position: relative;
     }
     .media-card:hover {
       transform: translateY(-5px);
@@ -116,13 +117,56 @@
       background: #1e293b;
       box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
     }
-    .media-content {
+    .media-content-container {
+      position: relative;
       width: 100%;
       aspect-ratio: 16/9;
+    }
+    .media-content {
+      width: 100%;
+      height: 100%;
       object-fit: cover;
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+    .media-content.thumbnail {
+      z-index: 1;
+    }
+    .media-content.video {
+      z-index: 2;
+      display: none;
+    }
+    .media-content.video.ready {
+      display: block;
+    }
+    .video-spinner {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 40px;
+      height: 40px;
+      z-index: 3;
+      display: none;
+    }
+    .video-spinner.active {
+      display: block;
+    }
+    .video-spinner circle {
+      stroke: #ef4444;
+      stroke-width: 4;
+      fill: none;
+      stroke-dasharray: 80;
+      stroke-dashoffset: 0;
+      animation: dash 1.5s ease-in-out infinite;
+    }
+    .video-spinner.dark circle {
+      stroke: #dc2626;
     }
     .media-info {
       padding: 1rem;
+      position: relative;
     }
     .media-title {
       font-size: 1.1rem;
@@ -139,6 +183,20 @@
       color: #64748b;
     }
     .media-posted-by.dark { color: #94a3b8; }
+    .impression-count {
+      position: absolute;
+      bottom: 0.5rem;
+      right: 0.5rem;
+      font-size: 0.8rem;
+      color: #64748b;
+      background: rgba(255, 255, 255, 0.8);
+      padding: 0.2rem 0.5rem;
+      border-radius: 12px;
+    }
+    .impression-count.dark {
+      color: #94a3b8;
+      background: rgba(30, 41, 59, 0.8);
+    }
     .no-media {
       text-align: center;
       padding: 2rem;
@@ -367,6 +425,11 @@
       <div class="form-group">
         <select id="media-category" class="input-field dark:input-field" required aria-label="Select Category">
           <option value="" disabled selected>Select a category</option>
+          <option value="Fun">Fun</option>
+          <option value="Education">Education</option>
+          <option value="Food">Food</option>
+          <option value="Events">Events</option>
+          <option value="Business">Business</option>
           <option value="Nature">Nature</option>
           <option value="Sports">Sports</option>
           <option value="Art">Art</option>
@@ -385,7 +448,7 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
     import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
-    import { getDatabase, ref, get, set, push } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-database.js";
+    import { getDatabase, ref, get, set, push, update } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-database.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
@@ -416,6 +479,7 @@
     const categoryFilter = document.getElementById("category-filter");
 
     let currentCategory = 'all';
+    const viewedMedia = new Set(); // Track viewed media to avoid double-counting
 
     function showLoading() { loadingOverlay.classList.remove("hidden"); }
     function hideLoading() { loadingOverlay.classList.add("hidden"); }
@@ -427,8 +491,10 @@
       document.querySelectorAll('.media-card').forEach(card => card.classList.toggle('dark', isDark));
       document.querySelectorAll('.media-title').forEach(title => title.classList.toggle('dark', isDark));
       document.querySelectorAll('.media-posted-by').forEach(info => info.classList.toggle('dark', isDark));
+      document.querySelectorAll('.impression-count').forEach(count => count.classList.toggle('dark', isDark));
       document.querySelector('.no-media').classList.toggle('dark', isDark);
       document.querySelector('.loading-spinner circle').classList.toggle('dark', isDark);
+      document.querySelectorAll('.video-spinner circle').forEach(circle => circle.classList.toggle('dark', isDark));
       document.querySelector('.username').classList.toggle('dark', isDark);
       document.querySelectorAll('.header-icon').forEach(icon => icon.classList.toggle('dark', isDark));
       document.querySelector('.add-media-btn').classList.toggle('dark', isDark);
@@ -486,6 +552,19 @@
       }
     }
 
+    async function incrementImpression(mediaId) {
+      if (viewedMedia.has(mediaId)) return; // Prevent double-counting
+      viewedMedia.add(mediaId);
+      try {
+        const impressionRef = ref(db, `media/${mediaId}/impressions`);
+        const snapshot = await get(impressionRef);
+        const currentImpressions = snapshot.val() || 0;
+        await set(impressionRef, currentImpressions + 1);
+      } catch (error) {
+        console.error('Error incrementing impression:', error);
+      }
+    }
+
     async function loadMedia(category = 'all') {
       showLoading();
       try {
@@ -499,7 +578,7 @@
         mediaGrid.innerHTML = '';
         const mediaList = Object.entries(media)
           .map(([mediaId, item]) => ({ mediaId, ...item }))
-          .filter(item => category === 'all' || item.category === category)
+          .filter(item => category === 'all' || (item.category || 'Other') === category)
           .sort((a, b) => b.timestamp - a.timestamp);
 
         if (mediaList.length === 0) {
@@ -510,54 +589,103 @@
         }
 
         noMedia.style.display = 'none';
-        mediaList.forEach(({ mediaId, title, url, resourceType, postedBy, category }) => {
+        mediaList.forEach(({ mediaId, title, url, resourceType, postedBy, category, impressions = 0 }) => {
           const user = users[postedBy] || { name: 'Unknown' };
           const mediaCard = document.createElement('div');
           mediaCard.className = 'media-card dark:media-card';
+          mediaCard.dataset.mediaId = mediaId;
           mediaCard.onclick = () => window.location.href = `media.html?mediaId=${mediaId}`;
           
           const mediaElement = resourceType === 'image'
-            ? `<img src="${url || 'https://via.placeholder.com/300x169'}" alt="${title || 'Media'} thumbnail" class="media-content" />`
-            : `<video src="${url}" class="media-content" muted playsinline></video>`;
+            ? `<div class="media-content-container">
+                 <img src="${url || 'https://via.placeholder.com/300x169'}" alt="${title || 'Media'} thumbnail" class="media-content" />
+               </div>`
+            : `<div class="media-content-container">
+                 <img src="${url || 'https://via.placeholder.com/300x169'}" alt="${title || 'Media'} thumbnail" class="media-content thumbnail" />
+                 <video src="${url}" class="media-content video" muted playsinline loop></video>
+                 <svg class="video-spinner dark:video-spinner" viewBox="0 0 24 24">
+                   <circle cx="12" cy="12" r="10" />
+                 </svg>
+               </div>`;
           
           mediaCard.innerHTML = `
             ${mediaElement}
             <div class="media-info">
               <h3 class="media-title dark:media-title">${title || 'Untitled'}</h3>
-              <p class="media-posted-by dark:media-posted-by">Posted by ${user.name} | ${category}</p>
+              <p class="media-posted-by dark:media-posted-by">Posted by ${user.name} | ${category || 'Other'}</p>
+              <span class="impression-count dark:impression-count">${impressions} views</span>
             </div>
           `;
           mediaGrid.appendChild(mediaCard);
         });
 
-        // Set up IntersectionObserver for video previews
-        const videos = document.querySelectorAll('video.media-content');
+        // Set up IntersectionObserver for video previews and impressions
         const observer = new IntersectionObserver((entries) => {
           entries.forEach(entry => {
-            const video = entry.target;
+            const card = entry.target;
+            const video = card.querySelector('video.media-content');
+            const thumbnail = card.querySelector('img.media-content.thumbnail');
+            const spinner = card.querySelector('.video-spinner');
+            const mediaId = card.dataset.mediaId;
+
             if (entry.isIntersecting) {
-              video.play().then(() => {
-                setTimeout(() => {
-                  video.pause();
-                  video.currentTime = 0;
-                }, 5000);
-              }).catch(error => console.error('Error playing video:', error));
+              incrementImpression(mediaId);
+              if (video) {
+                video.play().then(() => {
+                  setTimeout(() => {
+                    video.pause();
+                    video.currentTime = 0;
+                  }, 5000);
+                }).catch(error => {
+                  console.error('Error playing video:', error);
+                  if (spinner) spinner.classList.add('active');
+                });
+              }
             } else {
-              video.pause();
-              video.currentTime = 0;
+              if (video) {
+                video.pause();
+                video.currentTime = 0;
+                if (thumbnail) thumbnail.style.display = 'block';
+                if (spinner) spinner.classList.remove('active');
+              }
             }
           });
         }, { threshold: 0.5 });
 
-        videos.forEach(video => {
-          observer.observe(video);
+        document.querySelectorAll('.media-card').forEach(card => observer.observe(card));
+
+        // Video loading states
+        document.querySelectorAll('video.media-content').forEach(video => {
+          const thumbnail = video.parentElement.querySelector('img.media-content.thumbnail');
+          const spinner = video.parentElement.querySelector('.video-spinner');
+
+          video.addEventListener('canplay', () => {
+            video.classList.add('ready');
+            if (thumbnail) thumbnail.style.display = 'none';
+            if (spinner) spinner.classList.remove('active');
+          });
+
+          video.addEventListener('waiting', () => {
+            if (spinner) spinner.classList.add('active');
+          });
+
+          video.addEventListener('error', () => {
+            if (spinner) spinner.classList.add('active');
+            console.error('Video error:', video.error);
+          });
+
           video.addEventListener('focus', () => {
             video.play().then(() => {
               setTimeout(() => {
                 video.pause();
                 video.currentTime = 0;
+                if (thumbnail) thumbnail.style.display = 'block';
+                if (spinner) spinner.classList.remove('active');
               }, 5000);
-            }).catch(error => console.error('Error playing video:', error));
+            }).catch(error => {
+              console.error('Error playing video:', error);
+              if (spinner) spinner.classList.add('active');
+            });
           });
         });
       } catch (error) {
@@ -586,12 +714,12 @@
         applyFontSize(settings.fontSize || 'medium');
         await loadMedia(currentCategory);
 
-        // Set up category filter buttons
         categoryFilter.querySelectorAll('.category-btn').forEach(btn => {
           btn.addEventListener('click', () => {
             categoryFilter.querySelectorAll('.category-btn').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
             currentCategory = btn.dataset.category;
+            viewedMedia.clear(); // Reset viewed media for new category
             loadMedia(currentCategory);
           });
           btn.addEventListener('touchstart', (e) => {
@@ -599,6 +727,7 @@
             categoryFilter.querySelectorAll('.category-btn').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
             currentCategory = btn.dataset.category;
+            viewedMedia.clear(); // Reset viewed media for new category
             loadMedia(currentCategory);
           });
         });
@@ -659,6 +788,14 @@
         return;
       }
 
+      if (file.size > 10 * 1024 * 1024) {
+        uploadResult.classList.add('error');
+        uploadResult.textContent = 'File size exceeds 10MB limit.';
+        mediaFileInput.classList.add('error');
+        hideLoading();
+        return;
+      }
+
       try {
         const { url, resourceType, thumbnailUrl } = await uploadToCloudinary(file);
         const mediaRef = ref(db, "media");
@@ -670,6 +807,7 @@
           resourceType,
           category,
           postedBy: auth.currentUser.uid,
+          impressions: 0,
           timestamp: Date.now()
         });
 
