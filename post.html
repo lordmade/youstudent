@@ -242,7 +242,7 @@
     .friends-container {
       position: absolute;
       top: 1rem;
-      right: 4rem; /* Adjusted to place it next to notifications */
+      right: 4rem;
       display: flex;
       align-items: center;
       gap: 0.25rem;
@@ -983,7 +983,7 @@
 
   <script type="module">
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js';
-    import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js';
+    import { getAuth, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js';
     import { getDatabase, ref, get, set, push, update, onValue, off, runTransaction } from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-database.js';
 
     const firebaseConfig = {
@@ -1451,7 +1451,7 @@
           return;
         }
         const status = statusSnap.val();
-        postUserId = status.userId; // Set the postUserId to the user who posted the status
+        postUserId = status.userId;
         statusId = newStatusId;
 
         if (!isPrevious) {
@@ -1478,7 +1478,6 @@
 
         history.pushState({}, '', location.pathname);
 
-        // Fetch and update the profile data for the post owner
         const userData = await getUserData(postUserId);
         profileAvatar.src = userData.profilePicture || 'https://www.gravatar.com/avatar?d=mp';
         profileUsername.textContent = userData.username || 'Unknown User';
@@ -1640,7 +1639,10 @@
 
     onAuthStateChanged(auth, async user => {
       if (!user) {
-        location.href = 'signup.html';
+        showAlert('Please log in to view posts.');
+        setTimeout(() => {
+          location.href = 'signup.html';
+        }, 2000);
         return;
       }
       currentUser = user;
@@ -1666,11 +1668,23 @@
         await loadNextRandomStatus();
       } catch (error) {
         console.error('Error initializing:', error);
-        showAlert('Failed to load posts.');
+        showAlert('Failed to load posts. Please try again.');
       } finally {
         hideSpinner();
       }
     });
+
+    function handleLogout() {
+      signOut(auth).then(() => {
+        showAlert('Logged out successfully.');
+        setTimeout(() => {
+          location.href = 'signup.html';
+        }, 2000);
+      }).catch((error) => {
+        console.error('Error logging out:', error);
+        showAlert('Failed to log out. Please try again.');
+      });
+    }
 
     notificationsContainer.addEventListener('click', async () => {
       try {
