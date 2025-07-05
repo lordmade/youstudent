@@ -54,6 +54,44 @@
     }
     .header-icon:hover { stroke: #dc2626; transform: scale(1.1); }
     .header-icon.dark { stroke: #dc2626; }
+    .category-filter {
+      max-width: 1200px;
+      margin: 1rem auto;
+      padding: 0 1.5rem;
+      display: flex;
+      gap: 0.5rem;
+      overflow-x: auto;
+      white-space: nowrap;
+      -webkit-overflow-scrolling: touch;
+    }
+    .category-btn {
+      padding: 0.5rem 1rem;
+      background: #e5e7eb;
+      color: #1e293b;
+      border-radius: 20px;
+      font-size: 0.9rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.2s ease, color 0.2s ease;
+    }
+    .category-btn:hover {
+      background: #d1d5db;
+    }
+    .category-btn.active {
+      background: #ef4444;
+      color: white;
+    }
+    .category-btn.dark {
+      background: #4b5563;
+      color: #e2e8f0;
+    }
+    .category-btn.dark:hover {
+      background: #6b7280;
+    }
+    .category-btn.dark.active {
+      background: #dc2626;
+      color: white;
+    }
     .media-grid {
       max-width: 1200px;
       margin: 1rem auto;
@@ -81,7 +119,7 @@
     .media-content {
       width: 100%;
       aspect-ratio: 16/9;
-      object-fit: cover; /* Resize media to fill card, cropping if needed */
+      object-fit: cover;
     }
     .media-info {
       padding: 1rem;
@@ -291,6 +329,15 @@
     </div>
   </header>
 
+  <div class="category-filter" id="category-filter">
+    <button class="category-btn dark:category-btn active" data-category="all">All</button>
+    <button class="category-btn dark:category-btn" data-category="Nature">Nature</button>
+    <button class="category-btn dark:category-btn" data-category="Sports">Sports</button>
+    <button class="category-btn dark:category-btn" data-category="Art">Art</button>
+    <button class="category-btn dark:category-btn" data-category="Music">Music</button>
+    <button class="category-btn dark:category-btn" data-category="Travel">Travel</button>
+  </div>
+
   <div class="media-grid" id="media-grid"></div>
   <div class="no-media dark:no-media" id="no-media" style="display: none;">No media available.</div>
 
@@ -316,6 +363,16 @@
     <form id="upload-media-form" aria-label="Upload Media Form">
       <div class="form-group">
         <input type="text" id="media-title" class="input-field dark:input-field" placeholder="Enter media title" required aria-label="Media Title"/>
+      </div>
+      <div class="form-group">
+        <select id="media-category" class="input-field dark:input-field" required aria-label="Select Category">
+          <option value="" disabled selected>Select a category</option>
+          <option value="Nature">Nature</option>
+          <option value="Sports">Sports</option>
+          <option value="Art">Art</option>
+          <option value="Music">Music</option>
+          <option value="Travel">Travel</option>
+        </select>
       </div>
       <div class="form-group">
         <input type="file" id="media-file" class="input-field dark:input-field" accept="image/jpeg,image/png,video/mp4,video/quicktime" required aria-label="Select Image or Video"/>
@@ -351,10 +408,14 @@
     const bottomSheet = document.getElementById("bottom-sheet");
     const uploadMediaForm = document.getElementById("upload-media-form");
     const mediaTitleInput = document.getElementById("media-title");
+    const mediaCategoryInput = document.getElementById("media-category");
     const mediaFileInput = document.getElementById("media-file");
     const uploadResult = document.getElementById("upload-result");
     const addMediaBtn = document.getElementById("add-media-btn");
     const closeBottomSheetBtn = document.getElementById("close-bottom-sheet");
+    const categoryFilter = document.getElementById("category-filter");
+
+    let currentCategory = 'all';
 
     function showLoading() { loadingOverlay.classList.remove("hidden"); }
     function hideLoading() { loadingOverlay.classList.add("hidden"); }
@@ -377,6 +438,7 @@
       document.querySelector('.btn-primary').classList.toggle('dark', isDark);
       document.querySelector('.upload-result').classList.toggle('dark', isDark);
       document.querySelector('.close-btn').classList.toggle('dark', isDark);
+      document.querySelectorAll('.category-btn').forEach(btn => btn.classList.toggle('dark', isDark));
     }
 
     function applyFontSize(size) {
@@ -390,6 +452,7 @@
         uploadResult.textContent = '';
         uploadResult.classList.remove('error');
         mediaTitleInput.classList.remove('error');
+        mediaCategoryInput.classList.remove('error');
         mediaFileInput.classList.remove('error');
       }
     }
@@ -423,7 +486,7 @@
       }
     }
 
-    async function loadMedia() {
+    async function loadMedia(category = 'all') {
       showLoading();
       try {
         const mediaRef = ref(db, "media");
@@ -436,16 +499,18 @@
         mediaGrid.innerHTML = '';
         const mediaList = Object.entries(media)
           .map(([mediaId, item]) => ({ mediaId, ...item }))
+          .filter(item => category === 'all' || item.category === category)
           .sort((a, b) => b.timestamp - a.timestamp);
 
         if (mediaList.length === 0) {
           noMedia.style.display = 'block';
+          noMedia.textContent = category === 'all' ? 'No media available.' : `No media in ${category} category.`;
           hideLoading();
           return;
         }
 
         noMedia.style.display = 'none';
-        mediaList.forEach(({ mediaId, title, url, resourceType, postedBy }) => {
+        mediaList.forEach(({ mediaId, title, url, resourceType, postedBy, category }) => {
           const user = users[postedBy] || { name: 'Unknown' };
           const mediaCard = document.createElement('div');
           mediaCard.className = 'media-card dark:media-card';
@@ -459,7 +524,7 @@
             ${mediaElement}
             <div class="media-info">
               <h3 class="media-title dark:media-title">${title || 'Untitled'}</h3>
-              <p class="media-posted-by dark:media-posted-by">Posted by ${user.name}</p>
+              <p class="media-posted-by dark:media-posted-by">Posted by ${user.name} | ${category}</p>
             </div>
           `;
           mediaGrid.appendChild(mediaCard);
@@ -474,25 +539,24 @@
               video.play().then(() => {
                 setTimeout(() => {
                   video.pause();
-                  video.currentTime = 0; // Reset to start
-                }, 5000); // Play for 5 seconds
+                  video.currentTime = 0;
+                }, 5000);
               }).catch(error => console.error('Error playing video:', error));
             } else {
               video.pause();
-              video.currentTime = 0; // Reset to start
+              video.currentTime = 0;
             }
           });
         }, { threshold: 0.5 });
 
         videos.forEach(video => {
           observer.observe(video);
-          // Play preview on focus (click or tab)
           video.addEventListener('focus', () => {
             video.play().then(() => {
               setTimeout(() => {
                 video.pause();
-                video.currentTime = 0; // Reset to start
-              }, 5000); // Play for 5 seconds
+                video.currentTime = 0;
+              }, 5000);
             }).catch(error => console.error('Error playing video:', error));
           });
         });
@@ -520,13 +584,30 @@
         const settings = settingsSnap.val() || {};
         applyTheme(settings.theme || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
         applyFontSize(settings.fontSize || 'medium');
-        await loadMedia();
+        await loadMedia(currentCategory);
+
+        // Set up category filter buttons
+        categoryFilter.querySelectorAll('.category-btn').forEach(btn => {
+          btn.addEventListener('click', () => {
+            categoryFilter.querySelectorAll('.category-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            currentCategory = btn.dataset.category;
+            loadMedia(currentCategory);
+          });
+          btn.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            categoryFilter.querySelectorAll('.category-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            currentCategory = btn.dataset.category;
+            loadMedia(currentCategory);
+          });
+        });
       } catch (error) {
         console.error('Error loading user data or settings:', error);
         usernameElement.textContent = 'User';
         applyTheme(window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
         applyFontSize('medium');
-        await loadMedia();
+        await loadMedia(currentCategory);
       }
     });
 
@@ -536,16 +617,26 @@
       showLoading();
       uploadResult.classList.remove('error');
       mediaTitleInput.classList.remove('error');
+      mediaCategoryInput.classList.remove('error');
       mediaFileInput.classList.remove('error');
       uploadResult.textContent = 'Uploading media...';
 
       const title = mediaTitleInput.value.trim();
+      const category = mediaCategoryInput.value;
       const file = mediaFileInput.files[0];
 
       if (!title) {
         uploadResult.classList.add('error');
         uploadResult.textContent = 'Please enter a title.';
         mediaTitleInput.classList.add('error');
+        hideLoading();
+        return;
+      }
+
+      if (!category) {
+        uploadResult.classList.add('error');
+        uploadResult.textContent = 'Please select a category.';
+        mediaCategoryInput.classList.add('error');
         hideLoading();
         return;
       }
@@ -577,6 +668,7 @@
           url,
           thumbnailUrl,
           resourceType,
+          category,
           postedBy: auth.currentUser.uid,
           timestamp: Date.now()
         });
@@ -584,7 +676,7 @@
         uploadResult.textContent = 'Media uploaded successfully!';
         uploadMediaForm.reset();
         toggleBottomSheet();
-        await loadMedia();
+        await loadMedia(currentCategory);
       } catch (error) {
         uploadResult.classList.add('error');
         uploadResult.textContent = `Error uploading media: ${error.message || 'Unknown error'}`;
