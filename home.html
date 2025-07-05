@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device=device-width, initial-scale=1.0" />
   <title>BanterBox - Home</title>
   <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet" />
   <script src="https://cdn.tailwindcss.com"></script>
@@ -473,6 +473,47 @@
     .audio-player.active {
       display: block;
     }
+    .song-search {
+      margin-bottom: 1rem;
+    }
+    .song-search input {
+      width: 100%;
+      padding: 0.75rem;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      background: rgba(249, 250, 251, 0.8);
+    }
+    .song-search input.dark {
+      background: rgba(75, 85, 99, 0.8);
+      border-color: #6b7280;
+      color: #e2e8f0;
+    }
+    .song-results {
+      max-height: 150px;
+      overflow-y: auto;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      display: none;
+      background: white;
+    }
+    .song-results.dark {
+      background: #1e293b;
+      border-color: #6b7280;
+    }
+    .song-results.active {
+      display: block;
+    }
+    .song-item {
+      padding: 0.5rem;
+      cursor: pointer;
+    }
+    .song-item:hover {
+      background: #f3f4f6;
+    }
+    .song-item.dark:hover {
+      background: #374151;
+    }
     @keyframes spin { to { transform: rotate(360deg); } }
     @keyframes dash { 0% { stroke-dashoffset: 80; } 50% { stroke-dashoffset: 20; } 100% { stroke-dashoffset: 80; } }
     @keyframes shake {
@@ -629,8 +670,12 @@
           <option value="Travel">Travel</option>
         </select>
       </div>
+      <div class="form-group song-search">
+        <input type="text" id="song-search" class="input-field dark:input-field" placeholder="Search for a song" aria-label="Search Song"/>
+        <div id="song-results" class="song-results dark:song-results"></div>
+      </div>
       <div class="form-group">
-        <input type="file" id="media-file" class="input-field dark:input-field" accept="image/jpeg,image/png,video/mp4,video/quicktime" required aria-label="Select Image or Video"/>
+        <input type="file" id="media-file" class="input-field dark:input-field" accept="image/jpeg,image/png" required aria-label="Select Image"/>
       </div>
       <button type="submit" class="btn-primary dark:btn-primary">Upload</button>
     </form>
@@ -672,9 +717,12 @@
     const goLiveBtn = document.getElementById("go-live-btn");
     const audioPlayer = document.getElementById("audio-player");
     const previewAudio = document.getElementById("preview-audio");
+    const songSearchInput = document.getElementById("song-search");
+    const songResultsDiv = document.getElementById("song-results");
 
     let currentCategory = 'all';
     let currentUserId = null;
+    let selectedSongPreview = null;
 
     function showLoading() { loadingOverlay.classList.remove("hidden"); }
     function hideLoading() { loadingOverlay.classList.add("hidden"); }
@@ -702,6 +750,7 @@
       document.querySelector('.close-btn').classList.toggle('dark', isDark);
       document.querySelectorAll('.category-btn').forEach(btn => btn.classList.toggle('dark', isDark));
       audioPlayer.classList.toggle('dark', isDark);
+      songResultsDiv.classList.toggle('dark', isDark);
     }
 
     function applyFontSize(size) {
@@ -717,11 +766,13 @@
         mediaTitleInput.classList.remove('error');
         mediaCategoryInput.classList.remove('error');
         mediaFileInput.classList.remove('error');
+        songSearchInput.value = '';
+        songResultsDiv.classList.remove('active');
+        selectedSongPreview = null;
       }
     }
 
     async function getSpotifyAccessToken() {
-      // Replace with your Spotify client_id and client_secret
       const clientId = 'f1b60fb178c046d198b399575984e4ed';
       const clientSecret = 'c663adfe588b4321a0a902f4253995f6';
       const tokenUrl = 'https://accounts.spotify.com/api/token';
@@ -739,20 +790,40 @@
       return data.access_token;
     }
 
-    async function getSpotifyPreview(category) {
+    async function searchSongs(query) {
       const accessToken = await getSpotifyAccessToken();
-      const searchTerm = category || 'popular';
-      const apiUrl = `https://api.spotify.com/v1/search?q=${encodeURIComponent(searchTerm)}&type=track&limit=1`;
+      const apiUrl = `https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=track&limit=5`;
 
       const response = await fetch(apiUrl, {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`
-        }
+        headers: { 'Authorization': `Bearer ${accessToken}` }
       });
       const data = await response.json();
-      const track = data.tracks.items[0];
-      return track ? track.preview_url : null; // 30-second preview URL
+      return data.tracks.items;
     }
+
+    songSearchInput.addEventListener('input', async () => {
+      const query = songSearchInput.value.trim();
+      if (query.length < 2) {
+        songResultsDiv.classList.remove('active');
+        return;
+      }
+
+      const songs = await searchSongs(query);
+      songResultsDiv.innerHTML = '';
+      songResultsDiv.classList.add('active');
+
+      songs.forEach(song => {
+        const songItem = document.createElement('div');
+        songItem.className = 'song-item dark:song-item';
+        songItem.textContent = `${song.name} - ${song.artists[0].name}`;
+        songItem.onclick = () => {
+          selectedSongPreview = song.preview_url;
+          songSearchInput.value = `${song.name} - ${song.artists[0].name}`;
+          songResultsDiv.classList.remove('active');
+        };
+        songResultsDiv.appendChild(songItem);
+      });
+    });
 
     async function uploadToCloudinary(file) {
       const cloudName = "dqkujefxj";
@@ -849,7 +920,7 @@
         }
 
         noMedia.style.display = 'none';
-        mediaList.forEach(({ mediaId, title, url, thumbnailUrl, resourceType, postedBy, category, impressions = 0 }) => {
+        mediaList.forEach(({ mediaId, title, url, thumbnailUrl, resourceType, postedBy, category, songPreview, impressions = 0 }) => {
           const user = users[postedBy] || { name: 'Unknown' };
           const mediaCard = document.createElement('div');
           mediaCard.className = 'media-card dark:media-card';
@@ -881,6 +952,13 @@
               </span>
             </div>
           `;
+          if (songPreview) {
+            const audioElement = document.createElement('audio');
+            audioElement.src = songPreview;
+            audioElement.controls = true;
+            audioElement.className = 'w-full mt-2';
+            mediaCard.querySelector('.media-info').appendChild(audioElement);
+          }
           mediaGrid.appendChild(mediaCard);
         });
 
@@ -1048,10 +1126,9 @@
       }
 
       const validImageTypes = ['image/jpeg', 'image/png'];
-      const validVideoTypes = ['video/mp4', 'video/quicktime'];
-      if (!validImageTypes.includes(file.type) && !validVideoTypes.includes(file.type)) {
+      if (!validImageTypes.includes(file.type)) {
         uploadResult.classList.add('error');
-        uploadResult.textContent = 'Please select a valid image (JPEG, PNG) or video (MP4, MOV).';
+        uploadResult.textContent = 'Please select a valid image (JPEG, PNG).';
         mediaFileInput.classList.add('error');
         hideLoading();
         return;
@@ -1065,15 +1142,11 @@
         return;
       }
 
-      // Play Spotify preview
-      const previewUrl = await getSpotifyPreview(category);
-      if (previewUrl) {
-        previewAudio.src = previewUrl;
-        audioPlayer.classList.add('active');
-        previewAudio.play().catch(error => console.error('Error playing preview:', error));
-        previewAudio.onended = () => {
-          audioPlayer.classList.remove('active');
-        };
+      if (!selectedSongPreview) {
+        uploadResult.classList.add('error');
+        uploadResult.textContent = 'Please select a song.';
+        hideLoading();
+        return;
       }
 
       try {
@@ -1087,9 +1160,17 @@
           resourceType,
           category,
           postedBy: auth.currentUser.uid,
+          songPreview: selectedSongPreview,
           impressions: 0,
-          timestamp: Date.now()
+          timestamp: new Date('2025-07-06T01:34:00+02:00').getTime() // Current date and time
         });
+
+        if (selectedSongPreview) {
+          previewAudio.src = selectedSongPreview;
+          audioPlayer.classList.add('active');
+          previewAudio.play().catch(error => console.error('Error playing preview:', error));
+          previewAudio.onended = () => audioPlayer.classList.remove('active');
+        }
 
         uploadResult.textContent = 'Media uploaded successfully!';
         uploadMediaForm.reset();
