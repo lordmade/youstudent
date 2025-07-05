@@ -81,27 +81,36 @@
       width: 24px;
       height: 24px;
     }
-    .badge {
-      position: absolute;
-      top: -4px;
-      right: -4px;
-      background: #ef4444;
-      color: white;
-      font-size: 0.75rem;
-      font-weight: 600;
+    .live-icon {
+      cursor: pointer;
+      width: 40px;
+      height: 40px;
+      background: rgba(255, 255, 255, 0.8);
       border-radius: 50%;
-      width: 20px;
-      height: 20px;
       display: flex;
       align-items: center;
       justify-content: center;
-      transition: transform 0.2s ease;
+      stroke: #ef4444;
+      transition: transform 0.2s ease, background 0.2s ease;
+      position: relative;
+      backdrop-filter: blur(4px);
     }
-    .badge.dark {
-      background: #dc2626;
+    .live-icon:hover {
+      stroke: #dc2626;
+      transform: scale(1.1);
+      background: rgba(255, 255, 255, 0.9);
     }
-    .badge:empty {
-      display: none;
+    .live-icon.dark {
+      stroke: #dc2626;
+      background: rgba(30, 41, 59, 0.8);
+    }
+    .live-icon.dark:hover {
+      stroke: #f97316;
+      background: rgba(30, 41, 59, 0.9);
+    }
+    .live-icon:focus {
+      outline: none;
+      box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.3);
     }
     .category-filter {
       max-width: 1200px;
@@ -459,18 +468,13 @@
       .username {
         font-size: 1rem;
       }
-      .header-icon {
+      .header-icon, .live-icon {
         width: 36px;
         height: 36px;
       }
-      .header-icon svg {
+      .header-icon svg, .live-icon svg {
         width: 20px;
         height: 20px;
-      }
-      .badge {
-        font-size: 0.65rem;
-        width: 18px;
-        height: 18px;
       }
       .category-filter {
         padding: 0 1rem;
@@ -527,18 +531,12 @@
       <span id="username" class="username dark:username">Loading...</span>
     </div>
     <div class="header-right">
-      <a href="friends.html" class="header-icon chat-icon dark:chat-icon" id="chat-icon" role="button" aria-label="Chat, no unread messages" tabindex="0">
+      <button class="header-icon live-icon dark:live-icon" id="go-live-btn" role="button" aria-label="Go Live" tabindex="0">
         <svg viewBox="0 0 24 24">
-          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M18 8l4 4-4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
-        <span class="badge dark:badge" id="unread-count"></span>
-      </a>
-      <a href="notifications.html" class="header-icon notification-icon dark:notification-icon" id="notification-icon" role="button" aria-label="Notifications, no unread notifications" tabindex="0">
-        <svg viewBox="0 0 24 24">
-          <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9zM13 20a2 2 0 0 1-2 2h2a2 2 0 0 1-2-2z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-        </svg>
-        <span class="badge dark:badge" id="notification-count"></span>
-      </a>
+      </button>
       <a href="settings.html" class="header-icon settings-icon dark:settings-icon" role="button" aria-label="Settings" tabindex="0">
         <svg viewBox="0 0 24 24">
           <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
@@ -614,7 +612,7 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
     import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
-    import { getDatabase, ref, get, set, push, onValue } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-database.js";
+    import { getDatabase, ref, get, set, push } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-database.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
@@ -643,10 +641,7 @@
     const addMediaBtn = document.getElementById("add-media-btn");
     const closeBottomSheetBtn = document.getElementById("close-bottom-sheet");
     const categoryFilter = document.getElementById("category-filter");
-    const chatIcon = document.getElementById("chat-icon");
-    const notificationIcon = document.getElementById("notification-icon");
-    const unreadCount = document.getElementById("unread-count");
-    const notificationCount = document.getElementById("notification-count");
+    const goLiveBtn = document.getElementById("go-live-btn");
 
     let currentCategory = 'all';
     let currentUserId = null;
@@ -667,6 +662,7 @@
       document.querySelectorAll('.video-spinner circle').forEach(circle => circle.classList.toggle('dark', isDark));
       document.querySelector('.username').classList.toggle('dark', isDark);
       document.querySelectorAll('.header-icon').forEach(icon => icon.classList.toggle('dark', isDark));
+      document.querySelector('.live-icon').classList.toggle('dark', isDark);
       document.querySelector('.add-media-btn').classList.toggle('dark', isDark);
       document.querySelector('.bottom-sheet').classList.toggle('dark', isDark);
       document.querySelector('.bottom-sheet-title').classList.toggle('dark', isDark);
@@ -675,7 +671,6 @@
       document.querySelector('.upload-result').classList.toggle('dark', isDark);
       document.querySelector('.close-btn').classList.toggle('dark', isDark);
       document.querySelectorAll('.category-btn').forEach(btn => btn.classList.toggle('dark', isDark));
-      document.querySelectorAll('.badge').forEach(badge => badge.classList.toggle('dark', isDark));
     }
 
     function applyFontSize(size) {
@@ -745,40 +740,23 @@
       }
     }
 
-    async function loadUnreadMessageCount(userId) {
+    async function startLiveStream() {
       try {
-        const messagesRef = ref(db, 'messages');
-        onValue(messagesRef, (snapshot) => {
-          let unreadCountValue = 0;
-          const messages = snapshot.val() || {};
-          Object.values(messages).forEach(chat => {
-            if (chat.participants && chat.participants.includes(userId)) {
-              Object.values(chat.messages || {}).forEach(message => {
-                if (message.senderId !== userId && (!message.readBy || !message.readBy.includes(userId))) {
-                  unreadCountValue++;
-                }
-              });
-            }
-          });
-          unreadCount.textContent = unreadCountValue > 0 ? unreadCountValue : '';
-          chatIcon.setAttribute('aria-label', `Chat, ${unreadCountValue} unread message${unreadCountValue === 1 ? '' : 's'}`);
-        }, { onlyOnce: false });
+        showLoading();
+        const liveRef = ref(db, `liveStreams/${currentUserId}`);
+        await set(liveRef, {
+          userId: currentUserId,
+          startedAt: Date.now(),
+          status: 'live',
+          viewers: 0
+        });
+        window.location.href = 'live.html?uid=' + currentUserId;
       } catch (error) {
-        console.error('Error loading unread message count:', error);
-      }
-    }
-
-    async function loadNotificationCount(userId) {
-      try {
-        const notificationsRef = ref(db, `notifications/${userId}`);
-        onValue(notificationsRef, (snapshot) => {
-          const notifications = snapshot.val() || {};
-          const unreadCountValue = Object.values(notifications).filter(n => !n.read).length;
-          notificationCount.textContent = unreadCountValue > 0 ? unreadCountValue : '';
-          notificationIcon.setAttribute('aria-label', `Notifications, ${unreadCountValue} unread notification${unreadCountValue === 1 ? '' : 's'}`);
-        }, { onlyOnce: false });
-      } catch (error) {
-        console.error('Error loading notification count:', error);
+        console.error('Error starting live stream:', error);
+        uploadResult.classList.add('error');
+        uploadResult.textContent = 'Failed to start live stream. Please try again.';
+      } finally {
+        hideLoading();
       }
     }
 
@@ -930,8 +908,6 @@
         applyFontSize(settings.fontSize || 'medium');
 
         await loadMedia(currentCategory);
-        await loadUnreadMessageCount(currentUserId);
-        await loadNotificationCount(currentUserId);
 
         categoryFilter.querySelectorAll('.category-btn').forEach(btn => {
           btn.addEventListener('click', () => {
@@ -949,25 +925,14 @@
           });
         });
 
-        chatIcon.addEventListener('click', (e) => {
+        goLiveBtn.addEventListener('click', (e) => {
           e.preventDefault();
-          window.location.href = 'friends.html';
+          startLiveStream();
         });
-        chatIcon.addEventListener('keydown', (e) => {
+        goLiveBtn.addEventListener('keydown', (e) => {
           if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault();
-            window.location.href = 'friends.html';
-          }
-        });
-
-        notificationIcon.addEventListener('click', (e) => {
-          e.preventDefault();
-          window.location.href = 'notifications.html';
-        });
-        notificationIcon.addEventListener('keydown', (e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            window.location.href = 'notifications.html';
+            startLiveStream();
           }
         });
       } catch (error) {
