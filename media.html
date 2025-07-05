@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BanterBox - Media</title>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      font-family: 'Roboto', 'Segoe UI', sans-serif;
+      background: linear-gradient(180deg, #f5f7fa 0%, #e0e7ff 100%);
+      min-height: 100vh;
+      margin: 0;
+      padding: 0;
+      overflow-x: hidden;
+    }
+    body.dark {
+      background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
+    }
+    .header {
+      position: sticky;
+      top: 0;
+      z-index: 1000;
+      padding: 1rem 1.5rem;
+      background: rgba(255, 255, 255, 0.95);
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      backdrop-filter: blur(10px);
+    }
+    .header.dark {
+      background: rgba(30, 41, 59, 0.95);
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+      color: #e2e8f0;
+    }
+    .header-left, .header-right {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+    .username {
+      font-size: 1.2rem;
+      font-weight: 500;
+      color: #1e293b;
+    }
+    .username.dark { color: #e2e8f0; }
+    .header-icon {
+      cursor: pointer;
+      stroke: #ef4444;
+      width: 24px;
+      height: 24px;
+    }
+    .header-icon:hover { stroke: #dc2626; transform: scale(1.1); }
+    .header-icon.dark { stroke: #dc2626; }
+    .media-container {
+      max-width: 1200px;
+      margin: 1rem auto;
+      padding: 1rem 1.5rem;
+      display: flex;
+      justify-content: center;
+    }
+    .media-card {
+      background: white;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+      max-width: 800px;
+      width: 100%;
+    }
+    .media-card:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 6px 25px rgba(0, 0, 0, 0.15);
+    }
+    .media-card.dark {
+      background: #1e293b;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    }
+    .media-content-container {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 16/9;
+    }
+    .media-content {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+    .media-content.thumbnail {
+      z-index: 1;
+    }
+    .media-content.video {
+      z-index: 2;
+      display: none;
+    }
+    .media-content.video.ready {
+      display: block;
+    }
+    .video-spinner {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 40px;
+      height: 40px;
+      z-index: 3;
+      display: none;
+    }
+    .video-spinner.active {
+      display: block;
+    }
+    .video-spinner circle {
+      stroke: #ef4444;
+      stroke-width: 4;
+      fill: none;
+      stroke-dasharray: 80;
+      stroke-dashoffset: 0;
+      animation: dash 1.5s ease-in-out infinite;
+    }
+    .video-spinner.dark circle {
+      stroke: #dc2626;
+    }
+    .media-info {
+      padding: 1rem;
+      position: relative;
+    }
+    .media-title {
+      font-size: 1.5rem;
+      font-weight: 500;
+      color: #1e293b;
+      margin-bottom: 0.5rem;
+    }
+    .media-title.dark { color: #e2e8f0; }
+    .media-posted-by {
+      font-size: 1rem;
+      color: #64748b;
+      margin-bottom: 0.5rem;
+    }
+    .media-posted-by.dark { color: #94a3b8; }
+    .impression-count {
+      font-size: 0.9rem;
+      color: #64748b;
+      background: rgba(255, 255, 255, 0.8);
+      padding: 0.2rem 0.5rem;
+      border-radius: 12px;
+      position: absolute;
+      bottom: 0.5rem;
+      right: 0.5rem;
+    }
+    .impression-count.dark {
+      color: #94a3b8;
+      background: rgba(30, 41, 59, 0.8);
+    }
+    .no-media {
+      text-align: center;
+      padding: 2rem;
+      color: #64748b;
+      font-size: 1.1rem;
+    }
+    .no-media.dark { color: #94a3b8; }
+    .loading-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.6);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 2000;
+    }
+    .loading-overlay.hidden { opacity: 0; pointer-events: none; }
+    .loading-spinner {
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
+    }
+    .loading-spinner circle {
+      stroke: #ef4444;
+      stroke-width: 4;
+      fill: none;
+      stroke-dasharray: 80;
+      stroke-dashoffset: 0;
+      animation: dash 1.5s ease-in-out infinite;
+    }
+    .loading-spinner.dark circle { stroke: #dc2626; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes dash { 0% { stroke-dashoffset: 80; } 50% { stroke-dashoffset: 20; } 100% { stroke-dashoffset: 80; } }
+  </style>
+</head>
+<body>
+  <header class="header dark:header">
+    <div class="header-left">
+      <a href="profile.html?uid={{currentUser.uid}}&owner=true">
+        <svg class="header-icon profile-icon dark:profile-icon" viewBox="0 0 24 24">
+          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          <circle cx="12" cy="7" r="4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+      </a>
+      <span id="username" class="username dark:username">Loading...</span>
+    </div>
+    <div class="header-right">
+      <a href="settings.html">
+        <svg class="header-icon settings-icon dark:settings-icon" viewBox="0 0 24 24">
+          <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l-.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l-.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1. booking 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+      </a>
+    </div>
+  </header>
+
+  <div class="media-container" id="media-container"></div>
+  <div class="no-media dark:no-media" id="no-media" style="display: none;">Media not found.</div>
+
+  <div id="loading-overlay" class="loading-overlay hidden">
+    <svg class="loading-spinner" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="10" />
+    </svg>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
+    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
+    import { getDatabase, ref, get, set } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-database.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
+      authDomain: "fire-b-a8878.firebaseapp.com",
+      databaseURL: "https://fire-b-a8878.firebaseio.com",
+      projectId: "fire-b-a8878",
+      storageBucket: "fire-b-a8878.appspot.com",
+      messagingSenderId: "658673187627",
+      appId: "1:658673187627:web:6e4c29af661785f0afa36e"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getDatabase(app);
+
+    const mediaContainer = document.getElementById("media-container");
+    const noMedia = document.getElementById("no-media");
+    const loadingOverlay = document.getElementById("loading-overlay");
+    const usernameElement = document.getElementById("username");
+
+    let currentUserId = null;
+
+    function showLoading() { loadingOverlay.classList.remove("hidden"); }
+    function hideLoading() { loadingOverlay.classList.add("hidden"); }
+
+    function applyTheme(themeValue) {
+      const isDark = themeValue === 'dark';
+      document.body.classList.toggle('dark', isDark);
+      document.querySelector('.header').classList.toggle('dark', isDark);
+      document.querySelectorAll('.media-card').forEach(card => card.classList.toggle('dark', isDark));
+      document.querySelectorAll('.media-title').forEach(title => title.classList.toggle('dark', isDark));
+      document.querySelectorAll('.media-posted-by').forEach(info => info.classList.toggle('dark', isDark));
+      document.querySelectorAll('.impression-count').forEach(count => count.classList.toggle('dark', isDark));
+      document.querySelector('.no-media').classList.toggle('dark', isDark);
+      document.querySelector('.loading-spinner circle').classList.toggle('dark', isDark);
+      document.querySelectorAll('.video-spinner circle').forEach(circle => circle.classList.toggle('dark', isDark));
+      document.querySelector('.username').classList.toggle('dark', isDark);
+      document.querySelectorAll('.header-icon').forEach(icon => icon.classList.toggle('dark', isDark));
+    }
+
+    function applyFontSize(size) {
+      document.documentElement.style.fontSize = size === 'small' ? '14px' : size === 'large' ? '18px' : '16px';
+    }
+
+    async function incrementImpression(mediaId, userId) {
+      try {
+        const viewRef = ref(db, `media/${mediaId}/views/${userId}`);
+        const viewSnap = await get(viewRef);
+        if (viewSnap.exists()) return; // User has already viewed this post
+
+        // Record user view
+        await set(viewRef, { viewedAt: Date.now() });
+
+        // Increment impressions
+        const impressionRef = ref(db, `media/${mediaId}/impressions`);
+        const snapshot = await get(impressionRef);
+        const currentImpressions = snapshot.val() || 0;
+        await set(impressionRef, currentImpressions + 1);
+      } catch (error) {
+        console.error('Error incrementing impression:', error);
+      }
+    }
+
+    async function loadMedia(mediaId) {
+      showLoading();
+      try {
+        const mediaRef = ref(db, `media/${mediaId}`);
+        const mediaSnap = await get(mediaRef);
+        const media = mediaSnap.val();
+
+        if (!media) {
+          noMedia.style.display = 'block';
+          noMedia.textContent = 'Media not found.';
+          hideLoading();
+          return;
+        }
+
+        const usersRef = ref(db, `users/${media.postedBy}`);
+        const userSnap = await get(usersRef);
+        const user = userSnap.val() || { name: 'Unknown' };
+
+        noMedia.style.display = 'none';
+        mediaContainer.innerHTML = '';
+
+        const mediaCard = document.createElement('div');
+        mediaCard.className = 'media-card dark:media-card';
+        mediaCard.dataset.mediaId = mediaId;
+
+        const mediaElement = media.resourceType === 'image'
+          ? `<div class="media-content-container">
+               <img src="${media.url || 'https://via.placeholder.com/800x450'}" alt="${media.title || 'Media'} thumbnail" class="media-content" />
+             </div>`
+          : `<div class="media-content-container">
+               <img src="${media.thumbnailUrl || 'https://via.placeholder.com/800x450'}" alt="${media.title || 'Media'} thumbnail" class="media-content thumbnail" />
+               <video src="${media.url}" class="media-content video" muted playsinline loop></video>
+               <svg class="video-spinner dark:video-spinner" viewBox="0 0 24 24">
+                 <circle cx="12" cy="12" r="10" />
+               </svg>
+             </div>`;
+
+        mediaCard.innerHTML = `
+          ${mediaElement}
+          <div class="media-info">
+            <h3 class="media-title dark:media-title">${media.title || 'Untitled'}</h3>
+            <p class="media-posted-by dark:media-posted-by">Posted by ${user.name} | ${media.category || 'Other'}</p>
+            <span class="impression-count dark:impression-count">${media.impressions || 0} views</span>
+          </div>
+        `;
+        mediaContainer.appendChild(mediaCard);
+
+        const observer = new IntersectionObserver((entries) => {
+          entries.forEach(entry => {
+            const card = entry.target;
+            const video = card.querySelector('video.media-content');
+            const thumbnail = card.querySelector('img.media-content.thumbnail');
+            const spinner = card.querySelector('.video-spinner');
+
+            if (entry.isIntersecting && currentUserId) {
+              incrementImpression(mediaId, currentUserId);
+              if (video) {
+                video.play().catch(error => {
+                  console.error('Error playing video:', error);
+                  if (spinner) spinner.classList.add('active');
+                });
+              }
+            } else {
+              if (video) {
+                video.pause();
+                video.currentTime = 0;
+                if (thumbnail) thumbnail.style.display = 'block';
+                if (spinner) spinner.classList.remove('active');
+              }
+            }
+          });
+        }, { threshold: 0.5 });
+
+        observer.observe(mediaCard);
+
+        const video = mediaCard.querySelector('video.media-content');
+        if (video) {
+          const thumbnail = mediaCard.querySelector('img.media-content.thumbnail');
+          const spinner = mediaCard.querySelector('.video-spinner');
+
+          video.addEventListener('canplay', () => {
+            video.classList.add('ready');
+            if (thumbnail) thumbnail.style.display = 'none';
+            if (spinner) spinner.classList.remove('active');
+          });
+
+          video.addEventListener('waiting', () => {
+            if (spinner) spinner.classList.add('active');
+          });
+
+          video.addEventListener('error', () => {
+            if (spinner) spinner.classList.add('active');
+            console.error('Video error:', video.error);
+          });
+
+          video.addEventListener('focus', () => {
+            video.play().catch(error => {
+              console.error('Error playing video:', error);
+              if (spinner) spinner.classList.add('active');
+            });
+          });
+
+          video.addEventListener('blur', () => {
+            video.pause();
+            video.currentTime = 0;
+            if (thumbnail) thumbnail.style.display = 'block';
+            if (spinner) spinner.classList.remove('active');
+          });
+        }
+      } catch (error) {
+        console.error('Error loading media:', error);
+        noMedia.style.display = 'block';
+        noMedia.textContent = 'Error loading media.';
+      }
+      hideLoading();
+    }
+
+    onAuthStateChanged(auth, async (user) => {
+      if (!user) {
+        window.location.href = "signup.html";
+        return;
+      }
+      currentUserId = user.uid;
+      try {
+        const userRef = ref(db, `users/${user.uid}`);
+        const userSnap = await get(userRef);
+        const userData = userSnap.val() || {};
+        usernameElement.textContent = userData.name || 'User';
+
+        const settingsRef = ref(db, `users/${user.uid}/settings`);
+        const settingsSnap = await get(settingsRef);
+        const settings = settingsSnap.val() || {};
+        applyTheme(settings.theme || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
+        applyFontSize(settings.fontSize || 'medium');
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const mediaId = urlParams.get('mediaId');
+        if (!mediaId) {
+          noMedia.style.display = 'block';
+          noMedia.textContent = 'No media ID provided.';
+          hideLoading();
+          return;
+        }
+        await loadMedia(mediaId);
+      } catch (error) {
+        console.error('Error loading user data or settings:', error);
+        usernameElement.textContent = 'User';
+        applyTheme(window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+        applyFontSize('medium');
+        noMedia.style.display = 'block';
+        noMedia.textContent = 'Error loading user data.';
+        hideLoading();
+      }
+    });
+  </script>
+</body>
+</html>
