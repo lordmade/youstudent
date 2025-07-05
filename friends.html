@@ -96,6 +96,45 @@
       border-radius: 50%;
     }
 
+    .categories {
+      display: flex;
+      gap: 0.5rem;
+      padding: 1rem 0;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .category-pill {
+      background: var(--card-light);
+      color: var(--text-light);
+      padding: 0.5rem 1rem;
+      border-radius: 9999px;
+      font-size: 0.9rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
+      white-space: nowrap;
+    }
+
+    .dark .category-pill {
+      background: var(--card-dark);
+      color: var(--text-dark);
+    }
+
+    .category-pill.active {
+      background: var(--primary);
+      color: #fff;
+    }
+
+    .category-pill:hover {
+      transform: scale(1.05);
+    }
+
+    .category-pill:focus-visible {
+      outline: 2px solid var(--primary-dark);
+      outline-offset: 2px;
+    }
+
     .friends-list {
       margin-top: 1rem;
     }
@@ -216,6 +255,13 @@
       .top-bar {
         padding: 0.75rem;
       }
+      .categories {
+        padding: 0.75rem 0;
+      }
+      .category-pill {
+        padding: 0.4rem 0.8rem;
+        font-size: 0.85rem;
+      }
       .friend-item {
         padding: 0.5rem 0.75rem;
       }
@@ -233,6 +279,11 @@
         <i class="fas fa-arrow-left"></i>
       </button>
       <h1>Friends</h1>
+    </div>
+    <div class="categories">
+      <div class="category-pill active" data-filter="all">All</div>
+      <div class="category-pill" data-filter="unread">Unread</div>
+      <div class="category-pill" data-filter="group">Group</div>
     </div>
     <div id="friends-list" class="friends-list"></div>
   </div>
@@ -258,8 +309,10 @@
 
     const friendsList = document.getElementById('friends-list');
     const backBtn = document.querySelector('.back-btn');
+    const categoryPills = document.querySelectorAll('.category-pill');
 
     let currentUser;
+    let allFriends = [];
 
     function showSpinner() {
       friendsList.innerHTML = `
@@ -280,6 +333,52 @@
     async function getUserData(uid) {
       const snap = await get(ref(db, `users/${uid}`));
       return snap.val() || { username: 'Unknown User', profilePicture: 'https://www.gravatar.com/avatar?d=mp' };
+    }
+
+    function filterFriends(filter) {
+      let filteredFriends = [...allFriends];
+
+      if (filter === 'unread') {
+        filteredFriends = filteredFriends.filter(friend => friend.unread);
+      } else if (filter === 'group') {
+        // Note: This assumes group chats are identified by a chatId pattern or additional data (e.g., chat.participants.length > 2).
+        // You may need to adjust this logic based on your Firebase structure.
+        filteredFriends = filteredFriends.filter(friend => {
+          const chatRef = ref(db, `chats/${friend.chatId}`);
+          return get(chatRef).then(snap => {
+            const chat = snap.val();
+            return chat && Object.keys(chat.participants || {}).length > 2;
+          });
+        });
+      }
+
+      friendsList.innerHTML = filteredFriends.map(friend => `
+        <div class="friend-item" role="button" tabindex="0" aria-label="Open chat with ${friend.username}" data-friend-id="${friend.id}">
+          <img src="${friend.avatar}" alt="${friend.username}'s avatar" class="friend-avatar" loading="lazy" />
+          <div class="friend-info">
+            <div class="flex justify-between">
+              <span class="friend-username">${friend.username}</span>
+              <span class="friend-timestamp">${friend.timestamp}</span>
+            </div>
+            <span class="friend-last-message">${friend.lastMessage}</span>
+          </div>
+          ${friend.unread ? '<div class="unread-dot"></div>' : ''}
+        </div>
+      `).join('');
+
+      friendsList.querySelectorAll('.friend-item').forEach(item => {
+        item.addEventListener('click', () => {
+          const friendId = item.getAttribute('data-friend-id');
+          location.href = `chat.html?friendId=${friendId}`;
+        });
+
+        item.addEventListener('keypress', (e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            item.click();
+          }
+        });
+      });
     }
 
     async function loadFriends() {
@@ -312,6 +411,7 @@
 
             friendItems.push({
               id: otherUserId,
+              chatId: chatId,
               username: userData.username,
               avatar: userData.profilePicture || 'https://www.gravatar.com/avatar?d=mp',
               lastMessage: lastMessageText,
@@ -321,39 +421,8 @@
           }
         }
 
-        friendItems.sort((a, b) => {
-          const timeA = a.timestamp === 'Just now' ? Infinity : new Date(a.timestamp).getTime();
-          const timeB = b.timestamp === 'Just now' ? Infinity : new Date(b.timestamp).getTime();
-          return timeB - timeA;
-        });
-
-        friendsList.innerHTML = friendItems.map(friend => `
-          <div class="friend-item" role="button" tabindex="0" aria-label="Open chat with ${friend.username}">
-            <img src="${friend.avatar}" alt="${friend.username}'s avatar" class="friend-avatar" loading="lazy" />
-            <div class="friend-info">
-              <div class="flex justify-between">
-                <span class="friend-username">${friend.username}</span>
-                <span class="friend-timestamp">${friend.timestamp}</span>
-              </div>
-              <span class="friend-last-message">${friend.lastMessage}</span>
-            </div>
-            ${friend.unread ? '<div class="unread-dot"></div>' : ''}
-          </div>
-        `).join('');
-
-        friendsList.querySelectorAll('.friend-item').forEach(item => {
-          item.addEventListener('click', () => {
-            const friendId = item.getAttribute('data-friend-id');
-            location.href = `chat.html?friendId=${friendId}`;
-          });
-
-          item.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault();
-              item.click();
-            }
-          });
-        });
+        allFriends = friendItems;
+        filterFriends('all'); // Default to "All" category
       } catch (error) {
         console.error('Error loading friends:', error);
         friendsList.innerHTML = '<p class="text-center text-red-500">Failed to load friends.</p>';
@@ -397,6 +466,21 @@
         e.preventDefault();
         backBtn.click();
       }
+    });
+
+    categoryPills.forEach(pill => {
+      pill.addEventListener('click', () => {
+        categoryPills.forEach(p => p.classList.remove('active'));
+        pill.classList.add('active');
+        filterFriends(pill.getAttribute('data-filter'));
+      });
+
+      pill.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          pill.click();
+        }
+      });
     });
   </script>
 </body>
