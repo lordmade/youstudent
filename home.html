@@ -63,6 +63,11 @@
       overflow-x: auto;
       white-space: nowrap;
       -webkit-overflow-scrolling: touch;
+      scrollbar-width: none; /* Firefox */
+      -ms-overflow-style: none; /* IE and Edge */
+    }
+    .category-filter::-webkit-scrollbar {
+      display: none; /* Chrome, Safari, Opera */
     }
     .category-btn {
       padding: 0.5rem 1rem;
@@ -484,7 +489,7 @@
     const categoryFilter = document.getElementById("category-filter");
 
     let currentCategory = 'all';
-    const viewedMedia = new Set();
+    let currentUserId = null;
 
     function showLoading() { loadingOverlay.classList.remove("hidden"); }
     function hideLoading() { loadingOverlay.classList.add("hidden"); }
@@ -557,10 +562,16 @@
       }
     }
 
-    async function incrementImpression(mediaId) {
-      if (viewedMedia.has(mediaId)) return;
-      viewedMedia.add(mediaId);
+    async function incrementImpression(mediaId, userId) {
       try {
+        const viewRef = ref(db, `media/${mediaId}/views/${userId}`);
+        const viewSnap = await get(viewRef);
+        if (viewSnap.exists()) return; // User has already viewed this post
+
+        // Record user view
+        await set(viewRef, { viewedAt: Date.now() });
+
+        // Increment impressions
         const impressionRef = ref(db, `media/${mediaId}/impressions`);
         const snapshot = await get(impressionRef);
         const currentImpressions = snapshot.val() || 0;
@@ -632,15 +643,10 @@
             const spinner = card.querySelector('.video-spinner');
             const mediaId = card.dataset.mediaId;
 
-            if (entry.isIntersecting) {
-              incrementImpression(mediaId);
+            if (entry.isIntersecting && currentUserId) {
+              incrementImpression(mediaId, currentUserId);
               if (video) {
-                video.play().then(() => {
-                  setTimeout(() => {
-                    video.pause();
-                    video.currentTime = 0;
-                  }, 5000);
-                }).catch(error => {
+                video.play().catch(error => {
                   console.error('Error playing video:', error);
                   if (spinner) spinner.classList.add('active');
                 });
@@ -678,17 +684,17 @@
           });
 
           video.addEventListener('focus', () => {
-            video.play().then(() => {
-              setTimeout(() => {
-                video.pause();
-                video.currentTime = 0;
-                if (thumbnail) thumbnail.style.display = 'block';
-                if (spinner) spinner.classList.remove('active');
-              }, 5000);
-            }).catch(error => {
+            video.play().catch(error => {
               console.error('Error playing video:', error);
               if (spinner) spinner.classList.add('active');
             });
+          });
+
+          video.addEventListener('blur', () => {
+            video.pause();
+            video.currentTime = 0;
+            if (thumbnail) thumbnail.style.display = 'block';
+            if (spinner) spinner.classList.remove('active');
           });
         });
       } catch (error) {
@@ -704,6 +710,7 @@
         window.location.href = "signup.html";
         return;
       }
+      currentUserId = user.uid;
       try {
         const userRef = ref(db, `users/${user.uid}`);
         const userSnap = await get(userRef);
@@ -722,7 +729,6 @@
             categoryFilter.querySelectorAll('.category-btn').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
             currentCategory = btn.dataset.category;
-            viewedMedia.clear();
             loadMedia(currentCategory);
           });
           btn.addEventListener('touchstart', (e) => {
@@ -730,7 +736,6 @@
             categoryFilter.querySelectorAll('.category-btn').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
             currentCategory = btn.dataset.category;
-            viewedMedia.clear();
             loadMedia(currentCategory);
           });
         });
