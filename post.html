@@ -476,12 +476,7 @@
       height: 100%;
       background: var(--primary); /* Thin red progress */
       width: 0;
-      animation: progressAnimation 30s linear infinite; /* 30-second loop */
-    }
-
-    @keyframes progressAnimation {
-      0% { width: 0; }
-      100% { width: 100%; }
+      animation: none; /* Removed default animation */
     }
 
     .alert-dialog {
@@ -1030,6 +1025,7 @@
     let viewedStatusIds = [];
     let lastNotificationTimestamp = 0;
     let isAudioPlaying = false;
+    let currentVideo = null;
 
     function showAlert(message) {
       alertMessage.textContent = message;
@@ -1106,14 +1102,23 @@
         video.pause();
         video.currentTime = 0;
       });
+      if (currentVideo) {
+        stopProgressBar();
+        currentVideo = null;
+      }
     }
 
-    function startProgressBar() {
+    function startProgressBar(videoDuration = 30) {
+      progressFill.style.animation = `none`; // Reset animation
+      progressFill.style.width = '0'; // Reset width
+      // Set animation to match video duration (default 30s)
+      progressFill.style.animation = `progressAnimation ${videoDuration}s linear forwards`;
       progressFill.style.animationPlayState = 'running';
     }
 
     function stopProgressBar() {
       progressFill.style.animationPlayState = 'paused';
+      progressFill.style.width = '0'; // Reset width when stopped
     }
 
     function renderMedia(status) {
@@ -1141,13 +1146,11 @@
         });
         isAudioPlaying = true;
         pauseAudioBtn.style.display = 'inline';
-        startProgressBar(); // Start animated progress bar
       } else {
         songText.textContent = '';
         songText.classList.remove('show');
         audioControls.classList.add('hidden');
         backgroundAudio.src = '';
-        stopProgressBar();
       }
 
       if (mediaItems.length === 0) {
@@ -1194,6 +1197,18 @@
           showAlert('Failed to load video.');
           thumbnailElements[index].classList.add('show');
         });
+        video.addEventListener('play', () => {
+          if (video === currentVideo) {
+            startProgressBar(video.duration || 30); // Start progress bar with video duration or 30s default
+          }
+        });
+        video.addEventListener('pause', () => {
+          stopProgressBar();
+        });
+        video.addEventListener('ended', () => {
+          stopProgressBar();
+          loadNextRandomStatus(); // Move to next status when video ends
+        });
       });
 
       updateCarousel();
@@ -1207,6 +1222,7 @@
       const thumbnailElements = mediaContent.querySelectorAll('.thumbnail-placeholder');
       if (mediaItems[currentMediaIndex]?.type === 'video') {
         const video = videoElements[currentMediaIndex];
+        currentVideo = video; // Track the current video
         const thumbnail = thumbnailElements[currentMediaIndex];
         video.muted = isMuted || isAudioPlaying;
         muteToggleIcon.classList.remove('hidden');
@@ -1221,11 +1237,13 @@
           playPauseIcon.querySelector('.pause-icon').classList.remove('hidden');
           thumbnail.classList.remove('show');
           hideSpinner();
+          if (!isAudioPlaying) startProgressBar(video.duration || 30); // Start progress bar on play
         });
         video.addEventListener('pause', () => {
           playPauseIcon.querySelector('.play-icon').classList.remove('hidden');
           playPauseIcon.querySelector('.pause-icon').classList.add('hidden');
           thumbnail.classList.add('show');
+          stopProgressBar();
         });
 
         if (!commentsSheet.classList.contains('open') && !document.hidden && !isAudioPlaying) {
@@ -1237,6 +1255,8 @@
       } else {
         muteToggleIcon.classList.add('hidden');
         playPauseIcon.classList.add('hidden');
+        stopProgressBar();
+        currentVideo = null;
         hideSpinner();
       }
     }
@@ -1252,6 +1272,7 @@
         const video = mediaContent.querySelectorAll('.status-video')[currentMediaIndex];
         const thumbnail = mediaContent.querySelectorAll('.thumbnail-placeholder')[currentMediaIndex];
         video.muted = isMuted || isAudioPlaying;
+        currentVideo = video; // Update current video
         if (!commentsSheet.classList.contains('open') && !document.hidden && !isAudioPlaying) {
           video.play().catch(error => {
             console.error('Error playing video:', error);
@@ -1318,7 +1339,9 @@
         playPauseIcon.classList.remove('show');
       }
       if (isAudioPlaying) {
-        startProgressBar();
+        startProgressBar(backgroundAudio.duration || 30);
+      } else if (currentVideo && !currentVideo.paused) {
+        startProgressBar(currentVideo.duration || 30);
       }
       if (commentsListener) {
         off(ref(db, `statuses/${statusId}/comments`));
