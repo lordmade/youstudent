@@ -165,7 +165,7 @@
 <body>
   <div class="container">
     <div class="header">
-      <h1 class="text-2xl font-bold">BanterBox Home</h1>
+      <h1 class="text-2xl font-bold">My Videos</h1>
       <div class="flex gap-2">
         <button id="theme-toggle" class="px-4 py-2 bg-gray-200 rounded-full dark:bg-gray-700">Toggle Theme</button>
         <button id="logout-btn" class="px-4 py-2 bg-red-500 text-white rounded-full">Logout</button>
@@ -243,16 +243,16 @@
       });
     }
 
-    async function fetchVideos(category = 'all', lastKey = null) {
-      if (isLoading) return;
+    async function fetchUserVideos(category = 'all', lastKey = null) {
+      if (isLoading || !currentUser) return;
       isLoading = true;
       showLoading();
 
       try {
         const statusesRef = ref(db, 'statuses');
-        let queryRef = query(statusesRef, orderByChild('timestamp'), limitToLast(10));
+        let queryRef = query(statusesRef, orderByChild('userId'), limitToLast(10));
         if (lastKey) {
-          queryRef = query(statusesRef, orderByChild('timestamp'), child(statusesRef, lastKey), limitToLast(11));
+          queryRef = query(statusesRef, orderByChild('userId'), child(statusesRef, lastKey), limitToLast(11));
         }
 
         const snapshot = await get(queryRef);
@@ -262,33 +262,41 @@
           return;
         }
 
-        const videoList = Object.entries(statuses)
+        const userVideos = Object.entries(statuses)
           .filter(([_, status]) => {
-            if (category === 'all') return status.mediaUrls && status.mediaUrls.some(m => m.type === 'video');
-            return status.category === category && status.mediaUrls && status.mediaUrls.some(m => m.type === 'video');
+            return status.userId === currentUser.uid && status.mediaUrls && status.mediaUrls.some(m => m.type === 'video');
+          })
+          .filter(([_, status]) => {
+            if (category === 'all') return true;
+            return status.category === category;
           })
           .map(([id, status]) => ({
             id,
             title: status.text || 'Untitled Video',
-            thumbnailUrl: status.mediaUrls?.[0]?.url || 'https://via.placeholder.com/320x180',
-            channel: status.userId,
+            thumbnailUrl: status.mediaUrls?.find(m => m.type === 'video')?.url || 'https://via.placeholder.com/320x180',
+            channel: (await getUserData(status.userId))?.username || 'Unknown User',
             timestamp: status.timestamp || Date.now()
           }));
 
-        if (videoList.length > 0) {
-          if (lastKey && videoList.length > 1) videoList.shift(); // Remove the last key if paginating
-          renderVideoCards(videoList);
+        if (userVideos.length > 0) {
+          if (lastKey && userVideos.length > 1) userVideos.shift(); // Remove the last key if paginating
+          renderVideoCards(userVideos);
           lastVideoKey = Object.keys(statuses)[Object.keys(statuses).length - 1];
         } else {
           hideLoading();
         }
       } catch (error) {
-        console.error('Error fetching videos:', error);
-        alert('Failed to load videos.');
+        console.error('Error fetching user videos:', error);
+        alert('Failed to load your videos.');
       } finally {
         isLoading = false;
         hideLoading();
       }
+    }
+
+    async function getUserData(uid) {
+      const snap = await get(ref(db, `users/${uid}`));
+      return snap.val() || { username: 'Unknown User' };
     }
 
     categoryButtons.forEach(btn => {
@@ -301,7 +309,7 @@
         btn.setAttribute('aria-selected', 'true');
         videoGrid.innerHTML = '';
         lastVideoKey = null;
-        fetchVideos(btn.dataset.category);
+        fetchUserVideos(btn.dataset.category);
       });
     });
 
@@ -327,7 +335,7 @@
 
     onAuthStateChanged(auth, async user => {
       if (!user) {
-        alert('Please log in to view videos.');
+        alert('Please log in to view your videos.');
         setTimeout(() => {
           window.location.href = 'signup.html';
         }, 2000);
@@ -338,12 +346,12 @@
       const settings = settingsSnap.val() || {};
       applyTheme(settings.theme === 'dark');
 
-      fetchVideos('all');
+      fetchUserVideos('all');
     });
 
     window.addEventListener('scroll', () => {
       if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 500 && !isLoading) {
-        fetchVideos(document.querySelector('.category-btn.active').dataset.category, lastVideoKey);
+        fetchUserVideos(document.querySelector('.category-btn.active').dataset.category, lastVideoKey);
       }
     });
   </script>
