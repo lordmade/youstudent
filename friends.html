@@ -296,6 +296,14 @@
     .friend-status.dark.online {
       background: #34D399;
     }
+    .friend-timestamp {
+      font-size: 0.85rem;
+      color: #6B7280;
+      white-space: nowrap;
+    }
+    .friend-timestamp.dark {
+      color: #9CA3AF;
+    }
     .no-friends {
       text-align: center;
       padding: 2rem;
@@ -656,7 +664,7 @@
       <a href="settings.html" aria-label="Settings">
         <svg class="header-icon dark:header-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" />
-          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
         </svg>
       </a>
       <div class="kebab-menu" id="kebab-menu">
@@ -760,6 +768,8 @@
     let blockedUids = new Set();
     let selectedFriendUid = null;
     let unreadFriendIds = new Set();
+    let friendTimestamps = new Map(); // Store last message timestamps
+    let currentFilter = 'all'; // Track current filter
 
     function showLoading() { loadingOverlay.classList.remove("hidden"); }
     function hideLoading() { loadingOverlay.classList.add("hidden"); }
@@ -799,9 +809,17 @@
     }
 
     function timeAgo(timestamp) {
-      const now = new Date().getTime();
+      const now = new Date('2025-07-05T22:17:00+02:00').getTime(); // 10:17 PM SAST, July 05, 2025
       const diff = now - (timestamp || now);
-      return diff < 86400000 ? 'recent' : 'old';
+      const seconds = Math.floor(diff / 1000);
+      const minutes = Math.floor(seconds / 60);
+      const hours = Math.floor(minutes / 60);
+      const days = Math.floor(hours / 24);
+      if (seconds < 60) return `${seconds}s ago`;
+      if (minutes < 60) return `${minutes}m ago`;
+      if (hours < 24) return `${hours}h ago`;
+      if (days < 7) return `${days}d ago`;
+      return new Date(timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     }
 
     function toggleKebabMenu() {
@@ -842,6 +860,7 @@
       friendUids.clear();
       blockedUids.clear();
       unreadFriendIds.clear();
+      friendTimestamps.clear();
       try {
         const chatsRef = ref(db, "chats");
         const chatsSnap = await get(chatsRef);
@@ -857,13 +876,19 @@
                   onValue(messagesRef, (snap) => {
                     const messages = snap.val() || {};
                     const lastMessage = Object.values(messages).sort((a, b) => b.timestamp - a.timestamp)[0];
-                    if (lastMessage && !lastMessage.read && lastMessage.senderId !== uid && timeAgo(lastMessage.timestamp) === 'recent') {
-                      unreadFriendIds.add(friendUid);
+                    if (lastMessage) {
+                      friendTimestamps.set(friendUid, lastMessage.timestamp);
+                      if (!lastMessage.read && lastMessage.senderId !== uid && timeAgo(lastMessage.timestamp).includes('ago')) {
+                        unreadFriendIds.add(friendUid);
+                      } else {
+                        unreadFriendIds.delete(friendUid);
+                      }
                     } else {
+                      friendTimestamps.delete(friendUid);
                       unreadFriendIds.delete(friendUid);
                     }
-                    renderFriendsList(categoryButtons[0].dataset.filter);
-                  }, (error) => console.error('Error loading messages:', error));
+                    debouncedRenderFriendsList(currentFilter);
+                  }, { onlyOnce: false }, (error) => console.error('Error loading messages:', error));
                 }
               }
             }
@@ -877,20 +902,26 @@
             blockedUids.add(blockedUid);
           }
         }
-        renderFriendsList();
+        renderFriendsList(currentFilter);
       } catch (error) {
         console.error('Error loading friends or blocked users:', error);
         showToast('Error loading friends.', true);
       }
     }
 
+    const debouncedRenderFriendsList = debounce(renderFriendsList, 300);
+
     async function renderFriendsList(filter = 'all') {
-      friendsList.innerHTML = '';
+      currentFilter = filter; // Update current filter
+      friendsList.innerHTML = ''; // Clear the list to prevent duplicates
       try {
         const usersRef = ref(db, "users");
         const usersSnap = await get(usersRef);
         const users = usersSnap.val() || {};
-        let filteredFriends = Array.from(friendUids).map(uid => ({ uid, user: users[uid] })).filter(item => item.user);
+        let filteredFriends = Array.from(friendUids)
+          .map(uid => ({ uid, user: users[uid], timestamp: friendTimestamps.get(uid) }))
+          .filter(item => item.user)
+          .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)); // Sort by timestamp, newest first
 
         if (filter === 'unread') {
           filteredFriends = filteredFriends.filter(({ uid }) => unreadFriendIds.has(uid));
@@ -904,7 +935,7 @@
         noFriends.style.display = 'none';
         formBox.style.display = filter === 'add' ? 'block' : 'none';
 
-        filteredFriends.forEach(({ uid, user }) => {
+        filteredFriends.forEach(({ uid, user, timestamp }) => {
           const friendItem = document.createElement('div');
           friendItem.className = 'friend-item';
           friendItem.setAttribute('role', 'button');
@@ -915,8 +946,9 @@
           friendItem.innerHTML = `
             <img src="${user.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${user.name || 'Friend'} avatar" class="friend-avatar dark:friend-avatar" />
             <div class="friend-info">
-              <div class="friend-name dark:friend-name">${user.name || 'Unknown'}</div>
+              <div class="friend-name dark:friend-name">${sanitizeInput(user.name || 'Unknown')}</div>
               <div class="friend-details dark:friend-details">
+                ${timestamp ? `<span class="friend-timestamp dark:friend-timestamp">${timeAgo(timestamp)}</span>` : ''}
                 <span class="friend-status ${statusClass} dark:friend-status"></span>
               </div>
             </div>
@@ -1000,6 +1032,8 @@
           if (chats[chatId]) {
             await remove(ref(db, `chats/${chatId}`));
             friendUids.delete(friendUid);
+            friendTimestamps.delete(friendUid);
+            unreadFriendIds.delete(friendUid);
           }
         }
         await set(ref(db, `users/${currentUserUid}/blocked/${friendUid}`), true);
@@ -1009,7 +1043,7 @@
         blockFriendBtn.classList.add('hidden');
         selectedFriendUid = null;
         suggestionsDropdown.style.display = 'none';
-        renderFriendsList(categoryButtons[0].dataset.filter);
+        renderFriendsList(currentFilter);
       } catch (error) {
         console.error('Error blocking user:', error);
         showToast('Error blocking user.', true);
@@ -1020,6 +1054,7 @@
     const debouncedShowSuggestions = debounce(showSuggestions, 300);
 
     function filterContent(category) {
+      currentFilter = category;
       if (category === 'add') {
         friendsList.style.display = 'none';
         noFriends.style.display = 'none';
@@ -1150,7 +1185,7 @@
         suggestionsDropdown.style.display = 'none';
         blockFriendBtn.classList.add('hidden');
         selectedFriendUid = null;
-        renderFriendsList(categoryButtons[0].dataset.filter);
+        renderFriendsList(currentFilter);
         setTimeout(() => {
           window.location.href = "friends.html";
         }, 1000);
