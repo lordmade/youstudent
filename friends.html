@@ -116,29 +116,51 @@
     .kebab-item.dark:hover {
       background: #374151;
     }
-    .labor: .categories {
+    .categories {
       position: sticky;
       top: 56px;
       z-index: 900;
-      padding: 0.75rem 1.5rem;
+      padding: 1rem 1.5rem;
       background: rgba(255, 255, 255, 0.95);
       border-bottom: 1px solid rgba(209, 213, 219, 0.2);
       display: flex;
-      gap: 1.5rem;
+      justify-content: center;
+      gap: 2rem;
       overflow-x: auto;
       white-space: nowrap;
       backdrop-filter: blur(10px);
       -webkit-backdrop-filter: blur(10px);
+      scrollbar-width: thin;
+      scrollbar-color: #d1d5db transparent;
+    }
+    .categories::-webkit-scrollbar {
+      height: 6px;
+    }
+    .categories::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    .categories::-webkit-scrollbar-thumb {
+      background: #d1d5db;
+      border-radius: 3px;
+    }
+    .categories::-webkit-scrollbar-thumb:hover {
+      background: #b3b9c5;
     }
     .categories.dark {
       background: rgba(30, 41, 59, 0.95);
       border-bottom-color: rgba(55, 65, 81, 0.2);
     }
+    .categories.dark::-webkit-scrollbar-thumb {
+      background: #4b5563;
+    }
+    .categories.dark::-webkit-scrollbar-thumb:hover {
+      background: #6b7280;
+    }
     .category-btn {
       font-size: 0.95rem;
       font-weight: 500;
       color: #64748b;
-      padding: 0.25rem 1rem;
+      padding: 0.5rem 1.25rem;
       border-radius: 15px;
       cursor: pointer;
       transition: color 0.2s ease, background 0.2s ease;
@@ -542,6 +564,11 @@
       25% { transform: translateX(-4px); }
       75% { transform: translateX(4px); }
     }
+    @media (max-width: 640px) {
+      .categories {
+        justify-content: flex-start;
+      }
+    }
   </style>
 </head>
 <body>
@@ -631,16 +658,16 @@
 
   <script type="module">
     // Note: Firebase configuration should be stored securely in environment variables
-    // This is a placeholder; replace with actual environment variable access in a production environment
     const firebaseConfig = {
-      apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
-      authDomain: "fire-b-a8878.firebaseapp.com",
-      databaseURL: "https://fire-b-a8878.firebaseio.com",
-      projectId: "fire-b-a8878",
-      storageBucket: "fire-b-a8878.appspot.com",
-      messagingSenderId: "658673187627",
-      appId: "1:658673187627:web:6e4c29af661785f0afa36e"
-    }; 
+      apiKey: "YOUR_API_KEY",
+      authDomain: "YOUR_AUTH_DOMAIN",
+      databaseURL: "YOUR_DATABASE_URL",
+      projectId: "YOUR_PROJECT_ID",
+      storageBucket: "YOUR_STORAGE_BUCKET",
+      messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+      appId: "YOUR_APP_ID"
+    };
+
     // Constants for routes
     const ROUTES = {
       signup: 'signup.html',
@@ -678,6 +705,7 @@
     let blockedUids = new Set();
     let selectedFriendUid = null;
     let unreadFriendIds = new Set();
+    let renderedFriendUids = new Set(); // Track rendered UIDs to prevent duplicates
 
     function showLoading() { loadingOverlay.classList.remove("hidden"); }
     function hideLoading() { loadingOverlay.classList.add("hidden"); }
@@ -781,7 +809,7 @@
           }
         }
         monitorUnreadMessages(uid);
-        renderFriendsList();
+        debouncedRenderFriendsList('all');
       } catch (error) {
         console.error('Error loading friends or blocked users:', error);
         friendResult.classList.add('error');
@@ -794,25 +822,34 @@
       onValue(chatsRef, (snap) => {
         unreadFriendIds.clear();
         const chats = snap.val() || {};
+        const friendChats = {};
         for (const chatId in chats) {
           if (chats[chatId].participants?.[uid]) {
             const friendUid = Object.keys(chats[chatId].participants).find(id => id !== uid);
-            const messagesRef = ref(db, `chats/${chatId}/messages`);
-            onValue(messagesRef, (msgSnap) => {
-              const messages = msgSnap.val() || {};
-              const lastMessage = Object.values(messages).sort((a, b) => b.timestamp - a.timestamp)[0];
-              if (lastMessage && !lastMessage.read && lastMessage.senderId !== uid && timeAgo(lastMessage.timestamp) === 'recent') {
-                unreadFriendIds.add(friendUid);
-              }
-              renderFriendsList(document.querySelector('.category-btn.active')?.dataset.filter || 'all');
-            }, (error) => console.error('Error loading messages:', error));
+            if (friendUid) {
+              friendChats[friendUid] = chatId;
+            }
           }
         }
-      }, (error) => console.error('Error loading chats:', error));
+        for (const friendUid in friendChats) {
+          const messagesRef = ref(db, `chats/${friendChats[friendUid]}/messages`);
+          onValue(messagesRef, (msgSnap) => {
+            const messages = msgSnap.val() || {};
+            const lastMessage = Object.values(messages).sort((a, b) => b.timestamp - a.timestamp)[0];
+            if (lastMessage && !lastMessage.read && lastMessage.senderId !== uid && timeAgo(lastMessage.timestamp) === 'recent') {
+              unreadFriendIds.add(friendUid);
+            } else {
+              unreadFriendIds.delete(friendUid);
+            }
+            debouncedRenderFriendsList(document.querySelector('.category-btn.active')?.dataset.filter || 'all');
+          }, { onlyOnce: false }, (error) => console.error('Error loading messages:', error));
+        }
+      }, { onlyOnce: false }, (error) => console.error('Error loading chats:', error));
     }
 
-    async function renderFriendsList(filter = 'all') {
+    const debouncedRenderFriendsList = debounce(async (filter = 'all') => {
       friendsList.innerHTML = '';
+      renderedFriendUids.clear(); // Clear rendered UIDs
       try {
         const usersRef = ref(db, "users");
         const usersSnap = await get(usersRef);
@@ -837,8 +874,11 @@
         formBox.style.display = filter === 'add' ? 'block' : 'none';
 
         filteredFriends.forEach(({ uid, user }) => {
+          if (renderedFriendUids.has(uid)) return; // Skip duplicates
+          renderedFriendUids.add(uid);
           const friendItem = document.createElement('div');
           friendItem.className = 'friend-item dark:friend-item';
+          friendItem.dataset.uid = uid; // Add UID for tracking
           if (filter !== 'blocked') {
             friendItem.onclick = () => window.location.href = `${ROUTES.chat}?uid=${uid}`;
           }
@@ -860,7 +900,7 @@
         friendResult.classList.add('error');
         friendResult.textContent = 'Failed to load friends list.';
       }
-    }
+    }, 300);
 
     async function showSuggestions(query) {
       if (!query) {
@@ -960,7 +1000,7 @@
         blockFriendBtn.classList.add('hidden');
         selectedFriendUid = null;
         suggestionsDropdown.style.display = 'none';
-        renderFriendsList(categoryButtons[0].dataset.filter);
+        debouncedRenderFriendsList(categoryButtons[0].dataset.filter);
       } catch (error) {
         console.error('Error blocking user:', error);
         friendResult.classList.add('error');
@@ -980,7 +1020,7 @@
         blockFriendBtn.classList.add('hidden');
         selectedFriendUid = null;
         suggestionsDropdown.style.display = 'none';
-        renderFriendsList(categoryButtons[0].dataset.filter);
+        debouncedRenderFriendsList(categoryButtons[0].dataset.filter);
       } catch (error) {
         console.error('Error unblocking user:', error);
         friendResult.classList.add('error');
@@ -1000,7 +1040,7 @@
         friendsList.style.display = 'block';
         formBox.style.display = 'none';
         noFriends.style.display = (category === 'blocked' ? blockedUids.size : friendUids.size) === 0 ? 'block' : 'none';
-        renderFriendsList(category);
+        debouncedRenderFriendsList(category);
       }
       categoryButtons.forEach(btn => btn.classList.toggle('active', btn.dataset.filter === category));
     }
@@ -1130,7 +1170,7 @@
         suggestionsDropdown.style.display = 'none';
         blockFriendBtn.classList.add('hidden');
         selectedFriendUid = null;
-        renderFriendsList(categoryButtons[0].dataset.filter);
+        debouncedRenderFriendsList(categoryButtons[0].dataset.filter);
         setTimeout(() => {
           window.location.href = ROUTES.friends;
         }, 1000);
