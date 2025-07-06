@@ -121,11 +121,29 @@
       overflow-x: auto;
       white-space: nowrap;
       -webkit-overflow-scrolling: touch;
-      scrollbar-width: none;
-      -ms-overflow-style: none;
+      scrollbar-width: thin; /* Enable scrollbar on Firefox */
+      -ms-overflow-style: -ms-autohiding-scrollbar; /* Hide scrollbar in IE/Edge when not scrolling */
     }
     .category-filter::-webkit-scrollbar {
-      display: none;
+      height: 8px;
+    }
+    .category-filter::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    .category-filter::-webkit-scrollbar-thumb {
+      background-color: #d1d5db;
+      border-radius: 10px;
+      border: 2px solid transparent;
+      background-clip: padding-box;
+    }
+    .category-filter::-webkit-scrollbar-thumb:hover {
+      background-color: #9ca3af;
+    }
+    .category-filter.dark::-webkit-scrollbar-thumb {
+      background-color: #4b5563;
+    }
+    .category-filter.dark::-webkit-scrollbar-thumb:hover {
+      background-color: #6b7280;
     }
     .category-btn {
       padding: 0.5rem 1rem;
@@ -136,6 +154,7 @@
       font-weight: 500;
       cursor: pointer;
       transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
+      white-space: nowrap;
     }
     .category-btn:hover {
       background: #d1d5db;
@@ -538,6 +557,7 @@
       document.querySelector('.add-media-btn').classList.toggle('dark', isDark);
       document.querySelectorAll('.category-btn').forEach(btn => btn.classList.toggle('dark', isDark));
       audioPlayer.classList.toggle('dark', isDark);
+      categoryFilter.classList.toggle('dark', isDark);
     }
 
     function applyFontSize(size) {
@@ -609,11 +629,12 @@
         }
 
         noMedia.style.display = 'none';
-        mediaList.forEach(({ mediaId, title, url, thumbnailUrl, resourceType, postedBy, category, song, impressions = 0 }) => {
+        mediaList.forEach(({ mediaId, title, url, thumbnailUrl, resourceType, postedBy, category, song, songPreview, impressions = 0 }) => {
           const user = users[postedBy] || { name: 'Unknown' };
           const mediaCard = document.createElement('div');
           mediaCard.className = 'media-card dark:media-card';
           mediaCard.dataset.mediaId = mediaId;
+          mediaCard.tabIndex = 0; // Make card focusable
           mediaCard.onclick = () => window.location.href = `media.html?mediaId=${mediaId}`;
           
           const mediaElement = resourceType === 'image'
@@ -641,8 +662,21 @@
                 ${impressions}
               </span>
             </div>
+            ${songPreview ? `<audio id="card-audio-${mediaId}" src="${songPreview}" class="hidden" loop></audio>` : ''}
           `;
           mediaGrid.appendChild(mediaCard);
+
+          // Audio playback on focus
+          if (songPreview) {
+            const audio = mediaCard.querySelector(`#card-audio-${mediaId}`);
+            mediaCard.addEventListener('focus', () => {
+              audio.play().catch(error => console.error('Error playing audio:', error));
+            });
+            mediaCard.addEventListener('blur', () => {
+              audio.pause();
+              audio.currentTime = 0; // Reset to start
+            });
+          }
         });
 
         const observer = new IntersectionObserver((entries) => {
