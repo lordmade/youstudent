@@ -100,12 +100,12 @@
       border-color: #4A5568;
       color: #E2E8F0;
     }
-    .input-field:focus, .custom-file-input:focus {
+    .input-field:focus, .custom-file-input:focus-within {
       outline: none;
       border-color: #6B48FF;
       box-shadow: 0 0 0 4px rgba(107, 72, 255, 0.2);
     }
-    .input-field.dark:focus, .custom-file-input.dark:focus {
+    .input-field.dark:focus, .custom-file-input.dark:focus-within {
       border-color: #A855F7;
       box-shadow: 0 0 0 4px rgba(168, 85, 247, 0.2);
     }
@@ -253,6 +253,13 @@
     }
     .upload-result.dark { color: #48BB78; }
     .upload-result.dark.error { color: #FC8181; }
+    .file-name {
+      font-size: 0.9rem;
+      color: #666;
+      margin-top: 0.5rem;
+      word-break: break-all;
+    }
+    .file-name.dark { color: #A0AEC0; }
     @keyframes shake {
       0%, 100% { transform: translateX(0); }
       25% { transform: translateX(-4px); }
@@ -327,12 +334,13 @@
       <div class="form-group">
         <label for="media-file" class="label dark:label">Media File</label>
         <div class="custom-file-input dark:custom-file-input relative">
-          <input type="file" id="media-file" class="input-field dark:input-field absolute inset-0 opacity-0 cursor-pointer" accept="image/jpeg,image/png" required aria-label="Select Image"/>
+          <input type="file" id="media-file" class="input-field dark:input-field absolute inset-0 opacity-0 cursor-pointer" accept="image/jpeg,image/png" required aria-label="Select Image" aria-describedby="file-name"/>
           <svg class="w-full h-full absolute top-0 left-0 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M12 2v10m0 0l-4-4m4 4l4-4M3 20h18" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
           <span class="absolute inset-0 flex items-center justify-center text-gray-600 dark:text-gray-400">Choose File</span>
         </div>
+        <div id="file-name" class="file-name dark:file-name">No file selected</div>
       </div>
       <button type="submit" class="btn-primary dark:btn-primary" id="upload-btn">Upload</button>
     </form>
@@ -367,6 +375,7 @@
     const songResultsDiv = document.querySelector("#song-results .song-grid");
     const uploadButton = document.getElementById("upload-btn");
     const clearSongBtn = document.getElementById("clear-song");
+    const fileNameDisplay = document.getElementById("file-name");
 
     let currentUserId = null;
     let selectedSong = null;
@@ -393,6 +402,7 @@
       document.querySelector('.song-results').classList.toggle('dark', isDark);
       document.querySelector('.clear-btn').classList.toggle('dark', isDark);
       document.querySelector('.custom-file-input').classList.toggle('dark', isDark);
+      fileNameDisplay.classList.toggle('dark', isDark);
     }
 
     async function getSpotifyAccessToken() {
@@ -523,6 +533,15 @@
       }
     });
 
+    mediaFileInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        fileNameDisplay.textContent = file.name;
+      } else {
+        fileNameDisplay.textContent = 'No file selected';
+      }
+    });
+
     uploadMediaForm.onsubmit = async (e) => {
       e.preventDefault();
       e.stopPropagation();
@@ -591,11 +610,12 @@
           postedBy: auth.currentUser.uid,
           song: selectedSong || null, // Optional song
           impressions: 0,
-          timestamp: new Date('2025-07-06T08:17:00+02:00').getTime() // Current date and time
+          timestamp: new Date('2025-07-06T08:27:00+02:00').getTime() // Current date and time
         });
 
         uploadResult.textContent = 'Media uploaded successfully!';
         uploadMediaForm.reset();
+        fileNameDisplay.textContent = 'No file selected';
         setTimeout(() => window.location.href = 'index.html', 2000);
       } catch (error) {
         uploadResult.classList.add('error');
