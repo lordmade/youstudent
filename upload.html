@@ -416,7 +416,7 @@
 
     async function searchSongs(query) {
       const accessToken = await getSpotifyAccessToken();
-      const apiUrl = `https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=track&limit=8`;
+      const apiUrl = `https://api.spotify.com/v1/search?q=${encodeURIComponent(query || 'popular')}&type=track&limit=8`;
 
       const response = await fetch(apiUrl, {
         headers: { 'Authorization': `Bearer ${accessToken}` }
@@ -425,11 +425,55 @@
       return data.tracks.items;
     }
 
+    // Load default songs with preview on page load
+    async function loadDefaultSongs() {
+      try {
+        const songs = await searchSongs();
+        const songsWithPreview = songs.filter(song => song.preview_url);
+        songResultsDiv.innerHTML = '';
+        songResultsDiv.parentElement.classList.add('active');
+
+        if (songsWithPreview.length === 0) {
+          songResultsDiv.innerHTML = '<p class="text-center text-gray-500 dark:text-gray-400 p-2">No songs with preview available.</p>';
+          return;
+        }
+
+        songsWithPreview.forEach(song => {
+          const songCard = document.createElement('div');
+          songCard.className = 'song-card dark:song-card';
+          const imageUrl = song.album.images[0]?.url || 'https://via.placeholder.com/150';
+          songCard.innerHTML = `
+            <img src="${imageUrl}" alt="${song.name} album art" class="song-image" />
+            <div class="song-info">
+              <div class="song-title dark:song-title">${song.name}</div>
+              <div class="song-artist dark:song-artist">${song.artists[0].name}</div>
+            </div>
+          `;
+          songCard.onclick = (e) => {
+            e.stopPropagation();
+            selectedSong = `${song.name} - ${song.artists[0].name}`;
+            selectedSongPreview = song.preview_url;
+            songSearchInput.value = selectedSong;
+            songResultsDiv.parentElement.classList.remove('active');
+            clearSongBtn.style.display = 'block';
+            songPreview.classList.add('active');
+            previewAudio.src = selectedSongPreview;
+            previewAudio.load();
+            console.log('Selected song:', selectedSong, 'Preview URL:', selectedSongPreview);
+          };
+          songResultsDiv.appendChild(songCard);
+        });
+      } catch (error) {
+        console.error('Error loading default songs:', error);
+        songResultsDiv.innerHTML = '<p class="text-center text-gray-500 dark:text-gray-400 p-2">Error loading songs. Try searching.</p>';
+      }
+    }
+
     songSearchInput.addEventListener('input', async () => {
       const query = songSearchInput.value.trim();
       const clearBtn = document.getElementById('clear-song');
       if (query.length < 2) {
-        songResultsDiv.parentElement.classList.remove('active');
+        loadDefaultSongs(); // Revert to default list if input is too short
         clearBtn.style.display = 'none';
         songPreview.classList.remove('active');
         previewAudio.src = '';
@@ -438,7 +482,7 @@
       clearBtn.style.display = 'block';
 
       const songs = await searchSongs(query);
-      const songsWithPreview = songs.filter(song => song.preview_url); // Filter for songs with preview URL
+      const songsWithPreview = songs.filter(song => song.preview_url);
       songResultsDiv.innerHTML = '';
       songResultsDiv.parentElement.classList.add('active');
 
@@ -484,6 +528,7 @@
       songResultsDiv.parentElement.classList.remove('active');
       songPreview.classList.remove('active');
       previewAudio.src = '';
+      loadDefaultSongs(); // Revert to default list after clearing
       console.log('Song selection cleared, selectedSong:', selectedSong, 'Preview URL:', selectedSongPreview);
     });
 
@@ -532,6 +577,9 @@
         const settings = settingsSnap.val() || {};
         applyTheme(settings.theme || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
         applyFontSize(settings.fontSize || 'medium');
+
+        // Load default songs when the page loads
+        await loadDefaultSongs();
       } catch (error) {
         console.error('Error loading user data or settings:', error);
         applyTheme(window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
@@ -608,7 +656,7 @@
           song: selectedSong || null,
           songPreview: selectedSongPreview || null,
           impressions: 0,
-          timestamp: new Date('2025-07-06T10:40:00+02:00').getTime() // Updated to current time
+          timestamp: new Date('2025-07-06T11:00:00+02:00').getTime() // Updated to current time
         });
 
         uploadResult.textContent = 'Media uploaded successfully!';
