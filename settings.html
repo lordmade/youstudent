@@ -409,6 +409,13 @@
             <span class="slider"></span>
           </label>
         </div>
+        <div class="flex justify-between items-center">
+          <span class="text-gray-700 dark:label-dark">Verified Badge</span>
+          <label class="toggle">
+            <input id="verified" type="checkbox" role="switch" aria-checked="false" aria-label="Toggle verified badge" />
+            <span class="slider"></span>
+          </label>
+        </div>
       </div>
       <p id="privacy-error" class="error-message dark:error-message" role="alert">
         <span>Failed to save privacy settings.</span>
@@ -531,6 +538,7 @@
     const statusVisibility = document.getElementById('status-visibility');
     const twoFactor = document.getElementById('two-factor');
     const lowData = document.getElementById('low-data');
+    const verified = document.getElementById('verified');
     const backupBtn = document.getElementById('backup-btn');
     const signoutBtn = document.getElementById('signout-btn');
     const deleteBtn = document.getElementById('delete-btn');
@@ -614,7 +622,8 @@
           fontSize: fontSize.value,
           wallpaper: wallpaper.value,
           statusVisibility: statusVisibility.value,
-          lowData: lowData.checked
+          lowData: lowData.checked,
+          verified: verified.checked
         });
         hideLoading();
         return true;
@@ -697,6 +706,8 @@
         lowData.setAttribute('aria-checked', lowData.checked);
         twoFactor.checked = settings.twoFactor?.enabled ?? false;
         twoFactor.setAttribute('aria-checked', twoFactor.checked);
+        verified.checked = settings.verified ?? false;
+        verified.setAttribute('aria-checked', verified.checked);
         applyTheme(theme.value);
         applyFontSize(fontSize.value);
         loadBlockedUsers();
@@ -734,12 +745,17 @@
       });
     });
 
-    statusVisibility.addEventListener('change', async () => {
-      if (!(await saveSettings())) {
-        showError(privacyError, 'Failed to save privacy settings.');
-      } else {
-        hideError(privacyError);
-      }
+    [statusVisibility, verified].forEach(input => {
+      input.addEventListener('change', async () => {
+        input.setAttribute('aria-checked', input.checked);
+        if (!(await saveSettings())) {
+          showError(privacyError, 'Failed to save privacy settings.');
+          input.checked = !input.checked; // Revert if failed
+          input.setAttribute('aria-checked', input.checked);
+        } else {
+          hideError(privacyError);
+        }
+      });
     });
 
     twoFactor.addEventListener('change', () => {
