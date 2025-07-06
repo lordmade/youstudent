@@ -121,29 +121,12 @@
       overflow-x: auto;
       white-space: nowrap;
       -webkit-overflow-scrolling: touch;
-      scrollbar-width: thin; /* Enable scrollbar on Firefox */
-      -ms-overflow-style: -ms-autohiding-scrollbar; /* Hide scrollbar in IE/Edge when not scrolling */
+      scrollbar-width: none; /* Hide scrollbar in Firefox */
+      -ms-overflow-style: none; /* Hide scrollbar in IE/Edge */
+      user-select: none; /* Prevent text selection during drag */
     }
     .category-filter::-webkit-scrollbar {
-      height: 8px;
-    }
-    .category-filter::-webkit-scrollbar-track {
-      background: transparent;
-    }
-    .category-filter::-webkit-scrollbar-thumb {
-      background-color: #d1d5db;
-      border-radius: 10px;
-      border: 2px solid transparent;
-      background-clip: padding-box;
-    }
-    .category-filter::-webkit-scrollbar-thumb:hover {
-      background-color: #9ca3af;
-    }
-    .category-filter.dark::-webkit-scrollbar-thumb {
-      background-color: #4b5563;
-    }
-    .category-filter.dark::-webkit-scrollbar-thumb:hover {
-      background-color: #6b7280;
+      display: none; /* Hide scrollbar in Webkit browsers */
     }
     .category-btn {
       padding: 0.5rem 1rem;
@@ -535,6 +518,9 @@
 
     let currentCategory = 'all';
     let currentUserId = null;
+    let isDragging = false;
+    let startX;
+    let scrollLeft;
 
     function showLoading() { loadingOverlay.classList.remove("hidden"); }
     function hideLoading() { loadingOverlay.classList.add("hidden"); }
@@ -748,6 +734,48 @@
       }
       hideLoading();
     }
+
+    // Drag-to-scroll functionality for category filter
+    categoryFilter.addEventListener('mousedown', (e) => {
+      isDragging = true;
+      startX = e.pageX - categoryFilter.offsetLeft;
+      scrollLeft = categoryFilter.scrollLeft;
+    });
+
+    categoryFilter.addEventListener('mouseleave', () => {
+      isDragging = false;
+    });
+
+    categoryFilter.addEventListener('mouseup', () => {
+      isDragging = false;
+    });
+
+    categoryFilter.addEventListener('mousemove', (e) => {
+      if (!isDragging) return;
+      e.preventDefault();
+      const x = e.pageX - categoryFilter.offsetLeft;
+      const walk = (x - startX) * 1.5; // Adjust scroll speed
+      categoryFilter.scrollLeft = scrollLeft - walk;
+    });
+
+    // Touch events for mobile
+    categoryFilter.addEventListener('touchstart', (e) => {
+      isDragging = true;
+      startX = e.touches[0].pageX - categoryFilter.offsetLeft;
+      scrollLeft = categoryFilter.scrollLeft;
+    });
+
+    categoryFilter.addEventListener('touchend', () => {
+      isDragging = false;
+    });
+
+    categoryFilter.addEventListener('touchmove', (e) => {
+      if (!isDragging) return;
+      e.preventDefault();
+      const x = e.touches[0].pageX - categoryFilter.offsetLeft;
+      const walk = (x - startX) * 1.5; // Adjust scroll speed
+      categoryFilter.scrollLeft = scrollLeft - walk;
+    });
 
     onAuthStateChanged(auth, async (user) => {
       if (!user) {
