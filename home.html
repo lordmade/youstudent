@@ -312,6 +312,39 @@
       width: 16px;
       height: 16px;
     }
+    .like-btn {
+      padding: 0.3rem 0.8rem;
+      font-size: 0.85rem;
+      font-weight: 500;
+      color: white;
+      background: #ef4444;
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: background 0.2s ease, transform 0.2s ease;
+    }
+    .like-btn.liked {
+      background: #6b7280;
+    }
+    .like-btn:hover {
+      transform: translateY(-2px);
+      background: #dc2626;
+    }
+    .like-btn.liked:hover {
+      background: #4b5563;
+    }
+    .like-btn.dark {
+      background: #dc2626;
+    }
+    .like-btn.dark.liked {
+      background: #4b5563;
+    }
+    .like-btn.dark:hover {
+      background: #f97316;
+    }
+    .like-btn.dark.liked:hover {
+      background: #374151;
+    }
     .follow-btn {
       padding: 0.3rem 0.8rem;
       font-size: 0.85rem;
@@ -590,6 +623,7 @@
       document.querySelector('.live-icon').classList.toggle('dark', isDark);
       document.querySelector('.add-media-btn').classList.toggle('dark', isDark);
       document.querySelectorAll('.category-btn').forEach(btn => btn.classList.toggle('dark', isDark));
+      document.querySelectorAll('.like-btn').forEach(btn => btn.classList.toggle('dark', isDark));
       audioPlayer.classList.toggle('dark', isDark);
       categoryFilter.classList.toggle('dark', isDark);
     }
@@ -661,6 +695,40 @@
       }
     }
 
+    async function isLiked(mediaId, userId) {
+      const likeRef = ref(db, `media/${mediaId}/likedBy/${userId}`);
+      const snapshot = await get(likeRef);
+      return snapshot.exists();
+    }
+
+    async function toggleLike(mediaId, button) {
+      if (!currentUserId) return;
+
+      const isLiked = await isLiked(mediaId, currentUserId);
+      const likeRef = ref(db, `media/${mediaId}/likedBy/${currentUserId}`);
+      const likesRef = ref(db, `media/${mediaId}/likes`);
+
+      try {
+        if (isLiked) {
+          await set(likeRef, null); // Unlike
+          const snapshot = await get(likesRef);
+          const currentLikes = snapshot.val() || 0;
+          await set(likesRef, Math.max(0, currentLikes - 1));
+          button.textContent = `Like (${Math.max(0, currentLikes - 1)})`;
+          button.classList.remove('liked');
+        } else {
+          await set(likeRef, { likedAt: Date.now() }); // Like
+          const snapshot = await get(likesRef);
+          const currentLikes = snapshot.val() || 0;
+          await set(likesRef, currentLikes + 1);
+          button.textContent = `Like (${currentLikes + 1})`;
+          button.classList.add('liked');
+        }
+      } catch (error) {
+        console.error('Error toggling like:', error);
+      }
+    }
+
     async function loadMedia(category = 'all') {
       showLoading();
       try {
@@ -677,12 +745,11 @@
         mediaGrid.innerHTML = '';
         const mediaList = Object.entries(media)
           .map(([mediaId, item]) => {
-            // Ensure timestamp exists, fallback to 0 if missing
             const timestamp = item.timestamp || 0;
             return { mediaId, ...item, timestamp };
           })
           .filter(item => category === 'all' || (item.category || 'Other') === category)
-          .sort((a, b) => b.timestamp - a.timestamp); // Descending order (newest first)
+          .sort((a, b) => b.timestamp - a.timestamp);
 
         if (mediaList.length === 0) {
           noMedia.style.display = 'block';
@@ -692,8 +759,8 @@
         }
 
         noMedia.style.display = 'none';
-        mediaList.forEach(({ mediaId, title, url, thumbnailUrl, resourceType, postedBy, category, song, songPreview, impressions = 0, timestamp }) => {
-          console.log(`Loading media ${mediaId} with timestamp ${timestamp}`); // Debug log
+        mediaList.forEach(({ mediaId, title, url, thumbnailUrl, resourceType, postedBy, category, song, songPreview, impressions = 0, likes = 0, timestamp }) => {
+          console.log(`Loading media ${mediaId} with timestamp ${timestamp}`);
           const user = users[postedBy] || { displayName: 'Unknown User' };
           const displayName = user.displayName || 'Unknown User';
           const mediaCard = document.createElement('div');
@@ -718,6 +785,11 @@
                  </svg>
                </div>`;
 
+          const likeBtn = document.createElement('button');
+          likeBtn.className = 'like-btn dark:like-btn';
+          likeBtn.dataset.mediaId = mediaId;
+          likeBtn.textContent = `Like (${likes})`;
+
           const followBtn = document.createElement('button');
           followBtn.className = 'follow-btn dark:follow-btn';
           followBtn.dataset.friendId = postedBy;
@@ -737,6 +809,7 @@
                   ${impressions}
                 </span>
                 ${currentUserId && postedBy !== currentUserId ? followBtn.outerHTML : ''}
+                ${currentUserId ? likeBtn.outerHTML : ''}
               </div>
             </div>
             ${songPreview ? `<audio id="card-audio-${mediaId}" src="${songPreview}" class="hidden" loop></audio>` : ''}
@@ -751,6 +824,20 @@
               btn.onclick = (e) => {
                 e.stopPropagation();
                 toggleFollow(currentUserId, postedBy, btn);
+              };
+            });
+          }
+
+          if (currentUserId) {
+            isLiked(mediaId, currentUserId).then(liked => {
+              const likeButton = mediaCard.querySelector('.like-btn');
+              likeButton.textContent = `Like (${likes})`;
+              if (liked) {
+                likeButton.classList.add('liked');
+              }
+              likeButton.onclick = (e) => {
+                e.stopPropagation();
+                toggleLike(mediaId, likeButton);
               };
             });
           }
