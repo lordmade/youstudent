@@ -39,6 +39,13 @@
       .media-card {
         flex: 0 0 70%;
         max-width: 70%;
+        position: fixed;
+        top: 1rem;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 70%;
+        max-width: 896px; /* 70% of 1280px */
+        z-index: 1000;
       }
       .comment-section {
         flex: 0 0 30%;
@@ -46,6 +53,7 @@
         position: sticky;
         top: 1rem;
         align-self: flex-start;
+        margin-left: 71%; /* Offset to right of fixed media card */
       }
     }
     .media-card {
@@ -397,10 +405,25 @@
       border-radius: 8px;
       padding: 0.75rem;
       box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+      display: flex;
+      gap: 0.75rem;
     }
     .comment.dark {
       background: #2a2a2a;
       box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+    }
+    .comment-avatar {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: #ddd;
+      flex-shrink: 0;
+    }
+    .comment-avatar.dark {
+      background: #444;
+    }
+    .comment-content {
+      flex: 1;
     }
     .comment-text {
       font-size: 0.95rem;
@@ -514,9 +537,10 @@
       .media-card, .comment-section {
         flex: 0 0 100%;
         max-width: 100%;
+        position: static; /* Reset to static for mobile */
       }
       .media-content-container {
-        padding-top: 75%; /* Slightly taller for mobile to fit content */
+        padding-top: 75%; /* Slightly taller for mobile */
       }
       .play-button {
         width: 48px;
@@ -635,6 +659,7 @@
       document.querySelectorAll('.like-comment').forEach(icon => icon.classList.toggle('dark', isDark));
       document.querySelectorAll('.like-count').forEach(count => count.classList.toggle('dark', isDark));
       document.querySelectorAll('.like-btn').forEach(btn => btn.classList.toggle('dark', isDark));
+      document.querySelectorAll('.comment-avatar').forEach(avatar => avatar.classList.toggle('dark', isDark));
       document.querySelectorAll('.fullscreen-button').forEach(btn => btn.classList.toggle('dark', isDark));
       document.querySelectorAll('.mute-button').forEach(btn => btn.classList.toggle('dark', isDark));
       document.querySelectorAll('.back-button').forEach(btn => btn.classList.toggle('dark', isDark));
@@ -775,7 +800,7 @@
           const userPromises = commentArray.map(comment => get(ref(db, `users/${comment.postedBy}`)));
           const userSnaps = await Promise.all(userPromises);
           const users = userSnaps.reduce((acc, snap, index) => {
-            acc[commentArray[index].postedBy] = snap.val() || { displayName: 'Unknown' };
+            acc[commentArray[index].postedBy] = snap.val() || { displayName: 'Unknown', photoURL: null };
             return acc;
           }, {});
 
@@ -784,22 +809,26 @@
             commentElement.className = 'comment dark:comment';
             commentElement.dataset.commentId = commentId;
             const canDelete = currentUserId && (currentUserId === postedBy || currentUserId === mediaOwnerId);
+            const photoURL = users[postedBy].photoURL || 'https://via.placeholder.com/36';
             commentElement.innerHTML = `
-              <p class="comment-text dark:comment-text">${text}</p>
-              <p class="comment-meta dark:comment-meta">
-                By <a href="profile.html?uid=${postedBy}" class="posted-by-link">${users[postedBy].displayName}</a> • ${formatTimestamp(timestamp)}
-                <span class="like-container">
-                  <svg class="like-comment dark:like-comment ${isLiked ? 'liked' : ''}" viewBox="0 0 24 24" role="button" aria-label="${isLiked ? 'Unlike' : 'Like'} comment" tabindex="0">
-                    <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" fill="${isLiked ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-                  </svg>
-                  <span class="like-count dark:like-count">${likeCount}</span>
-                </span>
-                ${canDelete ? `
-                  <svg class="delete-comment dark:delete-comment" viewBox="0 0 24 24" role="button" aria-label="Delete comment" tabindex="0">
-                    <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-                  </svg>
-                ` : ''}
-              </p>
+              <div class="comment-avatar dark:comment-avatar" style="background-image: url('${photoURL}');"></div>
+              <div class="comment-content">
+                <p class="comment-text dark:comment-text">${text}</p>
+                <p class="comment-meta dark:comment-meta">
+                  By <a href="profile.html?uid=${postedBy}" class="posted-by-link">${users[postedBy].displayName}</a> • ${formatTimestamp(timestamp)}
+                  <span class="like-container">
+                    <svg class="like-comment dark:like-comment ${isLiked ? 'liked' : ''}" viewBox="0 0 24 24" role="button" aria-label="${isLiked ? 'Unlike' : 'Like'} comment" tabindex="0">
+                      <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" fill="${isLiked ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                    </svg>
+                    <span class="like-count dark:like-count">${likeCount}</span>
+                  </span>
+                  ${canDelete ? `
+                    <svg class="delete-comment dark:delete-comment" viewBox="0 0 24 24" role="button" aria-label="Delete comment" tabindex="0">
+                      <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                    </svg>
+                  ` : ''}
+                </p>
+              </div>
             `;
             commentList.appendChild(commentElement);
 
