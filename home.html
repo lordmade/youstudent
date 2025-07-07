@@ -14,6 +14,7 @@
       margin: 0;
       padding: 0;
       overflow-x: hidden;
+      position: relative;
     }
     body.dark {
       background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
@@ -172,7 +173,7 @@
       overflow: hidden;
       box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
       transition: transform 0.2s ease, box-shadow 0.2s ease;
-      cursor: default; /* Default cursor for non-clickable cards */
+      cursor: default;
       position: relative;
       width: 100%;
       height: 100%;
@@ -186,7 +187,7 @@
       box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
     }
     .media-card.video-clickable {
-      cursor: pointer; /* Only video cards are clickable */
+      cursor: pointer;
     }
     .media-card.video-clickable:hover {
       transform: translateY(-5px);
@@ -256,6 +257,8 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
+      flex-wrap: wrap;
+      gap: 0.5rem;
     }
     .media-title {
       font-size: 1.2rem;
@@ -309,6 +312,38 @@
       background: rgba(30, 41, 59, 0.9);
     }
     .impression-count svg {
+      width: 16px;
+      height: 16px;
+    }
+    .reaction-btn, .comment-btn {
+      padding: 0.3rem 0.8rem;
+      font-size: 0.85rem;
+      font-weight: 500;
+      color: #64748b;
+      background: rgba(255, 255, 255, 0.9);
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+      transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
+      backdrop-filter: blur(4px);
+    }
+    .reaction-btn:hover, .comment-btn:hover {
+      background: rgba(255, 255, 255, 0.95);
+      transform: translateY(-2px);
+      color: #1e293b;
+    }
+    .reaction-btn.dark, .comment-btn.dark {
+      color: #94a3b8;
+      background: rgba(30, 41, 59, 0.9);
+    }
+    .reaction-btn.dark:hover, .comment-btn.dark:hover {
+      background: rgba(30, 41, 59, 0.95);
+      color: #e2e8f0;
+    }
+    .reaction-btn svg, .comment-btn svg {
       width: 16px;
       height: 16px;
     }
@@ -421,6 +456,101 @@
     .audio-player.active {
       display: block;
     }
+    .comment-sheet {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      max-height: 70vh;
+      background: white;
+      border-top-left-radius: 16px;
+      border-top-right-radius: 16px;
+      box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+      z-index: 2001;
+      transform: translateY(100%);
+      transition: transform 0.3s ease;
+      overflow-y: auto;
+      padding: 1rem;
+      display: none;
+    }
+    .comment-sheet.dark {
+      background: #1e293b;
+      box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.3);
+    }
+    .comment-sheet.active {
+      display: block;
+      transform: translateY(0);
+    }
+    .comment-sheet-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1rem;
+    }
+    .comment-sheet-header h3 {
+      font-size: 1.2rem;
+      font-weight: 600;
+      color: #1e293b;
+    }
+    .comment-sheet-header.dark h3 {
+      color: #e2e8f0;
+    }
+    .close-btn {
+      background: none;
+      border: none;
+      font-size: 1.5rem;
+      cursor: pointer;
+      color: #64748b;
+    }
+    .close-btn.dark {
+      color: #94a3b8;
+    }
+    .comment-list {
+      margin-bottom: 1rem;
+    }
+    .comment {
+      padding: 0.5rem;
+      border-bottom: 1px solid #e5e7eb;
+      color: #1e293b;
+    }
+    .comment.dark {
+      border-bottom: 1px solid #4b5563;
+      color: #e2e8f0;
+    }
+    .comment-form {
+      display: flex;
+      gap: 0.5rem;
+    }
+    .comment-input {
+      flex-grow: 1;
+      padding: 0.5rem;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      font-size: 0.9rem;
+    }
+    .comment-input.dark {
+      border-color: #4b5563;
+      background: #1e293b;
+      color: #e2e8f0;
+    }
+    .comment-submit {
+      padding: 0.5rem 1rem;
+      background: #ef4444;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.2s ease;
+    }
+    .comment-submit.dark {
+      background: #dc2626;
+    }
+    .comment-submit:hover {
+      background: #dc2626;
+    }
+    .comment-submit.dark:hover {
+      background: #f97316;
+    }
     @keyframes spin { to { transform: rotate(360deg); } }
     @keyframes dash { 0% { stroke-dashoffset: 80; } 50% { stroke-dashoffset: 20; } 100% { stroke-dashoffset: 80; } }
     @media (max-width: 640px) {
@@ -471,6 +601,9 @@
         width: 150px;
         bottom: 5rem;
         right: 1rem;
+      }
+      .comment-sheet {
+        max-height: 60vh;
       }
     }
   </style>
@@ -535,6 +668,21 @@
     <audio id="preview-audio" controls></audio>
   </div>
 
+  <!-- Comment Bottom Sheet -->
+  <div class="comment-sheet dark:comment-sheet" id="comment-sheet">
+    <div class="comment-sheet-header">
+      <h3>Comments</h3>
+      <button class="close-btn dark:close-btn" id="close-comment-sheet">&times;</button>
+    </div>
+    <div class="comment-list" id="comment-list">
+      <!-- Comments will be loaded dynamically -->
+    </div>
+    <div class="comment-form">
+      <input type="text" class="comment-input dark:comment-input" id="comment-input" placeholder="Add a comment..." />
+      <button class="comment-submit dark:comment-submit" id="comment-submit">Post</button>
+    </div>
+  </div>
+
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
     import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
@@ -563,12 +711,18 @@
     const audioPlayer = document.getElementById("audio-player");
     const previewAudio = document.getElementById("preview-audio");
     const profileIcon = document.getElementById("profile-icon");
+    const commentSheet = document.getElementById("comment-sheet");
+    const closeCommentSheet = document.getElementById("close-comment-sheet");
+    const commentList = document.getElementById("comment-list");
+    const commentInput = document.getElementById("comment-input");
+    const commentSubmit = document.getElementById("comment-submit");
 
     let currentCategory = 'all';
     let currentUserId = null;
     let isDragging = false;
     let startX;
     let scrollLeft;
+    let currentMediaId = null;
 
     function showLoading() { loadingOverlay.classList.remove("hidden"); }
     function hideLoading() { loadingOverlay.classList.add("hidden"); }
@@ -592,6 +746,9 @@
       document.querySelectorAll('.category-btn').forEach(btn => btn.classList.toggle('dark', isDark));
       audioPlayer.classList.toggle('dark', isDark);
       categoryFilter.classList.toggle('dark', isDark);
+      commentSheet.classList.toggle('dark', isDark);
+      document.querySelectorAll('.reaction-btn').forEach(btn => btn.classList.toggle('dark', isDark));
+      document.querySelectorAll('.comment-btn').forEach(btn => btn.classList.toggle('dark', isDark));
     }
 
     function applyFontSize(size) {
@@ -661,6 +818,53 @@
       }
     }
 
+    async function loadComments(mediaId) {
+      try {
+        const commentsRef = ref(db, `media/${mediaId}/comments`);
+        const snapshot = await get(commentsRef);
+        const comments = snapshot.val() || {};
+        commentList.innerHTML = '';
+        Object.entries(comments).forEach(([commentId, comment]) => {
+          const commentElement = document.createElement('div');
+          commentElement.className = 'comment dark:comment';
+          commentElement.textContent = `${comment.userName || 'Anonymous'}: ${comment.text}`;
+          commentList.appendChild(commentElement);
+        });
+      } catch (error) {
+        console.error('Error loading comments:', error);
+        commentList.innerHTML = '<div class="comment dark:comment">Failed to load comments.</div>';
+      }
+    }
+
+    async function addComment(mediaId, text) {
+      try {
+        const commentsRef = ref(db, `media/${mediaId}/comments`);
+        const newCommentRef = push(commentsRef);
+        await set(newCommentRef, {
+          text: text,
+          userId: currentUserId,
+          userName: usernameElement.textContent,
+          timestamp: Date.now()
+        });
+        commentInput.value = '';
+        await loadComments(mediaId);
+      } catch (error) {
+        console.error('Error adding comment:', error);
+        alert('Failed to post comment. Please try again.');
+      }
+    }
+
+    function openCommentSheet(mediaId) {
+      currentMediaId = mediaId;
+      commentSheet.classList.add('active');
+      loadComments(mediaId);
+    }
+
+    function closeCommentSheet() {
+      commentSheet.classList.remove('active');
+      currentMediaId = null;
+    }
+
     async function loadMedia(category = 'all') {
       showLoading();
       try {
@@ -687,13 +891,12 @@
         noMedia.style.display = 'none';
         mediaList.forEach(({ mediaId, title, url, thumbnailUrl, resourceType, postedBy, category, song, songPreview, impressions = 0 }) => {
           const user = users[postedBy] || { displayName: 'Unknown User' };
-          const displayName = user.displayName || 'Unknown User'; // Fallback if displayName is undefined
+          const displayName = user.displayName || 'Unknown User';
           const mediaCard = document.createElement('div');
           mediaCard.className = 'media-card dark:media-card';
           mediaCard.dataset.mediaId = mediaId;
           mediaCard.tabIndex = 0;
 
-          // Only add video-clickable class if resourceType is 'video'
           if (resourceType === 'video') {
             mediaCard.classList.add('video-clickable');
             mediaCard.onclick = () => window.location.href = `media.html?mediaId=${mediaId}`;
@@ -710,6 +913,18 @@
                    <circle cx="12" cy="12" r="10" />
                  </svg>
                </div>`;
+
+          const reactionBtn = document.createElement('button');
+          reactionBtn.className = 'reaction-btn dark:reaction-btn';
+          reactionBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22h-.18"></path><path d="M3 12a7 7 0 0 0 7 7"></path></svg> 0';
+
+          const commentBtn = document.createElement('button');
+          commentBtn.className = 'comment-btn dark:comment-btn';
+          commentBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg> 0';
+          commentBtn.onclick = (e) => {
+            e.stopPropagation();
+            openCommentSheet(mediaId);
+          };
 
           const followBtn = document.createElement('button');
           followBtn.className = 'follow-btn dark:follow-btn';
@@ -730,6 +945,8 @@
                   ${impressions}
                 </span>
                 ${currentUserId && postedBy !== currentUserId ? followBtn.outerHTML : ''}
+                ${reactionBtn.outerHTML}
+                ${commentBtn.outerHTML}
               </div>
             </div>
             ${songPreview ? `<audio id="card-audio-${mediaId}" src="${songPreview}" class="hidden" loop></audio>` : ''}
@@ -869,7 +1086,7 @@
         const userRef = ref(db, `users/${currentUserId}`);
         const userSnap = await get(userRef);
         const userData = userSnap.val() || {};
-        usernameElement.textContent = userData.displayName || 'User'; // Fetch displayName from profile data
+        usernameElement.textContent = userData.displayName || 'User';
 
         const settingsRef = ref(db, `users/${currentUserId}/settings`);
         const settingsSnap = await get(settingsRef);
@@ -877,7 +1094,6 @@
         applyTheme(settings.theme || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
         applyFontSize(settings.fontSize || 'medium');
 
-        // Set the profile icon link dynamically
         profileIcon.href = `profile.html?uid=${currentUserId}&owner=true`;
 
         await loadMedia(currentCategory);
@@ -908,12 +1124,24 @@
             startLiveStream();
           }
         });
+
+        closeCommentSheet.addEventListener('click', closeCommentSheet);
+        commentSubmit.addEventListener('click', () => {
+          const text = commentInput.value.trim();
+          if (text && currentMediaId) {
+            addComment(currentMediaId, text);
+          }
+        });
+        commentInput.addEventListener('keypress', (e) => {
+          if (e.key === 'Enter' && commentInput.value.trim()) {
+            addComment(currentMediaId, commentInput.value.trim());
+          }
+        });
       } catch (error) {
         console.error('Error loading user data or settings:', error);
-        usernameElement.textContent = 'User'; // Fallback to 'User' if data fetch fails
+        usernameElement.textContent = 'User';
         applyTheme(window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
         applyFontSize('medium');
-        // Set a fallback profile link
         profileIcon.href = `profile.html?uid=${currentUserId || 'default'}&owner=true`;
         await loadMedia(currentCategory);
       }
