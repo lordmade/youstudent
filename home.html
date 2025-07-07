@@ -112,6 +112,39 @@
       outline: none;
       box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.3);
     }
+    .search-bar {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 1rem;
+      background: rgba(255, 255, 255, 0.95);
+      border-radius: 20px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      margin-right: 1rem;
+      transition: background 0.2s ease;
+    }
+    .search-bar.dark {
+      background: rgba(30, 41, 59, 0.95);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    }
+    .search-input {
+      flex-grow: 1;
+      border: none;
+      background: none;
+      font-size: 1rem;
+      color: #1e293b;
+      outline: none;
+    }
+    .search-input.dark { color: #e2e8f0; }
+    .search-input::placeholder { color: #64748b; }
+    .search-input.dark::placeholder { color: #94a3b8; }
+    .search-icon {
+      width: 20px;
+      height: 20px;
+      stroke: #ef4444;
+      transition: stroke 0.2s ease;
+    }
+    .search-icon.dark { stroke: #dc2626; }
     .category-filter {
       max-width: 1200px;
       margin: 1rem auto;
@@ -158,7 +191,7 @@
       background: #dc2626;
       color: white;
     }
-    .media-grid {
+    .media-grid, .trending-grid {
       max-width: 1200px;
       margin: 1rem auto;
       padding: 1rem 1.5rem;
@@ -166,6 +199,11 @@
       grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
       gap: 1.5rem;
     }
+    .trending-grid {
+      margin-top: 0;
+      border-bottom: 1px solid #e5e7eb;
+    }
+    .trending-grid.dark { border-bottom-color: #4b5563; }
     .media-card {
       background: white;
       border-radius: 16px;
@@ -289,7 +327,6 @@
     }
     .media-posted-by a:hover {
       color: #dc2626;
-      text-overflow: underline;
     }
     .media-posted-by.dark a { color: #dc2626; }
     .media-posted-by.dark a:hover { color: #f97316; }
@@ -553,6 +590,17 @@
         width: 20px;
         height: 20px;
       }
+      .search-bar {
+        padding: 0.4rem 0.8rem;
+        margin-right: 0.5rem;
+      }
+      .search-input {
+        font-size: 0.9rem;
+      }
+      .search-icon {
+        width: 18px;
+        height: 18px;
+      }
       .category-filter {
         padding: 0 1rem;
       }
@@ -560,7 +608,7 @@
         padding: 0.4rem 0.8rem;
         font-size: 0.85rem;
       }
-      .media-grid {
+      .media-grid, .trending-grid {
         grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
         gap: 1rem;
         padding: 1rem;
@@ -602,6 +650,12 @@
       <span id="username" class="username dark:username">Loading...</span>
     </div>
     <div class="header-right">
+      <div class="search-bar dark:search-bar">
+        <input type="text" id="search-input" class="search-input dark:search-input" placeholder="Search..." aria-label="Search media" />
+        <svg class="search-icon dark:search-icon" viewBox="0 0 24 24">
+          <path d="M21 21l-4.35-4.35m1.85-2.65a7 7 0 11-14 0 7 7 0 0114 0z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+      </div>
       <button class="header-icon live-icon dark:live-icon" id="go-live-btn" role="button" aria-label="Go Live" tabindex="0">
         <svg viewBox="0 0 24 24">
           <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
@@ -631,6 +685,9 @@
     <button class="category-btn dark:category-btn" data-category="Travel">Travel</button>
   </div>
 
+  <div class="trending-grid" id="trending-grid">
+    <h2 class="text-2xl font-bold text-[#1e293b] dark:text-[#e2e8f0] px-6 py-2">Trending</h2>
+  </div>
   <div class="media-grid" id="media-grid"></div>
   <div class="no-media dark:no-media" id="no-media" style="display: none;">No media available.</div>
 
@@ -664,7 +721,7 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
     import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
-    import { getDatabase, ref, get, set, push, child } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-database.js";
+    import { getDatabase, ref, get, set, push, child, query, orderByChild, limitToFirst } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-database.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
@@ -681,6 +738,7 @@
     const db = getDatabase(app);
 
     const mediaGrid = document.getElementById("media-grid");
+    const trendingGrid = document.getElementById("trending-grid");
     const noMedia = document.getElementById("no-media");
     const loadingOverlay = document.getElementById("loading-overlay");
     const usernameElement = document.getElementById("username");
@@ -689,6 +747,7 @@
     const audioPlayer = document.getElementById("audio-player");
     const previewAudio = document.getElementById("preview-audio");
     const profileIcon = document.getElementById("profile-icon");
+    const searchInput = document.getElementById("search-input");
 
     let currentCategory = 'all';
     let currentUserId = null;
@@ -703,6 +762,7 @@
       const isDark = themeValue === 'dark';
       document.body.classList.toggle('dark', isDark);
       document.querySelector('.header').classList.toggle('dark', isDark);
+      document.querySelector('.search-bar').classList.toggle('dark', isDark);
       document.querySelectorAll('.media-card').forEach(card => card.classList.toggle('dark', isDark));
       document.querySelectorAll('.media-title').forEach(title => title.classList.toggle('dark', isDark));
       document.querySelectorAll('.media-song').forEach(song => song.classList.toggle('dark', isDark));
@@ -718,6 +778,7 @@
       document.querySelectorAll('.category-btn').forEach(btn => btn.classList.toggle('dark', isDark));
       audioPlayer.classList.toggle('dark', isDark);
       categoryFilter.classList.toggle('dark', isDark);
+      trendingGrid.classList.toggle('dark', isDark);
     }
 
     function applyFontSize(size) {
@@ -787,7 +848,7 @@
       }
     }
 
-    async function loadMedia(category = 'all') {
+    async function loadMedia(category = 'all', searchQuery = '') {
       showLoading();
       try {
         const mediaRef = ref(db, "media");
@@ -806,12 +867,19 @@
             const timestamp = item.timestamp || 0;
             return { mediaId, ...item, timestamp };
           })
-          .filter(item => category === 'all' || (item.category || 'Other') === category)
+          .filter(item => {
+            const matchesCategory = category === 'all' || (item.category || 'Other') === category;
+            const matchesSearch = !searchQuery || 
+              (item.title && item.title.toLowerCase().includes(searchQuery.toLowerCase())) ||
+              (item.category && item.category.toLowerCase().includes(searchQuery.toLowerCase())) ||
+              (users[item.postedBy]?.displayName && users[item.postedBy].displayName.toLowerCase().includes(searchQuery.toLowerCase()));
+            return matchesCategory && matchesSearch;
+          })
           .sort((a, b) => b.timestamp - a.timestamp);
 
         if (mediaList.length === 0) {
           noMedia.style.display = 'block';
-          noMedia.textContent = category === 'all' ? 'No media available.' : `No media in ${category} category.`;
+          noMedia.textContent = category === 'all' && !searchQuery ? 'No media available.' : `No media found for ${searchQuery || category} category.`;
           hideLoading();
           return;
         }
@@ -995,6 +1063,147 @@
       hideLoading();
     }
 
+    async function loadTrendingMedia() {
+      showLoading();
+      try {
+        const mediaRef = query(ref(db, "media"), orderByChild("impressions"), limitToFirst(5));
+        const mediaSnap = await get(mediaRef);
+        if (!mediaSnap.exists()) {
+          trendingGrid.innerHTML = '<p class="text-center text-[#64748b] dark:text-[#94a3b8]">No trending media yet.</p>';
+          hideLoading();
+          return;
+        }
+        const media = mediaSnap.val() || {};
+        const usersRef = ref(db, "users");
+        const usersSnap = await get(usersRef);
+        const users = usersSnap.val() || {};
+
+        trendingGrid.innerHTML = '<h2 class="text-2xl font-bold text-[#1e293b] dark:text-[#e2e8f0] px-6 py-2">Trending</h2>';
+        const mediaList = Object.entries(media)
+          .map(([mediaId, item]) => ({ mediaId, ...item }))
+          .sort((a, b) => (b.impressions || 0) - (a.impressions || 0))
+          .slice(0, 5);
+
+        if (mediaList.length === 0) {
+          trendingGrid.innerHTML += '<p class="text-center text-[#64748b] dark:text-[#94a3b8]">No trending media yet.</p>';
+          hideLoading();
+          return;
+        }
+
+        mediaList.forEach(({ mediaId, title, url, thumbnailUrl, resourceType, postedBy, category, song, songPreview, impressions = 0 }) => {
+          const user = users[postedBy] || { displayName: 'Unknown User' };
+          const displayName = user.displayName || 'Unknown User';
+          const mediaCard = document.createElement('div');
+          mediaCard.className = 'media-card dark:media-card';
+          mediaCard.dataset.mediaId = mediaId;
+          mediaCard.tabIndex = 0;
+
+          if (resourceType === 'video') {
+            mediaCard.classList.add('video-clickable');
+            mediaCard.onclick = () => window.location.href = `media.html?mediaId=${mediaId}`;
+          }
+
+          const mediaElement = resourceType === 'image'
+            ? `<div class="media-content-container">
+                 <img src="${url || 'https://via.placeholder.com/300x300'}" alt="${title || 'Media'} thumbnail" class="media-content lazy" loading="lazy" aria-label="Media thumbnail" />
+               </div>`
+            : `<div class="media-content-container">
+                 <img src="${thumbnailUrl || 'https://via.placeholder.com/300x300'}" alt="${title || 'Media'} thumbnail" class="media-content thumbnail lazy" loading="lazy" aria-label="Video thumbnail" />
+                 <video src="${url}" class="media-content video" muted playsinline loop preload="auto"></video>
+                 <svg class="video-spinner dark:video-spinner" viewBox="0 0 24 24" aria-hidden="true">
+                   <circle cx="12" cy="12" r="10" />
+                 </svg>
+               </div>`;
+
+          mediaCard.innerHTML = `
+            ${mediaElement}
+            <div class="media-info">
+              <h3 class="media-title dark:media-title">${title || 'Untitled'}</h3>
+              ${song ? `<p class="media-song dark:media-song">Song: ${song}</p>` : ''}
+              <p class="media-posted-by dark:media-posted-by">Posted by <a href="profile.html?uid=${postedBy}" class="posted-by-link">${displayName}</a> | ${category || 'Other'}</p>
+              <div class="media-actions">
+                <span class="impression-count dark:impression-count">
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z" fill="currentColor"/>
+                  </svg>
+                  ${impressions}
+                </span>
+              </div>
+            </div>
+            ${songPreview ? `<audio id="card-audio-${mediaId}" src="${songPreview}" class="hidden" loop></audio>` : ''}
+          `;
+          trendingGrid.appendChild(mediaCard);
+        });
+
+        const observer = new IntersectionObserver((entries) => {
+          entries.forEach(entry => {
+            const card = entry.target;
+            const video = card.querySelector('video.media-content');
+            const thumbnail = card.querySelector('img.media-content.thumbnail');
+            const spinner = card.querySelector('.video-spinner');
+            const mediaId = card.dataset.mediaId;
+
+            if (entry.isIntersecting && currentUserId) {
+              incrementImpression(mediaId, currentUserId);
+              if (video) {
+                video.play().catch(error => {
+                  console.error('Error playing video:', error);
+                  if (spinner) spinner.classList.add('active');
+                });
+              }
+            } else {
+              if (video) {
+                video.pause();
+                video.currentTime = 0;
+                if (thumbnail) thumbnail.style.display = 'block';
+                if (spinner) spinner.classList.remove('active');
+              }
+            }
+          });
+        }, { threshold: 0.5 });
+
+        document.querySelectorAll('.media-card').forEach(card => observer.observe(card));
+
+        document.querySelectorAll('video.media-content').forEach(video => {
+          const thumbnail = video.parentElement.querySelector('img.media-content.thumbnail');
+          const spinner = video.parentElement.querySelector('.video-spinner');
+
+          video.addEventListener('canplay', () => {
+            video.classList.add('ready');
+            if (thumbnail) thumbnail.style.display = 'none';
+            if (spinner) spinner.classList.remove('active');
+          });
+
+          video.addEventListener('waiting', () => {
+            if (spinner) spinner.classList.add('active');
+          });
+
+          video.addEventListener('error', () => {
+            if (spinner) spinner.classList.add('active');
+            console.error('Video error:', video.error);
+          });
+
+          video.addEventListener('focus', () => {
+            video.play().catch(error => {
+              console.error('Error playing video:', error);
+              if (spinner) spinner.classList.add('active');
+            });
+          });
+
+          video.addEventListener('blur', () => {
+            video.pause();
+            video.currentTime = 0;
+            if (thumbnail) thumbnail.style.display = 'block';
+            if (spinner) spinner.classList.remove('active');
+          });
+        });
+      } catch (error) {
+        console.error('Error loading trending media:', error);
+        trendingGrid.innerHTML = '<p class="text-center text-[#64748b] dark:text-[#94a3b8]">Error loading trending media.</p>';
+      }
+      hideLoading();
+    }
+
     categoryFilter.addEventListener('mousedown', (e) => {
       isDragging = true;
       startX = e.pageX - categoryFilter.offsetLeft;
@@ -1055,6 +1264,7 @@
 
         profileIcon.href = `profile.html?uid=${currentUserId}&owner=true`;
 
+        await loadTrendingMedia();
         await loadMedia(currentCategory);
 
         categoryFilter.querySelectorAll('.category-btn').forEach(btn => {
@@ -1062,14 +1272,14 @@
             categoryFilter.querySelectorAll('.category-btn').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
             currentCategory = btn.dataset.category;
-            loadMedia(currentCategory);
+            loadMedia(currentCategory, searchInput.value.trim());
           });
           btn.addEventListener('touchstart', (e) => {
             e.preventDefault();
             categoryFilter.querySelectorAll('.category-btn').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
             currentCategory = btn.dataset.category;
-            loadMedia(currentCategory);
+            loadMedia(currentCategory, searchInput.value.trim());
           });
         });
 
@@ -1083,15 +1293,33 @@
             startLiveStream();
           }
         });
+
+        searchInput.addEventListener('input', debounce((e) => {
+          loadMedia(currentCategory, e.target.value.trim());
+        }, 300));
       } catch (error) {
         console.error('Error loading user data or settings:', error);
         usernameElement.textContent = 'User';
         applyTheme(window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
         applyFontSize('medium');
         profileIcon.href = `profile.html?uid=${currentUserId || 'default'}&owner=true`;
+        await loadTrendingMedia();
         await loadMedia(currentCategory);
       }
     });
+
+    // Debounce function for search input
+    function debounce(func, wait) {
+      let timeout;
+      return function executedFunction(...args) {
+        const later = () => {
+          clearTimeout(timeout);
+          func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+      };
+    }
   </script>
 </body>
 </html>
