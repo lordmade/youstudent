@@ -30,7 +30,7 @@
       background: linear-gradient(180deg, #ef4444 0%, #f97316 100%);
     }
     .profile-header.dark {
-      background: linear-gradient(180deg, #dc2626 0%, #f97316 100%);
+      background: linear-gradient(180deg, #dc2624 0%, #f97316 100%);
     }
     .cover-image {
       width: 100%;
@@ -177,7 +177,6 @@
     .media-card {
       aspect-ratio: 1 / 1;
       background: #fff;
-      cursor: pointer;
       overflow: hidden;
     }
     .media-card:hover img {
@@ -191,6 +190,9 @@
       height: 100%;
       object-fit: cover;
       transition: transform 0.2s ease;
+    }
+    .media-card.video-clickable {
+      cursor: pointer;
     }
     .btn-primary {
       background: #ef4444;
@@ -289,6 +291,38 @@
     .alert-btn.dark:hover {
       background: #f97316;
     }
+    .loading-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.7);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 2000;
+      transition: opacity 0.3s ease;
+    }
+    .loading-overlay.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+    .loading-spinner {
+      width: 48px;
+      height: 48px;
+      animation: spin 1s linear infinite;
+    }
+    .loading-spinner circle {
+      stroke: #ef4444;
+      stroke-width: 4;
+      fill: none;
+      stroke-dasharray: 80;
+      stroke-dashoffset: 0;
+      animation: dash 1.5s ease-in-out infinite;
+    }
+    .loading-spinner.dark circle {
+      stroke: #dc2626;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes dash { 0% { stroke-dashoffset: 80; } 50% { stroke-dashoffset: 20; } 100% { stroke-dashoffset: 80; } }
     @media (max-width: 600px) {
       .profile-pic {
         width: 100px;
@@ -343,6 +377,12 @@
         <button class="alert-btn" id="alert-close">OK</button>
       </div>
     </div>
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" class="loading-overlay hidden">
+      <svg class="loading-spinner" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="10" />
+      </svg>
+    </div>
   </div>
 
   <script type="module">
@@ -385,6 +425,7 @@
     const customAlert = document.getElementById('custom-alert');
     const alertMessage = document.getElementById('alert-message');
     const alertClose = document.getElementById('alert-close');
+    const loadingOverlay = document.getElementById('loading-overlay');
 
     let currentUserId = null;
     let isCurrentUser = false;
@@ -393,9 +434,11 @@
     const isOwner = urlParams.get('owner') === 'true';
 
     function showLoading() {
+      loadingOverlay.classList.remove('hidden');
       uploadResult.textContent = 'Saving...';
     }
     function hideLoading() {
+      loadingOverlay.classList.add('hidden');
       uploadResult.textContent = '';
     }
 
@@ -422,6 +465,7 @@
       document.querySelector('.btn-primary').classList.toggle('dark', isDark);
       document.querySelector('.message-btn').classList.toggle('dark', isDark);
       document.querySelector('.alert-content').classList.toggle('dark', isDark);
+      document.querySelector('.loading-spinner circle').classList.toggle('dark', isDark);
     }
 
     async function uploadToCloudinary(file) {
@@ -449,6 +493,7 @@
     }
 
     function updateUserStats(userId) {
+      showLoading();
       const userRef = ref(db, `users/${userId}`);
       get(userRef).then((snapshot) => {
         const userData = snapshot.val() || {};
@@ -471,11 +516,13 @@
           editEmail.value = userData.email || '';
           editBio.value = userData.bio || '';
         }
+        hideLoading();
       }).catch((error) => {
         console.error('Error fetching user data:', error);
         userName.textContent = 'Error';
         userEmail.textContent = 'N/A';
         bio.innerHTML = '<p>Error loading bio.</p>';
+        hideLoading();
       });
 
       const mediaRef = ref(db, 'media');
@@ -497,17 +544,21 @@
             <div class="stat"><a href="followers.html?uid=${userId}">Followers: <strong>${followersCount}</strong></a></div>
             <div class="stat"><a href="following.html?uid=${userId}">Following: <strong>${followingCount}</strong></a></div>
           `;
+          hideLoading();
         }).catch((error) => {
           console.error('Error fetching followers/following:', error);
           stats.innerHTML = '<div class="stat"><strong>0</strong> Posts</div><div class="stat"><a href="followers.html?uid=${userId}">Followers: <strong>0</strong></a></div><div class="stat"><a href="following.html?uid=${userId}">Following: <strong>0</strong></a></div>';
+          hideLoading();
         });
       }).catch((error) => {
         console.error('Error fetching stats:', error);
         stats.innerHTML = '<div class="stat"><strong>0</strong> Posts</div><div class="stat"><a href="followers.html?uid=${userId}">Followers: <strong>0</strong></a></div><div class="stat"><a href="following.html?uid=${userId}">Following: <strong>0</strong></a></div>';
+        hideLoading();
       });
     }
 
     function updateMediaGrid(userId) {
+      showLoading();
       const mediaRef = ref(db, 'media');
       get(mediaRef).then((snapshot) => {
         const mediaData = snapshot.val() || {};
@@ -517,6 +568,7 @@
         mediaGrid.innerHTML = '';
         if (userMedia.length === 0) {
           mediaGrid.innerHTML = '<p class="text-center text-gray-500 dark:text-gray-400">No media uploaded.</p>';
+          hideLoading();
           return;
         }
 
@@ -524,13 +576,18 @@
           const mediaCard = document.createElement('div');
           mediaCard.className = 'media-card dark:media-card';
           mediaCard.dataset.mediaId = mediaId;
-          mediaCard.onclick = () => window.location.href = `media.html?mediaId=${mediaId}`;
+          if (resourceType === 'video') {
+            mediaCard.classList.add('video-clickable');
+            mediaCard.onclick = () => window.location.href = `media.html?mediaId=${mediaId}`;
+          }
           mediaCard.innerHTML = `<img src="${thumbnailUrl || url || 'https://via.placeholder.com/120'}" alt="Media" />`;
           mediaGrid.appendChild(mediaCard);
         });
+        hideLoading();
       }).catch((error) => {
         console.error('Error loading media grid:', error);
         mediaGrid.innerHTML = '<p class="text-center text-gray-500 dark:text-gray-400">Error loading media.</p>';
+        hideLoading();
       });
     }
 
@@ -543,6 +600,7 @@
       isCurrentUser = currentUserId === profileUserId && isOwner;
 
       const userIdToLoad = profileUserId || currentUserId;
+      showLoading();
       updateUserStats(userIdToLoad);
       updateMediaGrid(userIdToLoad);
 
@@ -550,9 +608,11 @@
       get(settingsRef).then((snapshot) => {
         const settings = snapshot.val() || {};
         applyTheme(settings.theme || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
+        hideLoading();
       }).catch((error) => {
         console.error('Error fetching settings:', error);
         applyTheme(window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+        hideLoading();
       });
 
       if (isCurrentUser) {
