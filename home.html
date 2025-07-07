@@ -312,57 +312,6 @@
       width: 16px;
       height: 16px;
     }
-    .like-btn {
-      padding: 0.3rem;
-      width: 40px;
-      height: 40px;
-      font-size: 0.85rem;
-      font-weight: 500;
-      color: white;
-      background: transparent;
-      border: none;
-      border-radius: 50%;
-      cursor: pointer;
-      transition: background 0.2s ease, transform 0.2s ease, color 0.2s ease;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      position: relative;
-    }
-    .like-btn::after {
-      content: attr(data-likes);
-      position: absolute;
-      top: 100%;
-      left: 50%;
-      transform: translateX(-50%);
-      font-size: 0.7rem;
-      color: #64748b;
-      white-space: nowrap;
-    }
-    .like-btn:hover {
-      transform: scale(1.1);
-      background: rgba(255, 255, 255, 0.2);
-    }
-    .like-btn.liked {
-      color: #ef4444;
-    }
-    .like-btn.liked:hover {
-      color: #dc2626;
-      background: rgba(255, 255, 255, 0.2);
-    }
-    .like-btn.dark {
-      color: #94a3b8;
-    }
-    .like-btn.dark.liked {
-      color: #dc2626;
-    }
-    .like-btn.dark.liked:hover {
-      color: #f97316;
-      background: rgba(30, 41, 59, 0.2);
-    }
-    .like-btn.dark:hover {
-      background: rgba(30, 41, 59, 0.2);
-    }
     .follow-btn {
       padding: 0.3rem 0.8rem;
       font-size: 0.85rem;
@@ -641,7 +590,6 @@
       document.querySelector('.live-icon').classList.toggle('dark', isDark);
       document.querySelector('.add-media-btn').classList.toggle('dark', isDark);
       document.querySelectorAll('.category-btn').forEach(btn => btn.classList.toggle('dark', isDark));
-      document.querySelectorAll('.like-btn').forEach(btn => btn.classList.toggle('dark', isDark));
       audioPlayer.classList.toggle('dark', isDark);
       categoryFilter.classList.toggle('dark', isDark);
     }
@@ -713,40 +661,6 @@
       }
     }
 
-    async function isLiked(mediaId, userId) {
-      const likeRef = ref(db, `media/${mediaId}/likedBy/${userId}`);
-      const snapshot = await get(likeRef);
-      return snapshot.exists();
-    }
-
-    async function toggleLike(mediaId, button) {
-      if (!currentUserId) return;
-
-      const isLiked = await isLiked(mediaId, currentUserId);
-      const likeRef = ref(db, `media/${mediaId}/likedBy/${currentUserId}`);
-      const likesRef = ref(db, `media/${mediaId}/likes`);
-
-      try {
-        if (isLiked) {
-          await set(likeRef, null); // Unlike
-          const snapshot = await get(likesRef);
-          const currentLikes = snapshot.val() || 0;
-          await set(likesRef, Math.max(0, currentLikes - 1));
-          button.setAttribute('data-likes', Math.max(0, currentLikes - 1));
-          button.classList.remove('liked');
-        } else {
-          await set(likeRef, { likedAt: Date.now() }); // Like
-          const snapshot = await get(likesRef);
-          const currentLikes = snapshot.val() || 0;
-          await set(likesRef, currentLikes + 1);
-          button.setAttribute('data-likes', currentLikes + 1);
-          button.classList.add('liked');
-        }
-      } catch (error) {
-        console.error('Error toggling like:', error);
-      }
-    }
-
     async function loadMedia(category = 'all') {
       showLoading();
       try {
@@ -777,7 +691,7 @@
         }
 
         noMedia.style.display = 'none';
-        mediaList.forEach(({ mediaId, title, url, thumbnailUrl, resourceType, postedBy, category, song, songPreview, impressions = 0, likes = 0, timestamp }) => {
+        mediaList.forEach(({ mediaId, title, url, thumbnailUrl, resourceType, postedBy, category, song, songPreview, impressions = 0, timestamp }) => {
           console.log(`Loading media ${mediaId} with timestamp ${timestamp}`);
           const user = users[postedBy] || { displayName: 'Unknown User' };
           const displayName = user.displayName || 'Unknown User';
@@ -803,12 +717,6 @@
                  </svg>
                </div>`;
 
-          const likeBtn = document.createElement('button');
-          likeBtn.className = 'like-btn dark:like-btn';
-          likeBtn.dataset.mediaId = mediaId;
-          likeBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>`;
-          likeBtn.setAttribute('data-likes', likes);
-
           const followBtn = document.createElement('button');
           followBtn.className = 'follow-btn dark:follow-btn';
           followBtn.dataset.friendId = postedBy;
@@ -828,7 +736,6 @@
                   ${impressions}
                 </span>
                 ${currentUserId && postedBy !== currentUserId ? followBtn.outerHTML : ''}
-                ${currentUserId ? likeBtn.outerHTML : ''}
               </div>
             </div>
             ${songPreview ? `<audio id="card-audio-${mediaId}" src="${songPreview}" class="hidden" loop></audio>` : ''}
@@ -843,23 +750,6 @@
               btn.onclick = (e) => {
                 e.stopPropagation();
                 toggleFollow(currentUserId, postedBy, btn);
-              };
-            });
-          }
-
-          if (currentUserId) {
-            isLiked(mediaId, currentUserId).then(liked => {
-              const likeButton = mediaCard.querySelector('.like-btn');
-              likeButton.setAttribute('data-likes', likes);
-              if (liked) {
-                likeButton.classList.add('liked');
-                likeButton.querySelector('svg').setAttribute('fill', 'currentColor');
-              } else {
-                likeButton.querySelector('svg').removeAttribute('fill');
-              }
-              likeButton.onclick = (e) => {
-                e.stopPropagation();
-                toggleLike(mediaId, likeButton);
               };
             });
           }
