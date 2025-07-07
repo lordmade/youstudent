@@ -661,170 +661,168 @@
       }
     }
 
-    async function loadMedia(category = 'all') {
-      showLoading();
-      try {
-        const mediaRef = ref(db, "media");
-        const mediaSnap = await get(mediaRef);
-        if (!mediaSnap.exists()) {
-          throw new Error('No media data found in the database.');
-        }
-        const media = mediaSnap.val() || {};
-        const usersRef = ref(db, "users");
-        const usersSnap = await get(usersRef);
-        const users = usersSnap.val() || {};
+   async function loadMedia(category = 'all') {
+  showLoading();
+  try {
+    const mediaRef = ref(db, "media");
+    const mediaSnap = await get(mediaRef);
+    if (!mediaSnap.exists()) {
+      throw new Error('No media data found in the database.');
+    }
+    const media = mediaSnap.val() || {};
+    const usersRef = ref(db, "users");
+    const usersSnap = await get(usersRef);
+    const users = usersSnap.val() || {};
 
-        mediaGrid.innerHTML = '';
-        const mediaList = Object.entries(media)
-          .map(([mediaId, item]) => {
-            const timestamp = item.timestamp || 0;
-            return { mediaId, ...item, timestamp };
-          })
-          .filter(item => category === 'all' || (item.category || 'Other') === category)
-          .sort((a, b) => b.timestamp - a.timestamp);
+    mediaGrid.innerHTML = '';
+    const mediaList = Object.entries(media)
+      .map(([mediaId, item]) => {
+        const timestamp = item.timestamp || 0;
+        return { mediaId, ...item, timestamp };
+      })
+      .filter(item => category === 'all' || (item.category || 'Other') === category)
+      .sort((a, b) => b.timestamp - a.timestamp); // Ensures descending order (newest first)
 
-        if (mediaList.length === 0) {
-          noMedia.style.display = 'block';
-          noMedia.textContent = category === 'all' ? 'No media available.' : `No media in ${category} category.`;
-          hideLoading();
-          return;
-        }
+    if (mediaList.length === 0) {
+      noMedia.style.display = 'block';
+      noMedia.textContent = category === 'all' ? 'No media available.' : `No media in ${category} category.`;
+      hideLoading();
+      return;
+    }
 
-        noMedia.style.display = 'none';
-        mediaList.forEach(({ mediaId, title, url, thumbnailUrl, resourceType, postedBy, category, song, songPreview, impressions = 0, timestamp }) => {
-          console.log(`Loading media ${mediaId} with timestamp ${timestamp}`);
-          const user = users[postedBy] || { displayName: 'Unknown User' };
-          const displayName = user.displayName || 'Unknown User';
-          const mediaCard = document.createElement('div');
-          mediaCard.className = 'media-card dark:media-card';
-          mediaCard.dataset.mediaId = mediaId;
-          mediaCard.tabIndex = 0;
+    noMedia.style.display = 'none';
+    mediaList.forEach(({ mediaId, title, url, thumbnailUrl, resourceType, postedBy, category, song, songPreview, impressions = 0, timestamp }) => {
+      const user = users[postedBy] || { displayName: 'Unknown User' };
+      const displayName = user.displayName || 'Unknown User';
+      const mediaCard = document.createElement('div');
+      mediaCard.className = 'media-card dark:media-card';
+      mediaCard.dataset.mediaId = mediaId;
+      mediaCard.tabIndex = 0;
 
-          if (resourceType === 'video') {
-            mediaCard.classList.add('video-clickable');
-            mediaCard.onclick = () => window.location.href = `media.html?mediaId=${mediaId}`;
-          }
+      if (resourceType === 'video') {
+        mediaCard.classList.add('video-clickable');
+        mediaCard.onclick = () => window.location.href = `media.html?mediaId=${mediaId}`;
+      }
 
-          const mediaElement = resourceType === 'image'
-            ? `<div class="media-content-container">
-                 <img src="${url || 'https://via.placeholder.com/300x300'}" alt="${title || 'Media'} thumbnail" class="media-content lazy" loading="lazy" aria-label="Media thumbnail" />
-               </div>`
-            : `<div class="media-content-container">
-                 <img src="${thumbnailUrl || 'https://via.placeholder.com/300x300'}" alt="${title || 'Media'} thumbnail" class="media-content thumbnail lazy" loading="lazy" aria-label="Video thumbnail" />
-                 <video src="${url}" class="media-content video" muted playsinline loop preload="auto"></video>
-                 <svg class="video-spinner dark:video-spinner" viewBox="0 0 24 24" aria-hidden="true">
-                   <circle cx="12" cy="12" r="10" />
-                 </svg>
-               </div>`;
+      const mediaElement = resourceType === 'image'
+        ? `<div class="media-content-container">
+             <img src="${url || 'https://via.placeholder.com/300x300'}" alt="${title || 'Media'} thumbnail" class="media-content lazy" loading="lazy" aria-label="Media thumbnail" />
+           </div>`
+        : `<div class="media-content-container">
+             <img src="${thumbnailUrl || 'https://via.placeholder.com/300x300'}" alt="${title || 'Media'} thumbnail" class="media-content thumbnail lazy" loading="lazy" aria-label="Video thumbnail" />
+             <video src="${url}" class="media-content video" muted playsinline loop preload="auto"></video>
+             <svg class="video-spinner dark:video-spinner" viewBox="0 0 24 24" aria-hidden="true">
+               <circle cx="12" cy="12" r="10" />
+             </svg>
+           </div>`;
 
-          const followBtn = document.createElement('button');
-          followBtn.className = 'follow-btn dark:follow-btn';
-          followBtn.dataset.friendId = postedBy;
-          followBtn.textContent = 'Loading...';
+      const followBtn = document.createElement('button');
+      followBtn.className = 'follow-btn dark:follow-btn';
+      followBtn.dataset.friendId = postedBy;
+      followBtn.textContent = 'Loading...';
 
-          mediaCard.innerHTML = `
-            ${mediaElement}
-            <div class="media-info">
-              <h3 class="media-title dark:media-title">${title || 'Untitled'}</h3>
-              ${song ? `<p class="media-song dark:media-song">Song: ${song}</p>` : ''}
-              <p class="media-posted-by dark:media-posted-by">Posted by <a href="profile.html?uid=${postedBy}" class="posted-by-link">${displayName}</a> | ${category || 'Other'}</p>
-              <div class="media-actions">
-                <span class="impression-count dark:impression-count">
-                  <svg viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z" fill="currentColor"/>
-                  </svg>
-                  ${impressions}
-                </span>
-                ${currentUserId && postedBy !== currentUserId ? followBtn.outerHTML : ''}
-              </div>
-            </div>
-            ${songPreview ? `<audio id="card-audio-${mediaId}" src="${songPreview}" class="hidden" loop></audio>` : ''}
-          `;
-          mediaGrid.appendChild(mediaCard);
+      mediaCard.innerHTML = `
+        ${mediaElement}
+        <div class="media-info">
+          <h3 class="media-title dark:media-title">${title || 'Untitled'}</h3>
+          ${song ? `<p class="media-song dark:media-song">Song: ${song}</p>` : ''}
+          <p class="media-posted-by dark:media-posted-by">Posted by <a href="profile.html?uid=${postedBy}" class="posted-by-link">${displayName}</a> | ${category || 'Other'}</p>
+          <div class="media-actions">
+            <span class="impression-count dark:impression-count">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z" fill="currentColor"/>
+              </svg>
+              ${impressions}
+            </span>
+            ${currentUserId && postedBy !== currentUserId ? followBtn.outerHTML : ''}
+          </div>
+        </div>
+        ${songPreview ? `<audio id="card-audio-${mediaId}" src="${songPreview}" class="hidden" loop></audio>` : ''}
+      `;
+      mediaGrid.appendChild(mediaCard);
 
-          if (currentUserId && postedBy !== currentUserId) {
-            isFriend(currentUserId, postedBy).then(isFollowing => {
-              const btn = mediaCard.querySelector('.follow-btn');
-              btn.textContent = isFollowing ? 'Following' : 'Follow';
-              btn.classList.toggle('following', isFollowing);
-              btn.onclick = (e) => {
-                e.stopPropagation();
-                toggleFollow(currentUserId, postedBy, btn);
-              };
-            });
-          }
+      if (currentUserId && postedBy !== currentUserId) {
+        isFriend(currentUserId, postedBy).then(isFollowing => {
+          const btn = mediaCard.querySelector('.follow-btn');
+          btn.textContent = isFollowing ? 'Following' : 'Follow';
+          btn.classList.toggle('following', isFollowing);
+          btn.onclick = (e) => {
+            e.stopPropagation();
+            toggleFollow(currentUserId, postedBy, btn);
+          };
         });
+      }
+    });
 
-        const observer = new IntersectionObserver((entries) => {
-          entries.forEach(entry => {
-            const card = entry.target;
-            const video = card.querySelector('video.media-content');
-            const thumbnail = card.querySelector('img.media-content.thumbnail');
-            const spinner = card.querySelector('.video-spinner');
-            const mediaId = card.dataset.mediaId;
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        const card = entry.target;
+        const video = card.querySelector('video.media-content');
+        const thumbnail = card.querySelector('img.media-content.thumbnail');
+        const spinner = card.querySelector('.video-spinner');
+        const mediaId = card.dataset.mediaId;
 
-            if (entry.isIntersecting && currentUserId) {
-              incrementImpression(mediaId, currentUserId);
-              if (video) {
-                video.play().catch(error => {
-                  console.error('Error playing video:', error);
-                  if (spinner) spinner.classList.add('active');
-                });
-              }
-            } else {
-              if (video) {
-                video.pause();
-                video.currentTime = 0;
-                if (thumbnail) thumbnail.style.display = 'block';
-                if (spinner) spinner.classList.remove('active');
-              }
-            }
-          });
-        }, { threshold: 0.5 });
-
-        document.querySelectorAll('.media-card').forEach(card => observer.observe(card));
-
-        document.querySelectorAll('video.media-content').forEach(video => {
-          const thumbnail = video.parentElement.querySelector('img.media-content.thumbnail');
-          const spinner = video.parentElement.querySelector('.video-spinner');
-
-          video.addEventListener('canplay', () => {
-            video.classList.add('ready');
-            if (thumbnail) thumbnail.style.display = 'none';
-            if (spinner) spinner.classList.remove('active');
-          });
-
-          video.addEventListener('waiting', () => {
-            if (spinner) spinner.classList.add('active');
-          });
-
-          video.addEventListener('error', () => {
-            if (spinner) spinner.classList.add('active');
-            console.error('Video error:', video.error);
-          });
-
-          video.addEventListener('focus', () => {
+        if (entry.isIntersecting && currentUserId) {
+          incrementImpression(mediaId, currentUserId);
+          if (video) {
             video.play().catch(error => {
               console.error('Error playing video:', error);
               if (spinner) spinner.classList.add('active');
             });
-          });
-
-          video.addEventListener('blur', () => {
+          }
+        } else {
+          if (video) {
             video.pause();
             video.currentTime = 0;
             if (thumbnail) thumbnail.style.display = 'block';
             if (spinner) spinner.classList.remove('active');
-          });
-        });
-      } catch (error) {
-        console.error('Error loading media:', error);
-        noMedia.style.display = 'block';
-        noMedia.textContent = `Error loading media: ${error.message}. Check console for details.`;
-      }
-      hideLoading();
-    }
+          }
+        }
+      });
+    }, { threshold: 0.5 });
 
+    document.querySelectorAll('.media-card').forEach(card => observer.observe(card));
+
+    document.querySelectorAll('video.media-content').forEach(video => {
+      const thumbnail = video.parentElement.querySelector('img.media-content.thumbnail');
+      const spinner = video.parentElement.querySelector('.video-spinner');
+
+      video.addEventListener('canplay', () => {
+        video.classList.add('ready');
+        if (thumbnail) thumbnail.style.display = 'none';
+        if (spinner) spinner.classList.remove('active');
+      });
+
+      video.addEventListener('waiting', () => {
+        if (spinner) spinner.classList.add('active');
+      });
+
+      video.addEventListener('error', () => {
+        if (spinner) spinner.classList.add('active');
+        console.error('Video error:', video.error);
+      });
+
+      video.addEventListener('focus', () => {
+        video.play().catch(error => {
+          console.error('Error playing video:', error);
+          if (spinner) spinner.classList.add('active');
+        });
+      });
+
+      video.addEventListener('blur', () => {
+        video.pause();
+        video.currentTime = 0;
+        if (thumbnail) thumbnail.style.display = 'block';
+        if (spinner) spinner.classList.remove('active');
+      });
+    });
+  } catch (error) {
+    console.error('Error loading media:', error);
+    noMedia.style.display = 'block';
+    noMedia.textContent = `Error loading media: ${error.message}. Check console for details.`;
+  }
+  hideLoading();
+}
     categoryFilter.addEventListener('mousedown', (e) => {
       isDragging = true;
       startX = e.pageX - categoryFilter.offsetLeft;
