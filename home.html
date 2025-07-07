@@ -296,7 +296,7 @@
     .status-time.dark {
       color: #9ca3af;
     }
-    .status-image, .status-video {
+    .status-image, .status-video, .status-thumbnail {
       flex: 0 0 100%;
       width: 100%;
       aspect-ratio: 1 / 1;
@@ -305,9 +305,12 @@
       border-bottom: 1px solid #e5e7eb;
       display: block;
     }
-    .status-card.dark .status-image, .status-card.dark .status-video {
+    .status-card.dark .status-image, .status-card.dark .status-video, .status-card.dark .status-thumbnail {
       border-top: 1px solid #4b5563;
       border-bottom: 1px solid #4b5563;
+    }
+    .status-video {
+      cursor: pointer;
     }
     .status-video::-webkit-media-controls {
       display: none;
@@ -836,7 +839,7 @@
     }
     .mute-toggle-icon {
       position: absolute;
-      top: 12px;
+      bottom: 12px;
       right: 12px;
       background: rgba(0, 0, 0, 0.6);
       border-radius: 50%;
@@ -846,10 +849,32 @@
       cursor: pointer;
       transition: background 0.2s ease, transform 0.2s ease;
       box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+      z-index: 10;
     }
     .mute-toggle-icon:hover {
       background: rgba(0, 0, 0, 0.8);
       transform: scale(1.1);
+    }
+    .loading-spinner {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 20;
+      display: none;
+    }
+    .loading-spinner.show {
+      display: block;
+    }
+    .status-card.loading .status-carousel-container::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.3);
+      z-index: 15;
     }
   </style>    
 </head>
@@ -987,9 +1012,9 @@
 </div>
 
 <script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
-  import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
-  import { getDatabase, ref, onValue, set, push, get, remove, update, onDisconnect } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
+  import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
+  import { getDatabase, ref, onValue, set, push, get, remove, update, onDisconnect } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-database.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
@@ -1049,7 +1074,7 @@
     document.querySelector('.tab-nav').classList.toggle('dark', isDark);
     document.querySelector('.chat-subtab-nav')?.classList.toggle('dark', isDark);
     document.querySelectorAll('.friend-card, .status-card, .service-card').forEach(el => el.classList.toggle('dark', isDark));
-    document.querySelectorAll('.status-text, .service-description, .sponsored-text, .posted-by, .service-cta, .reaction-btn, .reaction-count, .comment-btn, .comment-count').forEach(el => el.classList.toggle('dark', isDark));
+    document.querySelectorAll('.status-text, .service-description, .sponsored-text, .service-cta, .reaction-btn, .reaction-count, .comment-btn, .comment-count').forEach(el => el.classList.toggle('dark', isDark));
     document.querySelectorAll('.last-seen, .status-time, .member-count, .service-time, .comment-time').forEach(el => el.classList.toggle('dark', isDark));
     document.querySelectorAll('#no-friends-message, #no-groups-message, #no-statuses-message, #no-services-message, #no-inbox-message').forEach(el => el.classList.toggle('dark', isDark));
     document.querySelectorAll('.tab-nav button, .chat-subtab-nav button').forEach(el => el.classList.toggle('dark', isDark));
@@ -1058,6 +1083,7 @@
     document.querySelectorAll('.status-info, .friend-info, .service-info, .comment-content, .comment-username, .comment-text').forEach(el => el.classList.toggle('dark', isDark));
     document.querySelectorAll('.notification-icon, .notification-badge').forEach(el => el.classList.toggle('dark', isDark));
     document.querySelectorAll('.message-popup, .message-popup-username, .message-popup-text').forEach(el => el.classList.toggle('dark', isDark));
+    document.querySelectorAll('.carousel-dot').forEach(el => el.classList.toggle('dark', isDark));
     floatingBtn.classList.toggle('dark', isDark);
     commentSheet.classList.toggle('dark', isDark);
   }
@@ -1480,6 +1506,35 @@
       const usersSnap = await get(usersRef);
       const users = usersSnap.exists() ? usersSnap.val() : {};
 
+      // Set up Intersection Observer for video auto-play
+      const observer = new IntersectionObserver(
+        (entries) => {
+          entries.forEach(entry => {
+            const card = entry.target;
+            const videos = card.querySelectorAll(".status-video");
+            const thumbnails = card.querySelectorAll(".status-thumbnail");
+            const spinners = card.querySelectorAll(".loading-spinner");
+
+            if (entry.isIntersecting) {
+              videos.forEach(video => {
+                video.play().catch(error => {
+                  console.error("Error auto-playing video:", error);
+                  card.classList.add("loading");
+                  spinners.forEach(spinner => spinner.classList.add("show"));
+                });
+                thumbnails.forEach(thumbnail => thumbnail.style.display = "none");
+              });
+            } else {
+              videos.forEach(video => {
+                video.pause();
+                thumbnails.forEach(thumbnail => thumbnail.style.display = "block");
+              });
+            }
+          });
+        },
+        { threshold: 0.5 } // 50% of card must be visible
+      );
+
       onValue(statusesRef, async (statusesSnap) => {
         statusesList.innerHTML = "";
         noStatusesMessage.classList.add("hidden");
@@ -1500,6 +1555,7 @@
           const userData = users[status.userId] || { name: "Unknown", photoURL: null };
           const statusCard = await renderStatusCard(sid, status, userData, uid);
           statusesList.appendChild(statusCard);
+          observer.observe(statusCard); // Observe each status card
           hasStatuses = true;
         }
 
@@ -1541,7 +1597,12 @@
             ${status.media.map((item, index) => `
               <div class="status-media-item" style="flex: 0 0 100%;">
                 ${item.type === 'video' ? `
-                  <video src="${item.url}" class="status-video dark:status-video" muted playsinline aria-label="Status video ${index + 1}"></video>
+                  <video src="${item.url}" class="status-video dark:status-video" muted playsinline loop aria-label="Status video ${index + 1}" data-public-id="${item.publicId}"></video>
+                  <img src="https://res.cloudinary.com/banter_box/video/upload/e_thumb/${item.publicId}.jpg" alt="Video thumbnail ${index + 1}" class="status-thumbnail dark:status-thumbnail" style="display: block;" />
+                  <svg class="loading-spinner" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4z"/>
+                  </svg>
                 ` : `
                   <img src="${item.url}" alt="Status image ${index + 1}" class="status-image dark:status-image" />
                 `}
@@ -1551,7 +1612,7 @@
           ${status.media.length > 1 ? `
             <div class="carousel-dots">
               ${status.media.map((_, index) => `
-                <span class="carousel-dot ${index === 0 ? 'active' : ''}" data-index="${index}" data-sid="${sid}"></span>
+                <span class="carousel-dot ${index === 0 ? 'active' : ''} dark:carousel-dot" data-index="${index}" data-sid="${sid}"></span>
               `).join('')}
             </div>
           ` : ''}
@@ -1594,13 +1655,15 @@
       </div>
     `;
 
-    // Apply dark mode classes
     if (document.body.classList.contains("dark")) {
       div.classList.add("dark");
-      div.querySelectorAll(".status-info, .status-text, .reaction-btn, .reaction-count, .comment-btn, .comment-count, .status-time").forEach(el => el.classList.add("dark"));
+      div.querySelectorAll(".status-header, .status-text, .status-info, .status-time, .reaction-btn, .reaction-count, .comment-btn, .comment-count").forEach(el => el.classList.add("dark"));
+      if (status.media) {
+        div.querySelectorAll(".status-image, .status-video, .status-thumbnail, .carousel-dot").forEach(el => el.classList.add("dark"));
+      }
     }
 
-    // Handle delete icon
+    // Handle delete status
     if (isOwner) {
       div.querySelector(".delete-icon")?.addEventListener("click", (e) => {
         e.stopPropagation();
@@ -1608,31 +1671,31 @@
       });
     }
 
-    // Handle reaction button
-    div.querySelector(".reaction-btn")?.addEventListener("click", async (e) => {
+    // Handle reactions
+    const reactionBtn = div.querySelector(".reaction-btn");
+    reactionBtn?.addEventListener("click", async (e) => {
       e.stopPropagation();
-      showLoading();
-      try {
-        const reactionRef = ref(db, `statuses/${sid}/reactions/${currentUserUid}`);
-        const statusSnap = await get(ref(db, `statuses/${sid}`));
-        const statusData = statusSnap.val();
-        if (!statusData.reactions || !statusData.reactions[currentUserUid]) {
+      if (!reactionBtn.classList.contains("reacted")) {
+        showLoading();
+        try {
+          const reactionRef = ref(db, `statuses/${sid}/reactions/${currentUserUid}`);
           await set(reactionRef, { timestamp: Date.now() });
-          if (statusData.userId !== currentUserUid) {
-            const notifRef = push(ref(db, `notifications/${statusData.userId}/${sid}/reactions`));
+          if (status.userId !== currentUserUid) {
+            const notifRef = push(ref(db, `notifications/${status.userId}/${sid}/reactions`));
             await set(notifRef, { type: 'reaction', userId: currentUserUid, timestamp: Date.now(), read: false });
           }
-        } else {
-          await remove(reactionRef);
+          reactionBtn.classList.add("reacted", "liked");
+          const countSpan = div.querySelector(".reaction-count");
+          countSpan.textContent = parseInt(countSpan.textContent) + 1;
+        } catch (error) {
+          console.error("Error adding reaction:", error);
+          alert("Failed to add reaction.");
         }
-      } catch (error) {
-        console.error("Error toggling reaction:", error);
-        alert("Failed to toggle reaction.");
+        hideLoading();
       }
-      hideLoading();
     });
 
-    // Handle comment button
+    // Handle comments
     div.querySelector(".comment-btn")?.addEventListener("click", (e) => {
       e.stopPropagation();
       showCommentSheet(sid);
@@ -1657,16 +1720,50 @@
 
     // Handle video mute/unmute
     const muteIcon = div.querySelector(".mute-toggle-icon");
-    const video = div.querySelector(".status-video");
-    if (muteIcon && video) {
+    const videos = div.querySelectorAll(".status-video");
+    if (muteIcon && videos.length > 0) {
       muteIcon.addEventListener("click", (e) => {
         e.stopPropagation();
-        video.muted = !video.muted;
-        muteIcon.innerHTML = video.muted
-          ? `<path d="M11 5L6 9H2v6h4l5 4V5zM22 9l-6 6M16 9l6 6"/>`
-          : `<path d="M11 5L6 9H2v6h4l5 4V5zM15 9c1.1 0 2 .9 2 2s-.9 2-2 2"/>`;
+        videos.forEach(video => {
+          video.muted = !video.muted;
+          muteIcon.innerHTML = video.muted
+            ? `<path d="M11 5L6 9H2v6h4l5 4V5zM22 9l-6 6M16 9l6 6"/>`
+            : `<path d="M11 5L6 9H2v6h4l5 4V5zM15 9c1.1 0 2 .9 2 2s-.9 2-2 2"/>`;
+        });
       });
     }
+
+    // Handle video click to redirect
+    videos.forEach(video => {
+      video.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const publicId = video.dataset.publicId;
+        if (publicId) {
+          window.location.href = `media.html?publicId=${publicId}`;
+        }
+      });
+    });
+
+    // Handle video buffering and network issues
+    videos.forEach(video => {
+      const spinner = div.querySelector(".loading-spinner");
+      video.addEventListener("waiting", () => {
+        div.classList.add("loading");
+        spinner.classList.add("show");
+      });
+      video.addEventListener("stalled", () => {
+        div.classList.add("loading");
+        spinner.classList.add("show");
+      });
+      video.addEventListener("error", () => {
+        div.classList.add("loading");
+        spinner.classList.add("show");
+      });
+      video.addEventListener("canplay", () => {
+        div.classList.remove("loading");
+        spinner.classList.remove("show");
+      });
+    });
 
     // Handle double-tap to like
     let lastTap = 0;
@@ -1675,18 +1772,18 @@
       const timeSinceLastTap = now - lastTap;
       if (timeSinceLastTap < 300 && timeSinceLastTap > 0) {
         e.stopPropagation();
-        const reactionBtn = div.querySelector(".reaction-btn");
         if (!reactionBtn.classList.contains("reacted")) {
           showLoading();
           try {
             const reactionRef = ref(db, `statuses/${sid}/reactions/${currentUserUid}`);
-            const statusSnap = await get(ref(db, `statuses/${sid}`));
-            const statusData = statusSnap.val();
             await set(reactionRef, { timestamp: Date.now() });
-            if (statusData.userId !== currentUserUid) {
-              const notifRef = push(ref(db, `notifications/${statusData.userId}/${sid}/reactions`));
+            if (status.userId !== currentUserUid) {
+              const notifRef = push(ref(db, `notifications/${status.userId}/${sid}/reactions`));
               await set(notifRef, { type: 'reaction', userId: currentUserUid, timestamp: Date.now(), read: false });
             }
+            reactionBtn.classList.add("reacted", "liked");
+            const countSpan = div.querySelector(".reaction-count");
+            countSpan.textContent = parseInt(countSpan.textContent) + 1;
             const heart = document.createElement("svg");
             heart.className = "double-tap-heart";
             heart.setAttribute("viewBox", "0 0 24 24");
