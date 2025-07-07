@@ -110,105 +110,6 @@
     .input-field.dark.error {
       border-color: #fc8181;
     }
-    .song-search-container {
-      position: relative;
-    }
-    .song-search-input {
-      padding-right: 3rem;
-    }
-    .clear-btn {
-      position: absolute;
-      right: 1rem;
-      top: 50%;
-      transform: translateY(-50%);
-      cursor: pointer;
-      stroke: #ef4444;
-      width: 20px;
-      height: 20px;
-      opacity: 0.7;
-      transition: opacity 0.2s ease, stroke 0.2s ease;
-    }
-    .clear-btn:hover {
-      opacity: 1;
-      stroke: #dc2626;
-    }
-    .clear-btn.dark {
-      stroke: #dc2626;
-    }
-    .clear-btn.dark:hover {
-      stroke: #f97316;
-    }
-    .song-results {
-      position: absolute;
-      top: 100%;
-      left: 0;
-      right: 0;
-      max-height: 300px;
-      overflow-y: auto;
-      border: 2px solid #e0e0e0;
-      border-radius: 12px;
-      background: white;
-      margin-top: 0.5rem;
-      display: none;
-      z-index: 10;
-    }
-    .song-results.dark {
-      background: #1e293b;
-      border-color: #4b5563;
-    }
-    .song-results.active {
-      display: block;
-    }
-    .song-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-      gap: 1rem;
-      padding: 1rem;
-    }
-    .song-card {
-      background: #f8f9fa;
-      border-radius: 10px;
-      overflow: hidden;
-      cursor: pointer;
-      transition: transform 0.2s ease, box-shadow 0.2s ease;
-    }
-    .song-card.dark {
-      background: #2d3748;
-    }
-    .song-card:hover {
-      transform: translateY(-4px);
-      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
-    }
-    .song-card.dark:hover {
-      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
-    }
-    .song-image {
-      width: 100%;
-      height: 100px;
-      object-fit: cover;
-      background: #ddd;
-    }
-    .song-info {
-      padding: 0.75rem;
-      text-align: center;
-    }
-    .song-title {
-      font-size: 0.9rem;
-      font-weight: 500;
-      color: #1e293b;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    .song-title.dark { color: #e2e8f0; }
-    .song-artist {
-      font-size: 0.8rem;
-      color: #64748b;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    .song-artist.dark { color: #94a3b8; }
     .btn-primary {
       width: 100%;
       padding: 0.9rem 1.5rem;
@@ -247,13 +148,6 @@
     }
     .upload-result.dark { color: #48bb78; }
     .upload-result.dark.error { color: #fc8181; }
-    .song-preview {
-      margin-top: 0.5rem;
-      display: none;
-    }
-    .song-preview.active {
-      display: block;
-    }
     @keyframes shake {
       0%, 100% { transform: translateX(0); }
       25% { transform: translateX(-4px); }
@@ -270,12 +164,6 @@
       .input-field {
         padding: 0.7rem 1rem;
         font-size: 0.95rem;
-      }
-      .song-grid {
-        grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-      }
-      .song-image {
-        height: 80px;
       }
       .btn-primary {
         padding: 0.7rem 1.2rem;
@@ -315,13 +203,6 @@
           <option value="Travel">Travel</option>
         </select>
       </div>
-      <div class="form-group song-search-container">
-        <label for="song-file" class="label dark:label">Upload Your Track (Optional)</label>
-        <input type="file" id="song-file" class="input-field dark:input-field" accept="audio/mpeg,audio/wav" aria-label="Upload Audio Track"/>
-        <div class="song-preview dark:song-preview" id="song-preview">
-          <audio id="preview-audio" controls></audio>
-        </div>
-      </div>
       <div class="form-group">
         <label for="media-file" class="label dark:label">Media File</label>
         <input type="file" id="media-file" class="input-field dark:input-field" accept="image/jpeg,image/png,video/mp4" required aria-label="Select Image or Video"/>
@@ -357,13 +238,9 @@
     const mediaCategoryInput = document.getElementById("media-category");
     const mediaFileInput = document.getElementById("media-file");
     const uploadResult = document.getElementById("upload-result");
-    const songFileInput = document.getElementById("song-file");
     const uploadButton = document.getElementById("upload-btn");
-    const songPreview = document.getElementById("song-preview");
-    const previewAudio = document.getElementById("preview-audio");
 
     let currentUserId = null;
-    let selectedSongPreview = null;
 
     // Loading state management
     function showLoading() { 
@@ -386,84 +263,6 @@
       document.querySelector('.btn-primary').classList.toggle('dark', isDark);
       document.querySelector('.upload-result').classList.toggle('dark', isDark);
       document.querySelector('.back-btn').classList.toggle('dark', isDark);
-      songPreview.classList.toggle('dark', isDark);
-    }
-
-    // Trim audio to 30 seconds using Web Audio API
-    async function trimAudio(audioFile) {
-      return new Promise((resolve, reject) => {
-        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        const reader = new FileReader();
-
-        reader.onload = function(e) {
-          audioContext.decodeAudioData(e.target.result, (buffer) => {
-            const offlineContext = new OfflineAudioContext(
-              buffer.numberOfChannels,
-              buffer.length * 30 / buffer.duration, // 30 seconds
-              buffer.sampleRate
-            );
-            const source = offlineContext.createBufferSource();
-            source.buffer = buffer;
-            source.connect(offlineContext.destination);
-            source.start(0);
-
-            offlineContext.startRendering().then(renderedBuffer => {
-              const wavBlob = bufferToWave(renderedBuffer, renderedBuffer.length);
-              resolve(wavBlob);
-            }).catch(reject);
-          }, reject);
-        };
-
-        reader.onerror = reject;
-        reader.readAsArrayBuffer(audioFile);
-      });
-    }
-
-    // Convert AudioBuffer to WAV Blob
-    function bufferToWave(buffer, length) {
-      const numChannels = buffer.numberOfChannels;
-      const sampleRate = buffer.sampleRate;
-      const format = 1; // PCM
-      const bitsPerSample = 16;
-      const bytesPerSample = bitsPerSample / 8;
-      const blockAlign = numChannels * bytesPerSample;
-      const byteRate = sampleRate * blockAlign;
-      const dataLength = length * numChannels * bytesPerSample;
-      const bufferLength = 44 + dataLength;
-      const arrayBuffer = new ArrayBuffer(bufferLength);
-      const view = new DataView(arrayBuffer);
-
-      // Write WAV header
-      writeString(view, 0, 'RIFF');
-      view.setUint32(4, 36 + dataLength, true);
-      writeString(view, 8, 'WAVE');
-      writeString(view, 12, 'fmt ');
-      view.setUint32(16, 16, true);
-      view.setUint16(20, format, true);
-      view.setUint16(22, numChannels, true);
-      view.setUint32(24, sampleRate, true);
-      view.setUint32(28, byteRate, true);
-      view.setUint16(32, blockAlign, true);
-      view.setUint16(34, bitsPerSample, true);
-      writeString(view, 36, 'data');
-      view.setUint32(40, dataLength, true);
-
-      // Write audio data
-      floatTo16BitPCM(view, 44, buffer.getChannelData(0), length);
-      return new Blob([view], { type: 'audio/wav' });
-    }
-
-    function writeString(view, offset, string) {
-      for (let i = 0; i < string.length; i++) {
-        view.setUint8(offset + i, string.charCodeAt(i));
-      }
-    }
-
-    function floatTo16BitPCM(view, offset, input, length) {
-      for (let i = 0; i < length; i++) {
-        const s = Math.max(-1, Math.min(1, input[i]));
-        view.setInt16(offset + i * 2, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
-      }
     }
 
     // Cloudinary upload function
@@ -534,8 +333,7 @@
 
       const title = mediaTitleInput.value.trim();
       const category = mediaCategoryInput.value;
-      const mediaFile = mediaFileInput.files[0];
-      const songFile = songFileInput.files[0];
+      const file = mediaFileInput.files[0];
 
       if (!title) {
         uploadResult.classList.add('error');
@@ -553,65 +351,33 @@
         return;
       }
 
-      if (!mediaFile) {
+      if (!file) {
         uploadResult.classList.add('error');
-        uploadResult.textContent = 'Please select a media file.';
+        uploadResult.textContent = 'Please select a file.';
         mediaFileInput.classList.add('error');
         hideLoading();
         return;
       }
 
-      const validMediaTypes = ['image/jpeg', 'image/png', 'video/mp4'];
-      if (!validMediaTypes.includes(mediaFile.type)) {
+      const validTypes = ['image/jpeg', 'image/png', 'video/mp4'];
+      if (!validTypes.includes(file.type)) {
         uploadResult.classList.add('error');
-        uploadResult.textContent = 'Please select a valid media file (JPEG, PNG, MP4).';
+        uploadResult.textContent = 'Please select a valid file (JPEG, PNG, MP4).';
         mediaFileInput.classList.add('error');
         hideLoading();
         return;
       }
 
-      if (mediaFile.size > 10 * 1024 * 1024) {
+      if (file.size > 10 * 1024 * 1024) {
         uploadResult.classList.add('error');
-        uploadResult.textContent = 'Media file size exceeds 10MB limit.';
+        uploadResult.textContent = 'File size exceeds 10MB limit.';
         mediaFileInput.classList.add('error');
         hideLoading();
         return;
-      }
-
-      let trimmedSongFile = null;
-      if (songFile) {
-        const validSongTypes = ['audio/mpeg', 'audio/wav'];
-        if (!validSongTypes.includes(songFile.type)) {
-          uploadResult.classList.add('error');
-          uploadResult.textContent = 'Please select a valid audio file (MP3, WAV).';
-          hideLoading();
-          return;
-        }
-
-        if (songFile.size > 20 * 1024 * 1024) { // 20MB limit for audio
-          uploadResult.classList.add('error');
-          uploadResult.textContent = 'Audio file size exceeds 20MB limit.';
-          hideLoading();
-          return;
-        }
-
-        try {
-          uploadResult.textContent = 'Trimming audio...';
-          trimmedSongFile = await trimAudio(songFile);
-          previewAudio.src = URL.createObjectURL(trimmedSongFile);
-          previewAudio.load();
-          songPreview.classList.add('active');
-          selectedSongPreview = trimmedSongFile; // Store trimmed file for upload
-        } catch (error) {
-          uploadResult.classList.add('error');
-          uploadResult.textContent = `Error trimming audio: ${error.message || 'Unknown error'}`;
-          hideLoading();
-          return;
-        }
       }
 
       try {
-        const { url, resourceType, thumbnailUrl } = await uploadToCloudinary(mediaFile);
+        const { url, resourceType, thumbnailUrl } = await uploadToCloudinary(file);
         const mediaRef = ref(db, "media");
         const newMediaRef = push(mediaRef);
         await set(newMediaRef, {
@@ -621,23 +387,12 @@
           resourceType,
           category,
           postedBy: auth.currentUser.uid,
-          song: songFile ? `${mediaTitleInput.value} (User Track)` : null,
-          songPreview: trimmedSongFile ? URL.createObjectURL(trimmedSongFile) : null,
           impressions: 0,
           timestamp: new Date('2025-07-06T11:18:00+02:00').getTime() // Updated to current time
         });
 
-        if (trimmedSongFile) {
-          const songUpload = await uploadToCloudinary(trimmedSongFile);
-          await set(newMediaRef, {
-            songPreview: songUpload.url
-          }, { merge: true });
-        }
-
         uploadResult.textContent = 'Media uploaded successfully!';
         uploadMediaForm.reset();
-        songPreview.classList.remove('active');
-        previewAudio.src = '';
         setTimeout(() => window.location.href = 'index.html', 2000);
       } catch (error) {
         uploadResult.classList.add('error');
