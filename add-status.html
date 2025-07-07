@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Add Status - BanterBox</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/11.10.0/firebase-database.js"></script>
   <script src="https://media-library.cloudinary.com/global/all.js"></script>
   <style>
     body {
@@ -183,9 +183,9 @@
   </div>
 
   <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
-    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
-    import { getDatabase, ref, push, set, get } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
+    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
+    import { getDatabase, ref, push, set, get } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-database.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
@@ -198,12 +198,12 @@
     };
 
     const app = initializeApp(firebaseConfig);
-    const auth = getAuth();
-    const db = getDatabase();
+    const auth = getAuth(app);
+    const db = getDatabase(app);
 
     // Cloudinary Configuration
-    const CLOUDINARY_CLOUD_NAME = 'dqkujefxj'; // Replace with your Cloudinary cloud name
-    const CLOUDINARY_UPLOAD_PRESET = 'banter_box'; // Replace with your unsigned upload preset
+    const CLOUDINARY_CLOUD_NAME = 'dqkujefxj';
+    const CLOUDINARY_UPLOAD_PRESET = 'banter_box';
 
     // DOM Elements
     const statusForm = document.getElementById('statusForm');
@@ -216,6 +216,7 @@
 
     let currentUserUid = null;
     let selectedFiles = [];
+    let cloudinaryWidget = null;
 
     // Apply Theme
     async function applyTheme() {
@@ -232,6 +233,24 @@
         document.querySelector('.media-btn').classList.toggle('dark', isDark);
         document.querySelector('.error-message').classList.toggle('dark', isDark);
         document.querySelector('.loading-spinner').classList.toggle('dark', isDark);
+        // Update Cloudinary widget styles if initialized
+        if (cloudinaryWidget) {
+          cloudinaryWidget.update({
+            styles: {
+              palette: {
+                window: isDark ? '#2d3748' : '#ffffff',
+                sourceBg: isDark ? '#374151' : '#f9fafb',
+                windowBorder: isDark ? '#4b5563' : '#e5e7eb',
+                tabIcon: '#ef4444',
+                inactiveTabIcon: isDark ? '#9ca3af' : '#6b7280',
+                link: '#ef4444',
+                action: '#ef4444',
+                textDark: '#111827',
+                textLight: '#e5e7eb'
+              }
+            }
+          });
+        }
       } catch (error) {
         console.error('Error loading theme:', error);
       }
@@ -241,6 +260,7 @@
     onAuthStateChanged(auth, (user) => {
       if (user) {
         currentUserUid = user.uid;
+        initializeCloudinaryWidget();
         applyTheme();
         updateSubmitButton();
       } else {
@@ -272,48 +292,63 @@
       submitBtn.disabled = !statusInput.value.trim() && selectedFiles.length === 0;
     }
 
-    // Initialize Cloudinary Upload Widget
-    const myWidget = cloudinary.createUploadWidget({
-      cloudName: CLOUDINARY_CLOUD_NAME,
-      uploadPreset: CLOUDINARY_UPLOAD_PRESET,
-      sources: ['local', 'camera'], // Limit to local gallery and camera for simplicity
-      multiple: true,
-      maxFiles: 5,
-      resourceType: 'auto',
-      clientAllowedFormats: ['jpg', 'png', 'jpeg', 'mp4', 'mov', 'webm'],
-      maxFileSize: 10000000, // 10MB
-      showAdvancedOptions: false,
-      cropping: false,
-      folder: 'banterbox_statuses',
-      showPoweredBy: false,
-      styles: {
-        palette: {
-          window: document.body.classList.contains('dark') ? '#2d3748' : '#ffffff',
-          sourceBg: document.body.classList.contains('dark') ? '#374151' : '#f9fafb',
-          windowBorder: document.body.classList.contains('dark') ? '#4b5563' : '#e5e7eb',
-          tabIcon: '#ef4444',
-          inactiveTabIcon: document.body.classList.contains('dark') ? '#9ca3af' : '#6b7280',
-          link: '#ef4444',
-          action: '#ef4444',
-          textDark: '#111827',
-          textLight: '#e5e7eb'
-        },
-        fonts: { default: null, "'Inter', sans-serif": { url: null, active: true } }
+    // Initialize Cloudinary Widget
+    function initializeCloudinaryWidget() {
+      if (!window.cloudinary) {
+        console.error('Cloudinary script not loaded');
+        showError('Cloudinary is not available. Please check your network or script inclusion.');
+        mediaBtn.disabled = true;
+        return;
       }
-    }, (error, result) => {
-      if (!error && result && result.event === 'success') {
-        selectedFiles.push({
-          url: result.info.secure_url,
-          type: result.info.resource_type,
-          publicId: result.info.public_id
+      try {
+        cloudinaryWidget = window.cloudinary.createUploadWidget({
+          cloudName: CLOUDINARY_CLOUD_NAME,
+          uploadPreset: CLOUDINARY_UPLOAD_PRESET,
+          sources: ['local', 'camera'],
+          multiple: true,
+          maxFiles: 5,
+          resourceType: 'auto',
+          clientAllowedFormats: ['jpg', 'png', 'jpeg', 'mp4', 'mov', 'webm'],
+          maxFileSize: 10000000,
+          showAdvancedOptions: false,
+          cropping: false,
+          folder: 'banterbox_statuses',
+          showPoweredBy: false,
+          styles: {
+            palette: {
+              window: document.body.classList.contains('dark') ? '#2d3748' : '#ffffff',
+              sourceBg: document.body.classList.contains('dark') ? '#374151' : '#f9fafb',
+              windowBorder: document.body.classList.contains('dark') ? '#4b5563' : '#e5e7eb',
+              tabIcon: '#ef4444',
+              inactiveTabIcon: document.body.classList.contains('dark') ? '#9ca3af' : '#6b7280',
+              link: '#ef4444',
+              action: '#ef4444',
+              textDark: '#111827',
+              textLight: '#e5e7eb'
+            },
+            fonts: { default: null, "'Inter', sans-serif": { url: null, active: true } }
+          }
+        }, (error, result) => {
+          if (!error && result && result.event === 'success') {
+            selectedFiles.push({
+              url: result.info.secure_url,
+              type: result.info.resource_type,
+              publicId: result.info.public_id
+            });
+            renderMediaPreview();
+            updateSubmitButton();
+          } else if (error) {
+            console.error('Cloudinary upload error:', error);
+            showError('Failed to upload media. Please try again.');
+          }
         });
-        renderMediaPreview();
-        updateSubmitButton();
-      } else if (error) {
-        console.error('Upload error:', error);
-        showError('Failed to upload media. Please try again.');
+        mediaBtn.disabled = false;
+      } catch (error) {
+        console.error('Error initializing Cloudinary widget:', error);
+        showError('Failed to initialize media uploader. Please try again later.');
+        mediaBtn.disabled = true;
       }
-    });
+    }
 
     // Render Media Previews
     function renderMediaPreview() {
@@ -324,7 +359,7 @@
         if (file.type === 'video') {
           mediaElement.controls = true;
           mediaElement.muted = true;
-          mediaElement.playsinline = true;
+          mediaElement.playsInline = true;
         }
         mediaElement.alt = `Selected ${file.type} ${index + 1}`;
         mediaPreview.appendChild(mediaElement);
@@ -332,12 +367,23 @@
     }
 
     // Open Cloudinary Widget
-    mediaBtn.addEventListener('click', () => {
+    mediaBtn.addEventListener('click', (e) => {
+      e.preventDefault();
       if (selectedFiles.length >= 5) {
         showError('Maximum 5 files allowed.');
         return;
       }
-      myWidget.open();
+      if (!cloudinaryWidget) {
+        console.error('Cloudinary widget not initialized');
+        showError('Media uploader not ready. Please try again.');
+        return;
+      }
+      try {
+        cloudinaryWidget.open();
+      } catch (error) {
+        console.error('Error opening Cloudinary widget:', error);
+        showError('Failed to open media picker. Please try again.');
+      }
     });
 
     // Handle Form Submission
@@ -370,7 +416,7 @@
         selectedFiles = [];
         mediaPreview.innerHTML = '';
         updateSubmitButton();
-        window.location.href = 'home.html';
+        window.location.href = 'index.html';
       } catch (error) {
         console.error('Error posting status:', error);
         showError('Failed to post status. Please try again.');
