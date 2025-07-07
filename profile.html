@@ -95,13 +95,22 @@
     }
     .stat {
       font-size: 0.9rem;
+      cursor: default;
     }
-    .stat strong {
+    .stat a {
+      text-decoration: none;
+      color: #ef4444;
       font-weight: 700;
-      color: #1e293b;
+      transition: color 0.2s ease;
     }
-    .stat.dark strong {
-      color: #e2e8f0;
+    .stat a:hover {
+      color: #dc2626;
+    }
+    .stat.dark a {
+      color: #dc2626;
+    }
+    .stat.dark a:hover {
+      color: #f97316;
     }
     .bio {
       padding: 1rem 20px;
@@ -480,14 +489,21 @@
         const followingRef = ref(db, `users/${userId}/friends`);
         const followingSnap = get(followingRef);
 
-        stats.innerHTML = `
-          <div class="stat"><strong>${totalPosts}</strong> Posts</div>
-          <div class="stat"><strong>${followersSnap.val() ? Object.keys(followersSnap.val()).length : 0}</strong> Followers</div>
-          <div class="stat"><strong>${followingSnap.val() ? Object.keys(followingSnap.val()).length : 0}</strong> Following</div>
-        `;
+        Promise.all([followersSnap, followingSnap]).then(([followersSnapshot, followingSnapshot]) => {
+          const followersCount = followersSnapshot.val() ? Object.keys(followersSnapshot.val()).length : 0;
+          const followingCount = followingSnapshot.val() ? Object.keys(followingSnapshot.val()).length : 0;
+          stats.innerHTML = `
+            <div class="stat"><strong>${totalPosts}</strong> Posts</div>
+            <div class="stat"><a href="followers.html?uid=${userId}">Followers: <strong>${followersCount}</strong></a></div>
+            <div class="stat"><a href="following.html?uid=${userId}">Following: <strong>${followingCount}</strong></a></div>
+          `;
+        }).catch((error) => {
+          console.error('Error fetching followers/following:', error);
+          stats.innerHTML = '<div class="stat"><strong>0</strong> Posts</div><div class="stat"><a href="followers.html?uid=${userId}">Followers: <strong>0</strong></a></div><div class="stat"><a href="following.html?uid=${userId}">Following: <strong>0</strong></a></div>';
+        });
       }).catch((error) => {
         console.error('Error fetching stats:', error);
-        stats.innerHTML = '<div class="stat"><strong>0</strong> Posts</div><div class="stat"><strong>0</strong> Followers</div><div class="stat"><strong>0</strong> Following</div>';
+        stats.innerHTML = '<div class="stat"><strong>0</strong> Posts</div><div class="stat"><a href="followers.html?uid=${userId}">Followers: <strong>0</strong></a></div><div class="stat"><a href="following.html?uid=${userId}">Following: <strong>0</strong></a></div>';
       });
     }
 
