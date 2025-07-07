@@ -8,7 +8,6 @@
   <script src="https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js"></script>
   <script src="https://www.gstatic.com/firebasejs/11.10.0/firebase-database.js"></script>
-  <script src="https://media-library.cloudinary.com/global/all.js" defer></script>
   <style>
     body {
       font-family: 'Inter', 'Segoe UI', sans-serif;
@@ -173,7 +172,7 @@
       <div id="mediaPreview" class="media-preview" aria-live="polite"></div>
       <div id="errorMessage" class="error-message dark:error-message"></div>
       <div class="flex gap-2">
-        <button type="button" id="mediaBtn" class="media-btn dark:media-btn" disabled>Choose Media</button>
+        <button type="button" id="mediaBtn" class="media-btn dark:media-btn">Choose Media</button>
         <button type="submit" id="submitBtn" class="submit-btn dark:submit-btn" disabled>Post Status</button>
         <input type="file" id="fileInput" accept="image/jpeg,image/png,image/jpg,video/mp4,video/mov,video/webm" multiple hidden>
       </div>
@@ -218,8 +217,6 @@
 
     let currentUserUid = null;
     let selectedFiles = [];
-    let cloudinaryWidget = null;
-    let isCloudinaryLoaded = false;
 
     // Apply Theme
     async function applyTheme() {
@@ -236,25 +233,8 @@
         document.querySelector('.media-btn').classList.toggle('dark', isDark);
         document.querySelector('.error-message').classList.toggle('dark', isDark);
         document.querySelector('.loading-spinner').classList.toggle('dark', isDark);
-        if (cloudinaryWidget) {
-          cloudinaryWidget.update({
-            styles: {
-              palette: {
-                window: isDark ? '#2d3748' : '#ffffff',
-                sourceBg: isDark ? '#374151' : '#f9fafb',
-                windowBorder: isDark ? '#4b5563' : '#e5e7eb',
-                tabIcon: '#ef4444',
-                inactiveTabIcon: isDark ? '#9ca3af' : '#6b7280',
-                link: '#ef4444',
-                action: '#ef4444',
-                textDark: '#111827',
-                textLight: '#e5e7eb'
-              }
-            }
-          });
-        }
       } catch (error) {
-        console.error('Error loading theme:', error);
+        console.error('Error loading theme:', error.message);
       }
     }
 
@@ -282,68 +262,6 @@
       submitBtn.disabled = !statusInput.value.trim() && selectedFiles.length === 0;
     }
 
-    // Initialize Cloudinary Widget
-    function initializeCloudinaryWidget() {
-      if (!window.cloudinary) {
-        console.error('Cloudinary script not loaded');
-        showError('Cloudinary script failed to load. Using native file picker.');
-        mediaBtn.disabled = false; // Enable button for fallback
-        return false;
-      }
-      try {
-        cloudinaryWidget = window.cloudinary.createUploadWidget({
-          cloudName: CLOUDINARY_CLOUD_NAME,
-          uploadPreset: CLOUDINARY_UPLOAD_PRESET,
-          sources: ['local', 'camera'],
-          multiple: true,
-          maxFiles: 5,
-          resourceType: 'auto',
-          clientAllowedFormats: ['jpg', 'png', 'jpeg', 'mp4', 'mov', 'webm'],
-          maxFileSize: 10000000,
-          showAdvancedOptions: false,
-          cropping: false,
-          folder: 'banterbox_statuses',
-          showPoweredBy: false,
-          styles: {
-            palette: {
-              window: document.body.classList.contains('dark') ? '#2d3748' : '#ffffff',
-              sourceBg: document.body.classList.contains('dark') ? '#374151' : '#f9fafb',
-              windowBorder: document.body.classList.contains('dark') ? '#4b5563' : '#e5e7eb',
-              tabIcon: '#ef4444',
-              inactiveTabIcon: document.body.classList.contains('dark') ? '#9ca3af' : '#6b7280',
-              link: '#ef4444',
-              action: '#ef4444',
-              textDark: '#111827',
-              textLight: '#e5e7eb'
-            },
-            fonts: { default: null, "'Inter', sans-serif": { url: null, active: true } }
-          }
-        }, (error, result) => {
-          if (!error && result && result.event === 'success') {
-            selectedFiles.push({
-              url: result.info.secure_url,
-              type: result.info.resource_type,
-              publicId: result.info.public_id
-            });
-            renderMediaPreview();
-            updateSubmitButton();
-          } else if (error) {
-            console.error('Cloudinary upload error:', error);
-            showError('Failed to upload media. Please try again.');
-          }
-        });
-        isCloudinaryLoaded = true;
-        mediaBtn.disabled = false;
-        console.log('Cloudinary widget initialized successfully');
-        return true;
-      } catch (error) {
-        console.error('Error initializing Cloudinary widget:', error.message);
-        showError(`Failed to initialize media uploader: ${error.message}. Using native file picker.`);
-        mediaBtn.disabled = false; // Enable button for fallback
-        return false;
-      }
-    }
-
     // Render Media Previews
     function renderMediaPreview() {
       mediaPreview.innerHTML = '';
@@ -360,8 +278,8 @@
       });
     }
 
-    // Fallback File Upload
-    async function handleFileInputUpload(files) {
+    // Handle File Upload to Cloudinary
+    async function handleFileUpload(files) {
       if (files.length + selectedFiles.length > 5) {
         showError('Maximum 5 files allowed.');
         return;
@@ -394,7 +312,7 @@
         renderMediaPreview();
         updateSubmitButton();
       } catch (error) {
-        console.error('Fallback upload error:', error.message);
+        console.error('File upload error:', error.message);
         showError(`Failed to upload media: ${error.message}`);
       } finally {
         hideLoading();
@@ -402,75 +320,32 @@
       }
     }
 
-    // Wait for Cloudinary Script to Load
-    function waitForCloudinary() {
-      return new Promise((resolve) => {
-        if (window.cloudinary) {
-          console.log('Cloudinary script already loaded');
-          resolve(true);
-          return;
-        }
-        const script = document.querySelector('script[src="https://media-library.cloudinary.com/global/all.js"]');
-        if (script) {
-          script.addEventListener('load', () => {
-            console.log('Cloudinary script loaded');
-            resolve(true);
-          });
-          script.addEventListener('error', () => {
-            console.error('Cloudinary script failed to load');
-            resolve(false);
-          });
-        } else {
-          console.error('Cloudinary script tag not found');
-          resolve(false);
-        }
-      });
-    }
-
-    // Check Authentication and Initialize
+    // Check Authentication
     onAuthStateChanged(auth, async (user) => {
       if (user) {
         currentUserUid = user.uid;
         await applyTheme();
-        const cloudinaryLoaded = await waitForCloudinary();
-        if (cloudinaryLoaded) {
-          initializeCloudinaryWidget();
-        } else {
-          showError('Cloudinary script failed to load. Using native file picker.');
-          mediaBtn.disabled = false; // Enable for fallback
-        }
         updateSubmitButton();
       } else {
         window.location.href = 'signup.html';
       }
     });
 
-    // Open Cloudinary Widget or Fallback
+    // Open File Chooser
     mediaBtn.addEventListener('click', (e) => {
       e.preventDefault();
       if (selectedFiles.length >= 5) {
         showError('Maximum 5 files allowed.');
         return;
       }
-      if (isCloudinaryLoaded && cloudinaryWidget) {
-        try {
-          cloudinaryWidget.open();
-        } catch (error) {
-          console.error('Error opening Cloudinary widget:', error.message);
-          showError('Failed to open media picker. Using native file picker.');
-          fileInput.click();
-        }
-      } else {
-        console.warn('Cloudinary not available, using native file picker');
-        fileInput.click();
-      }
+      fileInput.click();
     });
 
-    // Handle Fallback File Input
+    // Handle File Selection
     fileInput.addEventListener('change', (e) => {
       const files = Array.from(e.target.files);
       if (files.length > 0) {
-        handleFileInputUpload(files);
+        handleFileUpload(files);
       }
     });
 
