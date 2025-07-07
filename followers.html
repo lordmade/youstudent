@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BanterBox - Followers</title>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      font-family: 'Roboto', 'Segoe UI', sans-serif;
+      background: linear-gradient(180deg, #f5f7fa 0%, #e0e7ff 100%);
+      min-height: 100vh;
+      margin: 0;
+      padding: 0;
+      color: #1e293b;
+    }
+    body.dark {
+      background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
+      color: #e2e8f0;
+    }
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 1rem;
+    }
+    .following-section, .search-section {
+      margin-bottom: 1.5rem;
+    }
+    .section-title {
+      font-size: 1.2rem;
+      font-weight: 700;
+      margin-bottom: 0.5rem;
+      color: #1e293b;
+    }
+    .section-title.dark {
+      color: #e2e8f0;
+    }
+    .search-bar {
+      width: 100%;
+      padding: 0.5rem;
+      border: 2px solid #e5e7eb;
+      border-radius: 12px;
+      font-size: 0.9rem;
+      background: #fafafa;
+      margin-bottom: 1rem;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+    .search-bar.dark {
+      background: #2d3748;
+      border-color: #4b5563;
+      color: #e2e8f0;
+    }
+    .search-bar:focus {
+      outline: none;
+      border-color: #ef4444;
+      box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.3);
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+      gap: 1rem;
+    }
+    .user-card {
+      text-align: center;
+      cursor: pointer;
+      transition: transform 0.2s ease, opacity 0.2s ease;
+    }
+    .user-card:hover {
+      transform: scale(1.05);
+      opacity: 0.9;
+    }
+    .user-card img {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      object-fit: cover;
+      margin-bottom: 0.5rem;
+    }
+    .user-card p {
+      font-size: 0.9rem;
+      color: #64748b;
+      margin: 0;
+    }
+    .user-card.dark p {
+      color: #94a3b8;
+    }
+    .loading-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.7);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 2000;
+      transition: opacity 0.3s ease;
+    }
+    .loading-overlay.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+    .loading-spinner {
+      width: 48px;
+      height: 48px;
+      animation: spin 1s linear infinite;
+    }
+    .loading-spinner circle {
+      stroke: #ef4444;
+      stroke-width: 4;
+      fill: none;
+      stroke-dasharray: 80;
+      stroke-dashoffset: 0;
+      animation: dash 1.5s ease-in-out infinite;
+    }
+    .loading-spinner.dark circle {
+      stroke: #dc2626;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes dash { 0% { stroke-dashoffset: 80; } 50% { stroke-dashoffset: 20; } 100% { stroke-dashoffset: 80; } }
+    @media (max-width: 600px) {
+      .grid {
+        grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+      }
+      .user-card img {
+        width: 60px;
+        height: 60px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="following-section" id="following-section">
+      <h2 class="section-title dark:section-title">Following</h2>
+      <div class="grid" id="following-grid"></div>
+    </div>
+    <div class="search-section">
+      <input type="text" id="search-bar" class="search-bar dark:search-bar" placeholder="Search friends..." />
+      <div class="grid" id="search-results"></div>
+    </div>
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" class="loading-overlay hidden">
+      <svg class="loading-spinner" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="10" />
+      </svg>
+    </div>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
+    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
+    import { getDatabase, ref, get } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-database.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
+      authDomain: "fire-b-a8878.firebaseapp.com",
+      databaseURL: "https://fire-b-a8878.firebaseio.com",
+      projectId: "fire-b-a8878",
+      storageBucket: "fire-b-a8878.appspot.com",
+      messagingSenderId: "658673187627",
+      appId: "1:658673187627:web:6e4c29af661785f0afa36e"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getDatabase(app);
+
+    const followingGrid = document.getElementById('following-grid');
+    const searchBar = document.getElementById('search-bar');
+    const searchResults = document.getElementById('search-results');
+    const loadingOverlay = document.getElementById('loading-overlay');
+
+    function showLoading() {
+      loadingOverlay.classList.remove('hidden');
+    }
+    function hideLoading() {
+      loadingOverlay.classList.add('hidden');
+    }
+
+    function applyTheme(themeValue) {
+      const isDark = themeValue === 'dark';
+      document.body.classList.toggle('dark', isDark);
+      document.querySelector('.search-bar').classList.toggle('dark', isDark);
+      document.querySelectorAll('.section-title').forEach(title => title.classList.toggle('dark', isDark));
+      document.querySelectorAll('.user-card').forEach(card => card.querySelector('p').classList.toggle('dark', isDark));
+      document.querySelector('.loading-spinner circle').classList.toggle('dark', isDark);
+    }
+
+    function displayUsers(grid, users) {
+      grid.innerHTML = '';
+      users.forEach(user => {
+        const userCard = document.createElement('div');
+        userCard.className = 'user-card';
+        userCard.onclick = () => window.location.href = `profile.html?uid=${user.uid}&owner=false`;
+        userCard.innerHTML = `
+          <img src="${user.photoURL || 'https://via.placeholder.com/80'}" alt="${user.displayName || 'User'}'s profile" />
+          <p>${user.displayName || 'Anonymous'}</p>
+        `;
+        grid.appendChild(userCard);
+      });
+    }
+
+    onAuthStateChanged(auth, (user) => {
+      if (!user) {
+        window.location.href = 'signup.html';
+        return;
+      }
+      const currentUserId = user.uid;
+
+      showLoading();
+      // Fetch following users
+      const followingRef = ref(db, `users/${currentUserId}/friends`);
+      get(followingRef).then((snapshot) => {
+        const followingIds = snapshot.val() || {};
+        const followingUids = Object.keys(followingIds);
+
+        // Fetch all users
+        const usersRef = ref(db, 'users');
+        get(usersRef).then((usersSnapshot) => {
+          const allUsers = Object.values(usersSnapshot.val() || {}).filter(u => u.uid !== currentUserId);
+          const followingUsers = allUsers.filter(u => followingUids.includes(u.uid));
+
+          // Display following users
+          displayUsers(followingGrid, followingUsers);
+
+          // Search functionality
+          searchBar.addEventListener('input', () => {
+            const searchTerm = searchBar.value.trim().toLowerCase();
+            const filteredUsers = allUsers.filter(u =>
+              u.displayName?.toLowerCase().includes(searchTerm) ||
+              u.email?.toLowerCase().includes(searchTerm)
+            );
+            displayUsers(searchResults, filteredUsers);
+          });
+
+          hideLoading();
+        }).catch((error) => {
+          console.error('Error fetching users:', error);
+          followingGrid.innerHTML = '<p class="text-center text-gray-500 dark:text-gray-400">Error loading following.</p>';
+          searchResults.innerHTML = '<p class="text-center text-gray-500 dark:text-gray-400">Error loading search results.</p>';
+          hideLoading();
+        });
+
+        // Initial theme application
+        const settingsRef = ref(db, `users/${currentUserId}/settings`);
+        get(settingsRef).then((snapshot) => {
+          const settings = snapshot.val() || {};
+          applyTheme(settings.theme || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
+        }).catch((error) => {
+          console.error('Error fetching settings:', error);
+          applyTheme(window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+        });
+      }).catch((error) => {
+        console.error('Error fetching following:', error);
+        followingGrid.innerHTML = '<p class="text-center text-gray-500 dark:text-gray-400">Error loading following.</p>';
+        hideLoading();
+      });
+    });
+  </script>
+</body>
+</html>
