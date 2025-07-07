@@ -115,14 +115,14 @@
     .search-bar {
       display: flex;
       align-items: center;
-      gap: 1rem; /* Increased gap for space between ends */
-      padding: 0.5rem 2rem; /* Added padding to create space at ends */
+      gap: 1rem;
+      padding: 0.5rem 2rem;
       background: rgba(255, 255, 255, 0.95);
       border-radius: 20px;
       box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
       margin: 1rem auto;
       max-width: 1200px;
-      width: 90%; /* Reduced width to leave space on sides */
+      width: 90%;
       transition: background 0.2s ease;
     }
     .search-bar.dark {
@@ -197,12 +197,10 @@
     .media-grid {
       max-width: 1200px;
       margin: 0 auto 1rem;
-      padding: 1rem 1.5rem;
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-      gap: 1.5rem;
+      padding: 0 1.5rem;
     }
     .media-card {
+      width: 100%; /* Full width */
       background: white;
       border-radius: 16px;
       overflow: hidden;
@@ -210,6 +208,7 @@
       transition: transform 0.2s ease, box-shadow 0.2s ease;
       cursor: default;
       position: relative;
+      margin-bottom: 1.5rem; /* Spacing between cards */
     }
     .media-card:hover {
       transform: translateY(-5px);
@@ -229,7 +228,7 @@
     .media-content-container {
       position: relative;
       width: 100%;
-      aspect-ratio: 1/1;
+      aspect-ratio: 16/9; /* Adjusted for full-width video */
     }
     .media-content {
       width: 100%;
@@ -251,6 +250,30 @@
     .media-content.video.ready {
       display: block;
       opacity: 1;
+    }
+    .play-icon {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 60px;
+      height: 60px;
+      z-index: 3;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0, 0, 0, 0.6);
+      border-radius: 50%;
+      cursor: pointer;
+      transition: transform 0.2s ease;
+    }
+    .play-icon svg {
+      width: 24px;
+      height: 24px;
+      fill: white;
+    }
+    .play-icon:hover {
+      transform: translate(-50%, -50%) scale(1.1);
     }
     .video-spinner {
       position: absolute;
@@ -615,9 +638,9 @@
         height: 20px;
       }
       .search-bar {
-        padding: 0.4rem 1.5rem; /* Adjusted padding for mobile */
+        padding: 0.4rem 1.5rem;
         margin: 0.5rem auto;
-        width: 95%; /* Further reduced width for mobile */
+        width: 95%;
       }
       .search-input {
         font-size: 0.9rem;
@@ -633,22 +656,19 @@
         padding: 0.4rem 0.8rem;
         font-size: 0.85rem;
       }
-      .media-grid {
-        grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-        gap: 1rem;
-        padding: 1rem;
-      }
       .media-card {
-        width: 250px;
+        margin-bottom: 1rem; /* Adjusted spacing for mobile */
       }
-      .media-title {
-        font-size: 1rem;
+      .media-content-container {
+        aspect-ratio: 16/9; /* Maintain aspect ratio on mobile */
       }
-      .media-song {
-        font-size: 0.85rem;
+      .play-icon {
+        width: 50px;
+        height: 50px;
       }
-      .media-posted-by, .impression-count {
-        font-size: 0.8rem;
+      .play-icon svg {
+        width: 20px;
+        height: 20px;
       }
       .add-media-btn {
         width: 50px;
@@ -955,6 +975,13 @@
             mediaCard.onclick = () => window.location.href = `media.html?mediaId=${mediaId}`;
           }
 
+          const playIcon = resourceType === 'video' ? `
+            <div class="play-icon" aria-label="Play video">
+              <svg viewBox="0 0 24 24">
+                <path d="M8 5v14l11-7z" fill="currentColor"/>
+              </svg>
+            </div>` : '';
+
           const mediaElement = resourceType === 'image'
             ? `<div class="media-content-container">
                  <img src="${url || 'https://via.placeholder.com/300x300'}" alt="${title || 'Media'} thumbnail" class="media-content lazy" loading="lazy" aria-label="Media thumbnail" />
@@ -962,6 +989,7 @@
             : `<div class="media-content-container">
                  <img src="${thumbnailUrl || 'https://via.placeholder.com/300x300'}" alt="${title || 'Media'} thumbnail" class="media-content thumbnail lazy" loading="lazy" aria-label="Video thumbnail" />
                  <video src="${url}" class="media-content video" muted playsinline loop preload="auto"></video>
+                 ${playIcon}
                  <svg class="video-spinner dark:video-spinner" viewBox="0 0 24 24" aria-hidden="true">
                    <circle cx="12" cy="12" r="10" />
                  </svg>
@@ -1091,6 +1119,7 @@
             const video = card.querySelector('video.media-content');
             const thumbnail = card.querySelector('img.media-content.thumbnail');
             const spinner = card.querySelector('.video-spinner');
+            const playIcon = card.querySelector('.play-icon');
             const mediaId = card.dataset.mediaId;
 
             if (entry.isIntersecting && currentUserId) {
@@ -1100,12 +1129,14 @@
                   console.error('Error playing video:', error);
                   if (spinner) spinner.classList.add('active');
                 });
+                if (playIcon) playIcon.style.display = 'none';
               }
             } else {
               if (video) {
                 video.pause();
                 video.currentTime = 0;
                 if (thumbnail) thumbnail.style.display = 'block';
+                if (playIcon) playIcon.style.display = 'flex';
                 if (spinner) spinner.classList.remove('active');
               }
             }
@@ -1117,11 +1148,13 @@
         document.querySelectorAll('video.media-content').forEach(video => {
           const thumbnail = video.parentElement.querySelector('img.media-content.thumbnail');
           const spinner = video.parentElement.querySelector('.video-spinner');
+          const playIcon = video.parentElement.querySelector('.play-icon');
 
           video.addEventListener('canplay', () => {
             video.classList.add('ready');
             if (thumbnail) thumbnail.style.display = 'none';
             if (spinner) spinner.classList.remove('active');
+            if (playIcon) playIcon.style.display = 'flex';
           });
 
           video.addEventListener('waiting', () => {
@@ -1138,12 +1171,14 @@
               console.error('Error playing video:', error);
               if (spinner) spinner.classList.add('active');
             });
+            if (playIcon) playIcon.style.display = 'none';
           });
 
           video.addEventListener('blur', () => {
             video.pause();
             video.currentTime = 0;
             if (thumbnail) thumbnail.style.display = 'block';
+            if (playIcon) playIcon.style.display = 'flex';
             if (spinner) spinner.classList.remove('active');
           });
         });
