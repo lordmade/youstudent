@@ -8,7 +8,7 @@
   <script src="https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js"></script>
   <script src="https://www.gstatic.com/firebasejs/11.10.0/firebase-database.js"></script>
-  <script src="https://media-library.cloudinary.com/global/all.js"></script>
+  <script src="https://media-library.cloudinary.com/global/all.js" defer></script>
   <style>
     body {
       font-family: 'Inter', 'Segoe UI', sans-serif;
@@ -173,8 +173,9 @@
       <div id="mediaPreview" class="media-preview" aria-live="polite"></div>
       <div id="errorMessage" class="error-message dark:error-message"></div>
       <div class="flex gap-2">
-        <button type="button" id="mediaBtn" class="media-btn dark:media-btn">Choose Media</button>
+        <button type="button" id="mediaBtn" class="media-btn dark:media-btn" disabled>Choose Media</button>
         <button type="submit" id="submitBtn" class="submit-btn dark:submit-btn" disabled>Post Status</button>
+        <input type="file" id="fileInput" accept="image/jpeg,image/png,image/jpg,video/mp4,video/mov,video/webm" multiple hidden>
       </div>
     </form>
   </div>
@@ -213,10 +214,12 @@
     const mediaPreview = document.getElementById('mediaPreview');
     const errorMessage = document.getElementById('errorMessage');
     const loading = document.getElementById('loading');
+    const fileInput = document.getElementById('fileInput');
 
     let currentUserUid = null;
     let selectedFiles = [];
     let cloudinaryWidget = null;
+    let isCloudinaryLoaded = false;
 
     // Apply Theme
     async function applyTheme() {
@@ -233,7 +236,6 @@
         document.querySelector('.media-btn').classList.toggle('dark', isDark);
         document.querySelector('.error-message').classList.toggle('dark', isDark);
         document.querySelector('.loading-spinner').classList.toggle('dark', isDark);
-        // Update Cloudinary widget styles if initialized
         if (cloudinaryWidget) {
           cloudinaryWidget.update({
             styles: {
@@ -255,18 +257,6 @@
         console.error('Error loading theme:', error);
       }
     }
-
-    // Check Authentication
-    onAuthStateChanged(auth, (user) => {
-      if (user) {
-        currentUserUid = user.uid;
-        initializeCloudinaryWidget();
-        applyTheme();
-        updateSubmitButton();
-      } else {
-        window.location.href = 'signup.html';
-      }
-    });
 
     // Show Loading
     function showLoading() {
@@ -296,9 +286,9 @@
     function initializeCloudinaryWidget() {
       if (!window.cloudinary) {
         console.error('Cloudinary script not loaded');
-        showError('Cloudinary is not available. Please check your network or script inclusion.');
-        mediaBtn.disabled = true;
-        return;
+        showError('Cloudinary script failed to load. Using native file picker.');
+        mediaBtn.disabled = false; // Enable button for fallback
+        return false;
       }
       try {
         cloudinaryWidget = window.cloudinary.createUploadWidget({
@@ -342,11 +332,15 @@
             showError('Failed to upload media. Please try again.');
           }
         });
+        isCloudinaryLoaded = true;
         mediaBtn.disabled = false;
+        console.log('Cloudinary widget initialized successfully');
+        return true;
       } catch (error) {
-        console.error('Error initializing Cloudinary widget:', error);
-        showError('Failed to initialize media uploader. Please try again later.');
-        mediaBtn.disabled = true;
+        console.error('Error initializing Cloudinary widget:', error.message);
+        showError(`Failed to initialize media uploader: ${error.message}. Using native file picker.`);
+        mediaBtn.disabled = false; // Enable button for fallback
+        return false;
       }
     }
 
@@ -366,23 +360,117 @@
       });
     }
 
-    // Open Cloudinary Widget
+    // Fallback File Upload
+    async function handleFileInputUpload(files) {
+      if (files.length + selectedFiles.length > 5) {
+        showError('Maximum 5 files allowed.');
+        return;
+      }
+      showLoading();
+      try {
+        for (const file of files) {
+          const formData = new FormData();
+          formData.append('file', file);
+          formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+          formData.append('folder', 'banterbox_statuses');
+          const response = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/auto/upload`, {
+            method: 'POST',
+            body: formData
+          });
+          if (!response.ok) {
+            throw new Error(`Upload failed: ${response.statusText}`);
+          }
+          const result = await response.json();
+          if (result.secure_url) {
+            selectedFiles.push({
+              url: result.secure_url,
+              type: result.resource_type,
+              publicId: result.public_id
+            });
+          } else {
+            throw new Error('No secure URL returned from Cloudinary');
+          }
+        }
+        renderMediaPreview();
+        updateSubmitButton();
+      } catch (error) {
+        console.error('Fallback upload error:', error.message);
+        showError(`Failed to upload media: ${error.message}`);
+      } finally {
+        hideLoading();
+        fileInput.value = '';
+      }
+    }
+
+    // Wait for Cloudinary Script to Load
+    function waitForCloudinary() {
+      return new Promise((resolve) => {
+        if (window.cloudinary) {
+          console.log('Cloudinary script already loaded');
+          resolve(true);
+          return;
+        }
+        const script = document.querySelector('script[src="https://media-library.cloudinary.com/global/all.js"]');
+        if (script) {
+          script.addEventListener('load', () => {
+            console.log('Cloudinary script loaded');
+            resolve(true);
+          });
+          script.addEventListener('error', () => {
+            console.error('Cloudinary script failed to load');
+            resolve(false);
+          });
+        } else {
+          console.error('Cloudinary script tag not found');
+          resolve(false);
+        }
+      });
+    }
+
+    // Check Authentication and Initialize
+    onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        currentUserUid = user.uid;
+        await applyTheme();
+        const cloudinaryLoaded = await waitForCloudinary();
+        if (cloudinaryLoaded) {
+          initializeCloudinaryWidget();
+        } else {
+          showError('Cloudinary script failed to load. Using native file picker.');
+          mediaBtn.disabled = false; // Enable for fallback
+        }
+        updateSubmitButton();
+      } else {
+        window.location.href = 'signup.html';
+      }
+    });
+
+    // Open Cloudinary Widget or Fallback
     mediaBtn.addEventListener('click', (e) => {
       e.preventDefault();
       if (selectedFiles.length >= 5) {
         showError('Maximum 5 files allowed.');
         return;
       }
-      if (!cloudinaryWidget) {
-        console.error('Cloudinary widget not initialized');
-        showError('Media uploader not ready. Please try again.');
-        return;
+      if (isCloudinaryLoaded && cloudinaryWidget) {
+        try {
+          cloudinaryWidget.open();
+        } catch (error) {
+          console.error('Error opening Cloudinary widget:', error.message);
+          showError('Failed to open media picker. Using native file picker.');
+          fileInput.click();
+        }
+      } else {
+        console.warn('Cloudinary not available, using native file picker');
+        fileInput.click();
       }
-      try {
-        cloudinaryWidget.open();
-      } catch (error) {
-        console.error('Error opening Cloudinary widget:', error);
-        showError('Failed to open media picker. Please try again.');
+    });
+
+    // Handle Fallback File Input
+    fileInput.addEventListener('change', (e) => {
+      const files = Array.from(e.target.files);
+      if (files.length > 0) {
+        handleFileInputUpload(files);
       }
     });
 
@@ -418,8 +506,8 @@
         updateSubmitButton();
         window.location.href = 'index.html';
       } catch (error) {
-        console.error('Error posting status:', error);
-        showError('Failed to post status. Please try again.');
+        console.error('Error posting status:', error.message);
+        showError(`Failed to post status: ${error.message}`);
       } finally {
         hideLoading();
       }
