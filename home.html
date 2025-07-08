@@ -1121,7 +1121,7 @@
   floatingBtn.classList.remove("hidden");
   floatingBtnText.textContent = "Add Friend";
   floatingBtn.onclick = () => {
-    window.location.href = "add-friend.html";
+    window.location.href = "add-friends.html";
   };
 
   tabBtns.forEach((btn) => {
@@ -1140,7 +1140,7 @@
       if (btn.dataset.tab === "chat") {
         floatingBtnText.textContent = "Add Friend";
         floatingBtn.onclick = () => {
-          window.location.href = "add-friend.html";
+          window.location.href = "add-friends.html";
         };
       } else if (btn.dataset.tab === "groups") {
         floatingBtnText.textContent = "Add Group";
@@ -1223,23 +1223,84 @@
     noInboxMessage.classList.add("hidden");
 
     try {
-      const chatsRef = ref(db, "chats");
+      const followingRef = ref(db, `following/${uid}`);
       const usersRef = ref(db, "users");
+      const chatsRef = ref(db, "chats");
 
-      // Fetch users once to avoid repeated queries
-      const usersSnap = await get(usersRef);
+      // Fetch users and following data once
+      const [usersSnap, followingSnap] = await Promise.all([
+        get(usersRef),
+        get(followingRef)
+      ]);
       const users = usersSnap.exists() ? usersSnap.val() : {};
+      const following = followingSnap.exists() ? followingSnap.val() : {};
 
-      onValue(chatsRef, (chatsSnap) => {
+      // Handle Friends subtab: Show all followed users
+      onValue(ref(db, `following/${uid}`), async (followingSnap) => {
         friendsList.innerHTML = "";
-        inboxList.innerHTML = "";
         noFriendsMessage.classList.add("hidden");
+
+        if (!followingSnap.exists()) {
+          noFriendsMessage.classList.remove("hidden");
+          hideLoading();
+          return;
+        }
+
+        const followedUids = Object.keys(followingSnap.val());
+        if (followedUids.length === 0) {
+          noFriendsMessage.classList.remove("hidden");
+          hideLoading();
+          return;
+        }
+
+        for (const friendUid of followedUids) {
+          const userData = users[friendUid] || { name: "Unknown", photoURL: null, presence: "offline" };
+          const chatId = uid < friendUid ? `${uid}_${friendUid}` : `${friendUid}_${uid}`;
+          const messagesRefChat = ref(db, `messages/${chatId}`);
+
+          // Listen for message updates
+          onValue(messagesRefChat, (msgSnap) => {
+            const msgs = msgSnap.val() || {};
+            let unreadCount = 0;
+            let lastMessageTime = null;
+            let lastMessageText = null;
+
+            const messageArray = Object.entries(msgs).sort((a, b) => (b[1].timestamp || 0) - (a[1].timestamp || 0));
+            if (messageArray.length > 0) {
+              const [_, latestMessage] = messageArray[0];
+              lastMessageTime = latestMessage.timestamp;
+              lastMessageText = latestMessage.text;
+              if (latestMessage.sender === friendUid && !latestMessage.read && Date.now() - latestMessage.timestamp < 60000) {
+                showMessagePopup(friendUid, latestMessage.text);
+              }
+            }
+
+            for (const mid in msgs) {
+              const m = msgs[mid];
+              if (m.sender === friendUid && !m.read) unreadCount++;
+            }
+
+            updateFriendCard(friendUid, userData, unreadCount, lastMessageTime, lastMessageText, friendsList);
+          }, (error) => {
+            console.error("Error listening to messages for friend:", error);
+            updateFriendCard(friendUid, userData, 0, null, null, friendsList);
+          });
+        }
+
+        hideLoading();
+      }, (error) => {
+        console.error("Error listening to following:", error);
+        noFriendsMessage.classList.remove("hidden");
+        hideLoading();
+      });
+
+      // Handle Inbox subtab: Show only users with chats
+      onValue(chatsRef, (chatsSnap) => {
+        inboxList.innerHTML = "";
         noInboxMessage.classList.add("hidden");
 
         if (!chatsSnap.exists()) {
-          noFriendsMessage.classList.remove("hidden");
           noInboxMessage.classList.remove("hidden");
-          hideLoading();
           return;
         }
 
@@ -1256,9 +1317,7 @@
         }
 
         if (friendUids.size === 0) {
-          noFriendsMessage.classList.remove("hidden");
           noInboxMessage.classList.remove("hidden");
-          hideLoading();
           return;
         }
 
@@ -1290,8 +1349,6 @@
               if (m.sender === friendUid && !m.read) unreadCount++;
             }
 
-            updateFriendCard(friendUid, userData, unreadCount, lastMessageTime, lastMessageText, friendsList);
-
             if (hasMessages) {
               updateFriendCard(friendUid, userData, unreadCount, lastMessageTime, lastMessageText, inboxList);
             } else {
@@ -1306,13 +1363,9 @@
             console.error("Error listening to messages:", error);
           });
         });
-
-        hideLoading();
       }, (error) => {
         console.error("Error listening to chats:", error);
-        noFriendsMessage.classList.remove("hidden");
         noInboxMessage.classList.remove("hidden");
-        hideLoading();
       });
     } catch (error) {
       console.error("Error loading friends:", error);
@@ -1618,310 +1671,236 @@
           ` : ''}
         </div>
       `;
-      muteIcons = status.media.some(item => item.type === 'video') ? `
-        <svg class="mute-toggle-icon" data-sid="${sid}" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M11 5L6 9H2v6h4l5 4V5zM22 9l-6 6M16 9l6 6"/>
-        </svg>
-      ` : '';
+           muteIcons = status.media
+        .map((item, index) => `
+          ${item.type === 'video' ? `
+            <svg class="mute-toggle-icon" data-index="${index}" data-sid="${sid}" fill="none" stroke="white" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${item.muted ? 'M5 7h4l3 3H8a3 3 0 00-3 3v4a3 3 0 003 3h4l3-3H5V7z' : 'M15 7h-4l-3 3h4a3 3 0 003-3v-4a3 3 0 00-3-3h-4l-3 3h4v7z'}"/>
+            </svg>
+          ` : ''}
+        `).join('');
     }
-
-    const deleteIcon = isOwner
-      ? `<svg class="delete-icon" data-sid="${sid}" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-           <path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
-         </svg>`
-      : "";
 
     div.innerHTML = `
       <div class="status-header dark:status-header">
         <img src="${userData.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${userData.name || 'User'} avatar" class="status-avatar" />
         <div class="status-info dark:status-info">
-          <h4>${userData.name || "User"}</h4>
+          <h4>${userData.name || 'User'}</h4>
           <p class="status-time dark:status-time">${timeAgo(status.timestamp)}</p>
         </div>
-        ${deleteIcon}
+        ${isOwner ? `
+          <svg class="delete-icon" data-sid="${sid}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
+          </svg>
+        ` : ''}
       </div>
       ${mediaContent}
-      ${muteIcons}
-      <p class="status-text dark:status-text">${status.text || ""}</p>
+      <p class="status-text dark:status-text">${status.text || ''}</p>
       <div class="status-footer">
-        <svg class="reaction-btn ${isReacted ? 'reacted liked' : ''} dark:reaction-btn" data-sid="${sid}" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/>
+        <svg class="reaction-btn dark:reaction-btn ${isReacted ? 'reacted liked' : ''}" data-sid="${sid}" fill="${isReacted ? '#ef4444' : 'none'}" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/>
         </svg>
         <span class="reaction-count dark:reaction-count">${reactionCount}</span>
-        <svg class="comment-btn dark:comment-btn" data-sid="${sid}" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/>
+        <svg class="comment-btn dark:comment-btn" data-sid="${sid}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
         </svg>
         <span class="comment-count dark:comment-count">${commentCount}</span>
       </div>
     `;
 
-    if (document.body.classList.contains("dark")) {
-      div.classList.add("dark");
-      div.querySelectorAll(".status-header, .status-text, .status-info, .status-time, .reaction-btn, .reaction-count, .comment-btn, .comment-count").forEach(el => el.classList.add("dark"));
-      if (status.media) {
-        div.querySelectorAll(".status-image, .status-video, .status-thumbnail, .carousel-dot").forEach(el => el.classList.add("dark"));
-      }
-    }
-
-    // Handle delete status
-    if (isOwner) {
-      div.querySelector(".delete-icon")?.addEventListener("click", (e) => {
-        e.stopPropagation();
-        showDeleteStatusModal(sid);
-      });
-    }
-
-    // Handle reactions
-    const reactionBtn = div.querySelector(".reaction-btn");
-    reactionBtn?.addEventListener("click", async (e) => {
-      e.stopPropagation();
-      if (!reactionBtn.classList.contains("reacted")) {
-        showLoading();
-        try {
-          const reactionRef = ref(db, `statuses/${sid}/reactions/${currentUserUid}`);
-          await set(reactionRef, { timestamp: Date.now() });
-          if (status.userId !== currentUserUid) {
-            const notifRef = push(ref(db, `notifications/${status.userId}/${sid}/reactions`));
-            await set(notifRef, { type: 'reaction', userId: currentUserUid, timestamp: Date.now(), read: false });
-          }
-          reactionBtn.classList.add("reacted", "liked");
-          const countSpan = div.querySelector(".reaction-count");
-          countSpan.textContent = parseInt(countSpan.textContent) + 1;
-        } catch (error) {
-          console.error("Error adding reaction:", error);
-          alert("Failed to add reaction.");
-        }
-        hideLoading();
-      }
-    });
-
-    // Handle comments
-    div.querySelector(".comment-btn")?.addEventListener("click", (e) => {
-      e.stopPropagation();
-      showCommentSheet(sid);
-    });
-
-    // Handle carousel navigation
     if (status.media && status.media.length > 1) {
-      const carousel = div.querySelector(".status-carousel");
-      const dots = div.querySelectorAll(".carousel-dot");
+      const carousel = div.querySelector('.status-carousel');
+      const dots = div.querySelectorAll('.carousel-dot');
       let currentIndex = 0;
 
       dots.forEach(dot => {
-        dot.addEventListener("click", (e) => {
-          e.stopPropagation();
+        dot.addEventListener('click', () => {
           currentIndex = parseInt(dot.dataset.index);
           carousel.style.transform = `translateX(-${currentIndex * 100}%)`;
-          dots.forEach(d => d.classList.remove("active"));
-          dot.classList.add("active");
+          dots.forEach(d => d.classList.remove('active'));
+          dot.classList.add('active');
         });
       });
     }
 
-    // Handle video mute/unmute
-    const muteIcon = div.querySelector(".mute-toggle-icon");
-    const videos = div.querySelectorAll(".status-video");
-    if (muteIcon && videos.length > 0) {
-      muteIcon.addEventListener("click", (e) => {
+    div.querySelectorAll('.mute-toggle-icon').forEach(icon => {
+      icon.addEventListener('click', (e) => {
         e.stopPropagation();
-        videos.forEach(video => {
+        const index = parseInt(icon.dataset.index);
+        const video = div.querySelector(`.status-video[data-public-id="${status.media[index].publicId}"]`);
+        if (video) {
           video.muted = !video.muted;
-          muteIcon.innerHTML = video.muted
-            ? `<path d="M11 5L6 9H2v6h4l5 4V5zM22 9l-6 6M16 9l6 6"/>`
-            : `<path d="M11 5L6 9H2v6h4l5 4V5zM15 9c1.1 0 2 .9 2 2s-.9 2-2 2"/>`;
-        });
+          status.media[index].muted = video.muted;
+          icon.innerHTML = `
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${video.muted ? 'M5 7h4l3 3H8a3 3 0 00-3 3v4a3 3 0 003 3h4l3-3H5V7z' : 'M15 7h-4l-3 3h4a3 3 0 003-3v-4a3 3 0 00-3-3h-4l-3 3h4v7z'}"/>
+          `;
+          update(ref(db, `statuses/${sid}/media/${index}`), { muted: video.muted });
+        }
+      });
+    });
+
+    div.addEventListener('dblclick', (e) => {
+      if (!isReacted && !e.target.closest('.reaction-btn, .comment-btn, .delete-icon')) {
+        const heart = document.createElement('svg');
+        heart.className = 'double-tap-heart';
+        heart.setAttribute('fill', '#ef4444');
+        heart.setAttribute('viewBox', '0 0 24 24');
+        heart.innerHTML = `
+          <path d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/>
+        `;
+        div.appendChild(heart);
+        setTimeout(() => heart.remove(), 600);
+        toggleReaction(sid, currentUserUid);
+      }
+    });
+
+    const reactionBtn = div.querySelector('.reaction-btn');
+    reactionBtn.addEventListener('click', () => toggleReaction(sid, currentUserUid));
+
+    const commentBtn = div.querySelector('.comment-btn');
+    commentBtn.addEventListener('click', () => openCommentSheet(sid, userData.name));
+
+    if (isOwner) {
+      const deleteBtn = div.querySelector('.delete-icon');
+      deleteBtn.addEventListener('click', () => {
+        currentStatusId = sid;
+        deleteStatusModal.classList.remove('hidden');
       });
     }
-
-    // Handle video click to redirect
-    videos.forEach(video => {
-      video.addEventListener("click", (e) => {
-        e.stopPropagation();
-        const publicId = video.dataset.publicId;
-        if (publicId) {
-          window.location.href = `media.html?publicId=${publicId}`;
-        }
-      });
-    });
-
-    // Handle video buffering and network issues
-    videos.forEach(video => {
-      const spinner = div.querySelector(".loading-spinner");
-      video.addEventListener("waiting", () => {
-        div.classList.add("loading");
-        spinner.classList.add("show");
-      });
-      video.addEventListener("stalled", () => {
-        div.classList.add("loading");
-        spinner.classList.add("show");
-      });
-      video.addEventListener("error", () => {
-        div.classList.add("loading");
-        spinner.classList.add("show");
-      });
-      video.addEventListener("canplay", () => {
-        div.classList.remove("loading");
-        spinner.classList.remove("show");
-      });
-    });
-
-    // Handle double-tap to like
-    let lastTap = 0;
-    div.addEventListener("click", async (e) => {
-      const now = Date.now();
-      const timeSinceLastTap = now - lastTap;
-      if (timeSinceLastTap < 300 && timeSinceLastTap > 0) {
-        e.stopPropagation();
-        if (!reactionBtn.classList.contains("reacted")) {
-          showLoading();
-          try {
-            const reactionRef = ref(db, `statuses/${sid}/reactions/${currentUserUid}`);
-            await set(reactionRef, { timestamp: Date.now() });
-            if (status.userId !== currentUserUid) {
-              const notifRef = push(ref(db, `notifications/${status.userId}/${sid}/reactions`));
-              await set(notifRef, { type: 'reaction', userId: currentUserUid, timestamp: Date.now(), read: false });
-            }
-            reactionBtn.classList.add("reacted", "liked");
-            const countSpan = div.querySelector(".reaction-count");
-            countSpan.textContent = parseInt(countSpan.textContent) + 1;
-            const heart = document.createElement("svg");
-            heart.className = "double-tap-heart";
-            heart.setAttribute("viewBox", "0 0 24 24");
-            heart.setAttribute("fill", "currentColor");
-            heart.innerHTML = `<path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/>`;
-            div.appendChild(heart);
-            setTimeout(() => heart.remove(), 600);
-          } catch (error) {
-            console.error("Error handling double-tap reaction:", error);
-            alert("Failed to add reaction.");
-          }
-          hideLoading();
-        }
-      }
-      lastTap = now;
-    });
 
     return div;
   }
 
-  function showDeleteStatusModal(sid) {
-    currentStatusId = sid;
-    deleteStatusModal.classList.remove("hidden");
-    modalConfirm.focus();
-  }
-
-  modalConfirm.addEventListener("click", async () => {
-    if (currentStatusId) {
-      showLoading();
-      try {
-        await remove(ref(db, `statuses/${currentStatusId}`));
-        await remove(ref(db, `notifications/${currentUserUid}/${currentStatusId}`));
-        deleteStatusModal.classList.add("hidden");
-        currentStatusId = null;
-      } catch (error) {
-        console.error("Error deleting status:", error);
-        alert("Failed to delete status.");
-      }
-      hideLoading();
-    }
-  });
-
-  modalCancel.addEventListener("click", () => {
-    deleteStatusModal.classList.add("hidden");
-    currentStatusId = null;
-  });
-
-  async function showCommentSheet(sid) {
-    currentStatusId = sid;
-    commentSheet.classList.remove("hidden");
-    commentSheet.classList.add("open");
-    commentsList.innerHTML = "";
-    commentInput.value = "";
-    commentInput.focus();
-
+  async function toggleReaction(sid, uid) {
     try {
-      const statusSnap = await get(ref(db, `statuses/${sid}`));
-      const status = statusSnap.val();
-      const comments = status.comments || {};
-      const usersSnap = await get(ref(db, "users"));
-      const users = usersSnap.val() || {};
-
-      for (const cid in comments) {
-        const comment = comments[cid];
-        const userData = users[comment.userId] || { name: "Unknown", photoURL: null };
-        const commentItem = document.createElement("div");
-        commentItem.className = "comment-item";
-        commentItem.innerHTML = `
-          <img src="${userData.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${userData.name} avatar" class="comment-avatar" />
-          <div class="comment-content dark:comment-content">
-            <p class="comment-username dark:comment-username">${userData.name}</p>
-            <p class="comment-text dark:comment-text">${comment.text}</p>
-            <p class="comment-time dark:comment-time">${timeAgo(comment.timestamp)}</p>
-          </div>
-        `;
-        commentsList.appendChild(commentItem);
-      }
-
-      if (Object.keys(comments).length === 0) {
-        commentsList.innerHTML = `<p class="text-center text-gray-500 dark:text-gray-400">No comments yet.</p>`;
+      const reactionRef = ref(db, `statuses/${sid}/reactions/${uid}`);
+      const snap = await get(reactionRef);
+      if (snap.exists()) {
+        await remove(reactionRef);
+      } else {
+        await set(reactionRef, { timestamp: Date.now() });
       }
     } catch (error) {
-      console.error("Error loading comments:", error);
-      commentsList.innerHTML = `<p class="text-center text-gray-500 dark:text-gray-400">Failed to load comments.</p>`;
+      console.error('Error toggling reaction:', error);
     }
   }
 
-  commentSheetClose.addEventListener("click", () => {
-    commentSheet.classList.remove("open");
-    setTimeout(() => commentSheet.classList.add("hidden"), 300);
-    currentStatusId = null;
+  async function openCommentSheet(sid, username) {
+    currentStatusId = sid;
+    commentSheet.classList.remove('hidden');
+    commentSheet.classList.add('open');
+    commentsList.innerHTML = '';
+    commentInput.value = '';
+
+    try {
+      const commentsRef = ref(db, `statuses/${sid}/comments`);
+      onValue(commentsRef, async (commentsSnap) => {
+        commentsList.innerHTML = '';
+        if (!commentsSnap.exists()) return;
+
+        const comments = commentsSnap.val();
+        const userPromises = [];
+        for (const cid in comments) {
+          userPromises.push(get(ref(db, `users/${comments[cid].userId}`)));
+        }
+        const userSnaps = await Promise.all(userPromises);
+        const users = userSnaps.map(snap => snap.exists() ? snap.val() : { name: 'Unknown', photoURL: null });
+
+        let index = 0;
+        for (const cid in comments) {
+          const comment = comments[cid];
+          const userData = users[index];
+          const commentItem = document.createElement('div');
+          commentItem.className = 'comment-item';
+          commentItem.innerHTML = `
+            <img src="${userData.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${userData.name || 'User'} avatar" class="comment-avatar" />
+            <div class="comment-content dark:comment-content">
+              <p class="comment-username dark:comment-username">${userData.name || 'User'}</p>
+              <p class="comment-text dark:comment-text">${comment.text}</p>
+              <p class="comment-time dark:comment-time">${timeAgo(comment.timestamp)}</p>
+            </div>
+          `;
+          commentsList.appendChild(commentItem);
+          index++;
+        }
+      }, (error) => {
+        console.error('Error loading comments:', error);
+      });
+    } catch (error) {
+      console.error('Error opening comment sheet:', error);
+    }
+  }
+
+  commentSheetClose.addEventListener('click', () => {
+    commentSheet.classList.remove('open');
+    setTimeout(() => commentSheet.classList.add('hidden'), 300);
   });
 
-  commentSubmit.addEventListener("click", async () => {
-    if (!currentStatusId || !commentInput.value.trim()) return;
-    showLoading();
+  commentSubmit.addEventListener('click', async () => {
+    if (!commentInput.value.trim() || !currentStatusId) return;
     try {
       const commentRef = push(ref(db, `statuses/${currentStatusId}/comments`));
-      const statusSnap = await get(ref(db, `statuses/${currentStatusId}`));
-      const status = statusSnap.val();
       await set(commentRef, {
         userId: currentUserUid,
         text: commentInput.value.trim(),
-        timestamp: Date.now(),
+        timestamp: Date.now()
       });
-      if (status.userId !== currentUserUid) {
-        const notifRef = push(ref(db, `notifications/${status.userId}/${currentStatusId}/comments`));
-        await set(notifRef, { type: 'comment', userId: currentUserUid, timestamp: Date.now(), read: false });
-      }
-      commentInput.value = "";
-      await showCommentSheet(currentStatusId);
+      commentInput.value = '';
     } catch (error) {
-      console.error("Error adding comment:", error);
-      alert("Failed to add comment.");
+      console.error('Error posting comment:', error);
     }
-    hideLoading();
   });
 
-  commentInput.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") {
+  commentInput.addEventListener('keypress', async (e) => {
+    if (e.key === 'Enter' && commentInput.value.trim() && currentStatusId) {
       e.preventDefault();
-      commentSubmit.click();
+      try {
+        const commentRef = push(ref(db, `statuses/${currentStatusId}/comments`));
+        await set(commentRef, {
+          userId: currentUserUid,
+          text: commentInput.value.trim(),
+          timestamp: Date.now()
+        });
+        commentInput.value = '';
+      } catch (error) {
+        console.error('Error posting comment:', error);
+      }
     }
+  });
+
+  modalConfirm.addEventListener('click', async () => {
+    if (!currentStatusId) return;
+    try {
+      await remove(ref(db, `statuses/${currentStatusId}`));
+      deleteStatusModal.classList.add('hidden');
+      currentStatusId = null;
+    } catch (error) {
+      console.error('Error deleting status:', error);
+    }
+  });
+
+  modalCancel.addEventListener('click', () => {
+    deleteStatusModal.classList.add('hidden');
+    currentStatusId = null;
   });
 
   async function loadServices(uid) {
     showLoading();
-    servicesList.innerHTML = "";
-    noServicesMessage.classList.add("hidden");
+    servicesList.innerHTML = '';
+    noServicesMessage.classList.add('hidden');
 
     try {
-      const servicesRef = ref(db, "services");
+      const servicesRef = ref(db, 'services');
+      const usersRef = ref(db, 'users');
+      const usersSnap = await get(usersRef);
+      const users = usersSnap.exists() ? usersSnap.val() : {};
+
       onValue(servicesRef, async (servicesSnap) => {
-        servicesList.innerHTML = "";
-        noServicesMessage.classList.add("hidden");
+        servicesList.innerHTML = '';
+        noServicesMessage.classList.add('hidden');
 
         if (!servicesSnap.exists()) {
-          noServicesMessage.classList.remove("hidden");
+          noServicesMessage.classList.remove('hidden');
           hideLoading();
           return;
         }
@@ -1929,127 +1908,121 @@
         const services = servicesSnap.val();
         let hasServices = false;
 
-        for (const sid in services) {
-          const service = services[sid];
-          const usersSnap = await get(ref(db, `users/${service.userId}`));
-          const userData = usersSnap.exists() ? usersSnap.val() : { name: "Unknown", photoURL: null };
-          const serviceCard = renderServiceCard(sid, service, userData, uid);
+        const sortedServices = Object.entries(services).sort((a, b) => (b[1].timestamp || 0) - (a[1].timestamp || 0));
+
+        for (const [sid, service] of sortedServices) {
+          const userData = users[service.userId] || { name: 'Unknown', photoURL: null };
+          const serviceCard = await renderServiceCard(sid, service, userData, uid);
           servicesList.appendChild(serviceCard);
           hasServices = true;
         }
 
         if (!hasServices) {
-          noServicesMessage.classList.remove("hidden");
+          noServicesMessage.classList.remove('hidden');
         }
         hideLoading();
       }, (error) => {
-        console.error("Error listening to services:", error);
-        noServicesMessage.classList.remove("hidden");
+        console.error('Error listening to services:', error);
+        noServicesMessage.classList.remove('hidden');
         hideLoading();
       });
     } catch (error) {
-      console.error("Error loading services:", error);
-      noServicesMessage.classList.remove("hidden");
+      console.error('Error loading services:', error);
+      noServicesMessage.classList.remove('hidden');
       hideLoading();
     }
   }
 
-  function renderServiceCard(sid, service, userData, currentUserUid) {
-    const isOwner = service.userId === currentUserUid;
-    const div = document.createElement("div");
-    div.className = "service-card dark:service-card";
-    div.setAttribute("role", "article");
-    div.setAttribute("aria-label", `Service by ${userData.name || "User"}`);
+  async function renderServiceCard(sid, service, userData, currentUserUid) {
+    const div = document.createElement('div');
+    div.className = 'service-card dark:service-card';
+    div.dataset.sid = sid;
+    div.setAttribute('role', 'article');
+    div.setAttribute('aria-label', `Service by ${userData.name || 'User'}`);
 
-    const deleteIcon = isOwner
-      ? `<svg class="delete-icon" data-sid="${sid}" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-           <path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
-         </svg>`
-      : "";
+    const isOwner = service.userId === currentUserUid;
 
     div.innerHTML = `
       <span class="sponsored-text dark:sponsored-text">Sponsored</span>
       <div class="service-header dark:service-header">
         <img src="${userData.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${userData.name || 'User'} avatar" class="service-avatar" />
         <div class="service-info dark:service-info">
-          <h4>${userData.name || "User"}</h4>
+          <h4>${userData.name || 'User'}</h4>
           <p class="service-time dark:service-time">${timeAgo(service.timestamp)}</p>
         </div>
-        ${deleteIcon}
+        ${isOwner ? `
+          <svg class="delete-icon" data-sid="${sid}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
+          </svg>
+        ` : ''}
       </div>
-      <img src="${service.image || 'https://via.placeholder.com/300'}" alt="Service image" class="service-image dark:service-image" />
-      <p class="service-description dark:service-description">${service.description || ""}</p>
-      <a href="${service.ctaLink || '#'}" class="service-cta dark:service-cta">${service.ctaText || "Learn More"}</a>
+      ${service.image ? `
+        <img src="${service.image}" alt="Service image" class="service-image dark:service-image" />
+      ` : ''}
+      <p class="service-description dark:service-description">${service.description || ''}</p>
+      <a href="${service.ctaLink || '#'}" class="service-cta dark:service-cta" target="_blank" rel="noopener noreferrer">${service.ctaText || 'Learn More'}</a>
     `;
 
-    if (document.body.classList.contains("dark")) {
-      div.classList.add("dark");
-      div.querySelectorAll(".service-info, .service-description, .sponsored-text, .service-cta, .service-time").forEach(el => el.classList.add("dark"));
-    }
-
     if (isOwner) {
-      div.querySelector(".delete-icon")?.addEventListener("click", (e) => {
-        e.stopPropagation();
-        showDeleteServiceModal(sid);
+      const deleteBtn = div.querySelector('.delete-icon');
+      deleteBtn.addEventListener('click', () => {
+        currentStatusId = sid;
+        deleteServiceModal.classList.remove('hidden');
       });
     }
 
     return div;
   }
 
-  function showDeleteServiceModal(sid) {
-    currentStatusId = sid;
-    deleteServiceModal.classList.remove("hidden");
-    modalServiceConfirm.focus();
-  }
-
-  modalServiceConfirm.addEventListener("click", async () => {
-    if (currentStatusId) {
-      showLoading();
-      try {
-        await remove(ref(db, `services/${currentStatusId}`));
-        deleteServiceModal.classList.add("hidden");
-        currentStatusId = null;
-      } catch (error) {
-        console.error("Error deleting service:", error);
-        alert("Failed to delete service.");
-      }
-      hideLoading();
+  modalServiceConfirm.addEventListener('click', async () => {
+    if (!currentStatusId) return;
+    try {
+      await remove(ref(db, `services/${currentStatusId}`));
+      deleteServiceModal.classList.add('hidden');
+      currentStatusId = null;
+    } catch (error) {
+      console.error('Error deleting service:', error);
     }
   });
 
-  modalServiceCancel.addEventListener("click", () => {
-    deleteServiceModal.classList.add("hidden");
+  modalServiceCancel.addEventListener('click', () => {
+    deleteServiceModal.classList.add('hidden');
     currentStatusId = null;
   });
 
   async function loadNotifications(uid) {
     try {
-      const notifsRef = ref(db, `notifications/${uid}`);
-      onValue(notifsRef, (notifsSnap) => {
-        let unreadCount = 0;
-        if (notifsSnap.exists()) {
-          const notifications = notifsSnap.val();
-          for (const sid in notifications) {
-            const statusNotifs = notifications[sid];
-            for (const type in statusNotifs) {
-              for (const nid in statusNotifs[type]) {
-                if (!statusNotifs[type][nid].read) {
-                  unreadCount++;
-                }
-              }
-            }
-          }
+      const notificationsRef = ref(db, `notifications/${uid}`);
+      onValue(notificationsRef, (snap) => {
+        if (!snap.exists()) {
+          notificationBadge.classList.add('hidden');
+          notificationBadge.textContent = '0';
+          return;
         }
-        notificationBadge.textContent = unreadCount;
-        notificationBadge.classList.toggle("hidden", unreadCount === 0);
+
+        const notifications = snap.val();
+        let unreadCount = 0;
+
+        for (const nid in notifications) {
+          if (!notifications[nid].read) unreadCount++;
+        }
+
+        if (unreadCount > 0) {
+          notificationBadge.textContent = unreadCount > 9 ? '9+' : unreadCount;
+          notificationBadge.classList.remove('hidden');
+        } else {
+          notificationBadge.classList.add('hidden');
+        }
       }, (error) => {
-        console.error("Error listening to notifications:", error);
+        console.error('Error loading notifications:', error);
+        notificationBadge.classList.add('hidden');
       });
     } catch (error) {
-      console.error("Error loading notifications:", error);
+      console.error('Error setting up notifications listener:', error);
+      notificationBadge.classList.add('hidden');
     }
   }
+
 </script>
 </body>
 </html>
