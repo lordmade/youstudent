@@ -1628,6 +1628,65 @@
     }
   }
 
+// Function to shuffle an array (Fisher-Yates algorithm)
+function shuffleArray(array) {
+  for (let i = array.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [array[i], array[j]] = [array[j], array[i]];
+  }
+  return array;
+}
+
+// Function to fetch and render statuses with the most recent post first
+async function fetchAndRenderStatuses(currentUserUid, container) {
+  try {
+    const statusesRef = ref(db, 'statuses');
+    const snapshot = await get(statusesRef);
+    const statuses = [];
+
+    // Collect all statuses with their IDs
+    snapshot.forEach(child => {
+      statuses.push({ sid: child.key, ...child.val() });
+    });
+
+    if (statuses.length === 0) {
+      container.innerHTML = '<p class="text-center text-gray-500 dark:text-gray-400">No posts available.</p>';
+      return;
+    }
+
+    // Sort statuses by timestamp (descending) to get the most recent first
+    statuses.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+
+    // Separate the most recent post
+    const mostRecent = statuses.shift(); // Remove and store the most recent post
+
+    // Shuffle the remaining posts
+    const shuffledStatuses = shuffleArray(statuses);
+
+    // Combine: most recent post first, followed by shuffled posts
+    const finalStatuses = mostRecent ? [mostRecent, ...shuffledStatuses] : shuffledStatuses;
+
+    // Clear the container
+    container.innerHTML = '';
+
+    // Fetch user data and render each status
+    for (const status of finalStatuses) {
+      const userRef = ref(db, `users/${status.userId}`);
+      const userSnapshot = await get(userRef);
+      const userData = userSnapshot.val() || {};
+      const statusCard = await renderStatusCard(status.sid, status, userData, currentUserUid);
+      container.appendChild(statusCard);
+    }
+  } catch (error) {
+    console.error('Error fetching statuses:', error);
+    container.innerHTML = '<p class="text-center text-red-500 dark:text-red-400">Error loading posts.</p>';
+  }
+}
+
+
+
+  
+
 async function renderStatusCard(sid, status, userData, currentUserUid) {
   const div = document.createElement("div");
   div.className = "status-card dark:status-card";
