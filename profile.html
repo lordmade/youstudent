@@ -221,7 +221,7 @@
     }
     .modal-btn {
       padding: 0.5rem 1rem;
-      border-radius: 8px;
+      border-radius: 9999px;
       font-weight: 600;
       font-size: 0.875rem;
       transition: background-color 0.2s ease, transform 0.2s ease;
@@ -262,6 +262,19 @@
       border: 1px solid #4b5563;
       background: #374151;
       color: #e5e7eb;
+    }
+    .comment-btn {
+      padding: 0.5rem 1.5rem;
+      border-radius: 9999px;
+      font-weight: 600;
+      font-size: 0.875rem;
+      background: #ef4444;
+      color: white;
+      transition: background-color 0.2s ease, transform 0.2s ease;
+    }
+    .comment-btn:hover {
+      background: #dc2626;
+      transform: translateY(-1px);
     }
     .loading-overlay {
       position: fixed;
@@ -358,7 +371,7 @@
     <div class="p-4 border-t border-gray-200 dark:border-gray-600">
       <div class="flex items-center gap-2">
         <input id="comment-input" type="text" placeholder="Add a comment..." class="flex-1 p-2 border border-gray-300 dark:border-gray-500 rounded-lg bg-gray-50 dark:bg-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-red-500">
-        <button id="comment-submit" class="px-4 py-2 bg-red-500 text-white rounded-lg font-semibold hover:bg-red-600 transition duration-200">Post</button>
+        <button id="comment-submit" class="comment-btn">Post</button>
       </div>
     </div>
   </div>
@@ -374,7 +387,6 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
     import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
     import { getDatabase, ref, onValue, set, push, get, remove, update, onDisconnect } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-database.js";
-    import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-storage.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
@@ -389,7 +401,11 @@
     const app = initializeApp(firebaseConfig);
     const auth = getAuth();
     const db = getDatabase();
-    const storage = getStorage();
+
+    const cloudinaryConfig = {
+      cloudName: "banter_box", // Replace with your Cloudinary cloud name
+      uploadPreset: "banterbox_profile" // Replace with your Cloudinary upload preset
+    };
 
     const profileAvatar = document.getElementById("profile-avatar");
     const profileUsername = document.getElementById("profile-username");
@@ -549,7 +565,7 @@
           bio: editBio.value.trim()
         };
 
-        // Handle image upload
+        // Handle image upload to Cloudinary
         if (editPhoto.files && editPhoto.files[0]) {
           const file = editPhoto.files[0];
           if (!file.type.startsWith("image/")) {
@@ -557,11 +573,21 @@
             hideLoading();
             return;
           }
-          const storagePath = `profile_pictures/${currentUserUid}/${Date.now()}_${file.name}`;
-          const imageRef = storageRef(storage, storagePath);
-          await uploadBytes(imageRef, file);
-          const photoURL = await getDownloadURL(imageRef);
-          updates.photoURL = photoURL;
+
+          const formData = new FormData();
+          formData.append("file", file);
+          formData.append("upload_preset", cloudinaryConfig.uploadPreset);
+          formData.append("folder", `profile_pictures/${currentUserUid}`);
+
+          const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudinaryConfig.cloudName}/image/upload`, {
+            method: "POST",
+            body: formData
+          });
+          const data = await response.json();
+          if (!response.ok) {
+            throw new Error(data.error?.message || "Failed to upload image to Cloudinary");
+          }
+          updates.photoURL = data.secure_url;
         }
 
         await update(userRef, updates);
@@ -775,7 +801,7 @@
       const firstMedia = status.media[0];
       const isVideo = firstMedia.type === 'video';
       const mediaUrl = isVideo ? firstMedia.url : firstMedia.url;
-      const thumbnailUrl = isVideo ? `https://res.cloudinary.com/banter_box/video/upload/e_thumb/${firstMedia.publicId}.jpg` : firstMedia.url;
+      const thumbnailUrl = isVideo ? `https://res.cloudinary.com/${cloudinaryConfig.cloudName}/video/upload/e_thumb/${firstMedia.publicId}.jpg` : firstMedia.url;
 
       div.innerHTML = `
         ${isVideo ? `
