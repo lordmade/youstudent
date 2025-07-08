@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <meta name="description" content="BanterBox Reels - Watch and share short videos and photos with friends."/>
+  <meta name="description" content="BanterBox Reels - Watch and share short videos, photos, and music with friends."/>
   <meta name="theme-color" content="#EF4444"/>
   <title>BanterBox Reels</title>
   <link rel="icon" href="/favicon.ico"/>
@@ -72,6 +72,23 @@
       font-size: 0.9rem; line-height: 1.4; color: #e5e7eb;
       display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
       overflow: hidden; text-overflow: ellipsis;
+    }
+    .reel-track-info {
+      margin-top: 0.5rem;
+      display: flex; flex-direction: column; gap: 0.25rem;
+    }
+    .reel-track-info audio {
+      width: 100%; max-width: 300px; border-radius: 8px; margin-top: 0.5rem;
+    }
+    .reel-track-info p {
+      font-size: 0.85rem; color: #e5e7eb; text-shadow: 0 0 4px rgba(0, 0, 0, 0.8);
+    }
+    .reel-track-info a {
+      font-size: 0.8rem; color: #3b82f6; text-decoration: underline;
+      text-shadow: 0 0 4px rgba(0, 0, 0, 0.8);
+    }
+    .reel-track-info a:hover {
+      color: #60a5fa;
     }
     .reel-actions {
       position: absolute; right: 1rem; top: 50%;
@@ -267,6 +284,9 @@
       .suggested-reels {
         bottom: 7rem; padding: 0.5rem;
       }
+      .reel-track-info audio {
+        max-width: 250px;
+      }
     }
     @keyframes spin {
       to { transform: rotate(360deg); }
@@ -382,7 +402,7 @@
     }
 
     function timeAgo(timestamp) {
-      const now = new Date('2025-07-08T20:52:00+02:00').getTime(); // 8:52 PM SAST, July 08, 2025
+      const now = new Date('2025-07-08T23:03:00+02:00').getTime(); // 11:03 PM SAST, July 08, 2025
       const diff = now - (timestamp || now);
       const seconds = Math.floor(diff / 1000);
       const minutes = Math.floor(seconds / 60);
@@ -454,7 +474,7 @@
         }
 
         const statusEntries = Object.entries(statuses)
-          .filter(([_, status]) => status.media && status.media.some(media => ['video', 'image'].includes(media.type)))
+          .filter(([_, status]) => (status.media && status.media.some(media => ['video', 'image'].includes(media.type))) || status.track)
           .sort((a, b) => (b[1].timestamp || 0) - (a[1].timestamp || 0));
         let targetReelElement = null;
 
@@ -462,7 +482,9 @@
           const userSnap = await get(ref(db, `users/${status.userId}`));
           const userInfo = userSnap.val() || { name: 'Anonymous', photoURL: 'https://www.gravatar.com/avatar?d=mp' };
 
-          status.media.forEach((media, idx) => {
+          // Handle media (videos/images)
+          const mediaItems = status.media || [];
+          mediaItems.forEach((media, idx) => {
             if (!['video', 'image'].includes(media.type)) return;
 
             const reel = document.createElement('div');
@@ -501,6 +523,27 @@
               </div>
               <p class="reel-caption">${sanitizeInput(status.text || '')}</p>
             `;
+
+            // Add track info if present
+            if (status.track) {
+              const trackInfo = document.createElement('div');
+              trackInfo.className = 'reel-track-info';
+              trackInfo.innerHTML = `
+                <audio src="${status.track.url}" controls class="reel-media" data-duration="30" aria-label="Track: ${sanitizeInput(status.track.name)} by ${sanitizeInput(status.track.artist)}"></audio>
+                <p>${sanitizeInput(status.track.name)} by ${sanitizeInput(status.track.artist)}</p>
+                <a href="${status.track.jamendoUrl}" target="_blank" class="hover:underline" aria-label="Listen to ${sanitizeInput(status.track.name)} on Jamendo">Listen on Jamendo</a>
+              `;
+              overlay.appendChild(trackInfo);
+              // Limit audio to 30 seconds
+              const audio = trackInfo.querySelector('audio');
+              audio.addEventListener('timeupdate', () => {
+                if (audio.currentTime > 30) {
+                  audio.pause();
+                  audio.currentTime = 0;
+                  audio.classList.remove('playing');
+                }
+              });
+            }
 
             const actions = document.createElement('div');
             actions.className = 'reel-actions';
@@ -559,7 +602,7 @@
             const suggestedReels = document.createElement('div');
             suggestedReels.className = 'suggested-reels';
             statusEntries.slice(0, 5).forEach(([sid, s]) => {
-              if (sid === statusId || !s.media[0]?.thumbnail) return;
+              if (sid === statusId || !s.media?.[0]?.thumbnail) return;
               const thumb = document.createElement('div');
               thumb.className = 'suggested-reel';
               thumb.innerHTML = `
@@ -608,7 +651,7 @@
               mediaElement.addEventListener('error', () => {
                 console.error('Error loading image:', mediaElement.src);
                 showToast('Error loading image.', true);
-                loadingSpinner.style.display = 'none';
+                loadingSpinner.style.display = 'none');
               });
             }
 
@@ -654,6 +697,118 @@
               }
             });
           });
+
+          // Handle track-only reels (no media)
+          if (!mediaItems.length && status.track) {
+            const reel = document.createElement('div');
+            reel.className = 'reel';
+            reel.dataset.sid = statusId;
+            reel.dataset.mediaIndex = -1;
+
+            const placeholder = document.createElement('img');
+            placeholder.src = 'https://via.placeholder.com/640x360?text=Music+Reel';
+            placeholder.alt = 'Music reel placeholder';
+            placeholder.className = 'reel-media';
+
+            const loadingSpinner = document.createElement('div');
+            loadingSpinner.className = 'loading-spinner dark:loading-spinner';
+            loadingSpinner.style.display = 'none';
+
+            const overlay = document.createElement('div');
+            overlay.className = 'reel-overlay';
+            overlay.innerHTML = `
+              <div class="reel-user-info">
+                <a href="profile.html?uid=${status.userId}&owner=${status.userId === currentUser.uid}" aria-label="View ${userInfo.name}'s profile">
+                  <img src="${userInfo.photoURL}" alt="${userInfo.name} avatar" class="dark:reel-user-info img"/>
+                </a>
+                <a href="profile.html?uid=${status.userId}&owner=${status.userId === currentUser.uid}" class="hover:underline">${sanitizeInput(userInfo.name)}</a>
+              </div>
+              <p class="reel-caption">${sanitizeInput(status.text || '')}</p>
+              <div class="reel-track-info">
+                <audio src="${status.track.url}" controls class="reel-media" data-duration="30" aria-label="Track: ${sanitizeInput(status.track.name)} by ${sanitizeInput(status.track.artist)}"></audio>
+                <p>${sanitizeInput(status.track.name)} by ${sanitizeInput(status.track.artist)}</p>
+                <a href="${status.track.jamendoUrl}" target="_blank" class="hover:underline" aria-label="Listen to ${sanitizeInput(status.track.name)} on Jamendo">Listen on Jamendo</a>
+              </div>
+            `;
+            // Limit audio to 30 seconds
+            const audio = overlay.querySelector('audio');
+            audio.addEventListener('timeupdate', () => {
+              if (audio.currentTime > 30) {
+                audio.pause();
+                audio.currentTime = 0;
+                audio.classList.remove('playing');
+              }
+            });
+
+            const actions = document.createElement('div');
+            actions.className = 'reel-actions';
+
+            const likeBtn = document.createElement('button');
+            likeBtn.className = `reel-action-btn ${status.reactions?.[currentUser.uid] ? 'reacted' : ''}`;
+            likeBtn.innerHTML = `
+              <svg class="w-7 h-7" fill="${status.reactions?.[currentUser.uid] ? '#ef4444' : 'none'}" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4.318 6.318a4.5 4.5 0 016.364 0L12 7.636l1.318-1.318a4.5 4.5 0 016.364 0 4.5 4.5 0 010 6.364L12 20.364l-7.682-7.682a4.5 4.5 0 010-6.364z"/>
+              </svg>`;
+            likeBtn.setAttribute('aria-label', status.reactions?.[currentUser.uid] ? 'Unlike reel' : 'Like reel');
+            likeBtn.addEventListener('click', (e) => {
+              e.stopPropagation();
+              if (!status.reactions?.[currentUser.uid]) createLoveAnimation(reel);
+              toggleLike(statusId, likeBtn);
+            });
+
+            const likeCount = document.createElement('span');
+            likeCount.className = 'reel-action-count';
+            likeCount.textContent = status.reactions ? Object.keys(status.reactions).length : 0;
+
+            const shareBtn = document.createElement('button');
+            shareBtn.className = 'reel-action-btn';
+            shareBtn.innerHTML = `
+              <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/>
+              </svg>`;
+            shareBtn.setAttribute('aria-label', 'Share reel');
+            shareBtn.addEventListener('click', (e) => {
+              e.stopPropagation();
+              openShareModal(statusId);
+            });
+
+            actions.append(likeBtn, likeCount, shareBtn);
+            reel.append(placeholder, loadingSpinner, overlay, actions);
+            reel.append(suggestedReels);
+            reelContainer.appendChild(reel);
+
+            if (statusId === targetStatusId) {
+              targetReelElement = reel;
+            }
+
+            reel.addEventListener('touchstart', (e) => {
+              touchStartY = e.touches[0].clientY;
+              touchMoved = false;
+            });
+
+            reel.addEventListener('touchmove', (e) => {
+              touchMoved = true;
+            });
+
+            reel.addEventListener('touchend', (e) => {
+              if (touchMoved) {
+                const touchEndY = e.changedTouches[0].clientY;
+                const deltaY = touchStartY - touchEndY;
+                if (Math.abs(deltaY) > 50) {
+                  const nextReel = deltaY > 0 ? reel.nextElementSibling : reel.previousElementSibling;
+                  if (nextReel) {
+                    reel.style.opacity = '0';
+                    reel.style.transform = `translateY(${deltaY > 0 ? '100vh' : '-100vh'})`;
+                    setTimeout(() => {
+                      nextReel.scrollIntoView({ behavior: 'smooth' });
+                      reel.style.opacity = '1';
+                      reel.style.transform = 'translateY(0)';
+                    }, 400);
+                  }
+                }
+              }
+            });
+          }
         }
 
         if (reelContainer.children.length === 0) {
@@ -779,17 +934,21 @@
         entries.forEach(entry => {
           const media = entry.target;
           const spinner = media.parentElement.querySelector('.loading-spinner');
-          if (entry.isIntersecting && media.tagName === 'VIDEO') {
+          if (entry.isIntersecting) {
             spinner.style.display = 'block';
-            media.play().then(() => {
-              media.classList.add('playing');
+            if (media.tagName === 'VIDEO' || media.tagName === 'AUDIO') {
+              media.play().then(() => {
+                media.classList.add('playing');
+                spinner.style.display = 'none';
+              }).catch(error => {
+                console.error(`Error playing ${media.tagName.toLowerCase()}:`, error);
+                spinner.style.display = 'none';
+                showToast(`Error playing ${media.tagName.toLowerCase()}.`, true);
+              });
+            } else {
               spinner.style.display = 'none';
-            }).catch(error => {
-              console.error('Error auto-playing video:', error);
-              spinner.style.display = 'none';
-              showToast('Error playing video.', true);
-            });
-          } else if (media.tagName === 'VIDEO') {
+            }
+          } else if (media.tagName === 'VIDEO' || media.tagName === 'AUDIO') {
             media.pause();
             media.classList.remove('playing');
             spinner.style.display = 'none';
