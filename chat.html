@@ -113,18 +113,22 @@
     .message {
       max-width: 70%;
       padding: 0.5rem 0.75rem;
-      border-radius: 8px;
+      border-radius: 12px;
       font-size: 0.9rem;
       line-height: 1.4;
       position: relative;
-      margin-bottom: 1rem;
-      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+      margin-bottom: 1.5rem;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+      display: flex;
+      align-items: flex-start;
+      gap: 0.5rem;
     }
     .message.sent {
-      background: #ef4444;
-      color: white;
+      background: #d4f4dd;
+      color: #111827;
       margin-left: auto;
       border-bottom-right-radius: 2px;
+      flex-direction: row-reverse;
     }
     .message.received {
       background: #ffffff;
@@ -133,23 +137,64 @@
       border-bottom-left-radius: 2px;
     }
     .message.dark.sent {
-      background: #dc2626;
+      background: #055c38;
+      color: #e5e7eb;
     }
     .message.dark.received {
       background: #2a3b47;
       color: #e5e7eb;
     }
+    .message::before {
+      content: '';
+      position: absolute;
+      width: 0;
+      height: 0;
+      bottom: 0;
+    }
+    .message.sent::before {
+      border: 8px solid transparent;
+      border-left-color: #d4f4dd;
+      right: -8px;
+      bottom: 0;
+    }
+    .message.received::before {
+      border: 8px solid transparent;
+      border-right-color: #ffffff;
+      left: -8px;
+      bottom: 0;
+    }
+    .message.dark.sent::before {
+      border-left-color: #055c38;
+    }
+    .message.dark.received::before {
+      border-right-color: #2a3b47;
+    }
+    .message-avatar {
+      width: 28px;
+      height: 28px;
+      border-radius: 9999px;
+      object-fit: cover;
+      flex-shrink: 0;
+      margin-top: 0.25rem;
+    }
+    .message-content {
+      flex-grow: 1;
+      word-break: break-word;
+      padding: 0.25rem 0;
+    }
     .message-time {
       font-size: 0.65rem;
-      color: #d1d5db;
+      color: #6b7280;
       position: absolute;
       bottom: -1rem;
       right: 0.5rem;
       opacity: 0.8;
     }
     .message.received .message-time {
-      color: #6b7280;
       left: 0.5rem;
+    }
+    .message.dark.sent .message-time {
+      color: #d1d5db;
     }
     .message.dark.received .message-time {
       color: #9ca3af;
@@ -331,6 +376,12 @@
     return Math.floor(diff / 86400000) + "d ago";
   }
 
+  async function getUserData(uid) {
+    const userRef = ref(db, `users/${uid}`);
+    const userSnap = await get(userRef);
+    return userSnap.exists() ? userSnap.val() : { photoURL: 'https://www.gravatar.com/avatar?d=mp', name: 'User' };
+  }
+
   onAuthStateChanged(auth, async user => {
     if (!user) {
       location.href = "signup.html";
@@ -372,27 +423,20 @@
   async function loadChat(currentUid, otherUid) {
     try {
       chatId = currentUid < otherUid ? `${currentUid}_${otherUid}` : `${otherUid}_${currentUid}`;
-      const userRef = ref(db, `users/${otherUid}`);
-      const userSnap = await get(userRef);
-      if (!userSnap.exists()) {
-        alert("User not found.");
-        location.href = "friends.html";
-        return;
-      }
+      const userData = await getUserData(otherUid);
 
-      const userData = userSnap.val();
       chatAvatar.src = userData.photoURL || 'https://www.gravatar.com/avatar?d=mp';
       chatUsername.textContent = userData.name || 'User';
       const isOnline = userData.presence === 'online';
       chatStatus.textContent = isOnline ? 'Online' : `Last seen ${timeAgo(userData.lastSeen)}`;
       statusDot.classList.toggle('online', isOnline);
 
-      onValue(userRef, (snap) => {
+      onValue(ref(db, `users/${otherUid}`), (snap) => {
         if (snap.exists()) {
           const data = snap.val();
           const isOnline = data.presence === 'online';
           chatStatus.textContent = isOnline ? 'Online' : `Last seen ${timeAgo(data.lastSeen)}`;
-          statusDot.classList.toggle('online', isDark);
+          statusDot.classList.toggle('online', isOnline);
         }
       });
 
@@ -401,15 +445,18 @@
       if (!chatSnap.exists()) {
         await set(chatRef, {
           participants: {
-            [currentUid]: true,
-            [otherUid]: true
+            [currentUid]: { unreadCount: 0 },
+            [otherUid]: { unreadCount: 0 }
           },
           createdAt: Date.now()
         });
+      } else {
+        // Reset unread count for current user
+        await update(ref(db, `chats/${chatId}/participants/${currentUid}`), { unreadCount: 0 });
       }
 
       const messagesRef = ref(db, `messages/${chatId}`);
-      onValue(messagesRef, (messagesSnap) => {
+      onValue(messagesRef, async (messagesSnap) => {
         messagesList.innerHTML = '';
         if (!messagesSnap.exists()) {
           hideLoading();
@@ -419,14 +466,21 @@
         const messages = messagesSnap.val();
         const sortedMessages = Object.entries(messages).sort((a, b) => (a[1].timestamp || 0) - (b[1].timestamp || 0));
 
-        sortedMessages.forEach(([mid, message]) => {
-          const messageElement = renderMessage(mid, message, currentUid);
+        for (const [mid, message] of sortedMessages) {
+          const senderData = await getUserData(message.sender);
+          const messageElement = renderMessage(mid, message, currentUid, senderData);
           messagesList.appendChild(messageElement);
 
           if (message.sender !== currentUid && !message.read) {
-            update(ref(db, `messages/${chatId}/${mid}`), { read: true });
+            await update(ref(db, `messages/${chatId}/${mid}`), { read: true });
+            // Decrement unread count for current user
+            const chatSnap = await get(ref(db, `chats/${chatId}/participants/${currentUid}`));
+            const currentUnread = chatSnap.val()?.unreadCount || 0;
+            if (currentUnread > 0) {
+              await update(ref(db, `chats/${chatId}/participants/${currentUid}`), { unreadCount: currentUnread - 1 });
+            }
           }
-        });
+        }
 
         messagesList.scrollTop = messagesList.scrollHeight;
         hideLoading();
@@ -440,14 +494,17 @@
     }
   }
 
-  function renderMessage(mid, message, currentUid) {
+  function renderMessage(mid, message, currentUid, senderData) {
     const isSent = message.sender === currentUid;
     const div = document.createElement('div');
     div.className = `message ${isSent ? 'sent' : 'received'} dark:${isSent ? 'sent' : 'received'}`;
     div.dataset.mid = mid;
     div.innerHTML = `
-      <p>${message.text}</p>
-      <span class="message-time dark:${isSent ? '' : 'received'}">${timeAgo(message.timestamp)}</span>
+      <img src="${senderData.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${senderData.name || 'User'} avatar" class="message-avatar" />
+      <div class="message-content">
+        <p>${message.text}</p>
+        <span class="message-time dark:${isSent ? 'sent' : 'received'}">${timeAgo(message.timestamp)}</span>
+      </div>
     `;
     return div;
   }
@@ -462,6 +519,10 @@
         timestamp: Date.now(),
         read: false
       });
+      // Increment unread count for the other user
+      const chatSnap = await get(ref(db, `chats/${chatId}/participants/${otherUserUid}`));
+      const currentUnread = chatSnap.val()?.unreadCount || 0;
+      await update(ref(db, `chats/${chatId}/participants/${otherUserUid}`), { unreadCount: currentUnread + 1 });
       chatInput.value = '';
       messagesList.scrollTop = messagesList.scrollHeight;
     } catch (error) {
@@ -480,6 +541,10 @@
           timestamp: Date.now(),
           read: false
         });
+        // Increment unread count for the other user
+        const chatSnap = await get(ref(db, `chats/${chatId}/participants/${otherUserUid}`));
+        const currentUnread = chatSnap.val()?.unreadCount || 0;
+        await update(ref(db, `chats/${chatId}/participants/${otherUserUid}`), { unreadCount: currentUnread + 1 });
         chatInput.value = '';
         messagesList.scrollTop = messagesList.scrollHeight;
       } catch (error) {
@@ -491,7 +556,6 @@
   backBtn.addEventListener('click', () => {
     window.location.href = 'friends.html';
   });
-
 </script>
 </body>
 </html>
