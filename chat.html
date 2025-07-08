@@ -2,249 +2,496 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>BanterBox - Chat</title>
-  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet" />
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
   <style>
-    /* [Your existing styles remain unchanged for brevity; only key enhancements are shown] */
-    .message-list {
-      /* Add virtual scroll hint */
-      position: relative;
-      padding-bottom: 140px; /* Consistent with input height + padding */
+    * {
+      user-select: none;
+      -webkit-user-select: none;
+      -moz-user-select: none;
+      -ms-user-select: none;
+      touch-action: manipulation;
     }
-    .load-more {
-      text-align: center;
-      padding: 0.5rem;
-      color: #6b7280;
-      cursor: pointer;
+    body {
+      font-family: 'Inter', 'Segoe UI', sans-serif;
+      background: #f3f2ef;
+      transition: background 0.3s ease;
+      margin: 0;
+      padding-bottom: 80px;
     }
-    .load-more.dark { color: #9ca3af; }
-    .load-more:hover { color: #ef4444; }
-    .typing-indicator.active { bottom: 80px; } /* Adjusted for load-more */
-    /* Enhance animations */
-    @keyframes slideIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-    /* Add unread marker */
-    .unread-marker {
-      position: absolute;
-      left: 50%;
-      transform: translateX(-50%);
-      background: #ef4444;
-      color: #fff;
-      padding: 0.25rem 0.75rem;
-      border-radius: 10px;
-      font-size: 0.75rem;
+    body.dark {
+      background: #0b141a;
+    }
+    .header {
+      background: white;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
       z-index: 10;
     }
-    .unread-marker.dark { background: #dc2626; }
+    .header.dark {
+      background: #1f2a44;
+      border-bottom: 1px solid #2a3b47;
+      color: #e5e7eb;
+    }
+    .chat-container {
+      display: flex;
+      flex-direction: column;
+      height: calc(100vh - 64px);
+      max-width: 800px;
+      margin: 64px auto 0;
+    }
+    .chat-header {
+      display: flex;
+      align-items: center;
+      padding: 0.75rem 1rem;
+      background: white;
+    }
+    .chat-header.dark {
+      background: #1f2a44;
+      color: #e5e7eb;
+    }
+    .chat-avatar {
+      width: 40px;
+      height: 40px;
+      border-radius: 9999px;
+      object-fit: cover;
+      border: 2px solid transparent;
+      background: linear-gradient(to right, #ef4444, #f97316);
+      padding: 2px;
+      margin-right: 0.75rem;
+    }
+    .chat-info {
+      flex-grow: 1;
+    }
+    .chat-info h4 {
+      font-weight: 700;
+      font-size: 1rem;
+      color: #111827;
+    }
+    .chat-info.dark h4 {
+      color: #e5e7eb;
+    }
+    .chat-status {
+      font-size: 0.75rem;
+      color: #6b7280;
+    }
+    .chat-status.dark {
+      color: #9ca3af;
+    }
+    .status-dot {
+      position: absolute;
+      bottom: 2px;
+      right: 2px;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      border: 2px solid white;
+      background: #6b7280;
+    }
+    .status-dot.online {
+      background: #22c55e;
+    }
+    .status-dot.dark {
+      border-color: #1f2a44;
+    }
+    .chat-messages {
+      flex-grow: 1;
+      overflow-y: auto;
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      background: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAYAAADED76LAAAAFUlEQVR4AWP4z8Dwn4E5DAwMDOoBAM6uAYvD2MppAAAAAElFTkSuQmCC') repeat;
+    }
+    .chat-messages.dark {
+      background: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAYAAADED76LAAAAFUlEQVR4AWPo5+fg/38G5jAwMDAwEQA6uwZpfO9k8QAAAABJRU5ErkJggg==') repeat;
+    }
+    .message {
+      max-width: 70%;
+      padding: 0.5rem 0.75rem;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      line-height: 1.4;
+      position: relative;
+      margin-bottom: 1rem;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+    }
+    .message.sent {
+      background: #ef4444;
+      color: white;
+      margin-left: auto;
+      border-bottom-right-radius: 2px;
+    }
+    .message.received {
+      background: #ffffff;
+      color: #111827;
+      margin-right: auto;
+      border-bottom-left-radius: 2px;
+    }
+    .message.dark.sent {
+      background: #dc2626;
+    }
+    .message.dark.received {
+      background: #2a3b47;
+      color: #e5e7eb;
+    }
+    .message-time {
+      font-size: 0.65rem;
+      color: #d1d5db;
+      position: absolute;
+      bottom: -1rem;
+      right: 0.5rem;
+      opacity: 0.8;
+    }
+    .message.received .message-time {
+      color: #6b7280;
+      left: 0.5rem;
+    }
+    .message.dark.received .message-time {
+      color: #9ca3af;
+    }
+    .chat-input-container {
+      display: flex;
+      align-items: center;
+      padding: 0.5rem;
+      background: white;
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      max-width: 800px;
+      margin: 0 auto;
+      border-top: 1px solid #e5e7eb;
+    }
+    .chat-input-container.dark {
+      background: #1f2a44;
+      border-top: 1px solid #2a3b47;
+    }
+    .chat-input {
+      flex-grow: 1;
+      padding: 0.5rem 0.75rem;
+      border: none;
+      border-radius: 9999px;
+      font-size: 0.9rem;
+      background: #e5e7eb;
+      outline: none;
+      transition: background 0.2s ease;
+    }
+    .chat-input:focus {
+      background: #d1d5db;
+    }
+    .chat-input.dark {
+      background: #2a3b47;
+      color: #e5e7eb;
+    }
+    .chat-input.dark:focus {
+      background: #3b4b5c;
+    }
+    .send-btn {
+      margin-left: 0.5rem;
+      width: 40px;
+      height: 40px;
+      background: #ef4444;
+      color: white;
+      border-radius: 9999px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.2s ease, transform 0.2s ease;
+    }
+    .send-btn:hover {
+      background: #dc2626;
+      transform: scale(1.05);
+    }
+    .send-btn.dark {
+      background: #dc2626;
+    }
+    .send-btn.dark:hover {
+      background: #b91c1c;
+    }
+    .loading-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 50;
+    }
+    .back-btn {
+      color: #6b7280;
+      cursor: pointer;
+      transition: color 0.2s ease;
+      margin-right: 0.75rem;
+    }
+    .back-btn:hover {
+      color: #ef4444;
+    }
+    .back-btn.dark {
+      color: #9ca3af;
+    }
+    .back-btn.dark:hover {
+      color: #dc2626;
+    }
   </style>
 </head>
 <body>
-  <header class="header dark:header">
-    <!-- [Your existing header structure] -->
-  </header>
-  <div class="chat-container">
-    <div id="search-bar" class="search-bar dark:search-bar"></div>
-    <div id="message-list" class="message-list dark:message-list" aria-live="polite" aria-relevant="additions">
-      <div id="load-more" class="load-more dark:load-more" style="display: none;">Load older messages</div>
-    </div>
-    <div id="typing-indicator" class="typing-indicator dark:typing-indicator"></div>
-    <div id="input-container" class="input-container dark:input-container"></div>
-    <p id="media-error" class="error-message dark:error-message"></p>
-  </div>
-  <!-- [Your existing modals and overlay] -->
-
-  <div id="loading-overlay" class="loading-overlay hidden">
-    <svg class="loading-spinner" viewBox="0 0 24 24">
-      <circle cx="12" cy="12" r="10" />
+  <div class="loading-overlay" id="loading-overlay">
+    <svg class="animate-spin h-8 w-8 text-red-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4z"/>
     </svg>
   </div>
 
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
-    import { getAuth, onAuthStateChanged, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
-    import { getDatabase, ref, onValue, push, update, get, set, remove, query, limitToLast } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-database.js";
-    import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-storage.js";
+  <header class="header dark:header">
+    <div class="chat-header dark:chat-header">
+      <svg class="back-btn dark:back-btn" id="back-btn" fill="none" stroke="currentColor" viewBox="0 0 24 24" width="24" height="24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+      </svg>
+      <div class="relative">
+        <img id="chat-avatar" src="https://www.gravatar.com/avatar?d=mp" alt="User avatar" class="chat-avatar" />
+        <span id="status-dot" class="status-dot"></span>
+      </div>
+      <div class="chat-info dark:chat-info">
+        <h4 id="chat-username">User</h4>
+        <p id="chat-status" class="chat-status dark:chat-status">Offline</p>
+      </div>
+    </div>
+  </header>
 
-    const firebaseConfig = {
-      apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
-      authDomain: "fire-b-a8878.firebaseapp.com",
-      databaseURL: "https://fire-b-a8878.firebaseio.com",
-      projectId: "fire-b-a8878",
-      storageBucket: "fire-b-a8878.appspot.com",
-      messagingSenderId: "658673187627",
-      appId: "1:658673187627:web:6e4c29af661785f0afa36e"
-    };
+  <div class="chat-container">
+    <div id="messages-list" class="chat-messages dark:chat-messages" aria-live="polite" aria-relevant="additions"></div>
+    <div class="chat-input-container dark:chat-input-container">
+      <input id="chat-input" type="text" placeholder="Type a message..." class="chat-input dark:chat-input" />
+      <button id="send-btn" class="send-btn dark:send-btn" aria-label="Send message">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="24" height="24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
+        </svg>
+      </button>
+    </div>
+  </div>
 
-    const app = initializeApp(firebaseConfig);
-    const auth = getAuth();
-    const db = getDatabase();
-    const storage = getStorage();
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
+  import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
+  import { getDatabase, ref, onValue, set, push, get, update, onDisconnect } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-database.js";
 
-    // [Your existing element references]
-    const loadMore = document.getElementById("load-more");
+  const firebaseConfig = {
+    apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
+    authDomain: "fire-b-a8878.firebaseapp.com",
+    databaseURL: "https://fire-b-a8878.firebaseio.com",
+    projectId: "fire-b-a8878",
+    storageBucket: "fire-b-a8878.appspot.com",
+    messagingSenderId: "658673187627",
+    appId: "1:658673187627:web:6e4c29af661785f0afa36e"
+  };
 
-    // Generate a secure key (for demo; in production, use a server-side key)
-    const ENCRYPTION_KEY = CryptoJS.lib.WordArray.random(32).toString();
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth();
+  const db = getDatabase();
 
-    // [Your existing utility functions (encryptMessage, decryptMessage, showLoading, hideLoading, etc.)]
+  const loadingOverlay = document.getElementById("loading-overlay");
+  const backBtn = document.getElementById("back-btn");
+  const chatAvatar = document.getElementById("chat-avatar");
+  const statusDot = document.getElementById("status-dot");
+  const chatUsername = document.getElementById("chat-username");
+  const chatStatus = document.getElementById("chat-status");
+  const messagesList = document.getElementById("messages-list");
+  const chatInput = document.getElementById("chat-input");
+  const sendBtn = document.getElementById("send-btn");
 
-    // Enhanced initialization
-    async function initializeChat(user, friendUid) {
-      chatId = user.uid < friendUid ? `${user.uid}_${friendUid}` : `${friendUid}_${user.uid}`;
-      const chatRef = ref(db, `messages/${chatId}`);
-      const chatExists = (await get(chatRef)).exists();
+  let currentUserUid = null;
+  let otherUserUid = null;
+  let chatId = null;
 
-      if (!chatExists) {
-        await set(chatRef, {});
-        await set(ref(db, `userChats/${user.uid}/${chatId}`), true);
-        await set(ref(db, `userChats/${friendUid}/${chatId}`), true);
-      }
+  function showLoading() { loadingOverlay.classList.remove("hidden"); }
+  function hideLoading() { loadingOverlay.classList.add("hidden"); }
 
-      // Set up presence
-      const userStatusRef = ref(db, `users/${user.uid}/presence`);
-      const friendStatusRef = ref(db, `users/${friendUid}/presence`);
-      onValue(userStatusRef, snap => {
-        if (snap.val() !== 'online') set(userStatusRef, 'online');
-        window.onbeforeunload = () => set(userStatusRef, { lastSeen: Date.now(), presence: 'offline' });
-      });
-      onValue(friendStatusRef, snap => {
-        chatStatus.textContent = snap.val() === 'online' ? 'online' : timeAgo(snap.val().lastSeen);
-        chatStatus.classList.toggle('online', snap.val() === 'online');
-      });
+  function applyTheme(themeValue) {
+    const isDark = themeValue === 'dark';
+    document.body.classList.toggle('dark', isDark);
+    document.querySelector('.header').classList.toggle('dark', isDark);
+    document.querySelector('.chat-header').classList.toggle('dark', isDark);
+    document.querySelector('.chat-input-container').classList.toggle('dark', isDark);
+    document.querySelector('.chat-messages').classList.toggle('dark', isDark);
+    document.querySelectorAll('.chat-info, .chat-status, .message, .status-dot, .send-btn, .chat-input, .back-btn').forEach(el => el.classList.toggle('dark', isDark));
+  }
+
+  function timeAgo(timestamp) {
+    if (!timestamp) return "";
+    const now = Date.now();
+    const diff = now - timestamp;
+    if (diff < 60000) return "just now";
+    if (diff < 3600000) return Math.floor(diff / 60000) + "m ago";
+    if (diff < 86400000) return Math.floor(diff / 3600000) + "h ago";
+    return Math.floor(diff / 86400000) + "d ago";
+  }
+
+  onAuthStateChanged(auth, async user => {
+    if (!user) {
+      location.href = "signup.html";
+      return;
     }
+    currentUserUid = user.uid;
+    showLoading();
 
-    // Optimized message rendering with pagination
-    let lastVisible = null;
-    const PAGE_SIZE = 20;
+    try {
+      const userRef = ref(db, `users/${user.uid}`);
+      await onDisconnect(userRef).update({
+        presence: 'offline',
+        lastSeen: Date.now()
+      });
+      await update(userRef, {
+        presence: 'online',
+        lastSeen: Date.now()
+      });
 
-    async function loadMessages(initial = true) {
-      showLoading();
-      const messagesRef = ref(db, `messages/${chatId}`);
-      const q = initial ? query(messagesRef, limitToLast(PAGE_SIZE)) : query(messagesRef, limitToLast(PAGE_SIZE + 1), startAfter(lastVisible));
-      const snap = await get(q);
-      if (!snap.exists()) {
-        hideLoading();
+      const snap = await get(ref(db, `users/${user.uid}/settings`));
+      const settings = snap.val() || {};
+      applyTheme(settings.theme || 'light');
+
+      const urlParams = new URLSearchParams(window.location.search);
+      otherUserUid = urlParams.get('uid');
+      if (!otherUserUid) {
+        alert("No user selected for chat.");
+        location.href = "friends.html";
         return;
       }
-      const messages = snap.val();
-      const messageIds = Object.keys(messages).sort((a, b) => messages[b].timestamp - messages[a].timestamp);
-      if (!initial && messageIds.length > PAGE_SIZE) messageIds.pop(); // Exclude the last one if not initial
-      lastVisible = messages[messageIds[0]];
 
-      messageIds.forEach(mid => {
-        const msg = messages[mid];
-        const isSent = msg.sender === currentUser.uid;
-        renderMessage(msg, isSent, friendSnap.val(), mid, chatId, currentUser.uid);
-        if (!isSent && !msg.read) update(ref(db, `messages/${chatId}/${mid}`), { read: true });
+      await loadChat(user.uid, otherUserUid);
+    } catch (error) {
+      console.error('Error initializing chat:', error);
+      hideLoading();
+    }
+  });
+
+  async function loadChat(currentUid, otherUid) {
+    try {
+      chatId = currentUid < otherUid ? `${currentUid}_${otherUid}` : `${otherUid}_${currentUid}`;
+      const userRef = ref(db, `users/${otherUid}`);
+      const userSnap = await get(userRef);
+      if (!userSnap.exists()) {
+        alert("User not found.");
+        location.href = "friends.html";
+        return;
+      }
+
+      const userData = userSnap.val();
+      chatAvatar.src = userData.photoURL || 'https://www.gravatar.com/avatar?d=mp';
+      chatUsername.textContent = userData.name || 'User';
+      const isOnline = userData.presence === 'online';
+      chatStatus.textContent = isOnline ? 'Online' : `Last seen ${timeAgo(userData.lastSeen)}`;
+      statusDot.classList.toggle('online', isOnline);
+
+      onValue(userRef, (snap) => {
+        if (snap.exists()) {
+          const data = snap.val();
+          const isOnline = data.presence === 'online';
+          chatStatus.textContent = isOnline ? 'Online' : `Last seen ${timeAgo(data.lastSeen)}`;
+          statusDot.classList.toggle('online', isDark);
+        }
       });
 
-      loadMore.style.display = messageIds.length === PAGE_SIZE + 1 ? 'block' : 'none';
-      hideLoading();
-    }
-
-    loadMore.addEventListener('click', () => loadMessages(false));
-
-    // [Your existing event listeners with enhancements]
-    sendBtn.addEventListener('click', async () => {
-      const text = messageInput.value.trim();
-      if (!text) return;
-      showLoading();
-      try {
-        const encrypted = encryptMessage(text);
-        const data = {
-          sender: currentUser.uid,
-          text: encrypted,
-          timestamp: Date.now(),
-          read: false,
-          ...(messageInput.dataset.replyTo && { replyTo: messageInput.dataset.replyTo, replyText: messageInput.dataset.replyText })
-        };
-        await push(ref(db, `messages/${chatId}`), data);
-        messageInput.value = '';
-        sendBtn.disabled = true;
-        delete messageInput.dataset.replyTo;
-        delete messageInput.dataset.replyText;
-        inputContainer.classList.remove('reply-active');
-        delete inputContainer.dataset.reply;
-      } catch (e) {
-        showError("Failed to send message. Retrying...");
-        setTimeout(() => sendBtn.click(), 2000); // Auto-retry
+      const chatRef = ref(db, `chats/${chatId}`);
+      const chatSnap = await get(chatRef);
+      if (!chatSnap.exists()) {
+        await set(chatRef, {
+          participants: {
+            [currentUid]: true,
+            [otherUid]: true
+          },
+          createdAt: Date.now()
+        });
       }
-      hideLoading();
-    });
 
-    // Enhanced media upload with retry
-    async function uploadMedia(files = lastFiles) {
-      if (!files.length) return;
-      for (const file of files) {
-        if (!file.type.startsWith('image/') && !file.type.startsWith('video/')) {
-          showError('Please select valid media (image or video).');
-          continue;
-        }
-        if (file.size > 10 * 1024 * 1024) {
-          showError('Media size must be less than 10MB.');
-          continue;
-        }
-        showLoading();
-        try {
-          const fileToUpload = file.type.startsWith('image/') ? await compressImage(file) : file;
-          const storagePath = `media/${chatId}/${Date.now()}_${CryptoJS.MD5(file.name).toString()}`;
-          const fileRef = storageRef(storage, storagePath);
-          await uploadBytes(fileRef, fileToUpload);
-          const url = await getDownloadURL(fileRef);
-          await push(ref(db, `messages/${chatId}`), {
-            sender: currentUser.uid,
-            [file.type.startsWith('image/') ? 'image' : 'video']: url,
-            timestamp: Date.now(),
-            read: false
-          });
-        } catch (e) {
-          showError(`Failed to upload: ${e.message}`);
-          lastFiles.push(file); // Retry later
-        }
-        hideLoading();
-      }
-      mediaInput.value = '';
-      lastFiles = [];
-    }
-
-    mediaRetryBtn.addEventListener('click', () => uploadMedia(lastFiles));
-
-    // Real-time unread marker
-    let lastReadTime = Date.now();
-    onValue(ref(db, `messages/${chatId}`), snap => {
-      const messages = snap.val() || {};
-      const unread = Object.values(messages).filter(m => m.timestamp > lastReadTime && m.sender !== currentUser.uid);
-      if (unread.length) {
-        const marker = document.createElement('div');
-        marker.className = 'unread-marker dark:unread-marker';
-        marker.textContent = `${unread.length} new message${unread.length > 1 ? 's' : ''}`;
-        messageList.appendChild(marker);
-        lastReadTime = Date.now();
-      }
-    });
-
-    onAuthStateChanged(auth, async user => {
-      if (!user) {
-        showLoading();
-        try {
-          await signInAnonymously(auth);
-        } catch (e) {
-          showError("Failed to sign in anonymously.");
-          location.href = "signup.html";
+      const messagesRef = ref(db, `messages/${chatId}`);
+      onValue(messagesRef, (messagesSnap) => {
+        messagesList.innerHTML = '';
+        if (!messagesSnap.exists()) {
+          hideLoading();
           return;
         }
-        hideLoading();
-        return;
-      }
-      currentUser = user;
-      // [Your existing initialization logic with initializeChat call]
-      await initializeChat(user, urlParams.get('uid'));
-      await loadMessages(true);
 
-      // [Your existing event listeners]
-    });
-  </script>
+        const messages = messagesSnap.val();
+        const sortedMessages = Object.entries(messages).sort((a, b) => (a[1].timestamp || 0) - (b[1].timestamp || 0));
+
+        sortedMessages.forEach(([mid, message]) => {
+          const messageElement = renderMessage(mid, message, currentUid);
+          messagesList.appendChild(messageElement);
+
+          if (message.sender !== currentUid && !message.read) {
+            update(ref(db, `messages/${chatId}/${mid}`), { read: true });
+          }
+        });
+
+        messagesList.scrollTop = messagesList.scrollHeight;
+        hideLoading();
+      }, (error) => {
+        console.error('Error loading messages:', error);
+        hideLoading();
+      });
+    } catch (error) {
+      console.error('Error loading chat:', error);
+      hideLoading();
+    }
+  }
+
+  function renderMessage(mid, message, currentUid) {
+    const isSent = message.sender === currentUid;
+    const div = document.createElement('div');
+    div.className = `message ${isSent ? 'sent' : 'received'} dark:${isSent ? 'sent' : 'received'}`;
+    div.dataset.mid = mid;
+    div.innerHTML = `
+      <p>${message.text}</p>
+      <span class="message-time dark:${isSent ? '' : 'received'}">${timeAgo(message.timestamp)}</span>
+    `;
+    return div;
+  }
+
+  sendBtn.addEventListener('click', async () => {
+    if (!chatInput.value.trim() || !chatId) return;
+    try {
+      const messageRef = push(ref(db, `messages/${chatId}`));
+      await set(messageRef, {
+        sender: currentUserUid,
+        text: chatInput.value.trim(),
+        timestamp: Date.now(),
+        read: false
+      });
+      chatInput.value = '';
+      messagesList.scrollTop = messagesList.scrollHeight;
+    } catch (error) {
+      console.error('Error sending message:', error);
+    }
+  });
+
+  chatInput.addEventListener('keypress', async (e) => {
+    if (e.key === 'Enter' && chatInput.value.trim() && chatId) {
+      e.preventDefault();
+      try {
+        const messageRef = push(ref(db, `messages/${chatId}`));
+        await set(messageRef, {
+          sender: currentUserUid,
+          text: chatInput.value.trim(),
+          timestamp: Date.now(),
+          read: false
+        });
+        chatInput.value = '';
+        messagesList.scrollTop = messagesList.scrollHeight;
+      } catch (error) {
+        console.error('Error sending message:', error);
+      }
+    }
+  });
+
+  backBtn.addEventListener('click', () => {
+    window.location.href = 'friends.html';
+  });
+
+</script>
 </body>
 </html>
