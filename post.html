@@ -12,22 +12,29 @@
   <script src="https://unpkg.com/heroicons@2.1.5/dist/heroicons.min.js"></script>
   <style>
     html, body {
-      margin: 0; padding: 0; height: 100%; background: black; overflow: hidden;
+      margin: 0; padding: 0; height: 100vh; width: 100vw; background: black; overflow: hidden;
       font-family: 'Inter', 'Segoe UI', sans-serif;
     }
     body.dark {
       background: #111827;
     }
     .reel-container {
-      height: 100vh; scroll-snap-type: y mandatory; overflow-y: scroll; scroll-behavior: smooth;
+      height: 100vh; width: 100vw; scroll-snap-type: y mandatory; overflow-y: scroll; scroll-behavior: smooth;
       -webkit-overflow-scrolling: touch;
     }
     .reel {
-      height: 100vh; position: relative; scroll-snap-align: start; display: flex;
+      height: 100vh; width: 100vw; position: relative; scroll-snap-align: start; display: flex;
       align-items: center; justify-content: center; background: #000;
     }
     .reel video {
-      height: 100%; width: 100%; object-fit: contain; cursor: pointer; background: #000;
+      height: 100vh; width: 100vw; object-fit: cover; cursor: pointer; background: #000;
+      position: absolute; top: 0; left: 0; z-index: 1;
+    }
+    .reel video[poster]:not(.playing) {
+      opacity: 0.8; /* Slightly dim the poster for visual distinction */
+    }
+    .reel video.playing {
+      opacity: 1;
     }
     .reel-overlay {
       position: absolute; bottom: 4rem; left: 1rem; color: white;
@@ -102,7 +109,7 @@
       width: 20px; height: 20px; stroke-width: 2; display: inline-block; vertical-align: middle;
     }
     .modal {
-      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
       background: rgba(0, 0, 0, 0.8); display: none; justify-content: center; align-items: center;
       z-index: 100;
     }
@@ -316,6 +323,7 @@ try {
           video.playsInline = true;
           video.dataset.publicId = media.publicId || '';
           video.className = 'reel-video';
+          video.poster = media.thumbnail || 'https://via.placeholder.com/640x360?text=Video+Thumbnail';
 
           const loadingSpinner = document.createElement('div');
           loadingSpinner.className = 'loading-spinner';
@@ -338,7 +346,7 @@ try {
 
           const likeBtn = document.createElement('button');
           likeBtn.className = `reel-action-btn ${status.reactions?.[currentUser.uid] ? 'reacted' : ''}`;
-          likeBtn.innerHTML = `<svg data-heroicons="${status.reactions?.[currentUser.uid] ? 'heart' : 'heart'}" fill="${status.reactions?.[currentUser.uid] ? '#ef4444' : 'none'}" stroke="currentColor" class="inline-block"></svg>`;
+          likeBtn.innerHTML = `<svg data-heroicons="heart" fill="${status.reactions?.[currentUser.uid] ? '#ef4444' : 'none'}" stroke="currentColor" class="inline-block"></svg>`;
           likeBtn.setAttribute('aria-label', status.reactions?.[currentUser.uid] ? 'Unlike reel' : 'Like reel');
           likeBtn.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -376,8 +384,6 @@ try {
           const muteToggle = document.createElement('svg');
           muteToggle.className = 'reel-mute-toggle';
           muteToggle.setAttribute('data-heroicons', video.muted ? 'speaker-x-mark' : 'speaker-wave');
-          muteToggle.setAttribute('fill', 'none');
-          muteToggle.setAttribute('stroke', 'white');
           muteToggle.innerHTML = `<svg data-heroicons="${video.muted ? 'speaker-x-mark' : 'speaker-wave'}" fill="none" stroke="currentColor" class="inline-block"></svg>`;
           muteToggle.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -395,23 +401,45 @@ try {
           reel.append(video, loadingSpinner, overlay, actions, muteToggle);
           reelContainer.appendChild(reel);
 
+          // Video event listeners for loading/buffering and playback state
           video.addEventListener('click', (e) => {
             e.stopPropagation();
             try {
               if (video.paused) {
                 loadingSpinner.style.display = 'block';
                 video.play()
-                  .then(() => loadingSpinner.style.display = 'none')
+                  .then(() => {
+                    video.classList.add('playing');
+                    loadingSpinner.style.display = 'none';
+                  })
                   .catch(error => {
                     console.error("Error playing video:", error);
                     loadingSpinner.style.display = 'none';
                   });
               } else {
                 video.pause();
+                video.classList.remove('playing');
               }
             } catch (error) {
               console.error("Error handling video click:", error);
             }
+          });
+
+          video.addEventListener('waiting', () => {
+            loadingSpinner.style.display = 'block';
+          });
+          video.addEventListener('stalled', () => {
+            loadingSpinner.style.display = 'block';
+          });
+          video.addEventListener('canplay', () => {
+            loadingSpinner.style.display = 'none';
+          });
+          video.addEventListener('playing', () => {
+            video.classList.add('playing');
+            loadingSpinner.style.display = 'none';
+          });
+          video.addEventListener('pause', () => {
+            video.classList.remove('playing');
           });
 
           if (statusId === targetStatusId) {
@@ -419,7 +447,10 @@ try {
             try {
               loadingSpinner.style.display = 'block';
               video.play()
-                .then(() => loadingSpinner.style.display = 'none')
+                .then(() => {
+                  video.classList.add('playing');
+                  loadingSpinner.style.display = 'none';
+                })
                 .catch(error => {
                   console.error("Error auto-playing video:", error);
                   loadingSpinner.style.display = 'none';
@@ -508,13 +539,17 @@ try {
             if (entry.isIntersecting) {
               if (spinner) spinner.style.display = 'block';
               video.play()
-                .then(() => { if (spinner) spinner.style.display = 'none'; })
+                .then(() => {
+                  video.classList.add('playing');
+                  if (spinner) spinner.style.display = 'none';
+                })
                 .catch(error => {
                   console.error("Error auto-playing video:", error);
                   if (spinner) spinner.style.display = 'none';
                 });
             } else {
               video.pause();
+              video.classList.remove('playing');
               if (spinner) spinner.style.display = 'none';
             }
           } catch (error) {
