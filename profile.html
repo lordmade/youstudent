@@ -97,30 +97,13 @@
       font-size: 0.875rem;
       transition: background 0.2s ease, transform 0.2s ease;
     }
-    .edit-btn, .follow-btn {
+    .edit-btn, .follow-btn, .message-btn {
       background: linear-gradient(to right, #ef4444, #f97316);
       color: white;
     }
-    .edit-btn:hover, .follow-btn:hover {
+    .edit-btn:hover, .follow-btn:hover, .message-btn:hover {
       background: linear-gradient(to right, #dc2626, #ea580c);
       transform: translateY(-2px);
-    }
-    .theme-btn {
-      background: #e5e7eb;
-      color: #374151;
-      border: 1px solid #d1d5db;
-    }
-    .theme-btn:hover {
-      background: #d1d5db;
-      transform: translateY(-2px);
-    }
-    .theme-btn.dark {
-      background: #374151;
-      color: #e5e7eb;
-      border: 1px solid #4b5563;
-    }
-    .theme-btn.dark:hover {
-      background: #4b5563;
     }
     .tabs {
       display: flex;
@@ -189,10 +172,24 @@
     .media-item:hover .media-overlay {
       opacity: 1;
     }
+    .media-item:not(.playing) .media-overlay {
+      opacity: 0;
+    }
     .play-icon {
       width: 24px;
       height: 24px;
       color: white;
+    }
+    .thumbnail {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      z-index: 1;
+    }
+    .media-item.playing .thumbnail, .media-item.buffering .thumbnail {
+      display: none;
     }
     .no-content-message {
       text-align: center;
@@ -252,11 +249,19 @@
     .modal-btn-cancel.dark:hover {
       background: #6b7280;
     }
-    .comment-sheet, .comment-item, .comment-avatar, .comment-content, .comment-username, .comment-text, .comment-time {
-      /* Inherit comment sheet styles from original */
+    .file-input {
+      display: block;
+      width: 100%;
+      padding: 0.5rem;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      background: #f9fafb;
+      color: #374151;
     }
-    .comment-sheet.dark, .comment-content.dark, .comment-username.dark, .comment-text.dark, .comment-time.dark {
-      /* Inherit dark mode styles */
+    .file-input.dark {
+      border: 1px solid #4b5563;
+      background: #374151;
+      color: #e5e7eb;
     }
     .loading-overlay {
       position: fixed;
@@ -303,17 +308,17 @@
     <div id="profile-actions" class="profile-actions">
       <button id="action-btn" class="action-btn edit-btn hidden">Edit Profile</button>
       <button id="follow-btn" class="action-btn follow-btn hidden">Follow</button>
-      <button id="theme-btn" class="action-btn theme-btn hidden">Toggle Theme</button>
+      <button id="message-btn" class="action-btn message-btn hidden">Message</button>
     </div>
   </div>
 
   <div class="tabs">
     <div class="tab active" data-tab="posts">Posts</div>
-    <div class="tab" data-tab="likes">Likes</div>
+    <div class="tab" data-tab="saved">Saved</div>
   </div>
 
   <div id="posts-tab" class="media-grid"></div>
-  <div id="likes-tab" class="media-grid hidden"></div>
+  <div id="saved-tab" class="media-grid hidden"></div>
   <p id="no-content-message" class="no-content-message hidden">No content yet.</p>
 
   <div id="edit-profile-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
@@ -329,8 +334,8 @@
           <textarea id="edit-bio" rows="3" class="w-full p-2 border border-gray-300 dark:border-gray-500 rounded-lg bg-gray-50 dark:bg-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-red-500"></textarea>
         </div>
         <div>
-          <label for="edit-photo" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Profile Photo URL</label>
-          <input id="edit-photo" type="url" class="w-full p-2 border border-gray-300 dark:border-gray-500 rounded-lg bg-gray-50 dark:bg-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-red-500"/>
+          <label for="edit-photo" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Profile Photo</label>
+          <input id="edit-photo" type="file" accept="image/*" class="file-input dark:file-input"/>
         </div>
         <div class="modal-buttons">
           <button type="submit" class="modal-btn modal-btn-confirm">Save</button>
@@ -369,6 +374,7 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
     import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
     import { getDatabase, ref, onValue, set, push, get, remove, update, onDisconnect } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-database.js";
+    import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-storage.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
@@ -383,6 +389,7 @@
     const app = initializeApp(firebaseConfig);
     const auth = getAuth();
     const db = getDatabase();
+    const storage = getStorage();
 
     const profileAvatar = document.getElementById("profile-avatar");
     const profileUsername = document.getElementById("profile-username");
@@ -392,9 +399,9 @@
     const likesCount = document.getElementById("likes-count");
     const actionBtn = document.getElementById("action-btn");
     const followBtn = document.getElementById("follow-btn");
-    const themeBtn = document.getElementById("theme-btn");
+    const messageBtn = document.getElementById("message-btn");
     const postsTab = document.getElementById("posts-tab");
-    const likesTab = document.getElementById("likes-tab");
+    const savedTab = document.getElementById("saved-tab");
     const noContentMessage = document.getElementById("no-content-message");
     const editProfileModal = document.getElementById("edit-profile-modal");
     const editProfileForm = document.getElementById("edit-profile-form");
@@ -421,7 +428,7 @@
       document.body.classList.toggle('dark', isDark);
       document.querySelector('.header').classList.toggle('dark', isDark);
       document.querySelectorAll('.profile-username, .profile-bio, .stat-label, .stat-value, .no-content-message, .tabs').forEach(el => el.classList.toggle('dark', isDark));
-      document.querySelectorAll('.modal, .modal-btn-cancel, .theme-btn').forEach(el => el.classList.toggle('dark', isDark));
+      document.querySelectorAll('.modal, .modal-btn-cancel, .file-input').forEach(el => el.classList.toggle('dark', isDark));
       document.querySelectorAll('.comment-sheet, .comment-content, .comment-username, .comment-text, .comment-time').forEach(el => el.classList.toggle('dark', isDark));
     }
 
@@ -466,25 +473,24 @@
         }
         likesCount.textContent = totalLikes;
 
-        // Show appropriate action button
+        // Show appropriate action buttons
         if (isOwner) {
           actionBtn.classList.remove("hidden");
-          themeBtn.classList.remove("hidden");
           editName.value = userData.name || "";
           editBio.value = userData.bio || "";
-          editPhoto.value = userData.photoURL || "";
         } else {
           const followRef = ref(db, `followers/${uid}/${currentUserUid}`);
           const followSnap = await get(followRef);
           followBtn.textContent = followSnap.exists() ? "Unfollow" : "Follow";
           followBtn.classList.remove("hidden");
+          messageBtn.classList.remove("hidden");
         }
 
         const settingsSnap = await get(ref(db, `users/${uid}/settings`));
         const settings = settingsSnap.val() || {};
         applyTheme(settings.theme || 'light');
         await loadPosts(uid);
-        await loadLikedPosts();
+        await loadSavedPosts();
       } catch (error) {
         console.error("Error loading profile:", error);
         profileUsername.textContent = "Error Loading Profile";
@@ -524,8 +530,13 @@
       editName.focus();
     });
 
+    messageBtn.addEventListener("click", () => {
+      window.location.href = `messages.html?recipientUid=${profileUid}`;
+    });
+
     editModalCancel.addEventListener("click", () => {
       editProfileModal.classList.add("hidden");
+      editPhoto.value = ""; // Clear file input
     });
 
     editProfileForm.addEventListener("submit", async (e) => {
@@ -533,12 +544,29 @@
       showLoading();
       try {
         const userRef = ref(db, `users/${currentUserUid}`);
-        await update(userRef, {
+        const updates = {
           name: editName.value.trim(),
-          bio: editBio.value.trim(),
-          photoURL: editPhoto.value.trim() || null
-        });
+          bio: editBio.value.trim()
+        };
+
+        // Handle image upload
+        if (editPhoto.files && editPhoto.files[0]) {
+          const file = editPhoto.files[0];
+          if (!file.type.startsWith("image/")) {
+            alert("Please select a valid image file.");
+            hideLoading();
+            return;
+          }
+          const storagePath = `profile_pictures/${currentUserUid}/${Date.now()}_${file.name}`;
+          const imageRef = storageRef(storage, storagePath);
+          await uploadBytes(imageRef, file);
+          const photoURL = await getDownloadURL(imageRef);
+          updates.photoURL = photoURL;
+        }
+
+        await update(userRef, updates);
         editProfileModal.classList.add("hidden");
+        editPhoto.value = ""; // Clear file input
         await loadProfile(currentUserUid);
       } catch (error) {
         console.error("Error updating profile:", error);
@@ -571,35 +599,19 @@
       hideLoading();
     });
 
-    themeBtn.addEventListener("click", async () => {
-      showLoading();
-      try {
-        const settingsRef = ref(db, `users/${currentUserUid}/settings`);
-        const settingsSnap = await get(settingsRef);
-        const currentTheme = settingsSnap.val()?.theme || 'light';
-        const newTheme = currentTheme === 'light' ? 'dark' : 'light';
-        await set(settingsRef, { theme: newTheme });
-        applyTheme(newTheme);
-      } catch (error) {
-        console.error("Error toggling theme:", error);
-        alert("Failed to toggle theme.");
-      }
-      hideLoading();
-    });
-
     document.querySelectorAll('.tab').forEach(tab => {
       tab.addEventListener('click', () => {
         document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
         tab.classList.add('active');
         postsTab.classList.toggle('hidden', tab.dataset.tab !== 'posts');
-        likesTab.classList.toggle('hidden', tab.dataset.tab !== 'likes');
+        savedTab.classList.toggle('hidden', tab.dataset.tab !== 'saved');
         noContentMessage.classList.add('hidden');
         if (tab.dataset.tab === 'posts' && postsTab.children.length === 0) {
           noContentMessage.textContent = "No posts yet.";
-          noContentMessage.classList.remove('hidden');
-        } else if (tab.dataset.tab === 'likes' && likesTab.children.length === 0) {
-          noContentMessage.textContent = "No liked posts yet.";
-          noContentMessage.classList.remove('hidden');
+          noContentMessage.classList.remove("hidden");
+        } else if (tab.dataset.tab === 'saved' && savedTab.children.length === 0) {
+          noContentMessage.textContent = "No saved posts yet.";
+          noContentMessage.classList.remove("hidden");
         }
       });
     });
@@ -611,6 +623,27 @@
 
       try {
         const statusesRef = ref(db, "statuses");
+        const observer = new IntersectionObserver(
+          (entries) => {
+            entries.forEach(entry => {
+              const mediaItem = entry.target;
+              const video = mediaItem.querySelector("video");
+              if (!video) return;
+              if (entry.isIntersecting) {
+                video.play().catch(error => {
+                  console.error("Error auto-playing video:", error);
+                  mediaItem.classList.remove("playing");
+                  mediaItem.classList.add("buffering");
+                });
+              } else {
+                video.pause();
+                mediaItem.classList.remove("playing", "buffering");
+              }
+            });
+          },
+          { threshold: 0.5 }
+        );
+
         onValue(statusesRef, async (statusesSnap) => {
           postsTab.innerHTML = "";
           noContentMessage.classList.add("hidden");
@@ -631,6 +664,9 @@
             if (status.media && status.media.length > 0) {
               const mediaItem = await renderMediaItem(sid, status);
               postsTab.appendChild(mediaItem);
+              if (mediaItem.querySelector("video")) {
+                observer.observe(mediaItem);
+              }
             }
           }
 
@@ -653,50 +689,77 @@
       }
     }
 
-    async function loadLikedPosts() {
+    async function loadSavedPosts() {
       showLoading();
-      likesTab.innerHTML = "";
+      savedTab.innerHTML = "";
       noContentMessage.classList.add("hidden");
 
       try {
-        const statusesRef = ref(db, "statuses");
-        onValue(statusesRef, async (statusesSnap) => {
-          likesTab.innerHTML = "";
+        const savedRef = ref(db, `saved/${profileUid}`);
+        const observer = new IntersectionObserver(
+          (entries) => {
+            entries.forEach(entry => {
+              const mediaItem = entry.target;
+              const video = mediaItem.querySelector("video");
+              if (!video) return;
+              if (entry.isIntersecting) {
+                video.play().catch(error => {
+                  console.error("Error auto-playing video:", error);
+                  mediaItem.classList.remove("playing");
+                  mediaItem.classList.add("buffering");
+                });
+              } else {
+                video.pause();
+                mediaItem.classList.remove("playing", "buffering");
+              }
+            });
+          },
+          { threshold: 0.5 }
+        );
+
+        onValue(savedRef, async (savedSnap) => {
+          savedTab.innerHTML = "";
           noContentMessage.classList.add("hidden");
 
-          if (!statusesSnap.exists()) {
-            noContentMessage.textContent = "No liked posts yet.";
+          if (!savedSnap.exists()) {
+            noContentMessage.textContent = "No saved posts yet.";
             noContentMessage.classList.remove("hidden");
             hideLoading();
             return;
           }
 
-          const statuses = statusesSnap.val();
-          const likedStatuses = Object.entries(statuses)
-            .filter(([_, status]) => status.reactions && status.reactions[profileUid])
-            .sort((a, b) => (b[1].timestamp || 0) - (a[1].timestamp || 0));
+          const savedStatuses = savedSnap.val();
+          const statusIds = Object.keys(savedStatuses);
+          const statusesSnap = await get(ref(db, "statuses"));
+          const statuses = statusesSnap.exists() ? statusesSnap.val() : {};
 
-          for (const [sid, status] of likedStatuses) {
-            if (status.media && status.media.length > 0) {
-              const mediaItem = await renderMediaItem(sid, status);
-              likesTab.appendChild(mediaItem);
+          const sortedStatuses = statusIds
+            .map(sid => [sid, statuses[sid]])
+            .filter(([_, status]) => status && status.media && status.media.length > 0)
+            .sort((a, b) => (savedStatuses[b[0]].timestamp || 0) - (savedStatuses[a[0]].timestamp || 0));
+
+          for (const [sid, status] of sortedStatuses) {
+            const mediaItem = await renderMediaItem(sid, status);
+            savedTab.appendChild(mediaItem);
+            if (mediaItem.querySelector("video")) {
+              observer.observe(mediaItem);
             }
           }
 
-          if (likesTab.children.length === 0) {
-            noContentMessage.textContent = "No liked posts yet.";
+          if (savedTab.children.length === 0) {
+            noContentMessage.textContent = "No saved posts yet.";
             noContentMessage.classList.remove("hidden");
           }
           hideLoading();
         }, (error) => {
-          console.error("Error listening to liked posts:", error);
-          noContentMessage.textContent = "No liked posts yet.";
+          console.error("Error listening to saved posts:", error);
+          noContentMessage.textContent = "No saved posts yet.";
           noContentMessage.classList.remove("hidden");
           hideLoading();
         });
       } catch (error) {
-        console.error("Error loading liked posts:", error);
-        noContentMessage.textContent = "No liked posts yet.";
+        console.error("Error loading saved posts:", error);
+        noContentMessage.textContent = "No saved posts yet.";
         noContentMessage.classList.remove("hidden");
         hideLoading();
       }
@@ -711,18 +774,42 @@
       
       const firstMedia = status.media[0];
       const isVideo = firstMedia.type === 'video';
+      const mediaUrl = isVideo ? firstMedia.url : firstMedia.url;
       const thumbnailUrl = isVideo ? `https://res.cloudinary.com/banter_box/video/upload/e_thumb/${firstMedia.publicId}.jpg` : firstMedia.url;
 
       div.innerHTML = `
-        <${isVideo ? 'video' : 'img'} src="${thumbnailUrl}" alt="Post thumbnail" ${isVideo ? 'muted playsinline' : ''} />
         ${isVideo ? `
+          <video src="${mediaUrl}" autoplay loop muted playsinline class="media-video"></video>
+          <img src="${thumbnailUrl}" alt="Post thumbnail" class="thumbnail"/>
           <div class="media-overlay">
             <svg class="play-icon" viewBox="0 0 24 24" fill="currentColor">
               <path d="M8 5v14l11-7z"/>
             </svg>
           </div>
-        ` : ''}
+        ` : `
+          <img src="${mediaUrl}" alt="Post thumbnail" class="media-image"/>
+        `}
       `;
+
+      if (isVideo) {
+        const video = div.querySelector("video");
+        video.addEventListener("playing", () => {
+          div.classList.add("playing");
+          div.classList.remove("buffering");
+        });
+        video.addEventListener("waiting", () => {
+          div.classList.add("buffering");
+          div.classList.remove("playing");
+        });
+        video.addEventListener("stalled", () => {
+          div.classList.add("buffering");
+          div.classList.remove("playing");
+        });
+        video.addEventListener("error", () => {
+          div.classList.add("buffering");
+          div.classList.remove("playing");
+        });
+      }
 
       div.addEventListener("click", () => {
         window.location.href = `post.html?sid=${sid}`;
