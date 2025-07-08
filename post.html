@@ -1,1910 +1,257 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>BanterBox - Post</title>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>BanterBox Reels</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/11.10.0/firebase-database.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js"></script>
   <style>
-    :root {
-      --primary: #ff3b3b;
-      --primary-dark: #d32f2f;
-      --background-light: #f8fafc;
-      --background-dark: #0f172a;
-      --card-light: #ffffff;
-      --card-dark: #1e293b;
-      --text-light: #1e293b;
-      --text-dark: #e2e8f0;
-      --border-light: #e5e7eb;
-      --border-dark: #374151;
-      --shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-    }
-
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-      user-select: none;
-      -webkit-user-select: none;
-      -moz-user-select: none;
-      -ms-user-select: none;
-    }
-
-    body {
-      font-family: 'Inter', sans-serif;
-      background: linear-gradient(180deg, var(--background-light) 0%, #e0e7ff 100%);
-      min-height: 100vh;
-      overscroll-behavior: none;
-      transition: background 0.3s ease, color 0.3s ease;
-      position: relative;
-    }
-
-    body.dark {
-      background: linear-gradient(180deg, var(--background-dark) 0%, #1e293b 100%);
-    }
-
-    .container {
-      width: 100vw;
-      height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      position: relative;
-      padding: 0;
-    }
-
-    .media-container {
-      width: 100vw;
-      height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      overflow: hidden;
-      position: relative;
-      border-radius: 0;
-    }
-
-    .media-container img,
-    .media-container video {
-      width: 100vw;
-      height: 100vh;
-      object-fit: cover;
-      max-height: 100vh;
-    }
-
-    .thumbnail-placeholder {
-      width: 100vw;
-      height: 100vh;
-      object-fit: cover;
-      background: #000;
-      display: none;
-    }
-
-    .thumbnail-placeholder.show {
-      display: block;
-    }
-
-    .carousel {
-      display: flex;
-      width: 100vw;
-      height: 100vh;
-      transition: transform 0.3s ease;
-    }
-
-    .carousel-item {
-      flex: 0 0 100%;
-      width: 100vw;
-      height: 100vh;
-      position: relative;
-    }
-
-    .carousel-indicators {
-      position: absolute;
-      bottom: 1.5rem;
-      display: flex;
-      gap: 0.5rem;
-      z-index: 20;
-    }
-
-    .carousel-dot {
-      width: 10px;
-      height: 10px;
-      background: rgba(255, 255, 255, 0.5);
-      border-radius: 50%;
-      transition: background 0.2s ease, transform 0.2s ease;
-    }
-
-    .carousel-dot.active {
-      background: #fff;
-      transform: scale(1.3);
-    }
-
-    .dark .carousel-dot {
-      background: rgba(255, 255, 255, 0.3);
-    }
-
-    .dark .carousel-dot.active {
-      background: #e2e8f0;
-    }
-
-    .add-status-btn {
-      position: absolute;
-      bottom: 1rem;
-      left: 50%;
-      transform: translateX(-50%);
-      background: var(--primary);
-      color: #fff;
-      border-radius: 9999px;
-      padding: 0.75rem 1.5rem;
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      font-size: 1rem;
-      font-weight: 600;
-      cursor: pointer;
-      z-index: 20;
-      transition: transform 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
-      box-shadow: var(--shadow);
-    }
-
-    .add-status-btn:hover {
-      transform: translateX(-50%) scale(1.05);
-      background: var(--primary-dark);
-      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
-    }
-
-    .add-status-btn:focus-visible {
-      outline: 2px solid var(--primary-dark);
-      outline-offset: 2px;
-    }
-
-    .dark .add-status-btn {
-      background: var(--primary-dark);
-      color: var(--text-dark);
-    }
-
-    .dark .add-status-btn:hover {
-      background: var(--primary);
-    }
-
-    .add-status-btn svg {
-      width: 24px;
-      height: 24px;
-    }
-
-    .top-bar {
-      position: absolute;
-      top: 1rem;
-      left: 1rem;
-      display: flex;
-      align-items: center;
-      z-index: 20;
-    }
-
-    .profile-container {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      background: var(--primary);
-      border-radius: 9999px;
-      padding: 0.5rem 1rem;
-      cursor: pointer;
-      transition: transform 0.2s ease, box-shadow 0.2s ease;
-      box-shadow: var(--shadow);
-    }
-
-    .profile-container:hover {
-      transform: scale(1.05);
-      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
-    }
-
-    .profile-container:focus-visible {
-      outline: 2px solid var(--primary-dark);
-      outline-offset: 2px;
-    }
-
-    .profile-avatar {
-      width: 36px;
-      height: 36px;
-      border-radius: 9999px;
-      object-fit: cover;
-      border: 2px solid #fff;
-    }
-
-    .dark .profile-avatar {
-      border-color: var(--text-dark);
-    }
-
-    .profile-username {
-      color: #fff;
-      font-size: 0.9rem;
-      font-weight: 600;
-    }
-
-    .notifications-container {
-      position: absolute;
-      top: 1rem;
-      right: 1rem;
-      display: flex;
-      align-items: center;
-      gap: 0.25rem;
-      background: var(--primary);
-      border-radius: 9999px;
-      padding: 0.5rem;
-      cursor: pointer;
-      transition: transform 0.2s ease, box-shadow 0.2s ease;
-      box-shadow: var(--shadow);
-      z-index: 20;
-    }
-
-    .notifications-container:hover {
-      transform: scale(1.1);
-      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
-    }
-
-    .notifications-container:focus-visible {
-      outline: 2px solid var(--primary-dark);
-      outline-offset: 2px;
-    }
-
-    .notifications-icon,
-    .friends-icon {
-      width: 22px;
-      height: 22px;
-      color: #fff;
-    }
-
-    .notifications-unread-count {
-      background: #fff;
-      color: var(--primary);
-      font-size: 0.75rem;
-      font-weight: 600;
-      border-radius: 9999px;
-      padding: 0.15rem 0.5rem;
-      min-width: 22px;
-      text-align: center;
-      animation: pulse 1.5s ease infinite;
-    }
-
-    .dark .notifications-unread-count {
-      background: var(--text-dark);
-      color: var(--primary-dark);
-    }
-
-    .action-buttons {
-      position: absolute;
-      top: 50%;
-      right: 1rem;
-      transform: translateY(-50%);
-      display: flex;
-      flex-direction: column;
-      gap: 1.5rem;
-      z-index: 20;
-    }
-
-    .action-btn {
-      background: rgba(0, 0, 0, 0.6);
-      border-radius: 9999px;
-      padding: 0.75rem;
-      color: #fff;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 0.25rem;
-      font-size: 0.8rem;
-      font-weight: 600;
-      transition: transform 0.2s ease, background 0.2s ease;
-      box-shadow: var(--shadow);
-    }
-
-    .action-btn:hover {
-      transform: scale(1.1);
-      background: rgba(0, 0, 0, 0.8);
-    }
-
-    .action-btn:focus-visible {
-      outline: 2px solid var(--primary);
-      outline-offset: 2px;
-    }
-
-    .action-btn.liked svg {
-      fill: var(--primary);
-      stroke: var(--primary);
-      animation: pulse 0.3s ease;
-    }
-
-    .dark .action-btn.liked svg {
-      fill: var(--primary-dark);
-      stroke: var(--primary-dark);
-    }
-
-    .action-btn svg {
-      width: 26px;
-      height: 26px;
-    }
-
-    .friend-btn svg {
-      width: 30px;
-      height: 30px;
-    }
-
-    .mute-toggle-icon {
-      position: absolute;
-      bottom: 1.5rem;
-      right: 1.5rem;
-      background: rgba(0, 0, 0, 0.6);
-      border-radius: 50%;
-      padding: 6px;
-      width: 28px;
-      height: 28px;
-      cursor: pointer;
-      transition: transform 0.2s ease;
-      box-shadow: var(--shadow);
-    }
-
-    .mute-toggle-icon:hover {
-      transform: scale(1.1);
-    }
-
-    .play-pause-icon {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      background: rgba(0, 0, 0, 0.7);
-      border-radius: 50%;
-      padding: 10px;
-      width: 40px;
-      height: 40px;
-      cursor: pointer;
-      opacity: 0;
-      transition: opacity 0.3s ease;
-      z-index: 20;
-      box-shadow: var(--shadow);
-    }
-
-    .play-pause-icon.show {
-      opacity: 1;
-    }
-
-    .double-tap-heart {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%) scale(0);
-      width: 100px;
-      height: 100px;
-      fill: #fff;
-      opacity: 0;
-      z-index: 20;
-      animation: heartPop 0.5s ease forwards;
-    }
-
-    .animated-love {
-      position: absolute;
-      bottom: 0;
-      left: 50%;
-      transform: translateX(-50%) scale(0);
-      width: 50px;
-      height: 50px;
-      fill: #ff3b3b;
-      opacity: 0;
-      z-index: 20;
-      animation: loveRise 1s ease-out forwards;
-    }
-
-    .song-text {
-      position: absolute;
-      bottom: 5rem;
-      left: 1.5rem;
-      background: linear-gradient(to right, rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.5));
-      color: #fff;
-      font-size: 0.9rem;
-      font-weight: 500;
-      padding: 0.75rem 1.25rem;
-      border-radius: 12px;
-      z-index: 20;
-      max-width: 85%;
-      word-break: break-word;
-      display: none;
-      box-shadow: var(--shadow);
-      animation: fadeIn 0.3s ease;
-    }
-
-    .song-text.show {
-      display: block;
-    }
-
-    .dark .song-text {
-      background: linear-gradient(to right, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.1));
-    }
-
-    .swipe-text,
-    .post-text {
-      position: absolute;
-      bottom: 3rem;
-      left: 1.5rem;
-      background: linear-gradient(to right, rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.5));
-      color: #fff;
-      font-size: 0.9rem;
-      font-weight: 500;
-      padding: 0.75rem 1.25rem;
-      border-radius: 12px;
-      z-index: 20;
-      max-width: 85%;
-      word-break: break-word;
-      display: none;
-      box-shadow: var(--shadow);
-      animation: fadeIn 0.3s ease;
-    }
-
-    .swipe-text.show,
-    .post-text.show {
-      display: block;
-    }
-
-    .swipe-text {
-      opacity: 0;
-      transform: translateY(10px);
-      transition: opacity 0.3s ease, transform 0.3s ease;
-    }
-
-    .swipe-text.show {
-      opacity: 1;
-      transform: translateY(0);
-    }
-
-    .dark .swipe-text,
-    .dark .post-text {
-      background: linear-gradient(to right, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.1));
-    }
-
-    .progress-bar {
-      position: absolute;
-      bottom: 6rem;
-      left: 1.5rem;
-      width: 85%;
-      height: 4px;
-      background: rgba(255, 255, 255, 0.3);
-      border-radius: 2px;
-      z-index: 20;
-      overflow: hidden;
-    }
-
-    .progress-fill {
-      height: 100%;
-      background: var(--primary);
-      width: 0;
-      animation: none;
-    }
-
-    .alert-dialog {
-      position: fixed;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      background: var(--card-light);
-      border-radius: 16px;
-      padding: 1.5rem;
-      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
-      z-index: 40;
-      max-width: 90%;
-      width: 400px;
-      display: none;
-      flex-direction: column;
-      gap: 1rem;
-      animation: slideUp 0.3s ease;
-    }
-
-    .alert-dialog.show {
-      display: flex;
-    }
-
-    .dark .alert-dialog {
-      background: var(--card-dark);
-    }
-
-    .alert-title {
-      font-size: 1.1rem;
-      font-weight: 600;
-      color: var(--text-light);
-    }
-
-    .dark .alert-title {
-      color: var(--text-dark);
-    }
-
-    .alert-message {
-      font-size: 0.9rem;
-      color: #374151;
-    }
-
-    .dark .alert-message {
-      color: #d1d5db;
-    }
-
-    .alert-button {
-      background: var(--primary);
-      color: #fff;
-      border: none;
-      border-radius: 8px;
-      padding: 0.75rem 1.25rem;
-      font-size: 0.9rem;
-      font-weight: 600;
-      cursor: pointer;
-      transition: transform 0.2s ease, background 0.2s ease;
-    }
-
-    .alert-button:hover {
-      transform: scale(1.05);
-      background: var(--primary-dark);
-    }
-
-    .alert-button:focus-visible {
-      outline: 2px solid var(--primary-dark);
-      outline-offset: 2px;
-    }
-
-    .bottom-sheet {
-      position: fixed;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      background: var(--card-light);
-      border-top-left-radius: 20px;
-      border-top-right-radius: 20px;
-      max-height: 80vh;
-      overflow-y: auto;
-      transform: translateY(100%);
-      transition: transform 0.3s ease;
-      z-index: 30;
-      padding: 1rem;
-      box-shadow: 0 -6px 20px rgba(0, 0, 0, 0.2);
-    }
-
-    .dark .bottom-sheet {
-      background: var(--card-dark);
-    }
-
-    .bottom-sheet.open {
-      transform: translateY(0);
-    }
-
-    .bottom-sheet-handle {
-      width: 40px;
-      height: 4px;
-      background: var(--border-light);
-      border-radius: 2px;
-      margin: 0.5rem auto;
-    }
-
-    .dark .bottom-sheet-handle {
-      background: var(--border-dark);
-    }
-
-    .bottom-sheet-header {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      margin-bottom: 1rem;
-    }
-
-    .bottom-sheet-title {
-      font-size: 1.1rem;
-      font-weight: 600;
-      color: var(--text-light);
-      text-align: center;
-      flex-grow: 1;
-    }
-
-    .dark .bottom-sheet-title {
-      color: var(--text-dark);
-    }
-
-    .bottom-sheet-close {
-      background: none;
-      border: none;
-      color: var(--primary);
-      font-size: 0.9rem;
-      font-weight: 600;
-      cursor: pointer;
-      position: absolute;
-      right: 1rem;
-    }
-
-    .dark .bottom-sheet-close {
-      color: var(--primary-dark);
-    }
-
-    .bottom-sheet-close:hover {
-      color: var(--primary-dark);
-    }
-
-    .bottom-sheet-close:focus-visible {
-      outline: 2px solid var(--primary);
-      outline-offset: 2px;
-    }
-
-    .comments-list {
-      display: flex;
-      flex-direction: column;
-      gap: 1rem;
-      margin-bottom: 1rem;
-    }
-
-    .comment-item {
-      display: flex;
-      gap: 0.75rem;
-      align-items: flex-start;
-      padding: 0.75rem 0;
-    }
-
-    .dark .comment-item {
-      border-bottom-color: var(--border-dark);
-    }
-
-    .comment-avatar {
-      width: 36px;
-      height: 36px;
-      border-radius: 9999px;
-      object-fit: cover;
-    }
-
-    .comment-content {
-      flex: 1;
-    }
-
-    .comment-username {
-      font-size: 0.9rem;
-      font-weight: 600;
-      color: var(--text-light);
-    }
-
-    .dark .comment-username {
-      color: var(--text-dark);
-    }
-
-    .comment-text {
-      font-size: 0.9rem;
-      color: #374151;
-      word-break: break-word;
-    }
-
-    .dark .comment-text {
-      color: #d1d5db;
-    }
-
-    .comment-timestamp {
-      font-size: 0.8rem;
-      color: #6b7280;
-    }
-
-    .dark .comment-timestamp {
-      color: #9ca3af;
-    }
-
-    .comment-input-container {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      padding: 0.75rem;
-      background: var(--card-light);
-      border-top: 1px solid var(--border-light);
-      position: sticky;
-      bottom: 0;
-      box-shadow: var(--shadow);
-    }
-
-    .dark .comment-input-container {
-      background: var(--card-dark);
-      border-top-color: var(--border-dark);
-    }
-
-    .comment-input {
-      flex: 1;
-      background: var(--border-light);
-      border: none;
-      border-radius: 9999px;
-      padding: 0.75rem 1.25rem;
-      font-size: 0.9rem;
-      color: var(--text-light);
-    }
-
-    .dark .comment-input {
-      background: var(--border-dark);
-      color: var(--text-dark);
-    }
-
-    .comment-input:focus {
-      outline: none;
-      background: #fff;
-    }
-
-    .dark .comment-input:focus {
-      background: #4b5563;
-    }
-
-    .comment-submit {
-      background: var(--primary);
-      color: #fff;
-      border: none;
-      border-radius: 9999px;
-      padding: 0.75rem 1.5rem;
-      font-size: 0.9rem;
-      font-weight: 600;
-      cursor: pointer;
-      transition: transform 0.2s ease, background 0.2s ease;
-    }
-
-    .comment-submit:hover {
-      transform: scale(1.05);
-      background: var(--primary-dark);
-    }
-
-    .comment-submit:focus-visible {
-      outline: 2px solid var(--primary-dark);
-      outline-offset: 2px;
-    }
-
-    .loading-spinner {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      z-index: 20;
-      display: none;
-    }
-
-    .loading-spinner.show {
-      display: block;
-    }
-
-    .loading-spinner svg {
-      width: 56px;
-      height: 56px;
-      animation: spin 1s linear infinite;
-    }
-
-    .audio-controls {
-      position: absolute;
-      bottom: 1rem;
-      left: 50%;
-      transform: translateX(-50%);
-      z-index: 20;
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      background: rgba(0, 0, 0, 0.6);
-      padding: 0.5rem 1rem;
-      border-radius: 9999px;
-      box-shadow: var(--shadow);
-    }
-
-    .audio-controls button {
-      background: none;
-      border: none;
-      color: #fff;
-      font-size: 1rem;
-      cursor: pointer;
-      transition: transform 0.2s ease;
-    }
-
-    .audio-controls button:hover {
-      transform: scale(1.1);
-    }
-
-    .audio-controls button:focus-visible {
-      outline: 2px solid var(--primary);
-      outline-offset: 2px;
-    }
-
-    .audio-controls audio {
-      display: none;
-    }
-
-    @keyframes spin {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
-    }
-
-    @keyframes slideUp {
-      from { opacity: 0; transform: translate(-50%, -40%); }
-      to { opacity: 1; transform: translate(-50%, -50%); }
-    }
-
-    @keyframes heartPop {
-      0% { transform: translate(-50%, -50%) scale(0); opacity: 0; }
-      50% { transform: translate(-50%, -50%) scale(1.3); opacity: 0.9; }
-      100% { transform: translate(-50%, -50%) scale(1); opacity: 0; }
-    }
-
-    @keyframes loveRise {
-      0% { bottom: 0; opacity: 0; transform: translateX(-50%) scale(0); }
-      50% { bottom: 50%; opacity: 1; transform: translateX(-50%) scale(1.2); }
-      100% { bottom: 50%; opacity: 0; transform: translateX(-50%) scale(1.5); }
-    }
-
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(10px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-
-    @media (max-width: 640px) {
-      .container {
-        padding: 0;
-      }
-      .media-container {
-        border-radius: 0;
-      }
-      .profile-container {
-        padding: 0.4rem 0.8rem;
-      }
-      .notifications-container {
-        padding: 0.4rem;
-      }
-      .action-btn {
-        padding: 0.6rem;
-      }
-      .add-status-btn {
-        padding: 0.6rem 1.2rem;
-      }
-      .swipe-text,
-      .post-text,
-      .song-text {
-        font-size: 0.85rem;
-        padding: 0.6rem 1rem;
-        max-width: 90%;
-      }
-      .progress-bar {
-        width: 90%;
-      }
-      .audio-controls {
-        padding: 0.4rem 0.8rem;
-      }
+    html, body {
+      margin: 0; padding: 0; height: 100%; background: black; overflow: hidden;
+    }
+    .reel-container {
+      height: 100vh; scroll-snap-type: y mandatory; overflow-y: scroll; scroll-behavior: smooth;
+    }
+    .reel {
+      height: 100vh; position: relative; scroll-snap-align: start;
+    }
+    video {
+      height: 100%; width: 100%; object-fit: cover; cursor: pointer;
+    }
+    .overlay {
+      position: absolute; bottom: 4rem; left: 1rem; color: white;
+      text-shadow: 1px 1px 4px black; max-width: 65%;
+    }
+    .user-info {
+      display: flex; align-items: center; gap: 0.5rem;
+    }
+    .user-info img {
+      height: 32px; width: 32px; border-radius: 50%;
+      border: 2px solid white; object-fit: cover;
+    }
+    .actions {
+      position: absolute; right: 1rem; bottom: 5rem;
+      display: flex; flex-direction: column; gap: 1rem;
+      align-items: center; z-index: 10;
+    }
+    .actions button {
+      background-color: rgba(255,255,255,0.1);
+      border: none; padding: 0.7rem; border-radius: 9999px;
+      color: white; font-size: 1.3rem; cursor: pointer;
+    }
+    .home-btn {
+      position: fixed; top: 1rem; left: 1rem; z-index: 50;
+      background: rgba(255,255,255,0.1); color: white;
+      padding: 0.5rem 1rem; border-radius: 9999px;
+      font-weight: bold; border: 1px solid white;
+      text-decoration: none;
+    }
+    /* Modal */
+    .modal {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.8); display: none; justify-content: center; align-items: center;
+      z-index: 100;
+    }
+    .modal-content {
+      background: white; border-radius: 12px; padding: 1rem; width: 90%; max-width: 400px;
+      max-height: 80vh; overflow-y: auto;
+    }
+    .modal-content h2 {
+      margin-top: 0; font-weight: bold;
+    }
+    .comment {
+      border-bottom: 1px solid #e5e7eb; padding: 0.5rem 0;
     }
   </style>
 </head>
 <body>
-  <div class="container fade-in">
-    <div class="top-bar">
-      <div class="profile-container" role="button" tabindex="0" aria-label="View user profile">
-        <img id="profile-avatar" src="https://www.gravatar.com/avatar?d=mp" alt="User avatar" class="profile-avatar" loading="lazy" />
-        <span id="profile-username" class="profile-username">Loading...</span>
-      </div>
-    </div>
-    <div class="notifications-container" role="button" tabindex="0" aria-label="View notifications">
-      <svg class="notifications-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
-      </svg>
-      <span id="notifications-unread-count" class="notifications-unread-count hidden">0</span>
-    </div>
-    <div class="media-container" role="region" aria-label="Post media">
-      <div id="media-content" class="carousel"></div>
-      <div id="loading-spinner" class="loading-spinner" aria-label="Loading">
-        <svg viewBox="0 0 50 50" fill="none" stroke="#fff" stroke-width="4">
-          <circle cx="25" cy="25" r="20" stroke-opacity="0.3"/>
-          <circle cx="25" cy="25" r="20" stroke-dasharray="90 150" stroke-linecap="round"/>
-        </svg>
-      </div>
-      <div id="carousel-indicators" class="carousel-indicators"></div>
-      <button id="add-status-btn" class="add-status-btn" aria-label="Add new status">
-        <svg class="plus-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M12 5v14m7-7H5"/>
-        </svg>
-        <span>Add</span>
-      </button>
-      <svg id="mute-toggle-icon" class="mute-toggle-icon hidden" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path class="mute-icon hidden" d="M11 5L6 9H2v6h4l5 4V5zM19.07 4.93a10 10 0 010 14.14M15.54 8.46a5 5 0 010 7.07"/>
-        <path class="unmute-icon" d="M11 5L6 9H2v6h4l5 4V5z"/>
-      </svg>
-      <svg id="play-pause-icon" class="play-pause-icon" width="40" height="40" viewBox="0 0 24 24" fill="white" stroke="white" stroke-width="2">
-        <path class="play-icon" d="M5 3v18l15-9z"/>
-        <path class="pause-icon hidden" d="M6 4h4v16H6zM14 4h4v16h-4z"/>
-      </svg>
-      <svg id="double-tap-heart" class="double-tap-heart hidden" viewBox="0 0 24 24" fill="white">
-        <path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/>
-      </svg>
-      <div id="audio-controls" class="audio-controls hidden">
-        <button id="pause-audio-btn" aria-label="Pause audio"><i class="fas fa-pause"></i></button>
-        <audio id="background-audio"></audio>
-      </div>
-      <div id="progress-bar" class="progress-bar">
-        <div id="progress-fill" class="progress-fill"></div>
-      </div>
-    </div>
-    <div class="action-buttons">
-      <button id="friends-btn" class="action-btn" aria-label="View friends">
-        <svg class="friends-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 21v-2a4 4 0 00-4-4H9a4 4 0 00-4 4v2m8-10a4 4 0 110-8 4 4 0 010 8zm0 0l-2 2m4-2l-2-2m-6 8a4 4 0 110-8 4 4 0 010 8zm0 0l2 2m-2-2l-2-2" />
-        </svg>
-        <span>Friends</span>
-      </button>
-      <button id="like-btn" class="action-btn" aria-label="Like post">
-        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/>
-        </svg>
-        <span id="like-count">0</span>
-      </button>
-      <button id="comment-btn" class="action-btn" aria-label="View comments">
-        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/>
-        </svg>
-        <span id="comment-count">0</span>
-      </button>
-      <button id="add-friend-btn" class="action-btn friend-btn hidden" aria-label="Add friend">
-        <svg class="friends-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 21v-2a4 4 0 00-4-4H9a4 4 0 00-4 4v2m8-10a4 4 0 110-8 4 4 0 010 8zm0 0l-2 2m4-2l-2-2m-6 8a4 4 0 110-8 4 4 0 010 8zm0 0l2 2m-2-2l-2-2" />
-        </svg>
-      </button>
-    </div>
-    <div id="alert-dialog" class="alert-dialog" role="alertdialog" aria-labelledby="alert-title" aria-describedby="alert-message">
-      <h2 id="alert-title" class="alert-title">Error</h2>
-      <p id="alert-message" class="alert-message"></p>
-      <button id="alert-close" class="alert-button" aria-label="Close alert">OK</button>
-    </div>
-    <div id="comments-sheet" class="bottom-sheet" role="dialog" aria-label="Comments">
-      <div class="bottom-sheet-handle"></div>
-      <div class="bottom-sheet-header">
-        <h2 class="bottom-sheet-title">Comments</h2>
-        <button id="close-comments" class="bottom-sheet-close" aria-label="Close comments">Close</button>
-      </div>
-      <div id="comments-list" class="comments-list"></div>
-      <div class="comment-input-container">
-        <input id="comment-input" class="comment-input" placeholder="Add a comment..." aria-label="Add a comment" />
-        <button id="comment-submit" class="comment-submit" aria-label="Post comment">Post</button>
-      </div>
-    </div>
-    <div id="swipe-text" class="swipe-text" role="status" aria-live="polite"></div>
-    <div id="post-text" class="post-text" role="status" aria-live="polite"></div>
-    <div id="song-text" class="song-text" role="status" aria-live="polite"></div>
+<a href="index.html" class="home-btn">🏠 Home</a>
+<div class="reel-container" id="reelContainer"></div>
+
+<!-- Comment Modal -->
+<div id="commentModal" class="modal">
+  <div class="modal-content">
+    <h2>Comments</h2>
+    <div id="commentList"></div>
+    <textarea id="commentInput" class="w-full border mt-2 p-2 rounded" rows="2" placeholder="Add a comment..."></textarea>
+    <button id="postCommentBtn" class="mt-2 bg-red-500 text-white px-4 py-2 rounded">Post</button>
+    <button onclick="closeModal()" class="mt-4 text-sm text-gray-500 underline">Close</button>
   </div>
+</div>
 
-  <script type="module">
-    import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js';
-    import { getAuth, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js';
-    import { getDatabase, ref, get, set, push, update, onValue, off, runTransaction } from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-database.js';
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
+import { getDatabase, ref, onValue, set, push, update } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-database.js";
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
 
-    const firebaseConfig = {
-      apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
-      authDomain: "fire-b-a8878.firebaseapp.com",
-      databaseURL: "https://fire-b-a8878.firebaseio.com",
-      projectId: "fire-b-a8878",
-      storageBucket: "fire-b-a8878.appspot.com",
-      messagingSenderId: "658673187627",
-      appId: "1:658673187627:web:6e4c29af661785f0afa36e"
-    };
+const firebaseConfig = {
+  apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
+  authDomain: "fire-b-a8878.firebaseapp.com",
+  databaseURL: "https://fire-b-a8878.firebaseio.com",
+  projectId: "fire-b-a8878",
+  storageBucket: "fire-b-a8878.appspot.com",
+  messagingSenderId: "658673187627",
+  appId: "1:658673187627:web:6e4c29af661785f0afa36e"
+};
 
-    const app = initializeApp(firebaseConfig);
-    const auth = getAuth(app);
-    const db = getDatabase(app);
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+const auth = getAuth(app);
 
-    const mediaContainer = document.querySelector('.media-container');
-    const mediaContent = document.getElementById('media-content');
-    const loadingSpinner = document.getElementById('loading-spinner');
-    const carouselIndicators = document.getElementById('carousel-indicators');
-    const muteToggleIcon = document.getElementById('mute-toggle-icon');
-    const playPauseIcon = document.getElementById('play-pause-icon');
-    const doubleTapHeart = document.getElementById('double-tap-heart');
-    const likeBtn = document.getElementById('like-btn');
-    const commentBtn = document.getElementById('comment-btn');
-    const addFriendBtn = document.getElementById('add-friend-btn');
-    const addStatusBtn = document.getElementById('add-status-btn');
-    const notificationsContainer = document.querySelector('.notifications-container');
-    const notificationsUnreadCount = document.getElementById('notifications-unread-count');
-    const likeCount = document.getElementById('like-count');
-    const commentCount = document.getElementById('comment-count');
-    const alertDialog = document.getElementById('alert-dialog');
-    const alertMessage = document.getElementById('alert-message');
-    const alertClose = document.getElementById('alert-close');
-    const profileContainer = document.querySelector('.profile-container');
-    const profileAvatar = document.getElementById('profile-avatar');
-    const profileUsername = document.getElementById('profile-username');
-    const commentsSheet = document.getElementById('comments-sheet');
-    const commentsList = document.getElementById('comments-list');
-    const commentInput = document.getElementById('comment-input');
-    const commentSubmit = document.getElementById('comment-submit');
-    const closeComments = document.getElementById('close-comments');
-    const container = document.querySelector('.container');
-    const swipeText = document.getElementById('swipe-text');
-    const postText = document.getElementById('post-text');
-    const songText = document.getElementById('song-text');
-    const audioControls = document.getElementById('audio-controls');
-    const pauseAudioBtn = document.getElementById('pause-audio-btn');
-    const backgroundAudio = document.getElementById('background-audio');
-    const progressBar = document.getElementById('progress-bar');
-    const progressFill = document.getElementById('progress-fill');
-    const friendsBtn = document.getElementById('friends-btn');
+const reelContainer = document.getElementById('reelContainer');
+let currentUser = null;
 
-    let currentUser;
-    let postUserId;
-    let statusId;
-    let userCache = {};
-    let statusHistory = [];
-    let historyIndex = -1;
-    let currentMediaIndex = 0;
-    let mediaItems = [];
-    let commentsListener = null;
-    let notificationsListener = null;
-    let lastTap = 0;
-    let isMuted = false;
-    let availableStatusIds = [];
-    let viewedStatusIds = [];
-    let lastNotificationTimestamp = 0;
-    let isAudioPlaying = false;
-    let currentVideo = null;
+let activeReelId = null; // For comment modal
 
-    function showAlert(message) {
-      alertMessage.textContent = message;
-      alertDialog.classList.add('show');
-      alertClose.focus();
-    }
+onAuthStateChanged(auth, user => {
+  if (user) {
+    currentUser = user;
+    loadReels();
+  } else {
+    window.location.href = 'signup.html';
+  }
+});
 
-    function hideAlert() {
-      alertDialog.classList.remove('show');
-    }
+async function loadReels() {
+  const statusesRef = ref(db, 'statuses');
+  onValue(statusesRef, async (snapshot) => {
+    reelContainer.innerHTML = '';
+    const statuses = snapshot.val();
+    if (!statuses) return;
 
-    function showSpinner() {
-      loadingSpinner.classList.add('show');
-    }
+    const entries = Object.entries(statuses).reverse();
+    for (const [statusId, status] of entries) {
+      if (!status.media) continue;
 
-    function hideSpinner() {
-      loadingSpinner.classList.remove('show');
-    }
+      const userSnap = await get(ref(db, `users/${status.userId}`));
+      const userInfo = userSnap.exists() ? userSnap.val() : { name: "Anonymous", avatar: "https://i.pravatar.cc/150?u=" + status.userId };
 
-    function applyTheme(themeValue) {
-      const isDark = themeValue === 'dark';
-      document.body.classList.toggle('dark', isDark);
-      document.querySelectorAll('.carousel-dot').forEach(el => el.classList.toggle('dark', isDark));
-      document.querySelectorAll('.profile-avatar').forEach(el => el.classList.toggle('dark', isDark));
-      document.querySelectorAll('.comment-input').forEach(el => el.classList.toggle('dark', isDark));
-      document.querySelectorAll('.comment-input-container').forEach(el => el.classList.toggle('dark', isDark));
-      document.querySelectorAll('.comment-timestamp').forEach(el => el.classList.toggle('dark', isDark));
-      document.querySelectorAll('.comment-text').forEach(el => el.classList.toggle('dark', isDark));
-      document.querySelectorAll('.comment-username').forEach(el => el.classList.toggle('dark', isDark));
-      document.querySelectorAll('.comment-item').forEach(el => el.classList.toggle('dark', isDark));
-      document.querySelectorAll('.bottom-sheet-close').forEach(el => el.classList.toggle('dark', isDark));
-      document.querySelectorAll('.bottom-sheet-title').forEach(el => el.classList.toggle('dark', isDark));
-      document.querySelectorAll('.alert-message').forEach(el => el.classList.toggle('dark', isDark));
-      document.querySelectorAll('.alert-title').forEach(el => el.classList.toggle('dark', isDark));
-      swipeText.classList.toggle('dark', isDark);
-      postText.classList.toggle('dark', isDark);
-      songText.classList.toggle('dark', isDark);
-      commentsSheet.classList.toggle('dark', isDark);
-      likeBtn.classList.toggle('dark', isDark);
-      alertDialog.classList.toggle('dark', isDark);
-      addStatusBtn.classList.toggle('dark', isDark);
-      notificationsContainer.classList.toggle('dark', isDark);
-      notificationsUnreadCount.classList.toggle('dark', isDark);
-      audioControls.classList.toggle('dark', isDark);
-      progressBar.classList.toggle('dark', isDark);
-    }
+      status.media.forEach((media, idx) => {
+        if (media.type !== 'video') return;
 
-    function timeAgo(timestamp) {
-      if (!timestamp) return 'just now';
-      const now = new Date('2025-07-05T13:54:00+02:00').getTime(); // Updated to 01:54 PM SAST, July 05, 2025
-      const diff = now - timestamp;
-      if (diff < 60000) return 'just now';
-      if (diff < 3600000) return `${Math.floor(diff / 60000)}m`;
-      if (diff < 86400000) return `${Math.floor(diff / 3600000)}h`;
-      return new Date(timestamp).toLocaleString();
-    }
+        const reel = document.createElement('div');
+        reel.className = 'reel';
 
-    async function getUserData(uid) {
-      if (userCache[uid]) return userCache[uid];
-      try {
-        const snap = await get(ref(db, `users/${uid}`));
-        const data = snap.val() || { username: 'Unknown User', profilePicture: 'https://www.gravatar.com/avatar?d=mp' };
-        userCache[uid] = data;
-        return data;
-      } catch (error) {
-        console.error('Error fetching user data:', error);
-        return { username: 'Unknown User', profilePicture: 'https://www.gravatar.com/avatar?d=mp' };
-      }
-    }
+        const video = document.createElement('video');
+        video.src = media.url;
+        video.autoplay = idx === 0;
+        video.loop = true;
+        video.muted = true;
+        video.playsInline = true;
 
-    function pauseAllVideos() {
-      const videoElements = mediaContent.querySelectorAll('.status-video');
-      videoElements.forEach(video => {
-        video.pause();
-        video.currentTime = 0;
-      });
-      if (currentVideo) {
-        stopProgressBar();
-        currentVideo = null;
-      }
-    }
-
-    function startProgressBar(videoDuration = 30) {
-      progressFill.style.animation = `none`;
-      progressFill.style.width = '0';
-      progressFill.style.animation = `progressAnimation ${videoDuration}s linear forwards`;
-      progressFill.style.animationPlayState = 'running';
-    }
-
-    function stopProgressBar() {
-      progressFill.style.animationPlayState = 'paused';
-      progressFill.style.width = '0';
-    }
-
-    function renderMedia(status) {
-      mediaItems = Array.isArray(status.mediaUrls) ? status.mediaUrls : status.imageUrl ? [{ url: status.imageUrl, type: 'image' }] : [];
-      currentMediaIndex = 0;
-      mediaContent.innerHTML = '';
-      carouselIndicators.innerHTML = '';
-
-      if (status.text && status.text.trim()) {
-        postText.textContent = status.text;
-        postText.classList.add('show');
-      } else {
-        postText.textContent = '';
-        postText.classList.remove('show');
-      }
-
-      if (status.songName && status.songUrl) {
-        songText.textContent = `Song: ${status.songName}`;
-        songText.classList.add('show');
-        audioControls.classList.remove('hidden');
-        backgroundAudio.src = status.songUrl;
-        backgroundAudio.play().catch(error => {
-          console.error('Error auto-playing audio:', error);
-          showAlert('Failed to play audio.');
-        });
-        isAudioPlaying = true;
-        pauseAudioBtn.style.display = 'inline';
-      } else {
-        songText.textContent = '';
-        songText.classList.remove('show');
-        audioControls.classList.add('hidden');
-        backgroundAudio.src = '';
-      }
-
-      if (mediaItems.length === 0) {
-        mediaContent.innerHTML = '<div class="carousel-item"><img src="https://via.placeholder.com/1080x1920" alt="Placeholder" /></div>';
-        muteToggleIcon.classList.add('hidden');
-        playPauseIcon.classList.add('hidden');
-        hideSpinner();
-        return;
-      }
-
-      mediaItems.forEach((media, index) => {
-        const itemDiv = document.createElement('div');
-        itemDiv.className = 'carousel-item';
-        if (media.type === 'video') {
-          itemDiv.innerHTML = `
-            <img src="https://via.placeholder.com/1080x1920?text=Loading+Video" class="thumbnail-placeholder" alt="Video thumbnail" />
-            <video src="${media.url}" class="status-video" playsinline preload="metadata" loop data-post-id="${statusId}"></video>
-          `;
-        } else {
-          itemDiv.innerHTML = `
-            <img src="${media.url}?w=1080&h=1920&c=fill" alt="Post" loading="lazy" data-post-id="${statusId}" />
-          `;
-        }
-        mediaContent.appendChild(itemDiv);
-
-        const dot = document.createElement('div');
-        dot.className = `carousel-dot ${index === currentMediaIndex ? 'active' : ''}`;
-        carouselIndicators.appendChild(dot);
-      });
-
-      const videoElements = mediaContent.querySelectorAll('.status-video');
-      const thumbnailElements = mediaContent.querySelectorAll('.thumbnail-placeholder');
-      videoElements.forEach((video, index) => {
-        video.addEventListener('waiting', () => {
-          showSpinner();
-          thumbnailElements[index].classList.add('show');
-        });
-        video.addEventListener('canplay', () => {
-          hideSpinner();
-          thumbnailElements[index].classList.remove('show');
-        });
-        video.addEventListener('error', () => {
-          hideSpinner();
-          showAlert('Failed to load video.');
-          thumbnailElements[index].classList.add('show');
-        });
-        video.addEventListener('play', () => {
-          if (video === currentVideo) {
-            startProgressBar(video.duration || 30);
-          }
-        });
-        video.addEventListener('pause', () => {
-          stopProgressBar();
-        });
-        video.addEventListener('ended', () => {
-          stopProgressBar();
-          loadNextRandomStatus();
-        });
-      });
-
-      updateCarousel();
-      updateVideoControls();
-      setupImpressionTracking();
-      hideSpinner();
-    }
-
-    function updateVideoControls() {
-      const videoElements = mediaContent.querySelectorAll('.status-video');
-      const thumbnailElements = mediaContent.querySelectorAll('.thumbnail-placeholder');
-      if (mediaItems[currentMediaIndex]?.type === 'video') {
-        const video = videoElements[currentMediaIndex];
-        currentVideo = video;
-        const thumbnail = thumbnailElements[currentMediaIndex];
-        video.muted = isMuted || isAudioPlaying;
-        muteToggleIcon.classList.remove('hidden');
-        muteToggleIcon.querySelector('.mute-icon').classList.toggle('hidden', !isMuted);
-        muteToggleIcon.querySelector('.unmute-icon').classList.toggle('hidden', isMuted);
-        playPauseIcon.classList.remove('hidden');
-        playPauseIcon.querySelector('.play-icon').classList.toggle('hidden', !video.paused);
-        playPauseIcon.querySelector('.pause-icon').classList.toggle('hidden', video.paused);
-
-        video.addEventListener('play', () => {
-          playPauseIcon.querySelector('.play-icon').classList.add('hidden');
-          playPauseIcon.querySelector('.pause-icon').classList.remove('hidden');
-          thumbnail.classList.remove('show');
-          hideSpinner();
-          if (!isAudioPlaying) startProgressBar(video.duration || 30);
-        });
-        video.addEventListener('pause', () => {
-          playPauseIcon.querySelector('.play-icon').classList.remove('hidden');
-          playPauseIcon.querySelector('.pause-icon').classList.add('hidden');
-          thumbnail.classList.add('show');
-          stopProgressBar();
+        video.addEventListener('click', () => {
+          video.muted = !video.muted;
         });
 
-        if (!commentsSheet.classList.contains('open') && !document.hidden && !isAudioPlaying) {
-          video.play().catch(error => {
-            console.error('Error auto-playing video:', error);
-            showAlert('Failed to play video.');
-          });
-        }
-      } else {
-        muteToggleIcon.classList.add('hidden');
-        playPauseIcon.classList.add('hidden');
-        stopProgressBar();
-        currentVideo = null;
-        hideSpinner();
-      }
-    }
-
-    function updateCarousel() {
-      pauseAllVideos();
-      mediaContent.style.transform = `translateX(-${currentMediaIndex * 100}%)`;
-      document.querySelectorAll('.carousel-dot').forEach((dot, index) => {
-        dot.classList.toggle('active', index === currentMediaIndex);
-      });
-
-      if (mediaItems[currentMediaIndex]?.type === 'video') {
-        const video = mediaContent.querySelectorAll('.status-video')[currentMediaIndex];
-        const thumbnail = mediaContent.querySelectorAll('.thumbnail-placeholder')[currentMediaIndex];
-        video.muted = isMuted || isAudioPlaying;
-        currentVideo = video;
-        if (!commentsSheet.classList.contains('open') && !document.hidden && !isAudioPlaying) {
-          video.play().catch(error => {
-            console.error('Error playing video:', error);
-            showAlert('Failed to play video.');
-          });
-        }
-        thumbnail.classList.remove('show');
-      }
-
-      updateVideoControls();
-    }
-
-    async function renderComments(comments) {
-      commentsList.innerHTML = '';
-      if (!comments) {
-        commentsList.innerHTML = '<p class="comment-text dark:comment-text">No comments yet</p>';
-        return;
-      }
-      const commentItems = await Promise.all(Object.entries(comments).map(async ([commentId, comment]) => {
-        const userData = await getUserData(comment.userId);
-        const commentDiv = document.createElement('div');
-        commentDiv.className = 'comment-item';
-        commentDiv.innerHTML = `
-          <img src="${userData.profilePicture || 'https://www.gravatar.com/avatar?d=mp'}" alt="${userData.username}'s avatar" class="comment-avatar" loading="lazy" />
-          <div class="comment-content">
-            <span class="comment-username">${userData.username}</span>
-            <p class="comment-text">${comment.text}</p>
-            <span class="comment-timestamp">${timeAgo(comment.timestamp)}</span>
+        const overlay = document.createElement('div');
+        overlay.className = 'overlay';
+        overlay.innerHTML = `
+          <div class="user-info">
+            <img src="${userInfo.avatar}" alt="avatar" />
+            <strong>${userInfo.name}</strong>
           </div>
+          <p class="mt-1">${status.text || ''}</p>
         `;
-        return { div: commentDiv, timestamp: comment.timestamp || 0 };
-      }));
-      commentItems.sort((a, b) => a.timestamp - b.timestamp);
-      commentItems.forEach(item => commentsList.appendChild(item.div));
-    }
 
-    function openBottomSheet() {
-      commentsSheet.classList.add('open');
-      commentInput.focus();
-      pauseAllVideos();
-      backgroundAudio.pause();
-      isAudioPlaying = false;
-      stopProgressBar();
-      playPauseIcon.classList.add('show');
-      if (statusId) {
-        const commentsRef = ref(db, `statuses/${statusId}/comments`);
-        commentsListener = onValue(commentsRef, (snap) => {
-          const comments = snap.val();
-          commentCount.textContent = comments ? Object.keys(comments).length : 0;
-          renderComments(comments);
-        }, (error) => {
-          console.error('Error listening to comments:', error);
-          showAlert('Failed to load comments.');
-        });
-      }
-    }
+        const actions = document.createElement('div');
+        actions.className = 'actions';
 
-    function closeBottomSheet() {
-      commentsSheet.classList.remove('open');
-      commentInput.value = '';
-      if (mediaItems[currentMediaIndex]?.type === 'video' && !document.hidden && !isAudioPlaying) {
-        const video = mediaContent.querySelectorAll('.status-video')[currentMediaIndex];
-        video.play().catch(error => console.error('Error resuming video:', error));
-        playPauseIcon.classList.remove('show');
-      }
-      if (isAudioPlaying) {
-        startProgressBar(backgroundAudio.duration || 30);
-      } else if (currentVideo && !currentVideo.paused) {
-        startProgressBar(currentVideo.duration || 30);
-      }
-      if (commentsListener) {
-        off(ref(db, `statuses/${statusId}/comments`));
-        commentsListener = null;
-      }
-    }
+        const likeBtn = document.createElement('button');
+        likeBtn.innerHTML = status.reactions?.[currentUser.uid] ? '❤️' : '🤍';
+        likeBtn.addEventListener('click', () => toggleLike(statusId, likeBtn));
 
-    function showSwipeText(message) {
-      swipeText.textContent = message;
-      swipeText.classList.add('show');
-      setTimeout(() => {
-        swipeText.classList.remove('show');
-      }, 2000);
-    }
+        const commentBtn = document.createElement('button');
+        commentBtn.innerHTML = '💬';
+        commentBtn.addEventListener('click', () => openComments(statusId));
 
-    function shuffleArray(array) {
-      for (let i = array.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [array[i], array[j]] = [array[j], array[i]];
-      }
-      return array;
-    }
-
-    async function fetchAvailableStatuses() {
-      try {
-        const statusesRef = ref(db, 'statuses');
-        const snap = await get(statusesRef);
-        const statuses = snap.val();
-        if (!statuses) return [];
-        return Object.keys(statuses).filter(id => {
-          const status = statuses[id];
-          return (Array.isArray(status.mediaUrls) && status.mediaUrls.length > 0) || status.imageUrl;
-        });
-      } catch (error) {
-        console.error('Error fetching statuses:', error);
-        return [];
-      }
-    }
-
-    async function setupNotificationsListener() {
-      if (!currentUser) return;
-      const statusesRef = ref(db, `statuses/${currentUser.uid}`);
-      notificationsListener = onValue(statusesRef, (snap) => {
-        let unreadCount = 0;
-        const statuses = snap.val();
-        if (statuses) {
-          Object.entries(statuses).forEach(([statusId, status]) => {
-            if (status.reactions) {
-              Object.entries(status.reactions).forEach(([userId, reaction]) => {
-                if (userId !== currentUser.uid && reaction.timestamp > lastNotificationTimestamp) {
-                  unreadCount++;
-                }
-              });
-            }
-            if (status.comments) {
-              Object.entries(status.comments).forEach(([commentId, comment]) => {
-                if (comment.userId !== currentUser.uid && comment.timestamp > lastNotificationTimestamp) {
-                  unreadCount++;
-                }
-              });
-            }
-          });
-        }
-        notificationsUnreadCount.textContent = unreadCount;
-        notificationsUnreadCount.classList.toggle('hidden', unreadCount === 0);
-      }, (error) => {
-        console.error('Error listening to notifications:', error);
-        showAlert('Failed to load notifications.');
-      });
-    }
-
-    async function loadStatus(newStatusId, isPrevious = false) {
-      showSpinner();
-      try {
-        const statusRef = ref(db, `statuses/${newStatusId}`);
-        const statusSnap = await get(statusRef);
-        if (!statusSnap.exists()) {
-          showAlert('Post not found.');
-          return;
-        }
-        const status = statusSnap.val();
-        postUserId = status.userId;
-        statusId = newStatusId;
-
-        if (!isPrevious) {
-          try {
-            await runTransaction(ref(db, `statuses/${postUserId}/${newStatusId}/impressions`), current => (current || 0) + 1);
-          } catch (error) {
-            console.error('Error incrementing impressions:', error);
-          }
-        }
-
-        if (!isPrevious) {
-          if (historyIndex < statusHistory.length - 1) {
-            statusHistory = statusHistory.slice(0, historyIndex + 1);
-          }
-          statusHistory.push(newStatusId);
-          historyIndex++;
-          if (!viewedStatusIds.includes(newStatusId)) {
-            viewedStatusIds.push(newStatusId);
-            availableStatusIds = availableStatusIds.filter(id => id !== newStatusId);
-          }
-        } else {
-          historyIndex--;
-        }
-
-        history.pushState({}, '', location.pathname);
-
-        // Fetch and display the owner's username
-        const userData = await getUserData(postUserId);
-        profileAvatar.src = userData.profilePicture || 'https://www.gravatar.com/avatar?d=mp';
-        profileUsername.textContent = userData.username || 'Unknown User';
-
-        renderMedia(status);
-        const reactions = status.reactions || {};
-        likeCount.textContent = Object.keys(reactions).length;
-        likeBtn.classList.toggle('liked', !!reactions[currentUser.uid]);
-        const comments = status.comments || {};
-        commentCount.textContent = Object.keys(comments).length;
-        renderComments(comments);
-
-        addFriendBtn.classList.add('hidden');
-        if (postUserId !== currentUser.uid) {
-          const chatSnap = await get(ref(db, `chats`));
-          const chats = chatSnap.val() || {};
-          const isFriend = Object.values(chats).some(chat =>
-            chat.participants?.[currentUser.uid] && chat.participants?.[postUserId]
+        const shareBtn = document.createElement('button');
+        shareBtn.innerHTML = '📤';
+        shareBtn.addEventListener('click', () => {
+          navigator.clipboard.writeText(window.location.href).then(() =>
+            alert("Reel link copied!")
           );
-          if (!isFriend) {
-            addFriendBtn.classList.remove('hidden');
-          }
-        }
-
-        showSwipeText(isPrevious ? 'Previous Post' : 'Next Post');
-      } catch (error) {
-        console.error('Error loading status:', error);
-        showAlert('Failed to load post.');
-      } finally {
-        hideSpinner();
-      }
-    }
-
-    async function loadNextRandomStatus() {
-      showSpinner();
-      try {
-        if (availableStatusIds.length === 0) {
-          availableStatusIds = await fetchAvailableStatuses();
-          availableStatusIds = availableStatusIds.filter(id => !viewedStatusIds.includes(id));
-          if (availableStatusIds.length === 0) {
-            viewedStatusIds = [];
-            availableStatusIds = await fetchAvailableStatuses();
-            if (availableStatusIds.length === 0) {
-              showAlert('No media posts available.');
-              hideSpinner();
-              return;
-            }
-          }
-          availableStatusIds = shuffleArray(availableStatusIds);
-        }
-
-        const newStatusId = availableStatusIds[0];
-        await loadStatus(newStatusId);
-      } catch (error) {
-        console.error('Error loading random status:', error);
-        showAlert('Failed to load next post.');
-      } finally {
-        hideSpinner();
-      }
-    }
-
-    async function loadPreviousStatus() {
-      if (historyIndex <= 0) {
-        showAlert('No previous post available.');
-        return;
-      }
-      const previousStatusId = statusHistory[historyIndex - 1];
-      await loadStatus(previousStatusId, true);
-    }
-
-    async function addFriend(targetUserId) {
-      try {
-        const chatRef = ref(db, `chats/${currentUser.uid}_${targetUserId}`);
-        await set(chatRef, {
-          participants: {
-            [currentUser.uid]: true,
-            [targetUserId]: true
-          },
-          createdAt: Date.now()
         });
-        addFriendBtn.classList.add('hidden');
-        showSwipeText('Friend added!');
-      } catch (error) {
-        console.error('Error adding friend:', error);
-        showAlert('Failed to add friend.');
-      }
-    }
 
-    async function toggleLike() {
-      if (!currentUser || !statusId) {
-        showAlert('Cannot like post: User or post ID is missing.');
-        return;
-      }
-      try {
-        const reactionRef = ref(db, `statuses/${statusId}/reactions/${currentUser.uid}`);
-        const snap = await get(reactionRef);
-        if (snap.exists()) {
-          await set(reactionRef, null);
-          likeBtn.classList.remove('liked');
-          likeCount.textContent = parseInt(likeCount.textContent) - 1;
-        } else {
-          await set(reactionRef, { timestamp: Date.now() });
-          likeBtn.classList.add('liked');
-          likeCount.textContent = parseInt(likeCount.textContent) + 1;
-          createAnimatedLoves();
-        }
-      } catch (error) {
-        console.error('Error toggling like:', error);
-        showAlert('Failed to update like.');
-      }
-    }
-
-    function createAnimatedLoves() {
-      for (let i = 0; i < 3; i++) {
-        const love = document.createElement('svg');
-        love.className = 'animated-love';
-        love.innerHTML = '<path d="M12 4.248c-3.148-5.402-12-3.825-12 2.944 0 4.661 5.571 9.427 12 15.808 6.43-6.381 12-11.147 12-15.808 0-6.792-8.875-8.306-12-2.944z"/>';
-        love.style.left = `${50 + (Math.random() - 0.5) * 40}%`;
-        document.body.appendChild(love);
-        setTimeout(() => document.body.removeChild(love), 1000);
-      }
-    }
-
-    function setupImpressionTracking() {
-      const observer = new IntersectionObserver((entries) => {
-        entries.forEach(entry => {
-          if (entry.isIntersecting && statusId && postUserId) {
-            const postId = entry.target.dataset.postId;
-            if (postId && currentUser) {
-              runTransaction(ref(db, `statuses/${postUserId}/${postId}/impressions`), current => (current || 0) + 1)
-                .catch(error => {
-                  console.error('Error incrementing impressions:', error);
-                });
-              observer.unobserve(entry.target);
-            }
-          }
-        });
-      }, { threshold: 0.5 });
-
-      const mediaElements = mediaContent.querySelectorAll('.carousel-item img, .carousel-item video');
-      mediaElements.forEach(element => {
-        observer.observe(element);
+        actions.append(likeBtn, commentBtn, shareBtn);
+        reel.append(video, overlay, actions);
+        reelContainer.appendChild(reel);
       });
     }
 
-    pauseAudioBtn.addEventListener('click', () => {
-      backgroundAudio.pause();
-      isAudioPlaying = false;
-      stopProgressBar();
-      const videoElements = mediaContent.querySelectorAll('.status-video');
-      videoElements.forEach(video => {
-        video.muted = isMuted;
-        if (!commentsSheet.classList.contains('open') && !document.hidden) {
-          video.play().catch(error => console.error('Error resuming video:', error));
-        }
-      });
-      playPauseIcon.classList.remove('show');
-    });
+    observeVideos();
+  });
+}
 
-    onAuthStateChanged(auth, async user => {
-      if (!user) {
-        showAlert('Please log in to view posts.');
-        setTimeout(() => {
-          location.href = 'signup.html';
-        }, 2000);
-        return;
-      }
-      currentUser = user;
+function toggleLike(statusId, likeBtn) {
+  const likeRef = ref(db, `statuses/${statusId}/reactions/${currentUser.uid}`);
+  const isLiked = likeBtn.innerHTML === '❤️';
+  set(likeRef, isLiked ? null : true).then(() => {
+    likeBtn.innerHTML = isLiked ? '🤍' : '❤️';
+  });
+}
 
-      try {
-        showSpinner();
-        const settingsSnap = await get(ref(db, `users/${user.uid}/settings`));
-        const settings = settingsSnap.val() || {};
-        applyTheme(settings.theme || 'light');
-
-        const lastNotifSnap = await get(ref(db, `users/${user.uid}/lastNotificationTimestamp`));
-        lastNotificationTimestamp = lastNotifSnap.val() || 0;
-
-        setupNotificationsListener();
-
-        availableStatusIds = await fetchAvailableStatuses();
-        if (availableStatusIds.length === 0) {
-          showAlert('No media posts available.');
-          hideSpinner();
-          return;
-        }
-        availableStatusIds = shuffleArray(availableStatusIds);
-        await loadNextRandomStatus();
-      } catch (error) {
-        console.error('Error initializing:', error);
-        showAlert('Failed to load posts. Please try again.');
-      } finally {
-        hideSpinner();
+function observeVideos() {
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+      const video = entry.target;
+      if (entry.isIntersecting) {
+        video.play().catch(() => {});
+      } else {
+        video.pause();
       }
     });
+  }, { threshold: 0.6 });
 
-    function handleLogout() {
-      signOut(auth).then(() => {
-        showAlert('Logged out successfully.');
-        setTimeout(() => {
-          location.href = 'signup.html';
-        }, 2000);
-      }).catch((error) => {
-        console.error('Error logging out:', error);
-        showAlert('Failed to log out. Please try again.');
-      });
+  document.querySelectorAll('video').forEach(video => observer.observe(video));
+}
+
+// ---------------------- COMMENTS ----------------------
+const commentModal = document.getElementById('commentModal');
+const commentList = document.getElementById('commentList');
+const commentInput = document.getElementById('commentInput');
+const postCommentBtn = document.getElementById('postCommentBtn');
+
+function openComments(statusId) {
+  activeReelId = statusId;
+  commentModal.style.display = 'flex';
+  commentList.innerHTML = 'Loading...';
+
+  const commentsRef = ref(db, `statuses/${statusId}/comments`);
+  onValue(commentsRef, async (snapshot) => {
+    const comments = snapshot.val() || {};
+    const entries = Object.entries(comments);
+    commentList.innerHTML = '';
+
+    for (const [commentId, comment] of entries.reverse()) {
+      const userSnap = await get(ref(db, `users/${comment.userId}`));
+      const user = userSnap.exists() ? userSnap.val() : { name: 'User' };
+      const div = document.createElement('div');
+      div.className = 'comment';
+      div.innerHTML = `<strong>${user.name}</strong><br>${comment.text}`;
+      commentList.appendChild(div);
     }
+  });
+}
 
-    notificationsContainer.addEventListener('click', async () => {
-      try {
-        await set(ref(db, `users/${currentUser.uid}/lastNotificationTimestamp`), Date.now());
-        notificationsUnreadCount.textContent = '0';
-        notificationsUnreadCount.classList.toggle('hidden', true);
-        location.href = 'notifications.html';
-      } catch (error) {
-        console.error('Error updating notification timestamp:', error);
-        showAlert('Failed to process notifications.');
-      }
-    });
+postCommentBtn.addEventListener('click', () => {
+  const text = commentInput.value.trim();
+  if (!text || !activeReelId) return;
+  const newRef = push(ref(db, `statuses/${activeReelId}/comments`));
+  set(newRef, {
+    userId: currentUser.uid,
+    text,
+    timestamp: Date.now()
+  }).then(() => {
+    commentInput.value = '';
+  });
+});
 
-    notificationsContainer.addEventListener('keypress', (e) => {
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        notificationsContainer.click();
-      }
-    });
-
-    friendsBtn.addEventListener('click', () => {
-      location.href = 'friends.html';
-    });
-
-    friendsBtn.addEventListener('keypress', (e) => {
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        friendsBtn.click();
-      }
-    });
-
-    profileContainer.addEventListener('click', () => {
-      if (postUserId) {
-        location.href = `profile.html?uid=${postUserId}${postUserId === currentUser.uid ? '&owner=true' : ''}`;
-      }
-    });
-
-    profileContainer.addEventListener('keypress', (e) => {
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        profileContainer.click();
-      }
-    });
-
-    likeBtn.addEventListener('click', toggleLike);
-
-    likeBtn.addEventListener('keypress', (e) => {
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        toggleLike();
-      }
-    });
-
-    commentBtn.addEventListener('click', () => {
-      openBottomSheet();
-    });
-
-    commentBtn.addEventListener('keypress', (e) => {
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        commentBtn.click();
-      }
-    });
-
-    addFriendBtn.addEventListener('click', () => {
-      if (postUserId) {
-        addFriend(postUserId);
-      }
-    });
-
-    addFriendBtn.addEventListener('keypress', (e) => {
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        addFriendBtn.click();
-      }
-    });
-
-    addStatusBtn.addEventListener('click', () => {
-      location.href = 'add-status.html';
-    });
-
-    addStatusBtn.addEventListener('keypress', (e) => {
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        location.href = 'add-status.html';
-      }
-    });
-
-    closeComments.addEventListener('click', closeBottomSheet);
-
-    closeComments.addEventListener('keypress', (e) => {
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        closeBottomSheet();
-      }
-    });
-
-    alertClose.addEventListener('click', hideAlert);
-
-    alertClose.addEventListener('keypress', (e) => {
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        hideAlert();
-      }
-    });
-
-    document.addEventListener('click', (e) => {
-      if (!commentsSheet.contains(e.target) && !commentBtn.contains(e.target)) {
-        closeBottomSheet();
-      }
-      if (!alertDialog.contains(e.target) && alertDialog.classList.contains('show')) {
-        hideAlert();
-      }
-    });
-
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') {
-        if (commentsSheet.classList.contains('open')) {
-          closeBottomSheet();
-        }
-        if (alertDialog.classList.contains('show')) {
-          hideAlert();
-        }
-      }
-    });
-
-    commentSubmit.addEventListener('click', async () => {
-      const text = commentInput.value.trim();
-      if (!text || !currentUser || !statusId) return;
-      try {
-        await push(ref(db, `statuses/${statusId}/comments`), {
-          userId: currentUser.uid,
-          text,
-          timestamp: Date.now()
-        });
-        commentInput.value = '';
-      } catch (error) {
-        console.error('Error adding comment:', error);
-        showAlert('Failed to post comment.');
-      }
-    });
-
-    commentInput.addEventListener('keypress', (e) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        commentSubmit.click();
-      }
-    });
-
-    mediaContainer.addEventListener('click', (e) => {
-      if (mediaItems[currentMediaIndex]?.type === 'video') {
-        const video = mediaContent.querySelectorAll('.status-video')[currentMediaIndex];
-        if (video) {
-          if (video.paused && !isAudioPlaying) {
-            video.play().catch(error => console.error('Error playing video:', error));
-            playPauseIcon.classList.add('show');
-          } else if (!video.paused) {
-            video.pause();
-            playPauseIcon.classList.add('show');
-          }
-          setTimeout(() => playPauseIcon.classList.remove('show'), 1000);
-        }
-      }
-    });
-
-    muteToggleIcon.addEventListener('click', () => {
-      if (mediaItems[currentMediaIndex]?.type === 'video') {
-        const video = mediaContent.querySelectorAll('.status-video')[currentMediaIndex];
-        isMuted = !isMuted;
-        video.muted = isMuted || isAudioPlaying;
-        muteToggleIcon.querySelector('.mute-icon').classList.toggle('hidden', !isMuted);
-        muteToggleIcon.querySelector('.unmute-icon').classList.toggle('hidden', isMuted);
-      }
-    });
-
-    mediaContainer.addEventListener('touchstart', (e) => {
-      const now = new Date().getTime();
-      const timeSinceLastTap = now - lastTap;
-      if (timeSinceLastTap < 300 && timeSinceLastTap > 0) {
-        if (!commentsSheet.classList.contains('open') && !alertDialog.classList.contains('show')) {
-          toggleLike();
-        }
-      }
-      lastTap = now;
-    });
-
-    let touchStartX = 0;
-    let touchStartY = 0;
-
-    container.addEventListener('touchstart', (e) => {
-      touchStartX = e.changedTouches[0].screenX;
-      touchStartY = e.changedTouches[0].screenY;
-    });
-
-    container.addEventListener('touchend', (e) => {
-      const touchEndX = e.changedTouches[0].screenX;
-      const touchEndY = e.changedTouches[0].screenY;
-      const deltaX = touchStartX - touchEndX;
-      const deltaY = touchStartY - touchEndY;
-
-      if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 50) {
-        if (!commentsSheet.classList.contains('open') && !alertDialog.classList.contains('show') && !addStatusBtn.contains(e.target) && !notificationsContainer.contains(e.target)) {
-          if (deltaX > 0 && currentMediaIndex < mediaItems.length - 1) {
-            currentMediaIndex++;
-            updateCarousel();
-          } else if (deltaX < 0 && currentMediaIndex === 0) {
-            if (postUserId) {
-              location.href = `profile.html?uid=${postUserId}${postUserId === currentUser.uid ? '&owner=true' : ''}`;
-            }
-          } else if (deltaX < 0 && currentMediaIndex > 0) {
-            currentMediaIndex--;
-            updateCarousel();
-          }
-        }
-      } else if (Math.abs(deltaY) > 50) {
-        if (!commentsSheet.classList.contains('open') && !alertDialog.classList.contains('show') && !addStatusBtn.contains(e.target) && !notificationsContainer.contains(e.target)) {
-          if (deltaY < 0) {
-            loadNextRandomStatus();
-          } else {
-            loadPreviousStatus();
-          }
-        }
-      }
-    });
-
-    document.addEventListener('visibilitychange', () => {
-      if (mediaItems[currentMediaIndex]?.type === 'video') {
-        const video = mediaContent.querySelectorAll('.status-video')[currentMediaIndex];
-        if (document.hidden || commentsSheet.classList.contains('open')) {
-          video.pause();
-          playPauseIcon.classList.add('show');
-          backgroundAudio.pause();
-          isAudioPlaying = false;
-          stopProgressBar();
-        } else if (!isAudioPlaying) {
-          video.play().catch(error => console.error('Error resuming video:', error));
-          playPauseIcon.classList.remove('show');
-        }
-      }
-    });
-  </script>
+window.closeModal = () => {
+  commentModal.style.display = 'none';
+};
+</script>
 </body>
 </html>
