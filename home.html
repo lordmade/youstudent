@@ -1641,19 +1641,21 @@ async function renderStatusCard(sid, status, userData, currentUserUid) {
   const isReacted = status.reactions && status.reactions[currentUserUid];
 
   let mediaContent = '';
-  let muteIcons = '';
   if (status.media && status.media.length > 0) {
     mediaContent = `
       <div class="status-carousel-container">
         <div class="status-carousel" data-sid="${sid}">
           ${status.media.map((item, index) => `
-            <div class="status-media-item" style="flex: 0 0 100%;">
+            <div class="status-media-item" style="flex: 0 0 100%; position: relative;">
               ${item.type === 'video' ? `
-                <video src="${item.url}" class="status-video dark:status-video" muted playsinline loop aria-label="Status video ${index + 1}" data-public-id="${item.publicId}"></video>
+                <video src="${item.url}" class="status-video dark:status-video" ${item.muted ? 'muted' : ''} playsinline loop aria-label="Status video ${index + 1}" data-public-id="${item.publicId}"></video>
                 <img src="https://res.cloudinary.com/banter_box/video/upload/e_thumb/${item.publicId}.jpg" alt="Video thumbnail ${index + 1}" class="status-thumbnail dark:status-thumbnail" style="display: block;" />
                 <svg class="loading-spinner" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                   <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                   <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4z"/>
+                </svg>
+                <svg class="mute-toggle-icon" data-index="${index}" data-sid="${sid}" fill="none" stroke="white" viewBox="0 0 24 24" style="position: absolute; bottom: 12px; right: 12px; background: rgba(0, 0, 0, 0.6); border-radius: 50%; padding: 6px; width: 36px; height: 36px; cursor: pointer; transition: background 0.2s ease, transform 0.2s ease; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3); z-index: 10;">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${item.muted ? 'M5 7h4l3 3H8a3 3 0 00-3 3v4a3 3 0 003 3h4l3-3H5V7z' : 'M15 7h-4l-3 3h4a3 3 0 003-3v-4a3 3 0 00-3-3h-4l-3 3h4v7z'}"/>
                 </svg>
               ` : `
                 <img src="${item.url}" alt="Status image ${index + 1}" class="status-image dark:status-image" />
@@ -1670,14 +1672,6 @@ async function renderStatusCard(sid, status, userData, currentUserUid) {
         ` : ''}
       </div>
     `;
-    muteIcons = status.media
-      .map((item, index) => `
-        ${item.type === 'video' ? `
-          <svg class="mute-toggle-icon" data-index="${index}" data-sid="${sid}" fill="none" stroke="white" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${item.muted ? 'M5 7h4l3 3H8a3 3 0 00-3 3v4a3 3 0 003 3h4l3-3H5V7z' : 'M15 7h-4l-3 3h4a3 3 0 003-3v-4a3 3 0 00-3-3h-4l-3 3h4v7z'}"/>
-          </svg>
-        ` : ''}
-      `).join('');
   }
 
   div.innerHTML = `
@@ -1782,7 +1776,6 @@ async function renderStatusCard(sid, status, userData, currentUserUid) {
 
   return div;
 }
-
   async function toggleReaction(sid, uid) {
     try {
       const reactionRef = ref(db, `statuses/${sid}/reactions/${uid}`);
