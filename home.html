@@ -1628,148 +1628,157 @@
     }
   }
 
-  async function renderStatusCard(sid, status, userData, currentUserUid) {
-    const div = document.createElement("div");
-    div.className = "status-card dark:status-card";
-    div.dataset.sid = sid;
-    div.setAttribute("role", "article");
-    div.setAttribute("aria-label", `Status by ${userData.name || "User"}`);
+ async function renderStatusCard(sid, status, userData, currentUserUid) {
+  const div = document.createElement("div");
+  div.className = "status-card dark:status-card";
+  div.dataset.sid = sid;
+  div.setAttribute("role", "article");
+  div.setAttribute("aria-label", `Status by ${userData.name || "User"}`);
 
-    const isOwner = status.userId === currentUserUid;
-    const reactionCount = status.reactions ? Object.keys(status.reactions).length : 0;
-    const commentCount = status.comments ? Object.keys(status.comments).length : 0;
-    const isReacted = status.reactions && status.reactions[currentUserUid];
+  const isOwner = status.userId === currentUserUid;
+  const reactionCount = status.reactions ? Object.keys(status.reactions).length : 0;
+  const commentCount = status.comments ? Object.keys(status.comments).length : 0;
+  const isReacted = status.reactions && status.reactions[currentUserUid];
 
-    // Handle multiple media items
-    let mediaContent = '';
-    let muteIcons = '';
-    if (status.media && status.media.length > 0) {
-      mediaContent = `
-        <div class="status-carousel-container">
-          <div class="status-carousel" data-sid="${sid}">
-            ${status.media.map((item, index) => `
-              <div class="status-media-item" style="flex: 0 0 100%;">
-                ${item.type === 'video' ? `
-                  <video src="${item.url}" class="status-video dark:status-video" muted playsinline loop aria-label="Status video ${index + 1}" data-public-id="${item.publicId}"></video>
-                  <img src="https://res.cloudinary.com/banter_box/video/upload/e_thumb/${item.publicId}.jpg" alt="Video thumbnail ${index + 1}" class="status-thumbnail dark:status-thumbnail" style="display: block;" />
-                  <svg class="loading-spinner" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4z"/>
-                  </svg>
-                ` : `
-                  <img src="${item.url}" alt="Status image ${index + 1}" class="status-image dark:status-image" />
-                `}
-              </div>
+  let mediaContent = '';
+  let muteIcons = '';
+  if (status.media && status.media.length > 0) {
+    mediaContent = `
+      <div class="status-carousel-container">
+        <div class="status-carousel" data-sid="${sid}">
+          ${status.media.map((item, index) => `
+            <div class="status-media-item" style="flex: 0 0 100%;">
+              ${item.type === 'video' ? `
+                <video src="${item.url}" class="status-video dark:status-video" muted playsinline loop aria-label="Status video ${index + 1}" data-public-id="${item.publicId}"></video>
+                <img src="https://res.cloudinary.com/banter_box/video/upload/e_thumb/${item.publicId}.jpg" alt="Video thumbnail ${index + 1}" class="status-thumbnail dark:status-thumbnail" style="display: block;" />
+                <svg class="loading-spinner" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4z"/>
+                </svg>
+              ` : `
+                <img src="${item.url}" alt="Status image ${index + 1}" class="status-image dark:status-image" />
+              `}
+            </div>
+          `).join('')}
+        </div>
+        ${status.media.length > 1 ? `
+          <div class="carousel-dots">
+            ${status.media.map((_, index) => `
+              <span class="carousel-dot ${index === 0 ? 'active' : ''} dark:carousel-dot" data-index="${index}" data-sid="${sid}"></span>
             `).join('')}
           </div>
-          ${status.media.length > 1 ? `
-            <div class="carousel-dots">
-              ${status.media.map((_, index) => `
-                <span class="carousel-dot ${index === 0 ? 'active' : ''} dark:carousel-dot" data-index="${index}" data-sid="${sid}"></span>
-              `).join('')}
-            </div>
-          ` : ''}
-        </div>
-      `;
-           muteIcons = status.media
-        .map((item, index) => `
-          ${item.type === 'video' ? `
-            <svg class="mute-toggle-icon" data-index="${index}" data-sid="${sid}" fill="none" stroke="white" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${item.muted ? 'M5 7h4l3 3H8a3 3 0 00-3 3v4a3 3 0 003 3h4l3-3H5V7z' : 'M15 7h-4l-3 3h4a3 3 0 003-3v-4a3 3 0 00-3-3h-4l-3 3h4v7z'}"/>
-            </svg>
-          ` : ''}
-        `).join('');
-    }
-
-    div.innerHTML = `
-      <div class="status-header dark:status-header">
-        <img src="${userData.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${userData.name || 'User'} avatar" class="status-avatar" />
-        <div class="status-info dark:status-info">
-          <h4>${userData.name || 'User'}</h4>
-          <p class="status-time dark:status-time">${timeAgo(status.timestamp)}</p>
-        </div>
-        ${isOwner ? `
-          <svg class="delete-icon" data-sid="${sid}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
-          </svg>
         ` : ''}
       </div>
-      ${mediaContent}
-      <p class="status-text dark:status-text">${status.text || ''}</p>
-      <div class="status-footer">
-        <svg class="reaction-btn dark:reaction-btn ${isReacted ? 'reacted liked' : ''}" data-sid="${sid}" fill="${isReacted ? '#ef4444' : 'none'}" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/>
-        </svg>
-        <span class="reaction-count dark:reaction-count">${reactionCount}</span>
-        <svg class="comment-btn dark:comment-btn" data-sid="${sid}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
-        </svg>
-        <span class="comment-count dark:comment-count">${commentCount}</span>
-      </div>
     `;
+    muteIcons = status.media
+      .map((item, index) => `
+        ${item.type === 'video' ? `
+          <svg class="mute-toggle-icon" data-index="${index}" data-sid="${sid}" fill="none" stroke="white" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${item.muted ? 'M5 7h4l3 3H8a3 3 0 00-3 3v4a3 3 0 003 3h4l3-3H5V7z' : 'M15 7h-4l-3 3h4a3 3 0 003-3v-4a3 3 0 00-3-3h-4l-3 3h4v7z'}"/>
+          </svg>
+        ` : ''}
+      `).join('');
+  }
 
-    if (status.media && status.media.length > 1) {
-      const carousel = div.querySelector('.status-carousel');
-      const dots = div.querySelectorAll('.carousel-dot');
-      let currentIndex = 0;
+  div.innerHTML = `
+    <div class="status-header dark:status-header">
+      <img src="${userData.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${userData.name || 'User'} avatar" class="status-avatar" />
+      <div class="status-info dark:status-info">
+        <h4>${userData.name || 'User'}</h4>
+        <p class="status-time dark:status-time">${timeAgo(status.timestamp)}</p>
+      </div>
+      ${isOwner ? `
+        <svg class="delete-icon" data-sid="${sid}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
+        </svg>
+      ` : ''}
+    </div>
+    ${mediaContent}
+    <p class="status-text dark:status-text">${status.text || ''}</p>
+    <div class="status-footer">
+      <svg class="reaction-btn dark:reaction-btn ${isReacted ? 'reacted liked' : ''}" data-sid="${sid}" fill="${isReacted ? '#ef4444' : 'none'}" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/>
+      </svg>
+      <span class="reaction-count dark:reaction-count">${reactionCount}</span>
+      <svg class="comment-btn dark:comment-btn" data-sid="${sid}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+      </svg>
+      <span class="comment-count dark:comment-count">${commentCount}</span>
+    </div>
+  `;
 
-      dots.forEach(dot => {
-        dot.addEventListener('click', () => {
-          currentIndex = parseInt(dot.dataset.index);
-          carousel.style.transform = `translateX(-${currentIndex * 100}%)`;
-          dots.forEach(d => d.classList.remove('active'));
-          dot.classList.add('active');
-        });
-      });
-    }
-
-    div.querySelectorAll('.mute-toggle-icon').forEach(icon => {
-      icon.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const index = parseInt(icon.dataset.index);
-        const video = div.querySelector(`.status-video[data-public-id="${status.media[index].publicId}"]`);
-        if (video) {
-          video.muted = !video.muted;
-          status.media[index].muted = video.muted;
-          icon.innerHTML = `
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${video.muted ? 'M5 7h4l3 3H8a3 3 0 00-3 3v4a3 3 0 003 3h4l3-3H5V7z' : 'M15 7h-4l-3 3h4a3 3 0 003-3v-4a3 3 0 00-3-3h-4l-3 3h4v7z'}"/>
-          `;
-          update(ref(db, `statuses/${sid}/media/${index}`), { muted: video.muted });
-        }
-      });
-    });
-
-    div.addEventListener('dblclick', (e) => {
-      if (!isReacted && !e.target.closest('.reaction-btn, .comment-btn, .delete-icon')) {
-        const heart = document.createElement('svg');
-        heart.className = 'double-tap-heart';
-        heart.setAttribute('fill', '#ef4444');
-        heart.setAttribute('viewBox', '0 0 24 24');
-        heart.innerHTML = `
-          <path d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/>
-        `;
-        div.appendChild(heart);
-        setTimeout(() => heart.remove(), 600);
-        toggleReaction(sid, currentUserUid);
+  // Make only video status cards clickable to redirect to post.html
+  if (status.media && status.media.some(item => item.type === 'video')) {
+    div.style.cursor = 'pointer';
+    div.addEventListener('click', (e) => {
+      if (!e.target.closest('.reaction-btn, .comment-btn, .delete-icon, .mute-toggle-icon, .carousel-dot')) {
+        window.location.href = `post.html?sid=${sid}`;
       }
     });
-
-    const reactionBtn = div.querySelector('.reaction-btn');
-    reactionBtn.addEventListener('click', () => toggleReaction(sid, currentUserUid));
-
-    const commentBtn = div.querySelector('.comment-btn');
-    commentBtn.addEventListener('click', () => openCommentSheet(sid, userData.name));
-
-    if (isOwner) {
-      const deleteBtn = div.querySelector('.delete-icon');
-      deleteBtn.addEventListener('click', () => {
-        currentStatusId = sid;
-        deleteStatusModal.classList.remove('hidden');
-      });
-    }
-
-    return div;
   }
+
+  if (status.media && status.media.length > 1) {
+    const carousel = div.querySelector('.status-carousel');
+    const dots = div.querySelectorAll('.carousel-dot');
+    let currentIndex = 0;
+
+    dots.forEach(dot => {
+      dot.addEventListener('click', () => {
+        currentIndex = parseInt(dot.dataset.index);
+        carousel.style.transform = `translateX(-${currentIndex * 100}%)`;
+        dots.forEach(d => d.classList.remove('active'));
+        dot.classList.add('active');
+      });
+    });
+  }
+
+  div.querySelectorAll('.mute-toggle-icon').forEach(icon => {
+    icon.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const index = parseInt(icon.dataset.index);
+      const video = div.querySelector(`.status-video[data-public-id="${status.media[index].publicId}"]`);
+      if (video) {
+        video.muted = !video.muted;
+        status.media[index].muted = video.muted;
+        icon.innerHTML = `
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${video.muted ? 'M5 7h4l3 3H8a3 3 0 00-3 3v4a3 3 0 003 3h4l3-3H5V7z' : 'M15 7h-4l-3 3h4a3 3 0 003-3v-4a3 3 0 00-3-3h-4l-3 3h4v7z'}"/>
+        `;
+        update(ref(db, `statuses/${sid}/media/${index}`), { muted: video.muted });
+      }
+    });
+  });
+
+  div.addEventListener('dblclick', (e) => {
+    if (!isReacted && !e.target.closest('.reaction-btn, .comment-btn, .delete-icon')) {
+      const heart = document.createElement('svg');
+      heart.className = 'double-tap-heart';
+      heart.setAttribute('fill', '#ef4444');
+      heart.setAttribute('viewBox', '0 0 24 24');
+      heart.innerHTML = `
+        <path d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/>
+      `;
+      div.appendChild(heart);
+      setTimeout(() => heart.remove(), 600);
+      toggleReaction(sid, currentUserUid);
+    }
+  });
+
+  const reactionBtn = div.querySelector('.reaction-btn');
+  reactionBtn.addEventListener('click', () => toggleReaction(sid, currentUserUid));
+
+  const commentBtn = div.querySelector('.comment-btn');
+  commentBtn.addEventListener('click', () => openCommentSheet(sid, userData.name));
+
+  if (isOwner) {
+    const deleteBtn = div.querySelector('.delete-icon');
+    deleteBtn.addEventListener('click', () => {
+      currentStatusId = sid;
+      deleteStatusModal.classList.remove('hidden');
+    });
+  }
+
+  return div;
+}
 
   async function toggleReaction(sid, uid) {
     try {
