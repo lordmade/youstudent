@@ -897,6 +897,7 @@
             const postElement = document.createElement("div");
             postElement.className = "post";
             postElement.id = `post-${post.id}`;
+            postElement.tabIndex = 0; // Enable focus
             postElement.innerHTML = `
               <div class="post-header">
                 <img src="${users[post.userId]?.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${users[post.userId]?.username || 'User'} avatar" class="cursor-pointer">
@@ -907,13 +908,15 @@
               <div class="post-actions">
                 <button class="like-btn" data-post-id="${post.id}">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="${post.likedBy && post.likedBy.includes(currentUserUid) ? 'text-red-500' : 'text-gray-500'}">
-                    <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+                    <path d="M9 14l-5-5 1.41-1.41L9 11.17l7.59-7.58L18 5l-9 9z"/>
                   </svg>
+                  <span class="like-count ml-1">${post.likes || 0}</span>
                 </button>
                 <button class="comment-btn" aria-label="Comment on post">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M21 8v9a2 2 0 01-2 2H7a2 2 0 01-2-2V8m0 0l7-4 7 4m-7 4h4"/>
                   </svg>
+                  <span class="comment-count ml-1">0</span>
                 </button>
                 <button class="share-btn" aria-label="Share post">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -925,8 +928,23 @@
                 <strong>${users[post.userId]?.username || 'Unknown'}</strong>${post.caption || ''}
                 <span class="time">${timeAgo(post.timestamp)}</span>
               </div>
-              ${post.song ? `<div class="post-caption song-display cursor-pointer">${post.song.title} - ${post.song.artist} <audio controls src="${post.song.audioUrl}"></audio></div>` : ''}
+              ${post.song ? `<div class="post-caption song-display cursor-pointer">${post.song.title} - ${post.song.artist}</div>` : ''}
+              ${post.song ? `<audio id="audio-${post.id}" src="${post.song.audioUrl}" style="display: none;"></audio>` : ''}
             `;
+
+            // Real-time like count listener
+            const likeCountSpan = postElement.querySelector(".like-count");
+            onValue(ref(db, `posts/${post.id}/likes`), (snapshot) => {
+              const likes = snapshot.val() || 0;
+              likeCountSpan.textContent = likes;
+            });
+
+            // Real-time comment count listener
+            const commentCountSpan = postElement.querySelector(".comment-count");
+            onValue(ref(db, `posts/${post.id}/comments`), (snapshot) => {
+              const comments = snapshot.val() || {};
+              commentCountSpan.textContent = Object.keys(comments).length;
+            });
 
             const likeBtn = postElement.querySelector(".like-btn");
             likeBtn.addEventListener("click", (e) => {
@@ -949,18 +967,14 @@
             });
 
             if (post.song) {
-              const audio = postElement.querySelector("audio");
-              audio.id = `audio-${post.id}`;
-              audio.loop = true;
-              const songDisplay = postElement.querySelector(".song-display");
-              songDisplay.addEventListener("click", (e) => {
-                e.stopPropagation();
+              const audio = postElement.querySelector(`#audio-${post.id}`);
+              postElement.addEventListener("focus", () => {
                 pauseAllMedia("home");
-                if (audio.paused) {
-                  audio.play().catch(e => console.error("Audio play error:", e.message));
-                } else {
-                  audio.pause();
-                }
+                audio.play().catch(e => console.error("Audio play error:", e.message));
+              });
+              postElement.addEventListener("blur", () => {
+                audio.pause();
+                audio.currentTime = 0;
               });
             }
 
@@ -1000,7 +1014,7 @@
     function toggleLike(postId, button) {
       const userId = currentUserUid;
       const postRef = ref(db, `posts/${postId}`);
-      const likeCountSpan = button.querySelector(".like-count") || button.nextElementSibling;
+      const likeCountSpan = button.querySelector(".like-count");
       const likeIcon = button.querySelector("svg");
 
       get(postRef).then((snapshot) => {
@@ -1014,7 +1028,7 @@
             likes: currentLikes - 1,
             likedBy: likedBy.filter(id => id !== userId)
           }).then(() => {
-            likeCountSpan.textContent = currentLikes - 1 || '';
+            likeCountSpan.textContent = currentLikes - 1;
             likeIcon.classList.remove("text-red-500");
             likeIcon.classList.add("text-gray-500");
           });
@@ -1023,7 +1037,7 @@
             likes: currentLikes + 1,
             likedBy: [...likedBy, userId]
           }).then(() => {
-            likeCountSpan.textContent = currentLikes + 1 || '';
+            likeCountSpan.textContent = currentLikes + 1;
             likeIcon.classList.remove("text-gray-500");
             likeIcon.classList.add("text-red-500");
           });
