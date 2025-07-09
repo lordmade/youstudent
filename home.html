@@ -315,7 +315,7 @@
     .loading-overlay.hidden {
       display: none;
     }
-    .friend-item, .search-item {
+    .friend-item {
       display: flex;
       align-items: center;
       padding: 0.75rem;
@@ -323,17 +323,17 @@
       cursor: pointer;
       transition: background 0.2s ease;
     }
-    .friend-item:hover, .search-item:hover {
+    .friend-item:hover {
       background: rgba(237, 73, 86, 0.1);
     }
-    .friend-item img, .search-item img {
+    .friend-item img {
       width: 40px;
       height: 40px;
       border-radius: 50%;
       object-fit: cover;
       margin-right: 1rem;
     }
-    .friend-item span, .search-item span {
+    .friend-item span {
       font-size: clamp(0.85rem, 3.5vw, 0.9rem);
       color: var(--text-dark);
       font-weight: 600;
@@ -345,6 +345,38 @@
       border-radius: 9999px;
       font-size: clamp(0.85rem, 3.5vw, 0.9rem);
       margin-bottom: 1rem;
+    }
+    #search-results {
+      padding: 1rem 0;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: 0.5rem;
+    }
+    #search-results .post {
+      width: 100%;
+      aspect-ratio: 1;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--white);
+      overflow: hidden;
+      position: relative;
+      cursor: pointer;
+      transition: transform 0.2s ease;
+      margin-bottom: 0;
+    }
+    #search-results .post:hover {
+      transform: scale(1.05);
+    }
+    #search-results .post img.post-image {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    #search-results .post-header,
+    #search-results .post-actions,
+    #search-results .post-caption,
+    #search-results audio {
+      display: none;
     }
     .profile-header {
       padding: 1rem;
@@ -520,12 +552,16 @@
       .comment-input, .comment-submit {
         font-size: clamp(0.7rem, 2.5vw, 0.75rem);
       }
-      .friend-item img, .search-item img {
+      .friend-item img {
         width: 32px;
         height: 32px;
       }
-      .friend-item span, .search-item span {
+      .friend-item span {
         font-size: clamp(0.75rem, 3vw, 0.8rem);
+      }
+      #search-results {
+        grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+        gap: 0.3rem;
       }
       .profile-header img {
         width: 60px;
@@ -587,7 +623,7 @@
     </div>
     <div id="search" class="tab-content">
       <div id="search-container">
-        <input type="text" id="search-input" class="search-input" placeholder="Search users..."/>
+        <input type="text" id="search-input" class="search-input" placeholder="Search posts by username or caption..."/>
         <div id="search-results" class="loading">Loading...</div>
       </div>
     </div>
@@ -677,8 +713,8 @@
     let currentPostId = null;
 
     // Cloudinary configuration
-    const CLOUDINARY_UPLOAD_PRESET = "banter_box"; // Replace with your unsigned upload preset
-    const CLOUDINARY_CLOUD_NAME = "dqkujefxj"; // Replace with your Cloudinary cloud name
+    const CLOUDINARY_UPLOAD_PRESET = "banter_box";
+    const CLOUDINARY_CLOUD_NAME = "dqkujefxj";
     const CLOUDINARY_UPLOAD_URL = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`;
 
     function showLoading() { loadingOverlay.classList.remove("hidden"); }
@@ -1016,46 +1052,82 @@
       const searchInput = document.getElementById("search-input");
       const searchResults = document.getElementById("search-results");
       let debounceTimeout;
+
+      // Load all posts initially
+      const loadAllPosts = async (queryText = "") => {
+        searchResults.innerHTML = '<div class="loading">Loading posts...</div>';
+        showLoading();
+        try {
+          const postsSnap = await Promise.race([
+            get(query(ref(db, "posts"), orderByChild("timestamp"), limitToLast(100))),
+            new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout loading posts")), 10000))
+          ]);
+          const usersSnap = await Promise.race([
+            get(ref(db, "users")),
+            new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout loading users")), 10000))
+          ]);
+          searchResults.innerHTML = "";
+          const posts = [];
+          postsSnap.forEach(child => {
+            posts.push({ id: child.key, ...child.val() });
+          });
+          const users = usersSnap.val() || {};
+
+          // Filter posts based on query
+          const filteredPosts = queryText
+            ? posts.filter(post => {
+                const username = users[post.userId]?.username?.toLowerCase() || "";
+                const caption = post.caption?.toLowerCase() || "";
+                return username.includes(queryText) || caption.includes(queryText);
+              })
+            : posts;
+
+          // Sort by timestamp (descending) and randomize posts with the same timestamp
+          filteredPosts.sort((a, b) => {
+            if (b.timestamp === a.timestamp) {
+              return Math.random() - 0.5; // Randomize if timestamps are equal
+            }
+            return b.timestamp - a.timestamp; // Sort by timestamp descending
+          });
+
+          if (filteredPosts.length === 0) {
+            searchResults.innerHTML = '<div class="placeholder">No posts found.</div>';
+            hideLoading();
+            return;
+          }
+
+          for (const post of filteredPosts) {
+            const postId = `search-post-${post.id}`;
+            const postElement = document.createElement("div");
+            postElement.className = "post";
+            postElement.id = postId;
+            postElement.innerHTML = `
+              <img class="post-image" src="${post.imageUrl}" alt="Post">
+            `;
+            postElement.addEventListener("click", (e) => {
+              e.stopPropagation();
+              console.log("Navigating to post:", post.id);
+              location.href = `post.html?id=${post.id}`;
+            });
+            searchResults.appendChild(postElement);
+          }
+        } catch (error) {
+          console.error("Error loading posts:", error.code, error.message);
+          searchResults.innerHTML = `<p class="error">Failed to load posts: ${error.message}</p>`;
+        } finally {
+          hideLoading();
+        }
+      };
+
+      // Initial load of all posts
+      loadAllPosts();
+
+      // Search input handler
       searchInput.addEventListener("input", () => {
         clearTimeout(debounceTimeout);
-        debounceTimeout = setTimeout(async () => {
+        debounceTimeout = setTimeout(() => {
           const queryText = searchInput.value.trim().toLowerCase();
-          searchResults.innerHTML = '<div class="loading">Searching...</div>';
-          showLoading();
-          try {
-            const usersSnap = await Promise.race([
-              get(ref(db, "users")),
-              new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout loading users")), 10000))
-            ]);
-            searchResults.innerHTML = "";
-            const users = usersSnap.val() || {};
-            const matchingUsers = Object.entries(users).filter(([uid, user]) =>
-              user.username.toLowerCase().includes(queryText)
-            );
-            if (matchingUsers.length === 0) {
-              searchResults.innerHTML = '<div class="placeholder">No users found.</div>';
-              hideLoading();
-              return;
-            }
-            for (const [uid, user] of matchingUsers) {
-              const searchItem = document.createElement("div");
-              searchItem.className = "search-item";
-              searchItem.innerHTML = `
-                <img src="${user.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${user.username} avatar"/>
-                <span>${user.username}</span>
-              `;
-              searchItem.addEventListener("click", () => {
-                console.log("Navigating to profile:", uid);
-                location.href = `profile.html?uid=${uid}`;
-              });
-              searchResults.appendChild(searchItem);
-            }
-          } catch (error) {
-            console.error("Error searching users:", error.code, error.message);
-            searchResults.innerHTML = `<p class="error">Failed to search users: ${error.message}</p>`;
-          } finally {
-            hideLoading();
-          }
+          loadAllPosts(queryText);
         }, 500);
       });
     }
