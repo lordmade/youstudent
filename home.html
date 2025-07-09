@@ -154,6 +154,9 @@
       width: 24px;
       height: 24px;
     }
+    .like-btn .text-red-500 {
+      fill: var(--primary-red);
+    }
     .post-caption {
       padding: 0.75rem;
       font-size: 0.9rem;
@@ -680,7 +683,7 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
     import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
-    import { getDatabase, ref, onValue, query, orderByChild, limitToLast, set, get, push } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
+    import { getDatabase, ref, onValue, query, orderByChild, limitToLast, set, get, push, update } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
@@ -712,7 +715,6 @@
     const editProfileError = document.getElementById("edit-profile-error");
     let currentPostId = null;
 
-    // Cloudinary configuration
     const CLOUDINARY_UPLOAD_PRESET = "banter_box";
     const CLOUDINARY_CLOUD_NAME = "dqkujefxj";
     const CLOUDINARY_UPLOAD_URL = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`;
@@ -875,60 +877,45 @@
       onValue(postsRef, async (snapshot) => {
         postsContainer.innerHTML = '<div class="loading">Loading posts...</div>';
         try {
-          const snapshotData = await Promise.race([
-            new Promise(resolve => onValue(postsRef, resolve, { onlyOnce: true })),
-            new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout loading posts")), 10000))
-          ]);
+          const postsData = snapshot.val() || {};
+          const posts = Object.entries(postsData).map(([id, post]) => ({ id, ...post }));
+          posts.sort((a, b) => b.timestamp - a.timestamp);
+
           postsContainer.innerHTML = "";
-          if (!snapshotData.exists()) {
+          if (posts.length === 0) {
             postsContainer.innerHTML = '<div class="placeholder">No posts available.</div>';
             hideLoading();
             return;
           }
-          const posts = [];
-          snapshotData.forEach(child => {
-            posts.push({ id: child.key, ...child.val() });
-          });
-          posts.reverse();
-          const observer = new IntersectionObserver((entries) => {
-            entries.forEach(entry => {
-              const post = entry.target;
-              const postId = post.id;
-              const audio = post.querySelector("audio");
-              if (entry.isIntersecting && audio) {
-                pauseAllMedia(postId);
-                if (audio.paused) {
-                  audio.play().catch(e => console.error("Audio play error:", e.message));
-                }
-              } else if (audio && !audio.paused) {
-                audio.pause();
-              }
-            });
-          }, { threshold: 0.5 });
-          for (const post of posts) {
-            const userRef = ref(db, `users/${post.userId}`);
-            const userSnapshot = await Promise.race([
-              new Promise(resolve => onValue(userRef, resolve, { onlyOnce: true })),
-              new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout loading user")), 10000))
-            ]);
-            const user = userSnapshot.val() || {};
-            const username = user.username || "Anonymous";
-            const postId = `post-${post.id}`;
-            const audioId = `audio-${post.id}`;
+
+          const usersSnap = await get(ref(db, "users"));
+          const users = usersSnap.val() || {};
+          console.log(`Fetched ${posts.length} posts and ${Object.keys(users).length} users`);
+
+          posts.forEach(post => {
+            if (!post.userId || !post.imageUrl || !post.timestamp) {
+              console.warn(`Skipping invalid post ${post.id}: Missing required fields`);
+              return;
+            }
+
             const postElement = document.createElement("div");
             postElement.className = "post";
-            postElement.id = postId;
-            let songHtml = "";
-            if (post.song) {
-              songHtml = `<div class="song-display">🎵 ${post.song.title} by ${post.song.artist}</div>`;
-            }
+            postElement.id = `post-${post.id}`;
             postElement.innerHTML = `
               <div class="post-header">
-                <img src="${user.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="Profile" data-user-id="${post.userId}">
-                <span class="font-semibold" data-user-id="${post.userId}">${username}</span>
+                <img src="${users[post.userId]?.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${users[post.userId]?.username || 'User'} avatar" class="cursor-pointer">
+                <span class="cursor-pointer">${users[post.userId]?.username || 'Unknown'}</span>
               </div>
-              <img class="post-image" src="${post.imageUrl}" alt="Post">
+              <img class="post-image" src="${post.imageUrl}" alt="Post" onerror="this.src='https://via.placeholder.com/150?text=Image+Not+Found';">
+              ${post.caption ? `<div class="post-caption"><strong>${users[post.userId]?.username || 'Unknown'}:</strong> ${post.caption}</div>` : ''}
+              ${post.song ? `<div class="post-caption song-display cursor-pointer">${post.song.title} - ${post.song.artist} <audio controls src="${post.song.audioUrl}"></audio></div>` : ''}
               <div class="post-actions">
+                <button class="like-btn" data-post-id="${post.id}">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="${post.likedBy && post.likedBy.includes(currentUserUid) ? 'text-red-500' : 'text-gray-500'}">
+                    <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+                  </svg>
+                  <span class="like-count">${post.likes || 0}</span>
+                </button>
                 <button class="comment-btn" aria-label="Comment on post">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M21 8v9a2 2 0 01-2 2H7a2 2 0 01-2-2V8m0 0l7-4 7 4m-7 4h4"/>
@@ -944,19 +931,29 @@
                   </button>
                 ` : ''}
               </div>
-              <div class="post-caption">
-                <strong>${username}</strong> ${post.caption || ""}
-                ${songHtml}
-              </div>
             `;
+
+            const likeBtn = postElement.querySelector(".like-btn");
+            likeBtn.addEventListener("click", (e) => {
+              e.stopPropagation();
+              toggleLike(post.id, likeBtn);
+            });
+
+            const commentBtn = postElement.querySelector(".comment-btn");
+            commentBtn.addEventListener("click", (e) => {
+              e.stopPropagation();
+              showCommentSheet(post.id);
+              pauseAllMedia("home");
+            });
+
             if (post.song) {
-              const audio = new Audio(post.song.audioUrl);
-              audio.id = audioId;
+              const audio = postElement.querySelector("audio");
+              audio.id = `audio-${post.id}`;
               audio.loop = true;
-              postElement.appendChild(audio);
-              postElement.querySelector(".play-song-btn").addEventListener("click", (e) => {
+              const playSongBtn = postElement.querySelector(".play-song-btn");
+              playSongBtn.addEventListener("click", (e) => {
                 e.stopPropagation();
-                pauseAllMedia(postId);
+                pauseAllMedia("home");
                 if (audio.paused) {
                   audio.play().catch(e => console.error("Audio play error:", e.message));
                 } else {
@@ -965,15 +962,15 @@
               });
               postElement.querySelector(".song-display").addEventListener("click", (e) => {
                 e.stopPropagation();
-                pauseAllMedia(postId);
+                pauseAllMedia("home");
                 if (audio.paused) {
                   audio.play().catch(e => console.error("Audio play error:", e.message));
                 } else {
                   audio.pause();
                 }
               });
-              observer.observe(postElement);
             }
+
             postElement.querySelectorAll("[data-user-id]").forEach(el => {
               el.addEventListener("click", (e) => {
                 e.stopPropagation();
@@ -981,25 +978,64 @@
                 location.href = `profile.html?uid=${post.userId}`;
               });
             });
-            postElement.querySelector(".comment-btn").addEventListener("click", (e) => {
-              e.stopPropagation();
-              console.log("Comment button clicked for post:", post.id);
-              showCommentSheet(post.id);
-            });
+
             postElement.addEventListener("click", (e) => {
               if (e.target.closest('.post-actions button, .song-display, .post-header img, .post-header span')) return;
               console.log("Navigating to post:", post.id);
               location.href = `post.html?id=${post.id}`;
             });
+
             postsContainer.appendChild(postElement);
-          }
+          });
         } catch (error) {
-          console.error("Error loading posts:", error.code, error.message);
+          console.error("Error loading posts:", error.message);
           postsContainer.innerHTML = `<p class="error">Failed to load posts: ${error.message}</p>`;
         } finally {
           hideLoading();
         }
-      }, { onlyOnce: false });
+      }, (error) => {
+        console.error("Realtime error:", error.message);
+        postsContainer.innerHTML = `<p class="error">Failed to load posts: ${error.message}</p>`;
+        hideLoading();
+      });
+    }
+
+    function toggleLike(postId, button) {
+      const userId = currentUserUid;
+      const postRef = ref(db, `posts/${postId}`);
+      const likeCountSpan = button.querySelector(".like-count");
+      const likeIcon = button.querySelector("svg");
+
+      get(postRef).then((snapshot) => {
+        const post = snapshot.val() || {};
+        const currentLikes = post.likes || 0;
+        const likedBy = post.likedBy || [];
+        const isLiked = likedBy.includes(userId);
+
+        if (isLiked) {
+          // Unlike
+          update(postRef, {
+            likes: currentLikes - 1,
+            likedBy: likedBy.filter(id => id !== userId)
+          }).then(() => {
+            likeCountSpan.textContent = currentLikes - 1;
+            likeIcon.classList.remove("text-red-500");
+            likeIcon.classList.add("text-gray-500");
+          });
+        } else {
+          // Like
+          update(postRef, {
+            likes: currentLikes + 1,
+            likedBy: [...likedBy, userId]
+          }).then(() => {
+            likeCountSpan.textContent = currentLikes + 1;
+            likeIcon.classList.remove("text-gray-500");
+            likeIcon.classList.add("text-red-500");
+          });
+        }
+      }).catch((error) => {
+        console.error("Error updating like:", error.message);
+      });
     }
 
     function loadFriends() {
@@ -1009,23 +1045,16 @@
       onValue(friendsRef, async (snapshot) => {
         friendsContainer.innerHTML = '<div class="loading">Loading friends...</div>';
         try {
-          const snapshotData = await Promise.race([
-            new Promise(resolve => onValue(friendsRef, resolve, { onlyOnce: true })),
-            new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout loading friends")), 10000))
-          ]);
+          const friendsData = snapshot.val() || {};
           friendsContainer.innerHTML = "";
-          if (!snapshotData.exists()) {
+          if (Object.keys(friendsData).length === 0) {
             friendsContainer.innerHTML = '<div class="placeholder">No friends found.</div>';
             hideLoading();
             return;
           }
-          const friends = snapshotData.val();
-          const usersSnap = await Promise.race([
-            get(ref(db, "users")),
-            new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout loading users")), 10000))
-          ]);
+          const usersSnap = await get(ref(db, "users"));
           const users = usersSnap.val() || {};
-          for (const friendUid in friends) {
+          for (const friendUid in friendsData) {
             const userData = users[friendUid] || { username: "Unknown", photoURL: null };
             const friendItem = document.createElement("div");
             friendItem.className = "friend-item";
@@ -1057,14 +1086,25 @@
         searchResults.innerHTML = '<div class="loading">Loading posts...</div>';
         showLoading();
         try {
-          const postsSnap = await Promise.race([
-            get(query(ref(db, "posts"), orderByChild("timestamp"), limitToLast(100))),
-            new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout fetching posts")), 15000)),
-          ]);
+          let postsSnap;
+          try {
+            postsSnap = await Promise.race([
+              get(query(ref(db, "posts"), orderByChild("timestamp"), limitToLast(100))),
+              new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout fetching posts")), 15000)),
+            ]);
+          } catch (indexError) {
+            console.warn("Index not defined, falling back to unordered fetch:", indexError.message);
+            postsSnap = await Promise.race([
+              get(ref(db, "posts")),
+              new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout fetching posts")), 15000)),
+            ]);
+          }
+
           const usersSnap = await Promise.race([
             get(ref(db, "users")),
             new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout fetching users")), 15000)),
           ]);
+
           searchResults.innerHTML = "";
           const posts = [];
           if (postsSnap.exists()) {
@@ -1082,8 +1122,10 @@
             hideLoading();
             return;
           }
+
           const users = usersSnap.exists() ? usersSnap.val() : {};
           console.log(`Fetched ${posts.length} posts and ${Object.keys(users).length} users`);
+
           const filteredPosts = queryText
             ? posts.filter(post => {
                 const username = users[post.userId]?.username?.toLowerCase() || "";
@@ -1095,18 +1137,16 @@
                 return matches;
               })
             : posts;
-          filteredPosts.sort((a, b) => {
-            if (b.timestamp === a.timestamp) {
-              return Math.random() - 0.5;
-            }
-            return b.timestamp - a.timestamp;
-          });
+
+          filteredPosts.sort((a, b) => b.timestamp - a.timestamp);
+
           if (filteredPosts.length === 0) {
             console.log("No posts match the search query or no valid posts found");
             searchResults.innerHTML = '<div class="placeholder">No posts found.</div>';
             hideLoading();
             return;
           }
+
           console.log(`Displaying ${filteredPosts.length} posts`);
           for (const post of filteredPosts) {
             const postId = `search-post-${post.id}`;
