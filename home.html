@@ -202,7 +202,7 @@
       color: var(--text-dark);
       border-radius: 9999px;
       padding: 0.5rem;
-      transition: transform 0.2s ease, color 0.2s ease, background-color 0.2s ease;
+      transition: transform 0.2s ease, color: 0.2s ease, background-color: 0.2s ease;
     }
     .post-actions button:hover {
       color: var(--primary-red);
@@ -333,7 +333,7 @@
       color: var(--text-dark);
     }
     .comment-text {
-      font-size: clamp(0.75rem, 3vw, 0.8rem);
+      font-size: clamp(0.75rem, 0.8rem, 3vw);
       color: var(--text-dark);
     }
     .comment-time {
@@ -523,6 +523,19 @@
 
     function showLoading() { loadingOverlay.classList.remove("hidden"); }
     function hideLoading() { loadingOverlay.classList.add("hidden"); }
+
+    // Debounce function to prevent multiple rapid clicks
+    function debounce(func, wait) {
+      let timeout;
+      return function executedFunction(...args) {
+        const later = () => {
+          clearTimeout(timeout);
+          func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+      };
+    }
 
     onAuthStateChanged(auth, (user) => {
       if (!user) {
@@ -815,14 +828,17 @@
               location.href = `profile.html?uid=${post.userId}`;
             });
           });
-          postElement.querySelector(".like-btn").addEventListener("click", async (e) => {
+          const debouncedLike = debounce(async (e) => {
             e.preventDefault();
             e.stopPropagation();
             console.log("Like button clicked for post:", post.id);
             showLoading();
             try {
               const likeRef = ref(db, `posts/${post.id}/reactions/${currentUserUid}`);
-              const likeSnap = await get(likeRef);
+              const likeSnap = await Promise.race([
+                get(likeRef),
+                new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout checking like")), 10000))
+              ]);
               const likeBtn = postElement.querySelector(".like-btn");
               const likeCountElement = postElement.querySelector(".post-likes");
               if (likeSnap.exists()) {
@@ -850,7 +866,8 @@
             } finally {
               hideLoading();
             }
-          });
+          }, 300);
+          postElement.querySelector(".like-btn").addEventListener("click", debouncedLike);
           postElement.querySelector(".comment-btn").addEventListener("click", (e) => {
             e.stopPropagation();
             console.log("Comment button clicked for post:", post.id);
