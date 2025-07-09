@@ -158,7 +158,7 @@
       color: var(--text-light);
       font-size: 0.75rem;
     }
-    .post-caption .song-display {
+    .post-caption .song-display, .post-caption .video-display {
       margin-top: 0.5rem;
       font-size: 0.85rem;
       color: var(--text-light);
@@ -372,7 +372,8 @@
     #search-results .post-header,
     #search-results .post-actions,
     #search-results .post-caption,
-    #search-results audio {
+    #search-results audio,
+    #search-results video {
       display: none;
     }
     .profile-header {
@@ -523,7 +524,8 @@
     .profile-content .post-header,
     .profile-content .post-actions,
     .profile-content .post-caption,
-    .profile-content audio {
+    .profile-content audio,
+    .profile-content video {
       display: none;
     }
     .spinner {
@@ -550,7 +552,7 @@
       .post-caption .time {
         font-size: 0.7rem;
       }
-      .post-caption .song-display {
+      .post-caption .song-display, .post-caption .video-display {
         font-size: 0.8rem;
       }
       .comment-input-container {
@@ -682,9 +684,9 @@
   </div>
 
   <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
-    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
-    import { getDatabase, ref, onValue, query, orderByChild, limitToLast, set, get, push, update } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
+    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
+    import { getDatabase, ref, onValue, query, orderByChild, limitToLast, set, get, push, update } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-database.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
@@ -772,7 +774,7 @@
     }
 
     function pauseAllMedia(currentContainerId) {
-      const allMedia = document.querySelectorAll('audio');
+      const allMedia = document.querySelectorAll('audio, video');
       allMedia.forEach(media => {
         if (media.closest(`#${currentContainerId}`)) return;
         if (!media.paused) {
@@ -789,16 +791,10 @@
       commentsList.innerHTML = '<div class="loading flex items-center justify-center"><svg class="spinner h-6 w-6 text-red-500" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none" class="opacity-25"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4z"/></svg> Loading comments...</div>';
       showLoading();
       try {
-        const postSnap = await Promise.race([
-          get(ref(db, `posts/${postId}`)),
-          new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout loading comments")), 10000))
-        ]);
+        const postSnap = await get(ref(db, `posts/${postId}`));
         const post = postSnap.val();
         const comments = post.comments || {};
-        const usersSnap = await Promise.race([
-          get(ref(db, "users")),
-          new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout loading users")), 10000))
-        ]);
+        const usersSnap = await get(ref(db, "users"));
         const users = usersSnap.val() || {};
         commentsList.innerHTML = "";
         for (const cid in comments) {
@@ -840,10 +836,7 @@
       showLoading();
       try {
         const commentRef = push(ref(db, `posts/${currentPostId}/comments`));
-        const postSnap = await Promise.race([
-          get(ref(db, `posts/${currentPostId}`)),
-          new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout fetching post")), 10000))
-        ]);
+        const postSnap = await get(ref(db, `posts/${currentPostId}`));
         const post = postSnap.val();
         await set(commentRef, {
           userId: currentUserUid,
@@ -913,7 +906,7 @@
               <div class="post-actions">
                 <button class="like-btn" data-post-id="${post.id}">
                   <svg class="${post.likedBy && post.likedBy.includes(currentUserUid) ? 'text-red-500' : 'text-gray-500'}" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 12a.75.75 0 11-1.5 0 .75.75 0 011.5 0zM12.75 12a.75.75 0 11-1.5 0 .75.75 0 011.5 0zM18.75 12a.75.75 0 11-1.5 0 .75.75 0 011.5 0z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
                   </svg>
                   <span class="like-count ml-1">${post.likes || 0}</span>
                 </button>
@@ -934,9 +927,10 @@
                 <span class="time">${timeAgo(post.timestamp)}</span>
               </div>
               ${post.song ? `<div class="post-caption song-display cursor-pointer">${post.song.title} - ${post.song.artist}</div>` : ''}
-              ${post.song ? `<audio id="audio-${post.id}" src="${post.song.audioUrl}" style="display: none;"></audio>` : ''}
+              ${post.video ? `<div class="post-caption video-display cursor-pointer">Video: ${post.video.title}</div>` : ''}
+              ${post.song ? `<audio id="audio-${post.id}" src="${post.song.audioUrl}" style="display: none;" preload="auto"></audio>` : ''}
+              ${post.video ? `<video id="video-${post.id}" src="${post.video.videoUrl}" style="display: none;" preload="auto" controls></video>` : ''}
             `;
-
             // Real-time like count listener
             const likeCountSpan = postElement.querySelector(".like-count");
             onValue(ref(db, `posts/${post.id}/likes`), (snapshot) => {
@@ -971,15 +965,15 @@
               alert("Link copied to clipboard!");
             });
 
-            if (post.song) {
-              const audio = postElement.querySelector(`#audio-${post.id}`);
+            if (post.song || post.video) {
+              const media = post.song ? postElement.querySelector(`#audio-${post.id}`) : postElement.querySelector(`#video-${post.id}`);
               postElement.addEventListener("focus", () => {
                 pauseAllMedia("home");
-                audio.play().catch(e => console.error("Audio play error:", e.message));
+                media.play().catch(e => console.error("Media play error:", e.message));
               });
               postElement.addEventListener("blur", () => {
-                audio.pause();
-                audio.currentTime = 0;
+                media.pause();
+                media.currentTime = 0;
               });
             }
 
@@ -996,7 +990,7 @@
             });
 
             postElement.addEventListener("click", (e) => {
-              if (e.target.closest('.post-actions button, .song-display, .username, .post-header img')) return;
+              if (e.target.closest('.post-actions button, .song-display, .video-display, .username, .post-header img')) return;
               console.log("Navigating to post:", post.id);
               location.href = `post.html?id=${post.id}`;
             });
@@ -1022,7 +1016,7 @@
       const likeIcon = button.querySelector("svg");
       const currentLikes = parseInt(likeCountSpan.textContent) || 0;
 
-      showLoading(); // Show spinner during Firebase operation
+      showLoading();
       get(postRef).then((snapshot) => {
         const post = snapshot.val() || {};
         const likedBy = post.likedBy || [];
@@ -1049,12 +1043,11 @@
         }
       }).catch((error) => {
         console.error("Error updating like:", error.message);
-        // Revert UI if update fails
         likeCountSpan.textContent = currentLikes;
         likeIcon.classList.toggle("text-red-500", !isLiked);
         likeIcon.classList.toggle("text-gray-500", isLiked);
       }).finally(() => {
-        hideLoading(); // Hide spinner after operation
+        hideLoading();
       });
     }
 
@@ -1108,22 +1101,13 @@
         try {
           let postsSnap;
           try {
-            postsSnap = await Promise.race([
-              get(query(ref(db, "posts"), orderByChild("timestamp"), limitToLast(100))),
-              new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout fetching posts")), 15000)),
-            ]);
+            postsSnap = await get(query(ref(db, "posts"), orderByChild("timestamp"), limitToLast(100)));
           } catch (indexError) {
             console.warn("Index not defined, falling back to unordered fetch:", indexError.message);
-            postsSnap = await Promise.race([
-              get(ref(db, "posts")),
-              new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout fetching posts")), 15000)),
-            ]);
+            postsSnap = await get(ref(db, "posts"));
           }
 
-          const usersSnap = await Promise.race([
-            get(ref(db, "users")),
-            new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout fetching users")), 15000)),
-          ]);
+          const usersSnap = await get(ref(db, "users"));
 
           searchResults.innerHTML = "";
           const posts = [];
@@ -1211,14 +1195,8 @@
       const profileContainer = document.getElementById("profile-container");
       showLoading();
       Promise.all([
-        Promise.race([
-          get(ref(db, `users/${currentUserUid}`)),
-          new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout loading user")), 10000))
-        ]),
-        Promise.race([
-          new Promise(resolve => onValue(query(ref(db, "posts"), orderByChild("userId"), limitToLast(20)), resolve, { onlyOnce: true })),
-          new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout loading posts")), 10000))
-        ])
+        get(ref(db, `users/${currentUserUid}`)),
+        new Promise(resolve => onValue(query(ref(db, "posts"), orderByChild("userId"), limitToLast(20)), resolve, { onlyOnce: true }))
       ]).then(([userSnap, postsSnap]) => {
         const user = userSnap.val() || { username: "Anonymous", photoURL: null, bio: "" };
         profileContainer.innerHTML = `
