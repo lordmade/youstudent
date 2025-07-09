@@ -146,7 +146,7 @@
       white-space: nowrap;
       cursor: pointer;
     }
-    .post {
+    .post, .search-post {
       border: 1px solid var(--border);
       border-radius: 8px;
       margin-bottom: 1rem;
@@ -155,9 +155,9 @@
       animation: slideUp 0.5s ease-out forwards;
       cursor: pointer;
     }
-    .post:nth-child(1) { animation-delay: 0.1s; }
-    .post:nth-child(2) { animation-delay: 0.2s; }
-    .post:nth-child(3) { animation-delay: 0.3s; }
+    .post:nth-child(1), .search-post:nth-child(1) { animation-delay: 0.1s; }
+    .post:nth-child(2), .search-post:nth-child(2) { animation-delay: 0.2s; }
+    .post:nth-child(3), .search-post:nth-child(3) { animation-delay: 0.3s; }
     @keyframes slideUp {
       from { opacity: 0; transform: translateY(20px); }
       to { opacity: 1; transform: translateY(0); }
@@ -207,7 +207,7 @@
       color: var(--text-dark);
       border-radius: 9999px;
       padding: 0.5rem;
-      transition: transform 0.2s ease, color 0.2s ease, background-color 0.2s ease;
+      transition: transform 0.2s ease, color 0.2s ease, background-color: 0.2s ease;
     }
     .post-actions button:hover {
       color: var(--primary-red);
@@ -236,6 +236,40 @@
       color: var(--text-light);
       margin-top: 0.5rem;
       cursor: pointer;
+    }
+    .search-posts-container {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 1rem;
+      margin-top: 1rem;
+    }
+    .search-post {
+      margin-bottom: 0;
+    }
+    .search-post .post-image {
+      height: 150px;
+    }
+    .search-post .post-header img {
+      width: 24px;
+      height: 24px;
+    }
+    .search-post .post-header span {
+      font-size: clamp(0.7rem, 2.5vw, 0.75rem);
+    }
+    .search-post .post-actions {
+      padding: 0.5rem;
+      gap: 0.5rem;
+    }
+    .search-post .post-actions svg {
+      width: 20px;
+      height: 20px;
+    }
+    .search-post .post-caption {
+      padding: 0.5rem;
+      font-size: clamp(0.75rem, 3vw, 0.8rem);
+    }
+    .search-post .post-caption .song-display {
+      font-size: clamp(0.7rem, 2.5vw, 0.75rem);
     }
     .placeholder {
       padding: 2rem;
@@ -494,6 +528,12 @@
       .profile-header p {
         font-size: clamp(0.75rem, 3vw, 0.8rem);
       }
+      .search-posts-container {
+        grid-template-columns: 1fr;
+      }
+      .search-post .post-image {
+        height: 120px;
+      }
     }
   </style>
 </head>
@@ -536,8 +576,9 @@
     </div>
     <div id="search" class="tab-content">
       <div id="search-container">
-        <input type="text" id="search-input" class="search-input" placeholder="Search users..."/>
+        <input type="text" id="search-input" class="search-input" placeholder="Search users or posts..."/>
         <div id="search-results" class="loading">Loading...</div>
+        <div id="search-posts-container" class="search-posts-container"></div>
       </div>
     </div>
     <div id="profile" class="tab-content">
@@ -582,7 +623,7 @@
     const firebaseConfig = {
       apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
       authDomain: "fire-b-a8878.firebaseapp.com",
-      databaseURL: "https://fire-b-a8878.firebaseio.com",
+      databaseURL: "https://fire-b-a8878-default-rtdb.firebaseio.com",
       projectId: "fire-b-a8878",
       storageBucket: "fire-b-a8878.appspot.com",
       messagingSenderId: "658673187627",
@@ -1045,12 +1086,145 @@
     function loadSearch() {
       const searchInput = document.getElementById("search-input");
       const searchResults = document.getElementById("search-results");
+      const searchPostsContainer = document.getElementById("search-posts-container");
       let debounceTimeout;
+      let allPosts = [];
+      let allUsers = {};
+
+      async function loadSearchPosts() {
+        searchPostsContainer.innerHTML = '<div class="loading">Loading posts...</div>';
+        try {
+          const postsSnap = await Promise.race([
+            new Promise(resolve => onValue(query(ref(db, "posts"), orderByChild("timestamp"), limitToLast(50)), resolve, { onlyOnce: true })),
+            new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout loading posts")), 10000))
+          ]);
+          allPosts = [];
+          postsSnap.forEach(child => {
+            allPosts.push({ id: child.key, ...child.val() });
+          });
+          allPosts.reverse();
+          const usersSnap = await Promise.race([
+            get(ref(db, "users")),
+            new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout loading users")), 10000))
+          ]);
+          allUsers = usersSnap.val() || {};
+          renderSearchPosts(allPosts);
+        } catch (error) {
+          console.error("Error loading search posts:", error.code, error.message);
+          searchPostsContainer.innerHTML = `<p class="error">Failed to load posts: ${error.message}</p>`;
+        }
+      }
+
+      function renderSearchPosts(posts) {
+        searchPostsContainer.innerHTML = "";
+        if (posts.length === 0) {
+          searchPostsContainer.innerHTML = '<div class="placeholder">No posts found.</div>';
+          return;
+        }
+        const observer = new IntersectionObserver((entries) => {
+          entries.forEach(entry => {
+            const post = entry.target;
+            const postId = post.id;
+            const audio = post.querySelector("audio");
+            if (entry.isIntersecting && audio) {
+              pauseAllMedia(postId);
+              if (audio.paused) {
+                audio.play().catch(e => console.error("Audio play error:", e.message));
+              }
+            } else if (audio && !audio.paused) {
+              audio.pause();
+            }
+          });
+        }, { threshold: 0.5 });
+        for (const post of posts) {
+          const user = allUsers[post.userId] || { username: "Anonymous", photoURL: null };
+          const postId = `search-post-${post.id}`;
+          const audioId = `audio-search-${post.id}`;
+          const postElement = document.createElement("div");
+          postElement.className = "search-post";
+          postElement.id = postId;
+          let songHtml = "";
+          if (post.song) {
+            songHtml = `<div class="song-display">🎵 ${post.song.title} by ${post.song.artist}</div>`;
+          }
+          postElement.innerHTML = `
+            <div class="post-header">
+              <img src="${user.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="Profile" data-user-id="${post.userId}">
+              <span class="font-semibold" data-user-id="${post.userId}">${post.username || user.username}</span>
+            </div>
+            <img class="post-image" src="${post.imageUrl}" alt="Post">
+            <div class="post-actions">
+              <button class="comment-btn" aria-label="Comment on post">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 8v9a2 2 0 01-2 2H7a2 2 0 01-2-2V8m0 0l7-4 7 4m-7 4h4"/>
+                </svg>
+              </button>
+              ${post.song ? `
+                <button class="play-song-btn" aria-label="Play song">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M9 18V5l12-2v13"></path>
+                    <circle cx="6" cy="18" r="3"></circle>
+                    <circle cx="18" cy="16" r="3"></circle>
+                  </svg>
+                </button>
+              ` : ''}
+            </div>
+            <div class="post-caption">
+              <strong>${post.username || user.username}</strong> ${post.caption || ""}
+              ${songHtml}
+            </div>
+          `;
+          if (post.song) {
+            const audio = new Audio(post.song.audioUrl);
+            audio.id = audioId;
+            audio.loop = true;
+            postElement.appendChild(audio);
+            postElement.querySelector(".play-song-btn").addEventListener("click", (e) => {
+              e.stopPropagation();
+              pauseAllMedia(postId);
+              if (audio.paused) {
+                audio.play().catch(e => console.error("Audio play error:", e.message));
+              } else {
+                audio.pause();
+              }
+            });
+            postElement.querySelector(".song-display").addEventListener("click", (e) => {
+              e.stopPropagation();
+              pauseAllMedia(postId);
+              if (audio.paused) {
+                audio.play().catch(e => console.error("Audio play error:", e.message));
+              } else {
+                audio.pause();
+              }
+            });
+            observer.observe(postElement);
+          }
+          postElement.querySelectorAll("[data-user-id]").forEach(el => {
+            el.addEventListener("click", (e) => {
+              e.stopPropagation();
+              console.log("Navigating to profile:", post.userId);
+              location.href = `profile.html?uid=${post.userId}`;
+            });
+          });
+          postElement.querySelector(".comment-btn").addEventListener("click", (e) => {
+            e.stopPropagation();
+            console.log("Comment button clicked for post:", post.id);
+            showCommentSheet(post.id);
+          });
+          postElement.addEventListener("click", (e) => {
+            if (e.target.closest('.post-actions button, .song-display, .post-header img, .post-header span')) return;
+            console.log("Navigating to post:", post.id);
+            location.href = `post.html?id=${post.id}`;
+          });
+          searchPostsContainer.appendChild(postElement);
+        }
+      }
+
       searchInput.addEventListener("input", () => {
         clearTimeout(debounceTimeout);
         debounceTimeout = setTimeout(async () => {
           const queryText = searchInput.value.trim().toLowerCase();
-          searchResults.innerHTML = '<div class="loading">Searching...</div>';
+          searchResults.innerHTML = '<div class="loading">Searching users...</div>';
           showLoading();
           try {
             const usersSnap = await Promise.race([
@@ -1064,30 +1238,38 @@
             );
             if (matchingUsers.length === 0) {
               searchResults.innerHTML = '<div class="placeholder">No users found.</div>';
-              hideLoading();
-              return;
+            } else {
+              for (const [uid, user] of matchingUsers) {
+                const searchItem = document.createElement("div");
+                searchItem.className = "search-item";
+                searchItem.innerHTML = `
+                  <img src="${user.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${user.username} avatar"/>
+                  <span>${user.username}</span>
+                `;
+                searchItem.addEventListener("click", () => {
+                  console.log("Navigating to profile:", uid);
+                  location.href = `profile.html?uid=${uid}`;
+                });
+                searchResults.appendChild(searchItem);
+              }
             }
-            for (const [uid, user] of matchingUsers) {
-              const searchItem = document.createElement("div");
-              searchItem.className = "search-item";
-              searchItem.innerHTML = `
-                <img src="${user.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${user.username} avatar"/>
-                <span>${user.username}</span>
-              `;
-              searchItem.addEventListener("click", () => {
-                console.log("Navigating to profile:", uid);
-                location.href = `profile.html?uid=${uid}`;
-              });
-              searchResults.appendChild(searchItem);
-            }
+            const matchingPosts = allPosts.filter(post => {
+              const user = allUsers[post.userId] || { username: "Anonymous" };
+              return user.username.toLowerCase().includes(queryText) ||
+                     (post.caption && post.caption.toLowerCase().includes(queryText));
+            });
+            renderSearchPosts(matchingPosts);
           } catch (error) {
             console.error("Error searching users:", error.code, error.message);
             searchResults.innerHTML = `<p class="error">Failed to search users: ${error.message}</p>`;
+            searchPostsContainer.innerHTML = `<p class="error">Failed to search posts: ${error.message}</p>`;
           } finally {
             hideLoading();
           }
         }, 500);
       });
+
+      loadSearchPosts();
     }
 
     function loadProfile() {
