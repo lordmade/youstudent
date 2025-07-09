@@ -281,6 +281,19 @@
       color: var(--primary-red);
       font-size: 1rem;
     }
+    .error button {
+      margin-top: 1rem;
+      padding: 0.5rem 1rem;
+      background: var(--primary-red);
+      color: var(--white);
+      border-radius: 9999px;
+      font-weight: 600;
+      transition: background 0.2s ease, transform 0.2s ease;
+    }
+    .error button:hover {
+      background: #d43f4e;
+      transform: scale(1.05);
+    }
     .fab {
       position: fixed;
       bottom: 2rem;
@@ -609,6 +622,7 @@
     let currentPostId = null;
     let mediaObserver = null;
     const userCache = new Map();
+    const POSTS_CACHE_KEY = "banterbox_posts_cache";
 
     function showLoading() {
       loadingOverlay.classList.remove("hidden");
@@ -646,7 +660,7 @@
     function getErrorMessage(error) {
       if (error.code === "PERMISSION_DENIED") return "Permission denied. Check Firebase rules.";
       if (error.message.includes("Timeout")) return "Request timed out. Please try again.";
-      if (error.code === "NETWORK_ERROR") return "Network error. Check your connection.";
+      if (error.code === "NETWORK_ERROR" || error.message.includes("client is offline")) return "You're offline. Check your connection.";
       return error.message || "An error occurred.";
     }
 
@@ -663,6 +677,24 @@
       } catch (error) {
         console.error("Error fetching user:", userId, error.code, error.message);
         return { username: "Anonymous", photoURL: null };
+      }
+    }
+
+    function cachePosts(posts) {
+      try {
+        localStorage.setItem(POSTS_CACHE_KEY, JSON.stringify(posts));
+      } catch (error) {
+        console.error("Error caching posts:", error);
+      }
+    }
+
+    function getCachedPosts() {
+      try {
+        const cached = localStorage.getItem(POSTS_CACHE_KEY);
+        return cached ? JSON.parse(cached) : [];
+      } catch (error) {
+        console.error("Error retrieving cached posts:", error);
+        return [];
       }
     }
 
@@ -783,6 +815,10 @@
 
     commentSubmit.addEventListener("click", async () => {
       if (!currentPostId || !commentInput.value.trim()) return;
+      if (!navigator.onLine) {
+        showToast("You're offline. Please try again when connected.", "error");
+        return;
+      }
       showLoading();
       try {
         const commentRef = push(ref(db, `posts/${currentPostId}/comments`));
@@ -821,6 +857,11 @@
 
     function loadReels() {
       const reelsContainer = document.getElementById("reels-container");
+      if (!navigator.onLine) {
+        reelsContainer.innerHTML = `<p class="error">Failed to load reels: You're offline. Check your connection.</p>`;
+        showToast("You're offline. Reels will load when you're back online.", "error");
+        return;
+      }
       const reelsRef = query(ref(db, "reels"), orderByChild("timestamp"), limitToLast(10));
       showLoading();
       get(reelsRef).then(async (snapshot) => {
@@ -931,6 +972,22 @@
 
     function loadPosts() {
       const postsContainer = document.getElementById("posts-container");
+      if (!navigator.onLine) {
+        const cachedPosts = getCachedPosts();
+        if (cachedPosts.length > 0) {
+          renderPosts(cachedPosts);
+          showToast("You're offline. Showing cached posts.", "info");
+        } else {
+          postsContainer.innerHTML = `
+            <p class="error">
+              Failed to load posts: You're offline. Check your connection.
+              <button onclick="loadPosts()">Retry</button>
+            </p>`;
+          showToast("You're offline. Please try again when connected.", "error");
+        }
+        hideLoading();
+        return;
+      }
       const postsRef = query(ref(db, "posts"), orderByChild("timestamp"), limitToLast(20));
       showLoading();
       get(postsRef).then(async (snapshot) => {
@@ -938,6 +995,7 @@
         try {
           if (!snapshot.exists()) {
             postsContainer.innerHTML = '<div class="placeholder">No posts available.</div>';
+            cachePosts([]);
             hideLoading();
             return;
           }
@@ -963,197 +1021,260 @@
             posts.push({ id: child.key, ...child.val() });
           });
           posts.reverse();
-          postsContainer.innerHTML = "";
-          for (const post of posts) {
-            const user = await getUserData(post.userId);
-            const postId = `post-${post.id}`;
-            const audioId = `audio-${post.id}`;
-            const postElement = document.createElement("div");
-            postElement.className = "post";
-            postElement.id = postId;
-            let songHtml = "";
-            if (post.song) {
-              songHtml = `<div class="song-display">🎵 ${post.song.title} by ${post.song.artist}</div>`;
-            }
-            const likeRef = ref(db, `posts/${post.id}/reactions/${currentUserUid}`);
-            const likeSnap = await Promise.race([
-              get(likeRef),
-              new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout checking like")), 10000))
-            ]);
-            const isLiked = likeSnap.exists();
-            const likeCount = post.reactions ? Object.keys(post.reactions).length : 0;
-            postElement.innerHTML = `
-              <div class="post-header">
-                <img src="${user.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${user.username} profile" data-user-id="${post.userId}" loading="lazy">
-                <span class="font-semibold" data-user-id="${post.userId}">${post.username || user.username || "Anonymous"}</span>
-              </div>
-              <img class="post-image" src="${post.imageUrl || 'https://www.gravatar.com/avatar?d=mp'}" alt="Post" loading="lazy">
-              <div class="post-actions">
-                <button class="like-btn ${isLiked ? 'liked' : ''}" aria-label="${isLiked ? 'Unlike post' : 'Like post'}">
-                  <svg viewBox="0 0 24 24" ${isLiked ? 'fill="currentColor"' : 'fill="none"'} stroke="currentColor" stroke-width="2">
-                    <path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l8.94-8.94a5.5 5.5 0 000-7.78z"/>
-                  </svg>
-                </button>
-                <button class="comment-btn" aria-label="Comment on post">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
-                  </svg>
-                </button>
-              </div>
-              <div class="post-likes">${likeCount} ${likeCount === 1 ? 'like' : 'likes'}</div>
-              <div class="post-caption">
-                <strong>${post.username || user.username || "Anonymous"}</strong> ${post.caption || ""}
-                ${songHtml}
-              </div>
-            `;
-            if (post.song && post.song.audioUrl) {
-              const audio = new Audio(post.song.audioUrl);
-              audio.id = audioId;
-              audio.loop = true;
-              postElement.appendChild(audio);
-              const songDisplay = postElement.querySelector(".song-display");
-              if (songDisplay) {
-                songDisplay.removeEventListener("click", songClickHandler);
-                function songClickHandler(e) {
-                  e.stopPropagation();
-                  pauseAllMedia(postId);
-                  if (audio.paused) {
-                    audio.play().catch(e => console.error("Audio play error:", e.code, e.message));
-                  } else {
-                    audio.pause();
-                    console.log(`Paused audio for post: ${postId}`);
-                  }
-                }
-                songDisplay.addEventListener("click", songClickHandler);
-                songDisplay.addEventListener("keydown", (e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    songClickHandler(e);
-                  }
-                });
-              }
-              mediaObserver.observe(postElement);
-            }
-            postElement.querySelectorAll("[data-user-id]").forEach(el => {
-              el.removeEventListener("click", profileClickHandler);
-              function profileClickHandler(e) {
-                e.stopPropagation();
-                console.log("Navigating to profile:", post.userId);
-                location.href = `profile.html?uid=${post.userId}`;
-              }
-              el.addEventListener("click", profileClickHandler);
-              el.addEventListener("keydown", (e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  e.preventDefault();
-                  profileClickHandler(e);
-                }
-              });
-            });
-            const debouncedLike = debounce(async (e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              console.log("Like button clicked for post:", post.id);
-              showLoading();
-              try {
-                const likeRef = ref(db, `posts/${post.id}/reactions/${currentUserUid}`);
-                const likeSnap = await Promise.race([
-                  get(likeRef),
-                  new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout checking like")), 10000))
-                ]);
-                const likeBtn = postElement.querySelector(".like-btn");
-                const likeCountElement = postElement.querySelector(".post-likes");
-                if (likeSnap.exists()) {
-                  await remove(likeRef);
-                  likeBtn.classList.remove("liked");
-                  likeBtn.setAttribute("aria-label", "Like post");
-                  likeBtn.querySelector("svg").setAttribute("fill", "none");
-                  likeCountElement.textContent = `${parseInt(likeCountElement.textContent) - 1} ${parseInt(likeCountElement.textContent) - 1 === 1 ? 'like' : 'likes'}`;
-                  console.log("Unliked post:", post.id);
-                  showToast("Post unliked", "info");
-                } else {
-                  await set(likeRef, { timestamp: Date.now() });
-                  likeBtn.classList.add("liked");
-                  likeBtn.setAttribute("aria-label", "Unlike post");
-                  likeBtn.querySelector("svg").setAttribute("fill", "currentColor");
-                  likeCountElement.textContent = `${parseInt(likeCountElement.textContent) + 1} ${parseInt(likeCountElement.textContent) + 1 === 1 ? 'like' : 'likes'}`;
-                  if (post.userId !== currentUserUid) {
-                    const notifRef = push(ref(db, `notifications/${post.userId}/${post.id}/likes`));
-                    await set(notifRef, { type: 'like', userId: currentUserUid, timestamp: Date.now(), read: false });
-                  }
-                  console.log("Liked post:", post.id);
-                  showToast("Post liked", "info");
-                }
-              } catch (error) {
-                console.error("Error toggling like:", error.code, error.message);
-                showToast(`Failed to toggle like: ${getErrorMessage(error)}`, "error");
-              } finally {
-                hideLoading();
-              }
-            }, 300);
-            const likeBtn = postElement.querySelector(".like-btn");
-            likeBtn.removeEventListener("click", debouncedLike);
-            likeBtn.addEventListener("click", debouncedLike);
-            likeBtn.addEventListener("keydown", (e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
-                debouncedLike(e);
-              }
-            });
-            const commentBtn = postElement.querySelector(".comment-btn");
-            commentBtn.removeEventListener("click", commentClickHandler);
-            function commentClickHandler(e) {
-              e.stopPropagation();
-              console.log("Comment button clicked for post:", post.id);
-              showCommentSheet(post.id);
-            }
-            commentBtn.addEventListener("click", commentClickHandler);
-            commentBtn.addEventListener("keydown", (e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
-                commentClickHandler(e);
-              }
-            });
-            postElement.removeEventListener("click", postClickHandler);
-            function postClickHandler(e) {
-              if (e.target.closest('.post-actions button, .song-display, .post-header img, .post-header span')) return;
-              const audio = postElement.querySelector("audio");
-              if (audio) {
-                pauseAllMedia(postId);
-                if (audio.paused) {
-                  audio.play().catch(e => console.error("Audio play error:", e.code, e.message));
-                  console.log("Playing audio for post:", post.id);
-                } else {
-                  audio.pause();
-                  console.log("Pausing audio for post:", post.id);
-                }
-              } else {
-                console.log("Navigating to post:", post.id);
-                location.href = `post.html?id=${post.id}`;
-              }
-            }
-            postElement.addEventListener("click", postClickHandler);
-            postElement.addEventListener("keydown", (e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
-                postClickHandler(e);
-              }
-            });
-            postsContainer.appendChild(postElement);
-          }
+          cachePosts(posts);
+          renderPosts(posts);
         } catch (error) {
           console.error("Error loading posts:", error.code, error.message);
-          postsContainer.innerHTML = `<p class="error">Failed to load posts: ${getErrorMessage(error)}</p>`;
-          showToast(`Failed to load posts: ${getErrorMessage(error)}`, "error");
+          const cachedPosts = getCachedPosts();
+          if (cachedPosts.length > 0) {
+            renderPosts(cachedPosts);
+            showToast("Failed to load posts: Showing cached posts.", "error");
+          } else {
+            postsContainer.innerHTML = `
+              <p class="error">
+                Failed to load posts: ${getErrorMessage(error)}
+                <button onclick="loadPosts()">Retry</button>
+              </p>`;
+            showToast(`Failed to load posts: ${getErrorMessage(error)}`, "error");
+          }
         } finally {
           hideLoading();
         }
       }).catch(error => {
         console.error("Error loading posts:", error.code, error.message);
-        postsContainer.innerHTML = `<p class="error">Failed to load posts: ${getErrorMessage(error)}</p>`;
-        showToast(`Failed to load posts: ${getErrorMessage(error)}`, "error");
+        const cachedPosts = getCachedPosts();
+        if (cachedPosts.length > 0) {
+          renderPosts(cachedPosts);
+          showToast("Failed to load posts: Showing cached posts.", "error");
+        } else {
+          postsContainer.innerHTML = `
+            <p class="error">
+              Failed to load posts: ${getErrorMessage(error)}
+              <button onclick="loadPosts()">Retry</button>
+            </p>`;
+          showToast(`Failed to load posts: ${getErrorMessage(error)}`, "error");
+        }
         hideLoading();
       });
     }
+
+    async function renderPosts(posts) {
+      const postsContainer = document.getElementById("posts-container");
+      postsContainer.innerHTML = "";
+      for (const post of posts) {
+        const user = await getUserData(post.userId);
+        const postId = `post-${post.id}`;
+        const audioId = `audio-${post.id}`;
+        const postElement = document.createElement("div");
+        postElement.className = "post";
+        postElement.id = postId;
+        let songHtml = "";
+        if (post.song) {
+          songHtml = `<div class="song-display">🎵 ${post.song.title} by ${post.song.artist}</div>`;
+        }
+        const likeRef = ref(db, `posts/${post.id}/reactions/${currentUserUid}`);
+        let isLiked = false;
+        let likeCount = post.reactions ? Object.keys(post.reactions).length : 0;
+        if (navigator.onLine) {
+          try {
+            const likeSnap = await Promise.race([
+              get(likeRef),
+              new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout checking like")), 10000))
+            ]);
+            isLiked = likeSnap.exists();
+          } catch (error) {
+            console.error("Error checking like:", error.code, error.message);
+          }
+        } else {
+          isLiked = post.reactions && post.reactions[currentUserUid];
+        }
+        postElement.innerHTML = `
+          <div class="post-header">
+            <img src="${user.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${user.username} profile" data-user-id="${post.userId}" loading="lazy">
+            <span class="font-semibold" data-user-id="${post.userId}">${post.username || user.username || "Anonymous"}</span>
+          </div>
+          <img class="post-image" src="${post.imageUrl || 'https://www.gravatar.com/avatar?d=mp'}" alt="Post" loading="lazy">
+          <div class="post-actions">
+            <button class="like-btn ${isLiked ? 'liked' : ''}" aria-label="${isLiked ? 'Unlike post' : 'Like post'}">
+              <svg viewBox="0 0 24 24" ${isLiked ? 'fill="currentColor"' : 'fill="none"'} stroke="currentColor" stroke-width="2">
+                <path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l8.94-8.94a5.5 5.5 0 000-7.78z"/>
+              </svg>
+            </button>
+            <button class="comment-btn" aria-label="Comment on post">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
+              </svg>
+            </button>
+          </div>
+          <div class="post-likes">${likeCount} ${likeCount === 1 ? 'like' : 'likes'}</div>
+          <div class="post-caption">
+            <strong>${post.username || user.username || "Anonymous"}</strong> ${post.caption || ""}
+            ${songHtml}
+          </div>
+        `;
+        if (post.song && post.song.audioUrl) {
+          const audio = new Audio(post.song.audioUrl);
+          audio.id = audioId;
+          audio.loop = true;
+          postElement.appendChild(audio);
+          const songDisplay = postElement.querySelector(".song-display");
+          if (songDisplay) {
+            songDisplay.removeEventListener("click", songClickHandler);
+            function songClickHandler(e) {
+              e.stopPropagation();
+              pauseAllMedia(postId);
+              if (audio.paused) {
+                audio.play().catch(e => console.error("Audio play error:", e.code, e.message));
+              } else {
+                audio.pause();
+                console.log(`Paused audio for post: ${postId}`);
+              }
+            }
+            songDisplay.addEventListener("click", songClickHandler);
+            songDisplay.addEventListener("keydown", (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                songClickHandler(e);
+              }
+            });
+          }
+          mediaObserver.observe(postElement);
+        }
+        postElement.querySelectorAll("[data-user-id]").forEach(el => {
+          el.removeEventListener("click", profileClickHandler);
+          function profileClickHandler(e) {
+            e.stopPropagation();
+            console.log("Navigating to profile:", post.userId);
+            location.href = `profile.html?uid=${post.userId}`;
+          }
+          el.addEventListener("click", profileClickHandler);
+          el.addEventListener("keydown", (e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              profileClickHandler(e);
+            }
+          });
+        });
+        const debouncedLike = debounce(async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          if (!navigator.onLine) {
+            showToast("You're offline. Please try again when connected.", "error");
+            return;
+          }
+          console.log("Like button clicked for post:", post.id);
+          showLoading();
+          try {
+            const likeRef = ref(db, `posts/${post.id}/reactions/${currentUserUid}`);
+            const likeSnap = await Promise.race([
+              get(likeRef),
+              new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout checking like")), 10000))
+            ]);
+            const likeBtn = postElement.querySelector(".like-btn");
+            const likeCountElement = postElement.querySelector(".post-likes");
+            if (likeSnap.exists()) {
+              await remove(likeRef);
+              likeBtn.classList.remove("liked");
+              likeBtn.setAttribute("aria-label", "Like post");
+              likeBtn.querySelector("svg").setAttribute("fill", "none");
+              likeCountElement.textContent = `${parseInt(likeCountElement.textContent) - 1} ${parseInt(likeCountElement.textContent) - 1 === 1 ? 'like' : 'likes'}`;
+              console.log("Unliked post:", post.id);
+              showToast("Post unliked", "info");
+            } else {
+              await set(likeRef, { timestamp: Date.now() });
+              likeBtn.classList.add("liked");
+              likeBtn.setAttribute("aria-label", "Unlike post");
+              likeBtn.querySelector("svg").setAttribute("fill", "currentColor");
+              likeCountElement.textContent = `${parseInt(likeCountElement.textContent) + 1} ${parseInt(likeCountElement.textContent) + 1 === 1 ? 'like' : 'likes'}`;
+              if (post.userId !== currentUserUid) {
+                const notifRef = push(ref(db, `notifications/${post.userId}/${post.id}/likes`));
+                await set(notifRef, { type: 'like', userId: currentUserUid, timestamp: Date.now(), read: false });
+              }
+              console.log("Liked post:", post.id);
+              showToast("Post liked", "info");
+            }
+            // Update cache
+            const cachedPosts = getCachedPosts();
+            const updatedPosts = cachedPosts.map(p => {
+              if (p.id === post.id) {
+                p.reactions = p.reactions || {};
+                if (likeSnap.exists()) {
+                  delete p.reactions[currentUserUid];
+                } else {
+                  p.reactions[currentUserUid] = { timestamp: Date.now() };
+                }
+              }
+              return p;
+            });
+            cachePosts(updatedPosts);
+          } catch (error) {
+            console.error("Error toggling like:", error.code, error.message);
+            showToast(`Failed to toggle like: ${getErrorMessage(error)}`, "error");
+          } finally {
+            hideLoading();
+          }
+        }, 300);
+        const likeBtn = postElement.querySelector(".like-btn");
+        likeBtn.removeEventListener("click", debouncedLike);
+        likeBtn.addEventListener("click", debouncedLike);
+        likeBtn.addEventListener("keydown", (e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            debouncedLike(e);
+          }
+        });
+        const commentBtn = postElement.querySelector(".comment-btn");
+        commentBtn.removeEventListener("click", commentClickHandler);
+        function commentClickHandler(e) {
+          e.stopPropagation();
+          console.log("Comment button clicked for post:", post.id);
+          showCommentSheet(post.id);
+        }
+        commentBtn.addEventListener("click", commentClickHandler);
+        commentBtn.addEventListener("keydown", (e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            commentClickHandler(e);
+          }
+        });
+        postElement.removeEventListener("click", postClickHandler);
+        function postClickHandler(e) {
+          if (e.target.closest('.post-actions button, .song-display, .post-header img, .post-header span')) return;
+          const audio = postElement.querySelector("audio");
+          if (audio) {
+            pauseAllMedia(postId);
+            if (audio.paused) {
+              audio.play().catch(e => console.error("Audio play error:", e.code, e.message));
+              console.log("Playing audio for post:", post.id);
+            } else {
+              audio.pause();
+              console.log("Pausing audio for post:", post.id);
+            }
+          } else {
+            console.log("Navigating to post:", post.id);
+            location.href = `post.html?id=${post.id}`;
+          }
+        }
+        postElement.addEventListener("click", postClickHandler);
+        postElement.addEventListener("keydown", (e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            postClickHandler(e);
+          }
+        });
+        postsContainer.appendChild(postElement);
+      }
+    }
+
+    // Handle online/offline events
+    window.addEventListener("online", () => {
+      showToast("You're back online! Loading fresh posts.", "info");
+      loadPosts();
+    });
+    window.addEventListener("offline", () => {
+      showToast("You're offline. Showing cached posts.", "error");
+      loadPosts();
+    });
 
     // Clean up on page unload
     window.addEventListener("beforeunload", () => {
