@@ -50,7 +50,7 @@
       color: var(--text-dark);
       border-radius: 9999px;
       padding: 0.5rem;
-      transition: transform 0.2s ease, color: 0.2s ease, background-color: 0.2s ease;
+      transition: transform 0.2s ease, color 0.2s ease, background-color 0.2s ease;
       position: relative;
     }
     .tab-btn:hover {
@@ -202,7 +202,7 @@
       color: var(--text-dark);
       border-radius: 9999px;
       padding: 0.5rem;
-      transition: transform 0.2s ease, color: 0.2s ease, background-color: 0.2s ease;
+      transition: transform 0.2s ease, color 0.2s ease, background-color 0.2s ease;
     }
     .post-actions button:hover {
       color: var(--primary-red);
@@ -502,12 +502,12 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
     import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
-    import { getDatabase, ref, onValue, query, orderByChild, limitToLast, set, remove, get, push } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
+    import { getDatabase, ref, get, query, orderByChild, limitToLast, set, remove, push } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
       authDomain: "fire-b-a8878.firebaseapp.com",
-      databaseURL: "https://fire-b-a8878.firebaseio.com",
+      databaseURL: "https://fire-b-a8878-default-rtdb.firebaseio.com",
       projectId: "fire-b-a8878",
       storageBucket: "fire-b-a8878.appspot.com",
       messagingSenderId: "658673187627",
@@ -526,11 +526,11 @@
     const commentSubmit = document.getElementById("comment-submit");
     const loadingOverlay = document.getElementById("loading-overlay");
     let currentPostId = null;
+    let mediaObserver = null;
 
     function showLoading() { loadingOverlay.classList.remove("hidden"); }
     function hideLoading() { loadingOverlay.classList.add("hidden"); }
 
-    // Debounce function to prevent multiple rapid clicks
     function debounce(func, wait) {
       let timeout;
       return function executedFunction(...args) {
@@ -541,6 +541,13 @@
         clearTimeout(timeout);
         timeout = setTimeout(later, wait);
       };
+    }
+
+    function getErrorMessage(error) {
+      if (error.code === "PERMISSION_DENIED") return "Permission denied. Check Firebase rules.";
+      if (error.message.includes("Timeout")) return "Request timed out. Please try again.";
+      if (error.code === "NETWORK_ERROR") return "Network error. Check your connection.";
+      return error.message || "An error occurred.";
     }
 
     onAuthStateChanged(auth, (user) => {
@@ -557,7 +564,8 @@
     const tabs = document.querySelectorAll(".tab-content");
 
     tabBtns.forEach(btn => {
-      btn.addEventListener("click", () => {
+      btn.removeEventListener("click", tabClickHandler);
+      function tabClickHandler() {
         tabBtns.forEach(b => {
           b.classList.remove("active");
           b.setAttribute("aria-selected", "false");
@@ -569,11 +577,12 @@
         if (btn.dataset.tab === "profile") {
           location.href = `profile.html?uid=${currentUserUid}&owner=true`;
         }
-      });
+      }
+      btn.addEventListener("click", tabClickHandler);
     });
 
     function timeAgo(timestamp) {
-      if (!timestamp) return "";
+      if (!timestamp) return "just now";
       const now = Date.now();
       const diff = now - timestamp;
       if (diff < 60000) return "just now";
@@ -588,6 +597,7 @@
         if (media.closest(`#${currentContainerId}`)) return;
         if (!media.paused) {
           media.pause();
+          console.log(`Paused audio for element: ${media.id}`);
         }
       });
     }
@@ -604,6 +614,7 @@
           new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout loading comments")), 10000))
         ]);
         const post = postSnap.val();
+        if (!post) throw new Error("Post not found");
         const comments = post.comments || {};
         const usersSnap = await Promise.race([
           get(ref(db, "users")),
@@ -633,7 +644,7 @@
         commentInput.focus();
       } catch (error) {
         console.error("Error loading comments:", error.code, error.message);
-        commentsList.innerHTML = `<p class="error">Failed to load comments: ${error.message}</p>`;
+        commentsList.innerHTML = `<p class="error">Failed to load comments: ${getErrorMessage(error)}</p>`;
       } finally {
         hideLoading();
       }
@@ -655,6 +666,7 @@
           new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout fetching post")), 10000))
         ]);
         const post = postSnap.val();
+        if (!post) throw new Error("Post not found");
         await set(commentRef, {
           userId: currentUserUid,
           text: commentInput.value.trim(),
@@ -668,7 +680,7 @@
         await showCommentSheet(currentPostId);
       } catch (error) {
         console.error("Error adding comment:", error.code, error.message);
-        alert(`Failed to add comment: ${error.message}`);
+        alert(`Failed to add comment: ${getErrorMessage(error)}`);
       } finally {
         hideLoading();
       }
@@ -685,25 +697,16 @@
       const reelsContainer = document.getElementById("reels-container");
       const reelsRef = query(ref(db, "reels"), orderByChild("timestamp"), limitToLast(10));
       showLoading();
-      onValue(reelsRef, async (snapshot) => {
+      get(reelsRef).then(async (snapshot) => {
         reelsContainer.innerHTML = '<div class="loading">Loading reels...</div>';
         try {
-          const snapshotData = await Promise.race([
-            new Promise(resolve => onValue(reelsRef, resolve, { onlyOnce: true })),
-            new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout loading reels")), 10000))
-          ]);
-          reelsContainer.innerHTML = "";
-          if (!snapshotData.exists()) {
+          if (!snapshot.exists()) {
             reelsContainer.innerHTML = '<div class="placeholder">No reels available.</div>';
             hideLoading();
             return;
           }
-          const reels = [];
-          snapshotData.forEach(child => {
-            reels.push({ id: child.key, ...child.val() });
-          });
-          reels.reverse();
-          const observer = new IntersectionObserver((entries) => {
+          if (mediaObserver) mediaObserver.disconnect();
+          mediaObserver = new IntersectionObserver((entries) => {
             entries.forEach(entry => {
               const reel = entry.target;
               const reelId = reel.id;
@@ -711,23 +714,30 @@
               if (entry.isIntersecting && audio) {
                 pauseAllMedia(reelId);
                 if (audio.paused) {
-                  audio.play().catch(e => console.error("Audio play error:", e.message));
+                  audio.play().catch(e => console.error("Audio play error:", e.code, e.message));
                 }
               } else if (audio && !audio.paused) {
                 audio.pause();
+                console.log(`Paused audio for reel: ${reelId}`);
               }
             });
           }, { threshold: 0.5 });
+          const reels = [];
+          snapshot.forEach(child => {
+            reels.push({ id: child.key, ...child.val() });
+          });
+          reels.reverse();
+          reelsContainer.innerHTML = "";
           for (const reel of reels) {
             const userRef = ref(db, `users/${reel.userId}`);
             const userSnapshot = await Promise.race([
-              new Promise(resolve => onValue(userRef, resolve, { onlyOnce: true })),
+              get(userRef),
               new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout loading user")), 10000))
             ]);
             const user = userSnapshot.val() || {};
             const reelId = `reel-${reel.id}`;
             const audioId = `audio-${reel.id}`;
-            const thumbnailUrl = reel.videoUrl.replace('/upload/', '/upload/w_150,h_250,c_fill,so_0/');
+            const thumbnailUrl = reel.videoUrl ? reel.videoUrl.replace('/upload/', '/upload/w_150,h_250,c_fill,so_0/') : 'https://www.gravatar.com/avatar?d=mp';
             const reelElement = document.createElement("div");
             reelElement.className = "reel";
             reelElement.id = reelId;
@@ -740,61 +750,64 @@
               ${songHtml}
               <div class="username">${reel.username || user.username || "Anonymous"}</div>
             `;
-            reelElement.addEventListener("click", (e) => {
+            reelElement.removeEventListener("click", reelClickHandler);
+            function reelClickHandler(e) {
               if (!e.target.closest('.song-overlay')) {
                 location.href = `reel.html?id=${reel.id}`;
               }
-            });
-            if (reel.song) {
+            }
+            reelElement.addEventListener("click", reelClickHandler);
+            if (reel.song && reel.song.audioUrl) {
               const audio = new Audio(reel.song.audioUrl);
               audio.id = audioId;
               audio.loop = true;
               reelElement.appendChild(audio);
-              reelElement.querySelector(".song-overlay").addEventListener("click", (e) => {
-                e.stopPropagation();
-                pauseAllMedia(reelId);
-                if (audio.paused) {
-                  audio.play().catch(e => console.error("Audio play error:", e.message));
-                } else {
-                  audio.pause();
+              const songOverlay = reelElement.querySelector(".song-overlay");
+              if (songOverlay) {
+                songOverlay.removeEventListener("click", songClickHandler);
+                function songClickHandler(e) {
+                  e.stopPropagation();
+                  pauseAllMedia(reelId);
+                  if (audio.paused) {
+                    audio.play().catch(e => console.error("Audio play error:", e.code, e.message));
+                  } else {
+                    audio.pause();
+                    console.log(`Paused audio for reel: ${reelId}`);
+                  }
                 }
-              });
-              observer.observe(reelElement);
+                songOverlay.addEventListener("click", songClickHandler);
+              }
+              mediaObserver.observe(reelElement);
             }
             reelsContainer.appendChild(reelElement);
           }
         } catch (error) {
           console.error("Error loading reels:", error.code, error.message);
-          reelsContainer.innerHTML = `<div class="error">Failed to load reels: ${error.message}</div>`;
+          reelsContainer.innerHTML = `<div class="error">Failed to load reels: ${getErrorMessage(error)}</div>`;
         } finally {
           hideLoading();
         }
-      }, { onlyOnce: false });
+      }).catch(error => {
+        console.error("Error loading reels:", error.code, error.message);
+        reelsContainer.innerHTML = `<div class="error">Failed to load reels: ${getErrorMessage(error)}</div>`;
+        hideLoading();
+      });
     }
 
     function loadPosts() {
       const postsContainer = document.getElementById("posts-container");
       const postsRef = query(ref(db, "posts"), orderByChild("timestamp"), limitToLast(20));
       showLoading();
-      onValue(postsRef, async (snapshot) => {
+      get(postsRef).then(async (snapshot) => {
         postsContainer.innerHTML = '<div class="loading">Loading posts...</div>';
         try {
-          const snapshotData = await Promise.race([
-            new Promise(resolve => onValue(postsRef, resolve, { onlyOnce: true })),
-            new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout loading posts")), 10000))
-          ]);
-          postsContainer.innerHTML = "";
-          if (!snapshotData.exists()) {
+          if (!snapshot.exists()) {
             postsContainer.innerHTML = '<div class="placeholder">No posts available.</div>';
             hideLoading();
             return;
           }
-          const posts = [];
-          snapshotData.forEach(child => {
-            posts.push({ id: child.key, ...child.val() });
-          });
-          posts.reverse();
-          const observer = new IntersectionObserver((entries) => {
+          if (mediaObserver) mediaObserver.disconnect();
+          mediaObserver = new IntersectionObserver((entries) => {
             entries.forEach(entry => {
               const post = entry.target;
               const postId = post.id;
@@ -802,17 +815,24 @@
               if (entry.isIntersecting && audio) {
                 pauseAllMedia(postId);
                 if (audio.paused) {
-                  audio.play().catch(e => console.error("Audio play error:", e.message));
+                  audio.play().catch(e => console.error("Audio play error:", e.code, e.message));
                 }
               } else if (audio && !audio.paused) {
                 audio.pause();
+                console.log(`Paused audio for post: ${postId}`);
               }
             });
           }, { threshold: 0.5 });
+          const posts = [];
+          snapshot.forEach(child => {
+            posts.push({ id: child.key, ...child.val() });
+          });
+          posts.reverse();
+          postsContainer.innerHTML = "";
           for (const post of posts) {
             const userRef = ref(db, `users/${post.userId}`);
             const userSnapshot = await Promise.race([
-              new Promise(resolve => onValue(userRef, resolve, { onlyOnce: true })),
+              get(userRef),
               new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout loading user")), 10000))
             ]);
             const user = userSnapshot.val() || {};
@@ -837,7 +857,7 @@
                 <img src="${user.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="Profile" data-user-id="${post.userId}">
                 <span class="font-semibold" data-user-id="${post.userId}">${post.username || user.username || "Anonymous"}</span>
               </div>
-              <img class="post-image" src="${post.imageUrl}" alt="Post">
+              <img class="post-image" src="${post.imageUrl || 'https://www.gravatar.com/avatar?d=mp'}" alt="Post">
               <div class="post-actions">
                 <button class="like-btn ${isLiked ? 'liked' : ''}" aria-label="${isLiked ? 'Unlike post' : 'Like post'}">
                   <svg viewBox="0 0 24 24" ${isLiked ? 'fill="currentColor"' : 'fill="none"'} stroke="currentColor" stroke-width="2">
@@ -846,7 +866,7 @@
                 </button>
                 <button class="comment-btn" aria-label="Comment on post">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M21 8v9a2 2 0 01-2 2H7a2 2 0 01-2-2V8m0 0l7-4 7 4m-7 4h4"/>
+                    <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
                   </svg>
                 </button>
               </div>
@@ -856,28 +876,36 @@
                 ${songHtml}
               </div>
             `;
-            if (post.song) {
+            if (post.song && post.song.audioUrl) {
               const audio = new Audio(post.song.audioUrl);
               audio.id = audioId;
               audio.loop = true;
               postElement.appendChild(audio);
-              postElement.querySelector(".song-display").addEventListener("click", (e) => {
-                e.stopPropagation();
-                pauseAllMedia(postId);
-                if (audio.paused) {
-                  audio.play().catch(e => console.error("Audio play error:", e.message));
-                } else {
-                  audio.pause();
+              const songDisplay = postElement.querySelector(".song-display");
+              if (songDisplay) {
+                songDisplay.removeEventListener("click", songClickHandler);
+                function songClickHandler(e) {
+                  e.stopPropagation();
+                  pauseAllMedia(postId);
+                  if (audio.paused) {
+                    audio.play().catch(e => console.error("Audio play error:", e.code, e.message));
+                  } else {
+                    audio.pause();
+                    console.log(`Paused audio for post: ${postId}`);
+                  }
                 }
-              });
-              observer.observe(postElement);
+                songDisplay.addEventListener("click", songClickHandler);
+              }
+              mediaObserver.observe(postElement);
             }
             postElement.querySelectorAll("[data-user-id]").forEach(el => {
-              el.addEventListener("click", (e) => {
+              el.removeEventListener("click", profileClickHandler);
+              function profileClickHandler(e) {
                 e.stopPropagation();
                 console.log("Navigating to profile:", post.userId);
                 location.href = `profile.html?uid=${post.userId}`;
-              });
+              }
+              el.addEventListener("click", profileClickHandler);
             });
             const debouncedLike = debounce(async (e) => {
               e.preventDefault();
@@ -913,24 +941,30 @@
                 }
               } catch (error) {
                 console.error("Error toggling like:", error.code, error.message);
-                alert(`Failed to toggle like: ${error.message}`);
+                alert(`Failed to toggle like: ${getErrorMessage(error)}`);
               } finally {
                 hideLoading();
               }
             }, 300);
-            postElement.querySelector(".like-btn").addEventListener("click", debouncedLike);
-            postElement.querySelector(".comment-btn").addEventListener("click", (e) => {
+            const likeBtn = postElement.querySelector(".like-btn");
+            likeBtn.removeEventListener("click", debouncedLike);
+            likeBtn.addEventListener("click", debouncedLike);
+            const commentBtn = postElement.querySelector(".comment-btn");
+            commentBtn.removeEventListener("click", commentClickHandler);
+            function commentClickHandler(e) {
               e.stopPropagation();
               console.log("Comment button clicked for post:", post.id);
               showCommentSheet(post.id);
-            });
-            postElement.addEventListener("click", (e) => {
+            }
+            commentBtn.addEventListener("click", commentClickHandler);
+            postElement.removeEventListener("click", postClickHandler);
+            function postClickHandler(e) {
               if (e.target.closest('.post-actions button, .song-display, .post-header img, .post-header span')) return;
               const audio = postElement.querySelector("audio");
               if (audio) {
                 pauseAllMedia(postId);
                 if (audio.paused) {
-                  audio.play().catch(e => console.error("Audio play error:", e.message));
+                  audio.play().catch(e => console.error("Audio play error:", e.code, e.message));
                   console.log("Playing audio for post:", post.id);
                 } else {
                   audio.pause();
@@ -940,16 +974,21 @@
                 console.log("Navigating to post:", post.id);
                 location.href = `post.html?id=${post.id}`;
               }
-            });
+            }
+            postElement.addEventListener("click", postClickHandler);
             postsContainer.appendChild(postElement);
           }
         } catch (error) {
           console.error("Error loading posts:", error.code, error.message);
-          postsContainer.innerHTML = `<div class="error">Failed to load posts: ${error.message}</div>`;
+          postsContainer.innerHTML = `<div class="error">Failed to load posts: ${getErrorMessage(error)}</div>`;
         } finally {
           hideLoading();
         }
-      }, { onlyOnce: false });
+      }).catch(error => {
+        console.error("Error loading posts:", error.code, error.message);
+        postsContainer.innerHTML = `<div class="error">Failed to load posts: ${getErrorMessage(error)}</div>`;
+        hideLoading();
+      });
     }
   </script>
 </body>
