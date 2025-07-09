@@ -209,10 +209,10 @@
       background: rgba(237, 73, 86, 0.1);
       transform: scale(1.1);
     }
-    .post-actions button.liked {
+    .post-actions button.liked, .post-actions button.reacted {
       color: var(--primary-red);
     }
-    .post-actions button.liked svg {
+    .post-actions button.liked svg, .post-actions button.reacted svg {
       fill: var(--primary-red);
     }
     .post-actions svg {
@@ -764,10 +764,11 @@
           if (post.song) {
             songHtml = `<div class="song-display">🎵 ${post.song.title} by ${post.song.artist}</div>`;
           }
-          const likeRef = ref(db, `posts/${post.id}/reactions/${currentUserUid}`);
-          const likeSnap = await get(likeRef);
-          const isLiked = likeSnap.exists();
-          const likeCount = post.reactions ? Object.keys(post.reactions).length : 0;
+          const reactionRef = ref(db, `posts/${post.id}/reactions/${currentUserUid}`);
+          const reactionSnap = await get(reactionRef);
+          const isReacted = reactionSnap.exists() && reactionSnap.val().type === 'heart';
+          const reactionCount = post.reactions ? Object.values(post.reactions).filter(r => r.type === 'heart').length : 0;
+          const likeCount = post.reactions ? Object.values(post.reactions).filter(r => r.type === 'like').length : 0;
           postElement.innerHTML = `
             <div class="post-header">
               <img src="${user.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="Profile" data-user-id="${post.userId}">
@@ -775,9 +776,14 @@
             </div>
             <img class="post-image" src="${post.imageUrl}" alt="Post">
             <div class="post-actions">
-              <button class="like-btn ${isLiked ? 'liked' : ''}" aria-label="${isLiked ? 'Unlike post' : 'Like post'}">
-                <svg viewBox="0 0 24 24" ${isLiked ? 'fill="currentColor"' : 'fill="none"'} stroke="currentColor" stroke-width="2">
+              <button class="like-btn ${reactionSnap.exists() && reactionSnap.val().type === 'like' ? 'liked' : ''}" aria-label="${reactionSnap.exists() && reactionSnap.val().type === 'like' ? 'Unlike post' : 'Like post'}">
+                <svg viewBox="0 0 24 24" ${reactionSnap.exists() && reactionSnap.val().type === 'like' ? 'fill="currentColor"' : 'fill="none"'} stroke="currentColor" stroke-width="2">
                   <path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l8.94-8.94a5.5 5.5 0 000-7.78z"/>
+                </svg>
+              </button>
+              <button class="reaction-btn ${isReacted ? 'reacted' : ''}" aria-label="${isReacted ? 'Remove reaction' : 'Add reaction'}">
+                <svg viewBox="0 0 24 24" ${isReacted ? 'fill="currentColor"' : 'fill="none"'} stroke="currentColor" stroke-width="2">
+                  <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
                 </svg>
               </button>
               <button class="comment-btn" aria-label="Comment on post">
@@ -786,7 +792,7 @@
                 </svg>
               </button>
             </div>
-            <div class="post-likes">${likeCount} ${likeCount === 1 ? 'like' : 'likes'}</div>
+            <div class="post-likes">${likeCount} ${likeCount === 1 ? 'like' : 'likes'}, ${reactionCount} ${reactionCount === 1 ? 'reaction' : 'reactions'}</div>
             <div class="post-caption">
               <strong>${post.username || user.username || "Anonymous"}</strong> ${post.caption || ""}
               ${songHtml}
@@ -824,20 +830,28 @@
               const likeRef = ref(db, `posts/${post.id}/reactions/${currentUserUid}`);
               const likeSnap = await get(likeRef);
               const likeBtn = postElement.querySelector(".like-btn");
+              const reactionBtn = postElement.querySelector(".reaction-btn");
               const likeCountElement = postElement.querySelector(".post-likes");
-              if (likeSnap.exists()) {
+              if (likeSnap.exists() && likeSnap.val().type === 'like') {
                 await remove(likeRef);
                 likeBtn.classList.remove("liked");
                 likeBtn.setAttribute("aria-label", "Like post");
                 likeBtn.querySelector("svg").setAttribute("fill", "none");
-                likeCountElement.textContent = `${parseInt(likeCountElement.textContent) - 1} ${parseInt(likeCountElement.textContent) - 1 === 1 ? 'like' : 'likes'}`;
+                likeCountElement.textContent = `${parseInt(likeCount) - 1} ${parseInt(likeCount) - 1 === 1 ? 'like' : 'likes'}, ${reactionCount} ${reactionCount === 1 ? 'reaction' : 'reactions'}`;
                 console.log("Unliked post:", post.id);
               } else {
-                await set(likeRef, { timestamp: Date.now() });
+                await set(likeRef, { type: 'like', timestamp: Date.now() });
                 likeBtn.classList.add("liked");
                 likeBtn.setAttribute("aria-label", "Unlike post");
                 likeBtn.querySelector("svg").setAttribute("fill", "currentColor");
-                likeCountElement.textContent = `${parseInt(likeCountElement.textContent) + 1} ${parseInt(likeCountElement.textContent) + 1 === 1 ? 'like' : 'likes'}`;
+                if (likeSnap.exists() && likeSnap.val().type === 'heart') {
+                  reactionBtn.classList.remove("reacted");
+                  reactionBtn.setAttribute("aria-label", "Add reaction");
+                  reactionBtn.querySelector("svg").setAttribute("fill", "none");
+                  likeCountElement.textContent = `${parseInt(likeCount) + 1} ${parseInt(likeCount) + 1 === 1 ? 'like' : 'likes'}, ${parseInt(reactionCount) - 1} ${parseInt(reactionCount) - 1 === 1 ? 'reaction' : 'reactions'}`;
+                } else {
+                  likeCountElement.textContent = `${parseInt(likeCount) + 1} ${parseInt(likeCount) + 1 === 1 ? 'like' : 'likes'}, ${reactionCount} ${reactionCount === 1 ? 'reaction' : 'reactions'}`;
+                }
                 if (post.userId !== currentUserUid) {
                   const notifRef = push(ref(db, `notifications/${post.userId}/${post.id}/likes`));
                   await set(notifRef, { type: 'like', userId: currentUserUid, timestamp: Date.now(), read: false });
@@ -847,6 +861,50 @@
             } catch (error) {
               console.error("Error toggling like:", error.code, error.message);
               alert(`Failed to toggle like: ${error.message}`);
+            } finally {
+              hideLoading();
+            }
+          });
+          postElement.querySelector(".reaction-btn").addEventListener("click", async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log("Reaction button clicked for post:", post.id);
+            showLoading();
+            try {
+              const reactionRef = ref(db, `posts/${post.id}/reactions/${currentUserUid}`);
+              const reactionSnap = await get(reactionRef);
+              const reactionBtn = postElement.querySelector(".reaction-btn");
+              const likeBtn = postElement.querySelector(".like-btn");
+              const likeCountElement = postElement.querySelector(".post-likes");
+              if (reactionSnap.exists() && reactionSnap.val().type === 'heart') {
+                await remove(reactionRef);
+                reactionBtn.classList.remove("reacted");
+                reactionBtn.setAttribute("aria-label", "Add reaction");
+                reactionBtn.querySelector("svg").setAttribute("fill", "none");
+                likeCountElement.textContent = `${likeCount} ${likeCount === 1 ? 'like' : 'likes'}, ${parseInt(reactionCount) - 1} ${parseInt(reactionCount) - 1 === 1 ? 'reaction' : 'reactions'}`;
+                console.log("Removed reaction from post:", post.id);
+              } else {
+                await set(reactionRef, { type: 'heart', timestamp: Date.now() });
+                reactionBtn.classList.add("reacted");
+                reactionBtn.setAttribute("aria-label", "Remove reaction");
+                reactionBtn.querySelector("svg").setAttribute("fill", "currentColor");
+                if (reactionSnap.exists() && reactionSnap.val().type === 'like') {
+                  likeBtn.classList.remove("liked");
+                  likeBtn.setAttribute("aria-label", "Like post");
+                  likeBtn.querySelector("svg").setAttribute("fill", "none");
+                  likeCountElement.textContent = `${parseInt(likeCount) - 1} ${parseInt(likeCount) - 1 === 1 ? 'like' : 'likes'}, ${parseInt(reactionCount) + 1} ${parseInt(reactionCount) + 1 === 1 ? 'reaction' : 'reactions'}`;
+                } else {
+                  likeCountElement.textContent = `${likeCount} ${likeCount === 1 ? 'like' : 'likes'}, ${parseInt(reactionCount) + 1} ${parseInt(reactionCount) + 1 === 1 ? 'reaction' : 'reactions'}`;
+                }
+                if (post.userId !== currentUserUid) {
+                  const notifRef = push(ref(db, `notifications/${post.userId}/${post.id}/reactions`));
+                  await set(notifRef, { type: 'heart', userId: currentUserUid, timestamp: Date.now(), read: false });
+                }
+                console.log("Added reaction to post:", post.id);
+              }
+            } catch (error) {
+              console.error("Error toggling reaction:", error.code, error.message);
+              alert(`Failed to toggle reaction: ${error.message}`);
             } finally {
               hideLoading();
             }
