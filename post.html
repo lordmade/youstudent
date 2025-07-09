@@ -78,7 +78,7 @@
       display: flex; flex-direction: column; gap: 0.25rem;
     }
     .reel-track-info audio {
-      width: 100%; max-width: 300px; border-radius: 8px; margin-top: 0.5rem;
+      display: none; /* Hide audio player controls */
     }
     .reel-track-info p {
       font-size: 0.85rem; color: #e5e7eb; text-shadow: 0 0 4px rgba(0, 0, 0, 0.8);
@@ -195,6 +195,9 @@
       font-size: 1.5rem; font-weight: 600; color: #111827; margin-bottom: 1rem;
       display: flex; align-items: center; gap: 0.5rem;
     }
+    .modal-limited {
+      color: #111827; font-size: 0.95rem; margin-bottom: 1rem;
+    }
     .modal-title.dark {
       color: #e5e7eb;
     }
@@ -292,9 +295,6 @@
       }
       .suggested-reels {
         bottom: 7rem; padding: 0.5rem;
-      }
-      .reel-track-info audio {
-        max-width: 250px;
       }
     }
     @keyframes spin {
@@ -419,7 +419,7 @@
     }
 
     function timeAgo(timestamp) {
-      const now = new Date('2025-07-08T23:14:00+02:00').getTime(); // 11:14 PM SAST, July 08, 2025
+      const now = new Date().getTime(); // Use current time
       const diff = now - (timestamp || now);
       const seconds = Math.floor(diff / 1000);
       const minutes = Math.floor(seconds / 60);
@@ -563,7 +563,7 @@
                 const trackInfo = document.createElement('div');
                 trackInfo.className = 'reel-track-info';
                 trackInfo.innerHTML = `
-                  <audio src="${sanitizeInput(status.track.url)}" controls class="reel-media" data-duration="30" aria-label="Track: ${sanitizeInput(status.track.name)} by ${sanitizeInput(status.track.artist)}"></audio>
+                  <audio src="${sanitizeInput(status.track.url)}" loop class="reel-media" data-duration="30" aria-label="Track: ${sanitizeInput(status.track.name)} by ${sanitizeInput(status.track.artist)}"></audio>
                   <p>${sanitizeInput(status.track.name)} by ${sanitizeInput(status.track.artist)}</p>
                   <a href="${sanitizeInput(status.track.jamendoUrl)}" target="_blank" class="hover:underline" aria-label="Listen to ${sanitizeInput(status.track.name)} on Jamendo">Listen on Jamendo</a>
                 `;
@@ -572,9 +572,27 @@
                 const audio = trackInfo.querySelector('audio');
                 audio.addEventListener('timeupdate', () => {
                   if (audio.currentTime > 30) {
-                    audio.pause();
                     audio.currentTime = 0;
-                    audio.classList.remove('playing');
+                  }
+                });
+                // Toggle play/pause on reel click
+                reel.addEventListener('click', (e) => {
+                  if (!e.target.closest('.reel-actions, .reel-mute-toggle, .suggested-reels, a')) {
+                    e.stopPropagation();
+                    if (audio.paused) {
+                      loadingSpinner.style.display = 'block';
+                      audio.play().then(() => {
+                        audio.classList.add('playing');
+                        loadingSpinner.style.display = 'none';
+                      }).catch(error => {
+                        console.error('Error playing audio:', error);
+                        showToast('Error playing audio.', true);
+                        loadingSpinner.style.display = 'none';
+                      });
+                    } else {
+                      audio.pause();
+                      audio.classList.remove('playing');
+                    }
                   }
                 });
               }
@@ -658,20 +676,22 @@
 
               if (media.type === 'video') {
                 mediaElement.addEventListener('click', (e) => {
-                  e.stopPropagation();
-                  if (mediaElement.paused) {
-                    loadingSpinner.style.display = 'block';
-                    mediaElement.play().then(() => {
-                      mediaElement.classList.add('playing');
-                      loadingSpinner.style.display = 'none';
-                    }).catch(error => {
-                      console.error('Error playing video:', error);
-                      showToast('Error playing video.', true);
-                      loadingSpinner.style.display = 'none';
-                    });
-                  } else {
-                    mediaElement.pause();
-                    mediaElement.classList.remove('playing');
+                  if (!e.target.closest('.reel-actions, .reel-mute-toggle, .suggested-reels, a')) {
+                    e.stopPropagation();
+                    if (mediaElement.paused) {
+                      loadingSpinner.style.display = 'block';
+                      mediaElement.play().then(() => {
+                        mediaElement.classList.add('playing');
+                        loadingSpinner.style.display = 'none';
+                      }).catch(error => {
+                        console.error('Error playing video:', error);
+                        showToast('Error playing video.', true);
+                        loadingSpinner.style.display = 'none';
+                      });
+                    } else {
+                      mediaElement.pause();
+                      mediaElement.classList.remove('playing');
+                    }
                   }
                 });
 
@@ -685,7 +705,7 @@
                 mediaElement.addEventListener('error', () => {
                   console.error('Error loading image:', mediaElement.src);
                   showToast('Error loading image.', true);
-                  loadingSpinner.style.display = 'none';
+                  loadingSpinner.style.display = 'none');
                 });
               }
 
@@ -698,7 +718,7 @@
                     loadingSpinner.style.display = 'none';
                   }).catch(error => {
                     console.error('Error auto-playing video:', error);
-                    loadingSpinner.style.display = 'none';
+                    loadingSpinner.style.display = 'none');
                   });
                 }
               }
@@ -760,18 +780,36 @@
                 </div>
                 <p class="reel-caption">${sanitizeInput(status.text || '')}</p>
                 <div class="reel-track-info">
-                  <audio src="${sanitizeInput(status.track.url)}" controls class="reel-media" data-duration="30" aria-label="Track: ${sanitizeInput(status.track.name)} by ${sanitizeInput(status.track.artist)}"></audio>
+                  <audio src="${sanitizeInput(status.track.url)}" loop class="reel-media" data-duration="30" aria-label="Track: ${sanitizeInput(status.track.name)} by ${sanitizeInput(status.track.artist)}"></audio>
                   <p>${sanitizeInput(status.track.name)} by ${sanitizeInput(status.track.artist)}</p>
                   <a href="${sanitizeInput(status.track.jamendoUrl)}" target="_blank" class="hover:underline" aria-label="Listen to ${sanitizeInput(status.track.name)} on Jamendo">Listen on Jamendo</a>
                 </div>
               `;
-              // Limit audio to 30 seconds
+              // Limit audio to 30 seconds and handle play/pause
               const audio = overlay.querySelector('audio');
               audio.addEventListener('timeupdate', () => {
                 if (audio.currentTime > 30) {
-                  audio.pause();
                   audio.currentTime = 0;
-                  audio.classList.remove('playing');
+                }
+              });
+              // Toggle play/pause on reel click
+              reel.addEventListener('click', (e) => {
+                if (!e.target.closest('.reel-actions, .suggested-reels, a')) {
+                  e.stopPropagation();
+                  if (audio.paused) {
+                    loadingSpinner.style.display = 'block';
+                    audio.play().then(() => {
+                      audio.classList.add('playing');
+                      loadingSpinner.style.display = 'none';
+                    }).catch(error => {
+                      console.error('Error playing audio:', error);
+                      showToast('Error playing audio.', true);
+                      loadingSpinner.style.display = 'none');
+                    });
+                  } else {
+                    audio.pause();
+                    audio.classList.remove('playing');
+                  }
                 }
               });
 
@@ -813,6 +851,14 @@
 
               if (statusId === targetStatusId) {
                 targetReelElement = reel;
+                loadingSpinner.style.display = 'block';
+                audio.play().then(() => {
+                  audio.classList.add('playing');
+                  loadingSpinner.style.display = 'none';
+                }).catch(error => {
+                  console.error('Error auto-playing audio:', error);
+                  loadingSpinner.style.display = 'none');
+                });
               }
 
               reel.addEventListener('touchstart', (e) => {
@@ -1010,6 +1056,20 @@
       document.querySelectorAll('.reel-media').forEach(media => {
         console.log('Observing media:', media.tagName, media.src);
         observer.observe(media);
+        if (media.tagName === 'AUDIO') {
+          media.addEventListener('waiting', () => {
+            console.log('Audio waiting:', media.src);
+            media.parentElement.parentElement.querySelector('.loading-spinner').style.display = 'block';
+          });
+          media.addEventListener('stalled', () => {
+            console.log('Audio stalled:', media.src);
+            media.parentElement.parentElement.querySelector('.loading-spinner').style.display = 'block';
+          });
+          media.addEventListener('canplay', () => {
+            console.log('Audio canplay:', media.src);
+            media.parentElement.parentElement.querySelector('.loading-spinner').style.display = 'none';
+          });
+        }
       });
     }
 
