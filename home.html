@@ -50,7 +50,7 @@
       color: var(--text-dark);
       border-radius: 9999px;
       padding: 0.5rem;
-      transition: transform 0.2s ease, color 0.2s ease, background-color 0.2s ease;
+      transition: transform 0.2s ease, color: 0.2s ease, background-color: 0.2s ease;
       position: relative;
     }
     .tab-btn:hover {
@@ -249,6 +249,12 @@
       color: var(--text-dark);
       font-size: 1rem;
     }
+    .error {
+      text-align: center;
+      padding: 2rem;
+      color: var(--primary-red);
+      font-size: 1rem;
+    }
     .fab {
       position: fixed;
       bottom: 2rem;
@@ -333,7 +339,7 @@
       color: var(--text-dark);
     }
     .comment-text {
-      font-size: clamp(0.75rem, 0.8rem, 3vw);
+      font-size: clamp(0.75rem, 3vw, 0.8rem);
       color: var(--text-dark);
     }
     .comment-time {
@@ -590,15 +596,21 @@
       currentPostId = postId;
       commentSheet.classList.remove("hidden");
       commentSheet.classList.add("open");
-      commentsList.innerHTML = "";
-      commentInput.value = "";
-      commentInput.focus();
+      commentsList.innerHTML = '<div class="loading">Loading comments...</div>';
+      showLoading();
       try {
-        const postSnap = await get(ref(db, `posts/${postId}`));
+        const postSnap = await Promise.race([
+          get(ref(db, `posts/${postId}`)),
+          new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout loading comments")), 10000))
+        ]);
         const post = postSnap.val();
         const comments = post.comments || {};
-        const usersSnap = await get(ref(db, "users"));
+        const usersSnap = await Promise.race([
+          get(ref(db, "users")),
+          new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout loading users")), 10000))
+        ]);
         const users = usersSnap.val() || {};
+        commentsList.innerHTML = "";
         for (const cid in comments) {
           const comment = comments[cid];
           const userData = users[comment.userId] || { username: "Unknown", photoURL: null };
@@ -617,9 +629,13 @@
         if (Object.keys(comments).length === 0) {
           commentsList.innerHTML = `<p class="text-center text-gray-500">No comments yet.</p>`;
         }
+        commentInput.value = "";
+        commentInput.focus();
       } catch (error) {
         console.error("Error loading comments:", error.code, error.message);
-        commentsList.innerHTML = `<p class="text-center text-gray-500">Failed to load comments: ${error.message}</p>`;
+        commentsList.innerHTML = `<p class="error">Failed to load comments: ${error.message}</p>`;
+      } finally {
+        hideLoading();
       }
     }
 
@@ -634,7 +650,10 @@
       showLoading();
       try {
         const commentRef = push(ref(db, `posts/${currentPostId}/comments`));
-        const postSnap = await get(ref(db, `posts/${currentPostId}`));
+        const postSnap = await Promise.race([
+          get(ref(db, `posts/${currentPostId}`)),
+          new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout fetching post")), 10000))
+        ]);
         const post = postSnap.val();
         await set(commentRef, {
           userId: currentUserUid,
@@ -650,8 +669,9 @@
       } catch (error) {
         console.error("Error adding comment:", error.code, error.message);
         alert(`Failed to add comment: ${error.message}`);
+      } finally {
+        hideLoading();
       }
-      hideLoading();
     });
 
     commentInput.addEventListener("keydown", (e) => {
@@ -664,73 +684,90 @@
     function loadReels() {
       const reelsContainer = document.getElementById("reels-container");
       const reelsRef = query(ref(db, "reels"), orderByChild("timestamp"), limitToLast(10));
+      showLoading();
       onValue(reelsRef, async (snapshot) => {
-        reelsContainer.innerHTML = "";
-        if (!snapshot.exists()) {
-          reelsContainer.innerHTML = '<div class="placeholder">No reels available.</div>';
-          return;
-        }
-        const reels = [];
-        snapshot.forEach(child => {
-          reels.push({ id: child.key, ...child.val() });
-        });
-        reels.reverse();
-        const observer = new IntersectionObserver((entries) => {
-          entries.forEach(entry => {
-            const reel = entry.target;
-            const reelId = reel.id;
-            const audio = reel.querySelector("audio");
-            if (entry.isIntersecting && audio) {
-              pauseAllMedia(reelId);
-              if (audio.paused) {
-                audio.play().catch(e => console.error("Audio play error:", e.message));
-              }
-            } else if (audio && !audio.paused) {
-              audio.pause();
-            }
-          });
-        }, { threshold: 0.5 });
-        for (const reel of reels) {
-          const userRef = ref(db, `users/${reel.userId}`);
-          const userSnapshot = await new Promise(resolve => onValue(userRef, resolve, { onlyOnce: true }));
-          const user = userSnapshot.val() || {};
-          const reelId = `reel-${reel.id}`;
-          const audioId = `audio-${reel.id}`;
-          const thumbnailUrl = reel.videoUrl.replace('/upload/', '/upload/w_150,h_250,c_fill,so_0/');
-          const reelElement = document.createElement("div");
-          reelElement.className = "reel";
-          reelElement.id = reelId;
-          let songHtml = "";
-          if (reel.song) {
-            songHtml = `<div class="song-overlay">${reel.song.title} by ${reel.song.artist}</div>`;
+        reelsContainer.innerHTML = '<div class="loading">Loading reels...</div>';
+        try {
+          const snapshotData = await Promise.race([
+            new Promise(resolve => onValue(reelsRef, resolve, { onlyOnce: true })),
+            new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout loading reels")), 10000))
+          ]);
+          reelsContainer.innerHTML = "";
+          if (!snapshotData.exists()) {
+            reelsContainer.innerHTML = '<div class="placeholder">No reels available.</div>';
+            hideLoading();
+            return;
           }
-          reelElement.innerHTML = `
-            <img src="${thumbnailUrl}" alt="Reel thumbnail">
-            ${songHtml}
-            <div class="username">${reel.username || user.username || "Anonymous"}</div>
-          `;
-          reelElement.addEventListener("click", (e) => {
-            if (!e.target.closest('.song-overlay')) {
-              location.href = `reel.html?id=${reel.id}`;
-            }
+          const reels = [];
+          snapshotData.forEach(child => {
+            reels.push({ id: child.key, ...child.val() });
           });
-          if (reel.song) {
-            const audio = new Audio(reel.song.audioUrl);
-            audio.id = audioId;
-            audio.loop = true;
-            reelElement.appendChild(audio);
-            reelElement.querySelector(".song-overlay").addEventListener("click", (e) => {
-              e.stopPropagation();
-              pauseAllMedia(reelId);
-              if (audio.paused) {
-                audio.play().catch(e => console.error("Audio play error:", e.message));
-              } else {
+          reels.reverse();
+          const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+              const reel = entry.target;
+              const reelId = reel.id;
+              const audio = reel.querySelector("audio");
+              if (entry.isIntersecting && audio) {
+                pauseAllMedia(reelId);
+                if (audio.paused) {
+                  audio.play().catch(e => console.error("Audio play error:", e.message));
+                }
+              } else if (audio && !audio.paused) {
                 audio.pause();
               }
             });
-            observer.observe(reelElement);
+          }, { threshold: 0.5 });
+          for (const reel of reels) {
+            const userRef = ref(db, `users/${reel.userId}`);
+            const userSnapshot = await Promise.race([
+              new Promise(resolve => onValue(userRef, resolve, { onlyOnce: true })),
+              new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout loading user")), 10000))
+            ]);
+            const user = userSnapshot.val() || {};
+            const reelId = `reel-${reel.id}`;
+            const audioId = `audio-${reel.id}`;
+            const thumbnailUrl = reel.videoUrl.replace('/upload/', '/upload/w_150,h_250,c_fill,so_0/');
+            const reelElement = document.createElement("div");
+            reelElement.className = "reel";
+            reelElement.id = reelId;
+            let songHtml = "";
+            if (reel.song) {
+              songHtml = `<div class="song-overlay">${reel.song.title} by ${reel.song.artist}</div>`;
+            }
+            reelElement.innerHTML = `
+              <img src="${thumbnailUrl}" alt="Reel thumbnail">
+              ${songHtml}
+              <div class="username">${reel.username || user.username || "Anonymous"}</div>
+            `;
+            reelElement.addEventListener("click", (e) => {
+              if (!e.target.closest('.song-overlay')) {
+                location.href = `reel.html?id=${reel.id}`;
+              }
+            });
+            if (reel.song) {
+              const audio = new Audio(reel.song.audioUrl);
+              audio.id = audioId;
+              audio.loop = true;
+              reelElement.appendChild(audio);
+              reelElement.querySelector(".song-overlay").addEventListener("click", (e) => {
+                e.stopPropagation();
+                pauseAllMedia(reelId);
+                if (audio.paused) {
+                  audio.play().catch(e => console.error("Audio play error:", e.message));
+                } else {
+                  audio.pause();
+                }
+              });
+              observer.observe(reelElement);
+            }
+            reelsContainer.appendChild(reelElement);
           }
-          reelsContainer.appendChild(reelElement);
+        } catch (error) {
+          console.error("Error loading reels:", error.code, error.message);
+          reelsContainer.innerHTML = `<div class="error">Failed to load reels: ${error.message}</div>`;
+        } finally {
+          hideLoading();
         }
       }, { onlyOnce: false });
     }
@@ -738,159 +775,179 @@
     function loadPosts() {
       const postsContainer = document.getElementById("posts-container");
       const postsRef = query(ref(db, "posts"), orderByChild("timestamp"), limitToLast(20));
+      showLoading();
       onValue(postsRef, async (snapshot) => {
-        postsContainer.innerHTML = "";
-        if (!snapshot.exists()) {
-          postsContainer.innerHTML = '<div class="placeholder">No posts available.</div>';
-          return;
-        }
-        const posts = [];
-        snapshot.forEach(child => {
-          posts.push({ id: child.key, ...child.val() });
-        });
-        posts.reverse();
-        const observer = new IntersectionObserver((entries) => {
-          entries.forEach(entry => {
-            const post = entry.target;
-            const postId = post.id;
-            const audio = post.querySelector("audio");
-            if (entry.isIntersecting && audio) {
-              pauseAllMedia(postId);
-              if (audio.paused) {
-                audio.play().catch(e => console.error("Audio play error:", e.message));
-              }
-            } else if (audio && !audio.paused) {
-              audio.pause();
-            }
-          });
-        }, { threshold: 0.5 });
-        for (const post of posts) {
-          const userRef = ref(db, `users/${post.userId}`);
-          const userSnapshot = await new Promise(resolve => onValue(userRef, resolve, { onlyOnce: true }));
-          const user = userSnapshot.val() || {};
-          const postId = `post-${post.id}`;
-          const audioId = `audio-${post.id}`;
-          const postElement = document.createElement("div");
-          postElement.className = "post";
-          postElement.id = postId;
-          let songHtml = "";
-          if (post.song) {
-            songHtml = `<div class="song-display">🎵 ${post.song.title} by ${post.song.artist}</div>`;
+        postsContainer.innerHTML = '<div class="loading">Loading posts...</div>';
+        try {
+          const snapshotData = await Promise.race([
+            new Promise(resolve => onValue(postsRef, resolve, { onlyOnce: true })),
+            new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout loading posts")), 10000))
+          ]);
+          postsContainer.innerHTML = "";
+          if (!snapshotData.exists()) {
+            postsContainer.innerHTML = '<div class="placeholder">No posts available.</div>';
+            hideLoading();
+            return;
           }
-          const likeRef = ref(db, `posts/${post.id}/reactions/${currentUserUid}`);
-          const likeSnap = await get(likeRef);
-          const isLiked = likeSnap.exists();
-          const likeCount = post.reactions ? Object.keys(post.reactions).length : 0;
-          postElement.innerHTML = `
-            <div class="post-header">
-              <img src="${user.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="Profile" data-user-id="${post.userId}">
-              <span class="font-semibold" data-user-id="${post.userId}">${post.username || user.username || "Anonymous"}</span>
-            </div>
-            <img class="post-image" src="${post.imageUrl}" alt="Post">
-            <div class="post-actions">
-              <button class="like-btn ${isLiked ? 'liked' : ''}" aria-label="${isLiked ? 'Unlike post' : 'Like post'}">
-                <svg viewBox="0 0 24 24" ${isLiked ? 'fill="currentColor"' : 'fill="none"'} stroke="currentColor" stroke-width="2">
-                  <path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l8.94-8.94a5.5 5.5 0 000-7.78z"/>
-                </svg>
-              </button>
-              <button class="comment-btn" aria-label="Comment on post">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M21 8v9a2 2 0 01-2 2H7a2 2 0 01-2-2V8m0 0l7-4 7 4m-7 4h4"/>
-                </svg>
-              </button>
-            </div>
-            <div class="post-likes">${likeCount} ${likeCount === 1 ? 'like' : 'likes'}</div>
-            <div class="post-caption">
-              <strong>${post.username || user.username || "Anonymous"}</strong> ${post.caption || ""}
-              ${songHtml}
-            </div>
-          `;
-          if (post.song) {
-            const audio = new Audio(post.song.audioUrl);
-            audio.id = audioId;
-            audio.loop = true;
-            postElement.appendChild(audio);
-            postElement.querySelector(".song-display").addEventListener("click", (e) => {
-              e.stopPropagation();
-              pauseAllMedia(postId);
-              if (audio.paused) {
-                audio.play().catch(e => console.error("Audio play error:", e.message));
-              } else {
-                audio.pause();
-              }
-            });
-            observer.observe(postElement);
-          }
-          postElement.querySelectorAll("[data-user-id]").forEach(el => {
-            el.addEventListener("click", (e) => {
-              e.stopPropagation();
-              console.log("Navigating to profile:", post.userId);
-              location.href = `profile.html?uid=${post.userId}`;
-            });
+          const posts = [];
+          snapshotData.forEach(child => {
+            posts.push({ id: child.key, ...child.val() });
           });
-          const debouncedLike = debounce(async (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            console.log("Like button clicked for post:", post.id);
-            showLoading();
-            try {
-              const likeRef = ref(db, `posts/${post.id}/reactions/${currentUserUid}`);
-              const likeSnap = await Promise.race([
-                get(likeRef),
-                new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout checking like")), 10000))
-              ]);
-              const likeBtn = postElement.querySelector(".like-btn");
-              const likeCountElement = postElement.querySelector(".post-likes");
-              if (likeSnap.exists()) {
-                await remove(likeRef);
-                likeBtn.classList.remove("liked");
-                likeBtn.setAttribute("aria-label", "Like post");
-                likeBtn.querySelector("svg").setAttribute("fill", "none");
-                likeCountElement.textContent = `${parseInt(likeCountElement.textContent) - 1} ${parseInt(likeCountElement.textContent) - 1 === 1 ? 'like' : 'likes'}`;
-                console.log("Unliked post:", post.id);
-              } else {
-                await set(likeRef, { timestamp: Date.now() });
-                likeBtn.classList.add("liked");
-                likeBtn.setAttribute("aria-label", "Unlike post");
-                likeBtn.querySelector("svg").setAttribute("fill", "currentColor");
-                likeCountElement.textContent = `${parseInt(likeCountElement.textContent) + 1} ${parseInt(likeCountElement.textContent) + 1 === 1 ? 'like' : 'likes'}`;
-                if (post.userId !== currentUserUid) {
-                  const notifRef = push(ref(db, `notifications/${post.userId}/${post.id}/likes`));
-                  await set(notifRef, { type: 'like', userId: currentUserUid, timestamp: Date.now(), read: false });
+          posts.reverse();
+          const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+              const post = entry.target;
+              const postId = post.id;
+              const audio = post.querySelector("audio");
+              if (entry.isIntersecting && audio) {
+                pauseAllMedia(postId);
+                if (audio.paused) {
+                  audio.play().catch(e => console.error("Audio play error:", e.message));
                 }
-                console.log("Liked post:", post.id);
-              }
-            } catch (error) {
-              console.error("Error toggling like:", error.code, error.message);
-              alert(`Failed to toggle like: ${error.message}`);
-            } finally {
-              hideLoading();
-            }
-          }, 300);
-          postElement.querySelector(".like-btn").addEventListener("click", debouncedLike);
-          postElement.querySelector(".comment-btn").addEventListener("click", (e) => {
-            e.stopPropagation();
-            console.log("Comment button clicked for post:", post.id);
-            showCommentSheet(post.id);
-          });
-          postElement.addEventListener("click", (e) => {
-            if (e.target.closest('.post-actions button, .song-display, .post-header img, .post-header span')) return;
-            const audio = postElement.querySelector("audio");
-            if (audio) {
-              pauseAllMedia(postId);
-              if (audio.paused) {
-                audio.play().catch(e => console.error("Audio play error:", e.message));
-                console.log("Playing audio for post:", post.id);
-              } else {
+              } else if (audio && !audio.paused) {
                 audio.pause();
-                console.log("Pausing audio for post:", post.id);
               }
-            } else {
-              console.log("Navigating to post:", post.id);
-              location.href = `post.html?id=${post.id}`;
+            });
+          }, { threshold: 0.5 });
+          for (const post of posts) {
+            const userRef = ref(db, `users/${post.userId}`);
+            const userSnapshot = await Promise.race([
+              new Promise(resolve => onValue(userRef, resolve, { onlyOnce: true })),
+              new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout loading user")), 10000))
+            ]);
+            const user = userSnapshot.val() || {};
+            const postId = `post-${post.id}`;
+            const audioId = `audio-${post.id}`;
+            const postElement = document.createElement("div");
+            postElement.className = "post";
+            postElement.id = postId;
+            let songHtml = "";
+            if (post.song) {
+              songHtml = `<div class="song-display">🎵 ${post.song.title} by ${post.song.artist}</div>`;
             }
-          });
-          postsContainer.appendChild(postElement);
+            const likeRef = ref(db, `posts/${post.id}/reactions/${currentUserUid}`);
+            const likeSnap = await Promise.race([
+              get(likeRef),
+              new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout checking like")), 10000))
+            ]);
+            const isLiked = likeSnap.exists();
+            const likeCount = post.reactions ? Object.keys(post.reactions).length : 0;
+            postElement.innerHTML = `
+              <div class="post-header">
+                <img src="${user.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="Profile" data-user-id="${post.userId}">
+                <span class="font-semibold" data-user-id="${post.userId}">${post.username || user.username || "Anonymous"}</span>
+              </div>
+              <img class="post-image" src="${post.imageUrl}" alt="Post">
+              <div class="post-actions">
+                <button class="like-btn ${isLiked ? 'liked' : ''}" aria-label="${isLiked ? 'Unlike post' : 'Like post'}">
+                  <svg viewBox="0 0 24 24" ${isLiked ? 'fill="currentColor"' : 'fill="none"'} stroke="currentColor" stroke-width="2">
+                    <path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l8.94-8.94a5.5 5.5 0 000-7.78z"/>
+                  </svg>
+                </button>
+                <button class="comment-btn" aria-label="Comment on post">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 8v9a2 2 0 01-2 2H7a2 2 0 01-2-2V8m0 0l7-4 7 4m-7 4h4"/>
+                  </svg>
+                </button>
+              </div>
+              <div class="post-likes">${likeCount} ${likeCount === 1 ? 'like' : 'likes'}</div>
+              <div class="post-caption">
+                <strong>${post.username || user.username || "Anonymous"}</strong> ${post.caption || ""}
+                ${songHtml}
+              </div>
+            `;
+            if (post.song) {
+              const audio = new Audio(post.song.audioUrl);
+              audio.id = audioId;
+              audio.loop = true;
+              postElement.appendChild(audio);
+              postElement.querySelector(".song-display").addEventListener("click", (e) => {
+                e.stopPropagation();
+                pauseAllMedia(postId);
+                if (audio.paused) {
+                  audio.play().catch(e => console.error("Audio play error:", e.message));
+                } else {
+                  audio.pause();
+                }
+              });
+              observer.observe(postElement);
+            }
+            postElement.querySelectorAll("[data-user-id]").forEach(el => {
+              el.addEventListener("click", (e) => {
+                e.stopPropagation();
+                console.log("Navigating to profile:", post.userId);
+                location.href = `profile.html?uid=${post.userId}`;
+              });
+            });
+            const debouncedLike = debounce(async (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              console.log("Like button clicked for post:", post.id);
+              showLoading();
+              try {
+                const likeRef = ref(db, `posts/${post.id}/reactions/${currentUserUid}`);
+                const likeSnap = await Promise.race([
+                  get(likeRef),
+                  new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout checking like")), 10000))
+                ]);
+                const likeBtn = postElement.querySelector(".like-btn");
+                const likeCountElement = postElement.querySelector(".post-likes");
+                if (likeSnap.exists()) {
+                  await remove(likeRef);
+                  likeBtn.classList.remove("liked");
+                  likeBtn.setAttribute("aria-label", "Like post");
+                  likeBtn.querySelector("svg").setAttribute("fill", "none");
+                  likeCountElement.textContent = `${parseInt(likeCountElement.textContent) - 1} ${parseInt(likeCountElement.textContent) - 1 === 1 ? 'like' : 'likes'}`;
+                  console.log("Unliked post:", post.id);
+                } else {
+                  await set(likeRef, { timestamp: Date.now() });
+                  likeBtn.classList.add("liked");
+                  likeBtn.setAttribute("aria-label", "Unlike post");
+                  likeBtn.querySelector("svg").setAttribute("fill", "currentColor");
+                  likeCountElement.textContent = `${parseInt(likeCountElement.textContent) + 1} ${parseInt(likeCountElement.textContent) + 1 === 1 ? 'like' : 'likes'}`;
+                  if (post.userId !== currentUserUid) {
+                    const notifRef = push(ref(db, `notifications/${post.userId}/${post.id}/likes`));
+                    await set(notifRef, { type: 'like', userId: currentUserUid, timestamp: Date.now(), read: false });
+                  }
+                  console.log("Liked post:", post.id);
+                }
+              } catch (error) {
+                console.error("Error toggling like:", error.code, error.message);
+                alert(`Failed to toggle like: ${error.message}`);
+              } finally {
+                hideLoading();
+              }
+            }, 300);
+            postElement.querySelector(".like-btn").addEventListener("click", debouncedLike);
+            postElement.querySelector(".comment-btn").addEventListener("click", (e) => {
+              e.stopPropagation();
+              console.log("Comment button clicked for post:", post.id);
+              showCommentSheet(post.id);
+            });
+            postElement.addEventListener("click", (e) => {
+              if (e.target.closest('.post-actions button, .song-display, .post-header img, .post-header span')) return;
+              const audio = postElement.querySelector("audio");
+              if (audio) {
+                pauseAllMedia(postId);
+                if (audio.paused) {
+                  audio.play().catch(e => console.error("Audio play error:", e.message));
+                  console.log("Playing audio for post:", post.id);
+                } else {
+                  audio.pause();
+                  console.log("Pausing audio for post:", post.id);
+                }
+              } else {
+                console.log("Navigating to post:", post.id);
+                location.href = `post.html?id=${post.id}`;
+              }
+            });
+            postsContainer.appendChild(postElement);
+          }
+        } catch (error) {
+          console.error("Error loading posts:", error.code, error.message);
+          postsContainer.innerHTML = `<div class="error">Failed to load posts: ${error.message}</div>`;
+        } finally {
+          hideLoading();
         }
       }, { onlyOnce: false });
     }
