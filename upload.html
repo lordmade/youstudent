@@ -1,0 +1,715 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+  <title>Instagram - Upload</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root {
+      --primary-red: #ed4956;
+      --error-red: #ed4956;
+      --success-green: #00a400;
+      --background: #fafafa;
+      --border: #dbdbdb;
+      --text-dark: #262626;
+      --text-light: #8e8e8e;
+      --white: #ffffff;
+    }
+    * {
+      user-select: none;
+      -webkit-user-select: none;
+      -moz-user-select: none;
+      -ms-user-select: none;
+      touch-action: manipulation;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      background: var(--background);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0;
+      padding: 0.5rem;
+      box-sizing: border-box;
+    }
+    .upload-container {
+      background: var(--white);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      width: 100%;
+      max-width: 350px;
+      padding: 1.5rem;
+      text-align: center;
+      animation: fadeIn 0.5s ease-out;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .upload-title {
+      font-size: clamp(1.25rem, 5vw, 1.5rem);
+      font-weight: 600;
+      color: var(--text-dark);
+      margin-bottom: 1.25rem;
+    }
+    .form-group {
+      margin-bottom: 1rem;
+      opacity: 0;
+      animation: slideUp 0.3s ease-out forwards;
+    }
+    .form-group:nth-child(1) { animation-delay: 0.1s; }
+    .form-group:nth-child(2) { animation-delay: 0.2s; }
+    .form-group:nth-child(3) { animation-delay: 0.3s; }
+    .form-group:nth-child(4) { animation-delay: 0.4s; }
+    @keyframes slideUp {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .form-input {
+      width: 100%;
+      padding: 0.75rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: clamp(0.85rem, 4vw, 0.9rem);
+      background: var(--background);
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+      box-sizing: border-box;
+    }
+    .form-input:focus {
+      outline: none;
+      border-color: var(--text-light);
+      box-shadow: 0 0 0 2px rgba(38, 38, 38, 0.1);
+    }
+    .radio-group {
+      display: flex;
+      justify-content: center;
+      gap: 1.5rem;
+      margin-bottom: 1rem;
+    }
+    .radio-label {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: clamp(0.85rem, 4vw, 0.9rem);
+      color: var(--text-dark);
+      cursor: pointer;
+    }
+    .radio-label input {
+      width: 1.25rem;
+      height: 1.25rem;
+    }
+    .upload-btn, .search-btn, .clear-btn {
+      width: 100%;
+      padding: 0.75rem;
+      background: var(--primary-red);
+      color: var(--white);
+      border-radius: 9999px;
+      font-weight: 600;
+      font-size: clamp(0.9rem, 4.5vw, 1rem);
+      border: none;
+      cursor: pointer;
+      transition: transform 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
+      min-height: 48px;
+    }
+    .upload-btn:hover:not(:disabled), .search-btn:hover:not(:disabled), .clear-btn:hover:not(:disabled) {
+      transform: scale(1.02);
+      box-shadow: 0 2px 8px rgba(237, 73, 86, 0.3);
+      background: #d43f4e;
+    }
+    .upload-btn:disabled, .search-btn:disabled, .clear-btn:disabled {
+      background: #f4a4b0;
+      cursor: not-allowed;
+    }
+    .clear-btn {
+      background: var(--text-light);
+      margin-top: 0.5rem;
+    }
+    .clear-btn:hover:not(:disabled) {
+      background: #7a7a7a;
+      box-shadow: 0 2px 8px rgba(142, 142, 142, 0.3);
+    }
+    .upload-msg {
+      font-size: clamp(0.75rem, 3.5vw, 0.85rem);
+      color: var(--error-red);
+      margin-top: 1rem;
+      min-height: 1.5rem;
+    }
+    .upload-msg.success {
+      color: var(--success-green);
+    }
+    .preview {
+      width: 100%;
+      max-height: 180px;
+      object-fit: cover;
+      border-radius: 8px;
+      margin-bottom: 1rem;
+      display: none;
+      border: 1px solid var(--border);
+    }
+    .loading-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 50;
+      transition: opacity 0.3s ease;
+    }
+    .loading-overlay.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+    .error {
+      border-color: var(--error-red);
+      animation: shake 0.3s ease;
+    }
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-4px); }
+      75% { transform: translateX(4px); }
+    }
+    .song-results {
+      max-height: 150px;
+      overflow-y: auto;
+      margin-top: 0.5rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--white);
+      display: none;
+    }
+    .song-result {
+      padding: 0.5rem;
+      cursor: pointer;
+      font-size: clamp(0.8rem, 3.5vw, 0.85rem);
+      color: var(--text-dark);
+      border-bottom: 1px solid var(--border);
+      transition: background 0.2s ease;
+      min-height: 48px;
+      display: flex;
+      align-items: center;
+    }
+    .song-result:hover {
+      background: var(--background);
+    }
+    .song-result:last-child {
+      border-bottom: none;
+    }
+    .selected-song {
+      font-size: clamp(0.85rem, 4vw, 0.9rem);
+      color: var(--text-dark);
+      margin-top: 0.5rem;
+      min-height: 1.5rem;
+    }
+    .media-player {
+      display: none;
+      background: var(--background);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 0.75rem;
+      margin-top: 0.5rem;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .media-player.active {
+      display: flex;
+    }
+    .play-pause-btn {
+      background: var(--primary-red);
+      color: var(--white);
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: none;
+      cursor: pointer;
+      transition: transform 0.2s ease, background 0.2s ease;
+    }
+    .play-pause-btn:hover:not(:disabled) {
+      transform: scale(1.05);
+      background: #d43f4e;
+    }
+    .play-pause-btn svg {
+      width: 20px;
+      height: 20px;
+    }
+    .seek-bar, .volume-bar {
+      flex-grow: 1;
+      -webkit-appearance: none;
+      appearance: none;
+      height: 6px;
+      background: var(--border);
+      border-radius: 3px;
+      outline: none;
+      cursor: pointer;
+    }
+    .seek-bar::-webkit-slider-thumb, .volume-bar::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 12px;
+      height: 12px;
+      background: var(--primary-red);
+      border-radius: 50%;
+      cursor: pointer;
+    }
+    .seek-bar::-moz-range-thumb, .volume-bar::-moz-range-thumb {
+      width: 12px;
+      height: 12px;
+      background: var(--primary-red);
+      border-radius: 50%;
+      cursor: pointer;
+    }
+    .time-display {
+      font-size: clamp(0.75rem, 3.5vw, 0.8rem);
+      color: var(--text-dark);
+      width: 80px;
+      text-align: right;
+    }
+    .volume-container {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      width: 100px;
+    }
+    .volume-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: var(--text-dark);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 24px;
+      height: 24px;
+    }
+    .volume-btn:hover {
+      color: var(--primary-red);
+    }
+    .volume-btn svg {
+      width: 20px;
+      height: 20px;
+    }
+    @media (max-width: 414px) {
+      .upload-container {
+        padding: 1rem;
+        border-radius: 0;
+        border: none;
+        box-shadow: none;
+      }
+      .upload-title {
+        margin-bottom: 1rem;
+      }
+      .form-group {
+        margin-bottom: 0.75rem;
+      }
+      .radio-group {
+        gap: 1rem;
+      }
+      .upload-btn, .search-btn, .clear-btn {
+        padding: 0.65rem;
+      }
+      .preview {
+        max-height: 150px;
+      }
+      .song-results {
+        max-height: 120px;
+      }
+      .media-player {
+        padding: 0.5rem;
+      }
+      .play-pause-btn {
+        width: 36px;
+        height: 36px;
+      }
+      .time-display {
+        width: 70px;
+        font-size: clamp(0.7rem, 3vw, 0.75rem);
+      }
+      .volume-container {
+        width: 80px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="upload-container">
+    <h1 class="upload-title">Upload Media</h1>
+
+    <form id="upload-form" class="space-y-3" aria-label="Upload Media Form">
+      <div class="form-group radio-group">
+        <label class="radio-label">
+          <input type="radio" name="media-type" value="post" checked> Post
+        </label>
+        <label class="radio-label">
+          <input type="radio" name="media-type" value="reel"> Reel
+        </label>
+      </div>
+      <div class="form-group">
+        <input type="file" id="media-file" class="form-input" accept="image/*" required aria-label="Media file"/>
+        <img id="preview-image" class="preview" alt="Media preview"/>
+        <video id="preview-video" class="preview" muted></video>
+      </div>
+      <div class="form-group" id="caption-group">
+        <textarea id="caption" class="form-input" placeholder="Write a caption..." rows="3" aria-label="Caption"></textarea>
+      </div>
+      <div class="form-group">
+        <div class="flex gap-2">
+          <input type="text" id="song-search" class="form-input" placeholder="Search for a song..." aria-label="Search for a song"/>
+          <button type="button" id="search-btn" class="search-btn">Search</button>
+        </div>
+        <div id="song-results" class="song-results" aria-live="polite"></div>
+        <input type="hidden" id="selected-song" name="selected-song"/>
+        <p id="selected-song-display" class="selected-song"></p>
+        <div id="media-player" class="media-player">
+          <button type="button" id="play-pause-btn" class="play-pause-btn" aria-label="Play">
+            <svg viewBox="0 0 24 24" fill="currentColor">
+              <path d="M8 5v14l11-7z"/>
+            </svg>
+          </button>
+          <input type="range" id="seek-bar" class="seek-bar" min="0" max="100" value="0" aria-label="Seek audio"/>
+          <span id="time-display" class="time-display">0:00 / 0:00</span>
+          <div class="volume-container">
+            <button type="button" id="volume-btn" class="volume-btn" aria-label="Mute">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M11 5L6 9H2v6h4l5 4V5zM19.07 4.93a10 10 0 010 14.14M15.54 8.46a5 5 0 010 7.07"/>
+              </svg>
+            </button>
+            <input type="range" id="volume-bar" class="volume-bar" min="0" max="1" step="0.01" value="1" aria-label="Volume"/>
+          </div>
+        </div>
+        <button type="button" id="clear-song-btn" class="clear-btn" style="display: none;">Clear Song</button>
+      </div>
+      <button type="submit" class="upload-btn" disabled>Upload</button>
+    </form>
+
+    <p id="upload-msg" class="upload-msg" aria-live="polite"></p>
+
+    <div id="loading-overlay" class="loading-overlay hidden">
+      <svg class="animate-spin h-8 w-8 text-red-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4z"/>
+      </svg>
+    </div>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
+    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
+    import { getDatabase, ref, push, set } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
+      authDomain: "fire-b-a8878.firebaseapp.com",
+      databaseURL: "https://fire-b-a8878.firebaseio.com",
+      projectId: "fire-b-a8878",
+      storageBucket: "fire-b-a8878.appspot.com",
+      messagingSenderId: "658673187627",
+      appId: "1:658673187627:web:6e4c29af661785f0afa36e"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth();
+    const db = getDatabase();
+
+    const uploadForm = document.getElementById("upload-form");
+    const mediaTypeInputs = document.querySelectorAll('input[name="media-type"]');
+    const mediaFileInput = document.getElementById("media-file");
+    const captionInput = document.getElementById("caption");
+    const captionGroup = document.getElementById("caption-group");
+    const uploadBtn = uploadForm.querySelector(".upload-btn");
+    const uploadMsg = document.getElementById("upload-msg");
+    const previewImage = document.getElementById("preview-image");
+    const previewVideo = document.getElementById("preview-video");
+    const loadingOverlay = document.getElementById("loading-overlay");
+    const songSearchInput = document.getElementById("song-search");
+    const searchBtn = document.getElementById("search-btn");
+    const songResults = document.getElementById("song-results");
+    const selectedSongInput = document.getElementById("selected-song");
+    const selectedSongDisplay = document.getElementById("selected-song-display");
+    const clearSongBtn = document.getElementById("clear-song-btn");
+    const mediaPlayer = document.getElementById("media-player");
+    const playPauseBtn = document.getElementById("play-pause-btn");
+    const seekBar = document.getElementById("seek-bar");
+    const timeDisplay = document.getElementById("time-display");
+    const volumeBtn = document.getElementById("volume-btn");
+    const volumeBar = document.getElementById("volume-bar");
+
+    const CLOUDINARY_CLOUD_NAME = "dqkujefxj";
+    const CLOUDINARY_UPLOAD_PRESET = "banter_box";
+    const JAMENDO_CLIENT_ID = "your_jamendo_client_id"; // Replace with your Jamendo client ID
+
+    let audio = null;
+
+    function showLoading() { loadingOverlay.classList.remove("hidden"); }
+    function hideLoading() { loadingOverlay.classList.add("hidden"); }
+
+    function showError(message) {
+      uploadMsg.textContent = message;
+      uploadMsg.classList.remove("success");
+    }
+
+    function clearError() {
+      uploadMsg.textContent = "";
+      uploadMsg.classList.remove("success");
+    }
+
+    function formatTime(seconds) {
+      const min = Math.floor(seconds / 60);
+      const sec = Math.floor(seconds % 60);
+      return `${min}:${sec < 10 ? '0' : ''}${sec}`;
+    }
+
+    function initializeAudio(songData) {
+      if (audio) {
+        audio.pause();
+        audio = null;
+      }
+      audio = new Audio(songData.audioUrl);
+      audio.addEventListener("loadedmetadata", () => {
+        seekBar.max = audio.duration;
+        timeDisplay.textContent = `0:00 / ${formatTime(audio.duration)}`;
+      });
+      audio.addEventListener("timeupdate", () => {
+        seekBar.value = audio.currentTime;
+        timeDisplay.textContent = `${formatTime(audio.currentTime)} / ${formatTime(audio.duration)}`;
+      });
+      audio.addEventListener("ended", () => {
+        playPauseBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>`;
+        playPauseBtn.setAttribute("aria-label", "Play");
+        audio.currentTime = 0;
+        seekBar.value = 0;
+      });
+      volumeBar.value = audio.volume;
+    }
+
+    playPauseBtn.addEventListener("click", () => {
+      if (!audio) return;
+      if (audio.paused) {
+        audio.play();
+        playPauseBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg>`;
+        playPauseBtn.setAttribute("aria-label", "Pause");
+      } else {
+        audio.pause();
+        playPauseBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>`;
+        playPauseBtn.setAttribute("aria-label", "Play");
+      }
+    });
+
+    seekBar.addEventListener("input", () => {
+      if (audio) {
+        audio.currentTime = seekBar.value;
+      }
+    });
+
+    volumeBtn.addEventListener("click", () => {
+      if (!audio) return;
+      if (audio.volume === 0) {
+        audio.volume = volumeBar.value || 1;
+        volumeBar.value = audio.volume;
+        volumeBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 5L6 9H2v6h4l5 4V5zM19.07 4.93a10 10 0 010 14.14M15.54 8.46a5 5 0 010 7.07"/></svg>`;
+        volumeBtn.setAttribute("aria-label", "Mute");
+      } else {
+        audio.volume = 0;
+        volumeBar.value = 0;
+        volumeBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 5L6 9H2v6h4l5 4V5zM22 9l-6 6M16 9l6 6"/></svg>`;
+        volumeBtn.setAttribute("aria-label", "Unmute");
+      }
+    });
+
+    volumeBar.addEventListener("input", () => {
+      if (audio) {
+        audio.volume = volumeBar.value;
+        volumeBtn.innerHTML = audio.volume === 0
+          ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 5L6 9H2v6h4l5 4V5zM22 9l-6 6M16 9l6 6"/></svg>`
+          : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 5L6 9H2v6h4l5 4V5zM19.07 4.93a10 10 0 010 14.14M15.54 8.46a5 5 0 010 7.07"/></svg>`;
+        volumeBtn.setAttribute("aria-label", audio.volume === 0 ? "Unmute" : "Mute");
+      }
+    });
+
+    onAuthStateChanged(auth, (user) => {
+      if (!user) {
+        location.href = "index.html";
+      }
+    });
+
+    mediaTypeInputs.forEach(input => {
+      input.addEventListener("change", () => {
+        const isPost = input.value === "post";
+        mediaFileInput.accept = isPost ? "image/*" : "video/*";
+        captionGroup.style.display = isPost ? "block" : "none";
+        mediaFileInput.value = "";
+        previewImage.style.display = "none";
+        previewVideo.style.display = "none";
+        uploadBtn.disabled = true;
+        clearError();
+      });
+    });
+
+    mediaFileInput.addEventListener("change", () => {
+      const file = mediaFileInput.files[0];
+      if (!file) {
+        previewImage.style.display = "none";
+        previewVideo.style.display = "none";
+        uploadBtn.disabled = true;
+        return;
+      }
+      const isPost = document.querySelector('input[name="media-type"]:checked').value === "post";
+      if (isPost && !file.type.startsWith("image/")) {
+        showError("Please select an image for posts.");
+        uploadBtn.disabled = true;
+        return;
+      }
+      if (!isPost && !file.type.startsWith("video/")) {
+        showError("Please select a video for reels.");
+        uploadBtn.disabled = true;
+        return;
+      }
+      clearError();
+      uploadBtn.disabled = false;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        if (isPost) {
+          previewImage.src = e.target.result;
+          previewImage.style.display = "block";
+          previewVideo.style.display = "none";
+        } else {
+          previewVideo.src = e.target.result;
+          previewVideo.style.display = "block";
+          previewImage.style.display = "none";
+        }
+      };
+      reader.readAsDataURL(file);
+    });
+
+    searchBtn.addEventListener("click", async () => {
+      const query = songSearchInput.value.trim();
+      if (!query) {
+        showError("Please enter a song or artist name.");
+        return;
+      }
+      showLoading();
+      try {
+        const response = await fetch(`https://api.jamendo.com/v3.0/tracks/?client_id=${JAMENDO_CLIENT_ID}&format=json&limit=10&search=${encodeURIComponent(query)}`);
+        if (!response.ok) throw new Error("Jamendo API request failed.");
+        const data = await response.json();
+        songResults.innerHTML = "";
+        if (!data.results || data.results.length === 0) {
+          showError("No songs found.");
+          songResults.style.display = "none";
+          hideLoading();
+          return;
+        }
+        data.results.forEach(track => {
+          if (track.audiodownload_allowed) {
+            const div = document.createElement("div");
+            div.className = "song-result";
+            div.textContent = `${track.name} by ${track.artist_name}`;
+            div.dataset.songData = JSON.stringify({
+              id: track.id,
+              title: track.name,
+              artist: track.artist_name,
+              audioUrl: track.audio
+            });
+            div.addEventListener("click", () => {
+              const songData = JSON.parse(div.dataset.songData);
+              selectedSongInput.value = JSON.stringify(songData);
+              selectedSongDisplay.textContent = `Selected: ${songData.title} by ${songData.artist}`;
+              clearSongBtn.style.display = "block";
+              songResults.style.display = "none";
+              mediaPlayer.classList.add("active");
+              initializeAudio(songData);
+              clearError();
+            });
+            songResults.appendChild(div);
+          }
+        });
+        songResults.style.display = data.results.length > 0 ? "block" : "none";
+        if (data.results.length === 0) {
+          showError("No downloadable songs found.");
+        }
+      } catch (err) {
+        showError(err.message || "Failed to search songs.");
+      }
+      hideLoading();
+    });
+
+    clearSongBtn.addEventListener("click", () => {
+      selectedSongInput.value = "";
+      selectedSongDisplay.textContent = "";
+      clearSongBtn.style.display = "none";
+      songResults.style.display = "none";
+      songSearchInput.value = "";
+      mediaPlayer.classList.remove("active");
+      if (audio) {
+        audio.pause();
+        audio = null;
+      }
+      clearError();
+    });
+
+    uploadForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const user = auth.currentUser;
+      if (!user) return;
+      const file = mediaFileInput.files[0];
+      if (!file) {
+        showError("Please select a file.");
+        return;
+      }
+      const isPost = document.querySelector('input[name="media-type"]:checked').value === "post";
+      const caption = isPost ? captionInput.value.trim() : "";
+      showLoading();
+      try {
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
+        const resourceType = isPost ? "image" : "video";
+        const response = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/${resourceType}/upload`, {
+          method: "POST",
+          body: formData
+        });
+        if (!response.ok) throw new Error("Cloudinary upload failed.");
+        const data = await response.json();
+        const mediaUrl = data.secure_url;
+        const dbPath = isPost ? "posts" : "reels";
+        const newRef = push(ref(db, dbPath));
+        const dbData = {
+          userId: user.uid,
+          username: user.displayName || "Anonymous",
+          timestamp: Date.now(),
+          [isPost ? "imageUrl" : "videoUrl"]: mediaUrl
+        };
+        if (isPost && caption) dbData.caption = caption;
+        if (selectedSongInput.value) {
+          dbData.song = JSON.parse(selectedSongInput.value);
+        }
+        await set(newRef, dbData);
+        uploadMsg.textContent = "Upload successful!";
+        uploadMsg.classList.add("success");
+        uploadForm.reset();
+        previewImage.style.display = "none";
+        previewVideo.style.display = "none";
+        selectedSongInput.value = "";
+        selectedSongDisplay.textContent = "";
+        clearSongBtn.style.display = "none";
+        songResults.style.display = "none";
+        mediaPlayer.classList.remove("active");
+        if (audio) {
+          audio.pause();
+          audio = null;
+        }
+        uploadBtn.disabled = true;
+        setTimeout(() => location.href = "home.html", 1000);
+      } catch (err) {
+        showError(err.message || "Upload failed. Please try again.");
+      }
+      hideLoading();
+    });
+  </script>
+</body>
+</html>
