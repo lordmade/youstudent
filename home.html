@@ -1580,8 +1580,8 @@ function loadFriends() {
           `;
           friendItem.querySelector(".friend-item-btn").addEventListener("click", (e) => {
             e.stopPropagation();
-            console.log(`Initiate message to user: ${friendUid}`);
-            // Placeholder for messaging logic, e.g., navigate to chat page
+            console.log(`Navigating to chat with user: ${friendUid}`);
+            location.href = `chat.html?uid=${friendUid}`;
           });
           friendItem.addEventListener("click", (e) => {
             if (e.target.classList.contains("friend-item-btn")) return;
@@ -1607,7 +1607,7 @@ function loadFriends() {
     try {
       const followersData = snapshot.val() || {};
       followersContainer.innerHTML = "";
-      if (Object.keys(followersData).length === 0) {
+      if (Object.keys(friendsData).length === 0) {
         followersContainer.innerHTML = '<div class="placeholder">No followers found.</div>';
       } else {
         const usersSnap = await get(ref(db, "users"));
@@ -1642,6 +1642,49 @@ function loadFriends() {
       hideLoading();
     }
   }, { onlyOnce: false });
+
+  // Load Following
+  const followingRef = ref(db, `users/${currentUserUid}/following`);
+  onValue(followingRef, async (snapshot) => {
+    followingContainer.innerHTML = '<div class="loading">Loading following...</div>';
+    try {
+      const followingData = snapshot.val() || {};
+      followingContainer.innerHTML = "";
+      if (Object.keys(followingData).length === 0) {
+        followingContainer.innerHTML = '<div class="placeholder">Not following anyone.</div>';
+      } else {
+        const usersSnap = await get(ref(db, "users"));
+        const users = usersSnap.val() || {};
+        for (const followingUid in followingData) {
+          const userData = users[followingUid] || { username: "Unknown", photoURL: null };
+          const followingItem = document.createElement("div");
+          followingItem.className = "friend-item";
+          followingItem.innerHTML = `
+            <img src="${userData.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${userData.username} avatar"/>
+            <span>${userData.username}</span>
+            <button class="friend-item-btn following">Following</button>
+          `;
+          followingItem.querySelector(".friend-item-btn").addEventListener("click", (e) => {
+            e.stopPropagation();
+            toggleFollow(followingUid, e.target, 'following-container');
+          });
+          followingItem.addEventListener("click", (e) => {
+            if (e.target.classList.contains("friend-item-btn")) return;
+            console.log("Navigating to profile:", followingUid);
+            location.href = `profile.html?uid=${followingUid}`;
+            pauseAllMedia();
+          });
+          followingContainer.appendChild(followingItem);
+        }
+      }
+    } catch (error) {
+      console.error("Error loading following:", error.code, error.message);
+      followingContainer.innerHTML = `<p class="error">Failed to load following: ${error.message}</p>`;
+    } finally {
+      hideLoading();
+    }
+  }, { onlyOnce: false });
+}
 
   // Load Following
   const followingRef = ref(db, `users/${currentUserUid}/following`);
