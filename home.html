@@ -1422,88 +1422,98 @@ async function loadPosts() {
     }
 
     async function toggleFollow(targetUid, button, containerId) {
-      if (targetUid === currentUserUid) return;
-      showLoading();
-      try {
-        const followingRef = ref(db, `users/${currentUserUid}/following/${targetUid}`);
-        const followerRef = ref(db, `users/${targetUid}/followers/${currentUserUid}`);
-        const followingSnap = await get(followingRef);
-        const isFollowing = followingSnap.exists();
+  if (targetUid === currentUserUid) return;
+  showLoading();
+  try {
+    const followingRef = ref(db, `users/${currentUserUid}/following/${targetUid}`);
+    const followerRef = ref(db, `users/${targetUid}/followers/${currentUserUid}`);
+    const followingSnap = await get(followingRef);
+    const isFollowing = followingSnap.exists();
 
-        if (isFollowing) {
-          await set(followingRef, null);
-          await set(followerRef, null);
-          const isMutual = await get(ref(db, `users/${currentUserUid}/followers/${targetUid}`));
-          if (isMutual.exists()) {
-            await set(ref(db, `users/${currentUserUid}/friends/${targetUid}`), null);
-            await set(ref(db, `users/${targetUid}/friends/${currentUserUid}`), null);
-          }
-          button.textContent = "Follow";
-          button.classList.remove("following");
-          button.classList.add("follow");
-        } else {
-          await set(followingRef, true);
-          await set(followerRef, true);
-          const isMutual = await get(ref(db, `users/${currentUserUid}/followers/${targetUid}`));
-          if (isMutual.exists()) {
-            await set(ref(db, `users/${currentUserUid}/friends/${targetUid}`), true);
-            await set(ref(db, `users/${targetUid}/friends/${currentUserUid}`), true);
-          }
-          button.textContent = "Following";
-          button.classList.remove("follow");
-          button.classList.add("following");
-        }
-
-        const containerRef = {
-          'friends-container': ref(db, `users/${currentUserUid}/friends`),
-          'followers-container': ref(db, `users/${currentUserUid}/followers`),
-          'following-container': ref(db, `users/${currentUserUid}/following`)
-        }[containerId];
-
-        const snapshot = await get(containerRef);
-        const data = snapshot.val() || {};
-        const container = document.getElementById(containerId);
-        container.innerHTML = "";
-        if (Object.keys(data).length === 0) {
-          container.innerHTML = `<div class="placeholder">No ${containerId.replace('-container', '')} found.</div>`;
-        } else {
-          const usersSnap = await get(ref(db, "users"));
-          const users = usersSnap.val() || {};
-          for (const uid in data) {
-            const userData = users[uid] || { username: "Unknown", photoURL: null };
-            const item = document.createElement("div");
-            item.className = "friend-item";
-            item.innerHTML = `
-              <img src="${userData.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${userData.username} avatar"/>
-              <span>${userData.username}</span>
-              <button class="friend-item-btn ${containerId === 'friends-container' ? 'message' : containerId === 'followers-container' ? (await get(ref(db, `users/${currentUserUid}/following/${uid}`)).exists() ? 'following' : 'follow') : 'following'}">
-                ${containerId === 'friends-container' ? 'Message' : containerId === 'followers-container' ? (await get(ref(db, `users/${currentUserUid}/following/${uid}`)).exists() ? 'Following' : 'Follow') : 'Following'}
-              </button>
-            `;
-            item.querySelector(".friend-item-btn").addEventListener("click", (e) => {
-              e.stopPropagation();
-              if (containerId === 'friends-container') {
-                console.log(`Initiate message to user: ${uid}`);
-              } else {
-                toggleFollow(uid, e.target, containerId);
-              }
-            });
-            item.addEventListener("click", (e) => {
-              if (e.target.classList.contains("friend-item-btn")) return;
-              console.log("Navigating to profile:", uid);
-              location.href = `profile.html?uid=${uid}`;
-              pauseAllMedia();
-            });
-            container.appendChild(item);
-          }
-        }
-      } catch (error) {
-        console.error("Error toggling follow:", error.message);
-        document.getElementById(containerId).innerHTML = `<p class="error">Failed to load ${containerId.replace('-container', '')}: ${error.message}</p>`;
-      } finally {
-        hideLoading();
+    if (isFollowing) {
+      await set(followingRef, null);
+      await set(followerRef, null);
+      const isMutual = await get(ref(db, `users/${currentUserUid}/followers/${targetUid}`));
+      if (isMutual.exists()) {
+        await set(ref(db, `users/${currentUserUid}/friends/${targetUid}`), null);
+        await set(ref(db, `users/${targetUid}/friends/${currentUserUid}`), null);
       }
+      button.textContent = "Follow";
+      button.classList.remove("following");
+      button.classList.add("follow");
+    } else {
+      await set(followingRef, true);
+      await set(followerRef, true);
+      const isMutual = await get(ref(db, `users/${currentUserUid}/followers/${targetUid}`));
+      if (isMutual.exists()) {
+        await set(ref(db, `users/${currentUserUid}/friends/${targetUid}`), true);
+        await set(ref(db, `users/${targetUid}/friends/${currentUserUid}`), true);
+      }
+      button.textContent = "Following";
+      button.classList.remove("follow");
+      button.classList.add("following");
     }
+
+    // Handle container updates
+    if (['friends-container', 'followers-container', 'following-container'].includes(containerId)) {
+      const containerRef = {
+        'friends-container': ref(db, `users/${currentUserUid}/friends`),
+        'followers-container': ref(db, `users/${currentUserUid}/followers`),
+        'following-container': ref(db, `users/${currentUserUid}/following`)
+      }[containerId];
+
+      const snapshot = await get(containerRef);
+      const data = snapshot.val() || {};
+      const container = document.getElementById(containerId);
+      container.innerHTML = "";
+      if (Object.keys(data).length === 0) {
+        container.innerHTML = `<div class="placeholder">No ${containerId.replace('-container', '')} found.</div>`;
+      } else {
+        const usersSnap = await get(ref(db, "users"));
+        const users = usersSnap.val() || {};
+        for (const uid in data) {
+          const userData = users[uid] || { username: "Unknown", photoURL: null };
+          const item = document.createElement("div");
+          item.className = "friend-item";
+          item.innerHTML = `
+            <img src="${userData.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${userData.username} avatar"/>
+            <span>${userData.username}</span>
+            <button class="friend-item-btn ${containerId === 'friends-container' ? 'message' : containerId === 'followers-container' ? (await get(ref(db, `users/${currentUserUid}/following/${uid}`)).exists() ? 'following' : 'follow') : 'following'}">
+              ${containerId === 'friends-container' ? 'Message' : containerId === 'followers-container' ? (await get(ref(db, `users/${currentUserUid}/following/${uid}`)).exists() ? 'Following' : 'Follow') : 'Following'}
+            </button>
+          `;
+          item.querySelector(".friend-item-btn").addEventListener("click", (e) => {
+            e.stopPropagation();
+            if (containerId === 'friends-container') {
+              console.log(`Initiate message to user: ${uid}`);
+            } else {
+              toggleFollow(uid, e.target, containerId);
+            }
+          });
+          item.addEventListener("click", (e) => {
+            if (e.target.classList.contains("friend-item-btn")) return;
+            console.log("Navigating to profile:", uid);
+            location.href = `profile.html?uid=${uid}`;
+            pauseAllMedia();
+          });
+          container.appendChild(item);
+        }
+      }
+    } else if (containerId === 'posts-container') {
+      // Reload posts to update follow button states
+      await loadPosts();
+    }
+  } catch (error) {
+    console.error("Error toggling follow:", error.message);
+    if (['friends-container', 'followers-container', 'following-container'].includes(containerId)) {
+      document.getElementById(containerId).innerHTML = `<p class="error">Failed to load ${containerId.replace('-container', '')}: ${error.message}</p>`;
+    } else {
+      console.error("Error in posts-container follow action:", error.message);
+    }
+  } finally {
+    hideLoading();
+  }
+}
 
     function loadFriends() {
       const friendsContainer = document.getElementById("friends-container");
