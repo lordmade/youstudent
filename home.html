@@ -870,7 +870,60 @@
     padding: 0.5rem 0.75rem;
   }
 }
+/* Friend Item Button */
+.friend-item-btn {
+  padding: 0.5rem 1rem;
+  border-radius: 9999px;
+  font-size: clamp(0.7rem, 2.5vw, 0.75rem);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.2s ease, color 0.2s ease;
+  border: 1px solid var(--border);
+  background: var(--white);
+  color: var(--text-dark);
+  margin-left: auto;
+}
 
+.friend-item-btn.follow {
+  background: var(--primary-red);
+  color: var(--white);
+  border: none;
+}
+
+.friend-item-btn.follow:hover {
+  background: #d43f4e;
+  transform: scale(1.05);
+}
+
+.friend-item-btn.following,
+.friend-item-btn.message {
+  background: var(--white);
+  color: var(--primary-red);
+}
+
+.friend-item-btn.following:hover,
+.friend-item-btn.message:hover {
+  background: rgba(237, 73, 86, 0.1);
+  transform: scale(1.05);
+}
+
+/* Adjust friend-item layout for button */
+.friend-item {
+  display: flex;
+  align-items: center;
+  padding: 0.75rem;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  transition: background 0.2s ease;
+  justify-content: space-between; /* Ensure button aligns to the right */
+}
+
+@media (max-width: 414px) {
+  .friend-item-btn {
+    padding: 0.4rem 0.8rem;
+    font-size: clamp(0.65rem, 2vw, 0.7rem);
+  }
+}
     
   </style>
 </head>
@@ -1376,45 +1429,266 @@
       });
     }
 
-    function loadFriends() {
-      const friendsContainer = document.getElementById("friends-container");
-      const friendsRef = ref(db, `users/${currentUserUid}/friends`);
-      showLoading();
-      onValue(friendsRef, async (snapshot) => {
-        friendsContainer.innerHTML = '<div class="loading">Loading friends...</div>';
-        try {
-          const friendsData = snapshot.val() || {};
-          friendsContainer.innerHTML = "";
-          if (Object.keys(friendsData).length === 0) {
-            friendsContainer.innerHTML = '<div class="placeholder">No friends found.</div>';
-            hideLoading();
-            return;
-          }
-          const usersSnap = await get(ref(db, "users"));
-          const users = usersSnap.val() || {};
-          for (const friendUid in friendsData) {
-            const userData = users[friendUid] || { username: "Unknown", photoURL: null };
-            const friendItem = document.createElement("div");
-            friendItem.className = "friend-item";
-            friendItem.innerHTML = `
-              <img src="${userData.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${userData.username} avatar"/>
-              <span>${userData.username}</span>
-            `;
-            friendItem.addEventListener("click", () => {
-              console.log("Navigating to profile:", friendUid);
-              location.href = `profile.html?uid=${friendUid}`;
-              pauseAllMedia();
-            });
-            friendsContainer.appendChild(friendItem);
-          }
-        } catch (error) {
-          console.error("Error loading friends:", error.code, error.message);
-          friendsContainer.innerHTML = `<p class="error">Failed to load friends: ${error.message}</p>`;
-        } finally {
-          hideLoading();
-        }
-      }, { onlyOnce: false });
+
+
+    
+   onAuthStateChanged(auth, (user) => {
+  if (!user) {
+    location.href = "index.html";
+  } else {
+    currentUserUid = user.uid;
+    loadPosts();
+    loadFriends(); // Updated to call loadFriends with sub-tabs
+    loadSearch();
+    loadProfile();
+  }
+});
+
+async function toggleFollow(targetUid, button, containerId) {
+  if (targetUid === currentUserUid) return;
+  showLoading();
+  try {
+    const followingRef = ref(db, `users/${currentUserUid}/following/${targetUid}`);
+    const followerRef = ref(db, `users/${targetUid}/followers/${currentUserUid}`);
+    const followingSnap = await get(followingRef);
+    const isFollowing = followingSnap.exists();
+
+    if (isFollowing) {
+      // Unfollow
+      await set(followingRef, null);
+      await set(followerRef, null);
+      // Remove from friends if mutual
+      const isMutual = await get(ref(db, `users/${currentUserUid}/followers/${targetUid}`));
+      if (isMutual.exists()) {
+        await set(ref(db, `users/${currentUserUid}/friends/${targetUid}`), null);
+        await set(ref(db, `users/${targetUid}/friends/${currentUserUid}`), null);
+      }
+      button.textContent = "Follow";
+      button.classList.remove("following");
+      button.classList.add("follow");
+    } else {
+      // Follow
+      await set(followingRef, true);
+      await set(followerRef, true);
+      // Add to friends if mutual
+      const isMutual = await get(ref(db, `users/${currentUserUid}/followers/${targetUid}`));
+      if (isMutual.exists()) {
+        await set(ref(db, `users/${currentUserUid}/friends/${targetUid}`), true);
+        await set(ref(db, `users/${targetUid}/friends/${currentUserUid}`), true);
+      }
+      button.textContent = "Following";
+      button.classList.remove("follow");
+      button.classList.add("following");
     }
+
+    // Refresh the specific container
+    const containerRef = {
+      'friends-container': ref(db, `users/${currentUserUid}/friends`),
+      'followers-container': ref(db, `users/${currentUserUid}/followers`),
+      'following-container': ref(db, `users/${currentUserUid}/following`)
+    }[containerId];
+
+    const snapshot = await get(containerRef);
+    const data = snapshot.val() || {};
+    const container = document.getElementById(containerId);
+    container.innerHTML = "";
+    if (Object.keys(data).length === 0) {
+      container.innerHTML = `<div class="placeholder">No ${containerId.replace('-container', '')} found.</div>`;
+    } else {
+      const usersSnap = await get(ref(db, "users"));
+      const users = usersSnap.val() || {};
+      for (const uid in data) {
+        const userData = users[uid] || { username: "Unknown", photoURL: null };
+        const item = document.createElement("div");
+        item.className = "friend-item";
+        item.innerHTML = `
+          <img src="${userData.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${userData.username} avatar"/>
+          <span>${userData.username}</span>
+          <button class="friend-item-btn ${containerId === 'friends-container' ? 'message' : containerId === 'followers-container' ? (await get(ref(db, `users/${currentUserUid}/following/${uid}`)).exists() ? 'following' : 'follow') : 'following'}">
+            ${containerId === 'friends-container' ? 'Message' : containerId === 'followers-container' ? (await get(ref(db, `users/${currentUserUid}/following/${uid}`)).exists() ? 'Following' : 'Follow') : 'Following'}
+          </button>
+        `;
+        item.querySelector(".friend-item-btn").addEventListener("click", (e) => {
+          e.stopPropagation();
+          if (containerId === 'friends-container') {
+            console.log(`Initiate message to user: ${uid}`);
+            // Placeholder for messaging logic, e.g., navigate to chat page
+          } else {
+            toggleFollow(uid, e.target, containerId);
+          }
+        });
+        item.addEventListener("click", (e) => {
+          if (e.target.classList.contains("friend-item-btn")) return;
+          console.log("Navigating to profile:", uid);
+          location.href = `profile.html?uid=${uid}`;
+          pauseAllMedia();
+        });
+        container.appendChild(item);
+      }
+    }
+  } catch (error) {
+    console.error("Error toggling follow:", error.message);
+    document.getElementById(containerId).innerHTML = `<p class="error">Failed to load ${containerId.replace('-container', '')}: ${error.message}</p>`;
+  } finally {
+    hideLoading();
+  }
+}
+
+function loadFriends() {
+  const friendsContainer = document.getElementById("friends-container");
+  const followersContainer = document.getElementById("followers-container");
+  const followingContainer = document.getElementById("following-container");
+  const subTabBtns = document.querySelectorAll(".sub-tab-btn");
+  const subTabs = document.querySelectorAll(".sub-tab-content");
+
+  // Sub-tab navigation
+  subTabBtns.forEach(btn => {
+    btn.addEventListener("click", () => {
+      subTabBtns.forEach(b => {
+        b.classList.remove("active");
+        b.setAttribute("aria-selected", "false");
+      });
+      subTabs.forEach(t => t.classList.remove("active"));
+      btn.classList.add("active");
+      btn.setAttribute("aria-selected", "true");
+      document.querySelector(`.sub-tab-content[data-sub-tab="${btn.dataset.subTab}"]`).classList.add("active");
+      pauseAllMedia();
+    });
+  });
+
+  // Load Friends
+  const friendsRef = ref(db, `users/${currentUserUid}/friends`);
+  showLoading();
+  onValue(friendsRef, async (snapshot) => {
+    friendsContainer.innerHTML = '<div class="loading">Loading friends...</div>';
+    try {
+      const friendsData = snapshot.val() || {};
+      friendsContainer.innerHTML = "";
+      if (Object.keys(friendsData).length === 0) {
+        friendsContainer.innerHTML = '<div class="placeholder">No friends found.</div>';
+      } else {
+        const usersSnap = await get(ref(db, "users"));
+        const users = usersSnap.val() || {};
+        for (const friendUid in friendsData) {
+          const userData = users[friendUid] || { username: "Unknown", photoURL: null };
+          const friendItem = document.createElement("div");
+          friendItem.className = "friend-item";
+          friendItem.innerHTML = `
+            <img src="${userData.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${userData.username} avatar"/>
+            <span>${userData.username}</span>
+            <button class="friend-item-btn message">Message</button>
+          `;
+          friendItem.querySelector(".friend-item-btn").addEventListener("click", (e) => {
+            e.stopPropagation();
+            console.log(`Initiate message to user: ${friendUid}`);
+            // Placeholder for messaging logic, e.g., navigate to chat page
+          });
+          friendItem.addEventListener("click", (e) => {
+            if (e.target.classList.contains("friend-item-btn")) return;
+            console.log("Navigating to profile:", friendUid);
+            location.href = `profile.html?uid=${friendUid}`;
+            pauseAllMedia();
+          });
+          friendsContainer.appendChild(friendItem);
+        }
+      }
+    } catch (error) {
+      console.error("Error loading friends:", error.code, error.message);
+      friendsContainer.innerHTML = `<p class="error">Failed to load friends: ${error.message}</p>`;
+    } finally {
+      hideLoading();
+    }
+  }, { onlyOnce: false });
+
+  // Load Followers
+  const followersRef = ref(db, `users/${currentUserUid}/followers`);
+  onValue(followersRef, async (snapshot) => {
+    followersContainer.innerHTML = '<div class="loading">Loading followers...</div>';
+    try {
+      const followersData = snapshot.val() || {};
+      followersContainer.innerHTML = "";
+      if (Object.keys(followersData).length === 0) {
+        followersContainer.innerHTML = '<div class="placeholder">No followers found.</div>';
+      } else {
+        const usersSnap = await get(ref(db, "users"));
+        const users = usersSnap.val() || {};
+        for (const followerUid in followersData) {
+          const userData = users[followerUid] || { username: "Unknown", photoURL: null };
+          const isFollowing = await get(ref(db, `users/${currentUserUid}/following/${followerUid}`)).exists();
+          const followerItem = document.createElement("div");
+          followerItem.className = "friend-item";
+          followerItem.innerHTML = `
+            <img src="${userData.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${userData.username} avatar"/>
+            <span>${userData.username}</span>
+            <button class="friend-item-btn ${isFollowing ? 'following' : 'follow'}">${isFollowing ? 'Following' : 'Follow'}</button>
+          `;
+          followerItem.querySelector(".friend-item-btn").addEventListener("click", (e) => {
+            e.stopPropagation();
+            toggleFollow(followerUid, e.target, 'followers-container');
+          });
+          followerItem.addEventListener("click", (e) => {
+            if (e.target.classList.contains("friend-item-btn")) return;
+            console.log("Navigating to profile:", followerUid);
+            location.href = `profile.html?uid=${followerUid}`;
+            pauseAllMedia();
+          });
+          followersContainer.appendChild(followerItem);
+        }
+      }
+    } catch (error) {
+      console.error("Error loading followers:", error.code, error.message);
+      followersContainer.innerHTML = `<p class="error">Failed to load followers: ${error.message}</p>`;
+    } finally {
+      hideLoading();
+    }
+  }, { onlyOnce: false });
+
+  // Load Following
+  const followingRef = ref(db, `users/${currentUserUid}/following`);
+  onValue(followingRef, async (snapshot) => {
+    followingContainer.innerHTML = '<div class="loading">Loading following...</div>';
+    try {
+      const followingData = snapshot.val() || {};
+      followingContainer.innerHTML = "";
+      if (Object.keys(followingData).length === 0) {
+        followingContainer.innerHTML = '<div class="placeholder">Not following anyone.</div>';
+      } else {
+        const usersSnap = await get(ref(db, "users"));
+        const users = usersSnap.val() || {};
+        for (const followingUid in followingData) {
+          const userData = users[followingUid] || { username: "Unknown", photoURL: null };
+          const followingItem = document.createElement("div");
+          followingItem.className = "friend-item";
+          followingItem.innerHTML = `
+            <img src="${userData.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${userData.username} avatar"/>
+            <span>${userData.username}</span>
+            <button class="friend-item-btn following">Following</button>
+          `;
+          followingItem.querySelector(".friend-item-btn").addEventListener("click", (e) => {
+            e.stopPropagation();
+            toggleFollow(followingUid, e.target, 'following-container');
+          });
+          followingItem.addEventListener("click", (e) => {
+            if (e.target.classList.contains("friend-item-btn")) return;
+            console.log("Navigating to profile:", followingUid);
+            location.href = `profile.html?uid=${followingUid}`;
+            pauseAllMedia();
+          });
+          followingContainer.appendChild(followingItem);
+        }
+      }
+    } catch (error) {
+      console.error("Error loading following:", error.code, error.message);
+      followingContainer.innerHTML = `<p class="error">Failed to load following: ${error.message}</p>`;
+    } finally {
+      hideLoading();
+    }
+  }, { onlyOnce: false });
+}
+
+
+
+    
 
     function loadSearch() {
       const searchInput = document.getElementById("search-input");
