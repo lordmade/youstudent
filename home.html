@@ -1222,6 +1222,8 @@
       }
     });
 
+
+    
     
 async function loadPosts() {
   const postsContainer = document.getElementById("posts-container");
@@ -1252,7 +1254,7 @@ async function loadPosts() {
     postsContainer.innerHTML = "";
     const posts = Object.entries(postsData)
       .map(([id, post]) => ({ id, ...post }))
-      .filter(post => post.userId && post.imageUrl && post.timestamp);
+      .filter(post => post.userId && (post.imageUrls?.length > 0 || post.imageUrl) && post.timestamp);
 
     if (posts.length === 0) {
       postsContainer.innerHTML = '<div class="placeholder">No posts available.</div>';
@@ -1279,7 +1281,9 @@ async function loadPosts() {
 
     finalPosts.forEach(post => {
       const isFollowing = !!followingData[post.userId];
-      const showFollowButton = post.userId !== currentUserUid; // Only show for non-current user posts
+      const showFollowButton = post.userId !== currentUserUid;
+      // Handle single image (backward compatibility) or multiple images
+      const imageUrls = Array.isArray(post.imageUrls) ? post.imageUrls : [post.imageUrl].filter(Boolean);
       const postElement = document.createElement("div");
       postElement.className = "post";
       postElement.id = `post-${post.id}`;
@@ -1291,7 +1295,30 @@ async function loadPosts() {
             <span class="timestamp">${timeAgo(post.timestamp)}</span>
           </div>
         </div>
-        <img class="post-image" src="${post.imageUrl}" alt="Post" onerror="this.src='https://via.placeholder.com/150?text=Image+Not+Found';">
+        <div class="post-image-carousel" data-post-id="${post.id}">
+          <div class="post-image-container">
+            ${imageUrls.map(url => `
+              <img src="${url}" alt="Post image" onerror="this.src='https://via.placeholder.com/150?text=Image+Not+Found';">
+            `).join('')}
+          </div>
+          ${imageUrls.length > 1 ? `
+            <button class="carousel-arrow left" aria-label="Previous image">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M15 18l-6-6 6-6"/>
+              </svg>
+            </button>
+            <button class="carousel-arrow right" aria-label="Next image">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M9 18l6-6-6-6"/>
+              </svg>
+            </button>
+            <div class="carousel-indicators">
+              ${imageUrls.map((_, index) => `
+                <span class="carousel-indicator ${index === 0 ? 'active' : ''}"></span>
+              `).join('')}
+            </div>
+          ` : ''}
+        </div>
         <div class="post-actions">
           <button class="like-btn" data-post-id="${post.id}">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="${post.likedBy && post.likedBy.includes(currentUserUid) ? 'text-red-500' : 'text-gray-500'}">
@@ -1367,8 +1394,72 @@ async function loadPosts() {
         });
       }
 
+      // Carousel swipe functionality
+      if (imageUrls.length > 1) {
+        const carousel = postElement.querySelector(".post-image-carousel");
+        const imageContainer = carousel.querySelector(".post-image-container");
+        const indicators = carousel.querySelectorAll(".carousel-indicator");
+        const leftArrow = carousel.querySelector(".carousel-arrow.left");
+        const rightArrow = carousel.querySelector(".carousel-arrow.right");
+        let currentIndex = 0;
+        let startX = 0;
+        let isDragging = false;
+
+        const updateCarousel = () => {
+          imageContainer.style.transform = `translateX(-${currentIndex * 100}%)`;
+          indicators.forEach((indicator, index) => {
+            indicator.classList.toggle("active", index === currentIndex);
+          });
+          leftArrow.style.display = currentIndex === 0 ? "none" : "block";
+          rightArrow.style.display = currentIndex === imageUrls.length - 1 ? "none" : "block";
+        };
+
+        leftArrow.addEventListener("click", (e) => {
+          e.stopPropagation();
+          if (currentIndex > 0) {
+            currentIndex--;
+            updateCarousel();
+          }
+        });
+
+        rightArrow.addEventListener("click", (e) => {
+          e.stopPropagation();
+          if (currentIndex < imageUrls.length - 1) {
+            currentIndex++;
+            updateCarousel();
+          }
+        });
+
+        carousel.addEventListener("touchstart", (e) => {
+          e.stopPropagation();
+          startX = e.touches[0].clientX;
+          isDragging = true;
+        });
+
+        carousel.addEventListener("touchmove", (e) => {
+          if (!isDragging) return;
+          e.stopPropagation();
+          const currentX = e.touches[0].clientX;
+          const diffX = startX - currentX;
+          if (Math.abs(diffX) > 50) { // Swipe threshold
+            if (diffX > 0 && currentIndex < imageUrls.length - 1) {
+              currentIndex++;
+            } else if (diffX < 0 && currentIndex > 0) {
+              currentIndex--;
+            }
+            updateCarousel();
+            isDragging = false;
+          }
+        });
+
+        carousel.addEventListener("touchend", (e) => {
+          e.stopPropagation();
+          isDragging = false;
+        });
+      }
+
       postElement.addEventListener("click", (e) => {
-        if (e.target.closest('.post-actions button, .song-display, .post-header img, .post-header .user-info span:first-child, .post-follow-btn')) return;
+        if (e.target.closest('.post-actions button, .song-display, .post-header img, .post-header .user-info span:first-child, .post-follow-btn, .carousel-arrow')) return;
         console.log("Navigating to post:", post.id);
         location.href = `post.html?id=${post.id}`;
         pauseAllMedia();
