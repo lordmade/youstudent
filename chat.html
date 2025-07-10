@@ -1,190 +1,165 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>BanterBox - Chat</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://upload-widget.cloudinary.com/global/all.js" type="text/javascript"></script>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
   <style>
-    * {
-      user-select: none;
-      -webkit-user-select: none;
-      -moz-user-select: none;
-      -ms-user-select: none;
-      touch-action: manipulation;
+    :root {
+      --primary-red: #ED4956;
+      --white: #FFFFFF;
+      --text-dark: #333333;
+      --border: #E5E7EB;
     }
+
     body {
-      font-family: 'Inter', 'Segoe UI', sans-serif;
-      background: #f3f2ef;
-      transition: background 0.3s ease;
+      font-family: 'Arial', sans-serif;
+      background: var(--white);
+      color: var(--text-dark);
       margin: 0;
-      padding-bottom: 80px;
+      padding: 0;
     }
-    body.dark {
-      background: #ffffff; /* Changed from #0b141a to white */
-    }
-    .header {
-      background: white;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      z-index: 10;
-    }
-    .header.dark {
-      background: #f5f5f5; /* Light gray for contrast */
-      border-bottom: 1px solid #e5e7eb;
-      color: #111827; /* Dark text for readability */
-    }
-    .chat-container {
+
+    .container {
+      max-width: 414px;
+      margin: 0 auto;
+      padding: 1rem;
       display: flex;
       flex-direction: column;
-      height: calc(100vh - 64px);
-      max-width: 800px;
-      margin: 64px auto 0;
+      height: 100vh;
     }
+
     .chat-header {
       display: flex;
       align-items: center;
-      padding: 0.75rem 1rem;
-      background: white;
+      padding: 0.75rem;
+      border-bottom: 1px solid var(--border);
+      background: var(--white);
+      position: sticky;
+      top: 0;
+      z-index: 10;
     }
-    .chat-header.dark {
-      background: #f5f5f5; /* Light gray */
-      color: #111827;
-    }
-    .chat-avatar {
+
+    .chat-header img {
       width: 40px;
       height: 40px;
-      border-radius: 9999px;
-      object-fit: cover;
-      border: 2px solid transparent;
-      background: linear-gradient(to right, #ef4444, #f97316);
-      padding: 2px;
+      border-radius: 50%;
       margin-right: 0.75rem;
     }
-    .chat-info {
-      flex-grow: 1;
+
+    .chat-header span {
+      font-size: clamp(0.9rem, 3vw, 1rem);
+      font-weight: 600;
     }
-    .chat-info h4 {
-      font-weight: 700;
-      font-size: 1rem;
-      color: #111827;
-    }
-    .chat-info.dark h4 {
-      color: #111827; /* Dark text for white background */
-    }
-    .chat-status {
-      font-size: 0.75rem;
+
+    .chat-header .status {
+      font-size: clamp(0.75rem, 2.5vw, 0.8rem);
       color: #6b7280;
     }
-    .chat-status.dark {
-      color: #4b5563; /* Slightly darker gray for readability */
+
+    .back-btn, .kebab-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 0.5rem;
+      transition: transform 0.2s ease;
     }
-    .status-dot {
+
+    .back-btn {
+      margin-right: 0.75rem;
+    }
+
+    .kebab-btn {
+      margin-left: auto;
+    }
+
+    .back-btn:hover svg, .kebab-btn:hover svg {
+      fill: var(--primary-red);
+    }
+
+    .back-btn svg, .kebab-btn svg {
+      width: 24px;
+      height: 24px;
+      fill: var(--text-dark);
+      transition: fill 0.2s ease;
+    }
+
+    .kebab-menu {
       position: absolute;
-      bottom: 2px;
-      right: 2px;
-      width: 10px;
-      height: 10px;
-      border-radius: 50%;
-      border: 2px solid white;
-      background: #6b7280;
+      top: 3rem;
+      right: 1rem;
+      background: var(--white);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      z-index: 20;
+      display: none;
     }
-    .status-dot.online {
-      background: #22c55e;
+
+    .kebab-menu.active {
+      display: block;
     }
-    .status-dot.dark {
-      border-color: #f5f5f5; /* Match header background */
+
+    .kebab-menu button {
+      display: block;
+      width: 100%;
+      padding: 0.5rem 1rem;
+      text-align: left;
+      background: none;
+      border: none;
+      font-size: clamp(0.85rem, 2.5vw, 0.9rem);
+      color: var(--text-dark);
+      cursor: pointer;
+      transition: background 0.2s ease;
     }
-    .chat-messages {
-      flex-grow: 1;
+
+    .kebab-menu button:hover {
+      background: var(--border);
+    }
+
+    .kebab-menu button.delete {
+      color: var(--primary-red);
+    }
+
+    .chat-area {
+      flex: 1;
       overflow-y: auto;
       padding: 1rem;
       display: flex;
       flex-direction: column;
       gap: 0.5rem;
-      background: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAYAAADED76LAAAAFUlEQVR4AWP4z8Dwn4E5DAwMDOoBAM6uAYvD2MppAAAAAElFTkSuQmCC') repeat;
+      background: var(--white);
+      background-size: cover;
+      background-position: center;
     }
-    .chat-messages.dark {
-      background: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAYAAADED76LAAAAFUlEQVR4AWP4z8Dwn4E5DAwMDOoBAM6uAYvD2MppAAAAAElFTkSuQmCC') repeat; /* Light background pattern */
-    }
+
     .message {
       max-width: 70%;
-      padding: 0.5rem 0.75rem;
-      border-radius: 12px;
-      font-size: 0.9rem;
+      padding: 0.5rem 1rem;
+      border-radius: 1rem;
+      font-size: clamp(0.85rem, 2.5vw, 0.9rem);
       line-height: 1.4;
       position: relative;
-      margin-bottom: 1.5rem;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
-      display: flex;
-      align-items: flex-start;
-      gap: 0.5rem;
-      touch-action: none;
-      -webkit-touch-callout: none;
+      background: var(--white);
+      border: 1px solid var(--border);
     }
+
     .message.sent {
-      background: #d4f4dd;
-      color: #111827;
-      margin-left: auto;
-      border-bottom-right-radius: 2px;
-      flex-direction: row-reverse;
+      background: var(--primary-red);
+      color: var(--white);
+      align-self: flex-end;
+      border-bottom-right-radius: 0.25rem;
+      border: none;
     }
+
     .message.received {
-      background: #ffffff;
-      color: #111827;
-      margin-right: auto;
-      border-bottom-left-radius: 2px;
+      background: var(--border);
+      color: var(--text-dark);
+      align-self: flex-start;
+      border-bottom-left-radius: 0.25rem;
     }
-    .message.dark.sent {
-      background: #055c38; /* Keep dark green for contrast */
-      color: #e5e7eb;
-    }
-    .message.dark.received {
-      background: #e5e7eb; /* Lighter gray for contrast on white */
-      color: #111827;
-    }
-    .message::before {
-      content: '';
-      position: absolute;
-      width: 0;
-      height: 0;
-      bottom: 0;
-    }
-    .message.sent::before {
-      border: 8px solid transparent;
-      border-left-color: #d4f4dd;
-      right: -8px;
-      bottom: 0;
-    }
-    .message.received::before {
-      border: 8px solid transparent;
-      border-right-color: #ffffff;
-      left: -8px;
-      bottom: 0;
-    }
-    .message.dark.sent::before {
-      border-left-color: #055c38;
-    }
-    .message.dark.received::before {
-      border-right-color: #e5e7eb;
-    }
-    .message-avatar {
-      width: 28px;
-      height: 28px;
-      border-radius: 9999px;
-      object-fit: cover;
-      flex-shrink: 0;
-      margin-top: 0.25rem;
-    }
-    .message-content {
-      flex-grow: 1;
-      word-break: break-word;
-      padding: 0.25rem 0;
-    }
+
     .message-media {
       max-width: 100%;
       max-height: 200px;
@@ -192,84 +167,84 @@
       border-radius: 8px;
       margin-top: 0.25rem;
     }
+
     .message-time {
       font-size: 0.65rem;
       color: #6b7280;
       position: absolute;
       bottom: -1rem;
       right: 0.5rem;
-      opacity: 0.8;
     }
+
     .message.received .message-time {
       left: 0.5rem;
     }
-    .message.dark.sent .message-time {
-      color: #6b7280; /* Darker for readability */
-    }
-    .message.dark.received .message-time {
-      color: #4b5563;
-    }
-    .chat-input-container {
+
+    .chat-input {
       display: flex;
       align-items: center;
-      padding: 0.5rem;
-      background: white;
-      position: fixed;
+      padding: 0.75rem;
+      border-top: 1px solid var(--border);
+      background: var(--white);
+      position: sticky;
       bottom: 0;
-      left: 0;
-      right: 0;
-      max-width: 800px;
-      margin: 0 auto;
-      border-top: 1px solid #e5e7eb;
     }
-    .chat-input-container.dark {
-      background: #f5f5f5; /* Light gray */
-      border-top: 1px solid #e5e7eb;
-    }
-    .chat-input {
-      flex-grow: 1;
-      padding: 0.5rem 0.75rem;
-      border: none;
+
+    .chat-input input[type="text"] {
+      flex: 1;
+      padding: 0.5rem 1rem;
+      border: 1px solid var(--border);
       border-radius: 9999px;
-      font-size: 0.9rem;
-      background: #e5e7eb;
+      font-size: clamp(0.85rem, 2.5vw, 0.9rem);
+      margin-right: 0.5rem;
       outline: none;
-      transition: background 0.2s ease;
       user-select: text;
       -webkit-user-select: text;
     }
-    .chat-input:focus {
-      background: #d1d5db;
+
+    .chat-input input[type="file"] {
+      display: none;
     }
-    .chat-input.dark {
-      background: #d1d5db; /* Slightly darker gray */
-      color: #111827;
-    }
-    .chat-input.dark:focus {
-      background: #b0b7c3;
-    }
-    .send-btn, .upload-btn {
-      margin-left: 0.5rem;
-      width: 40px;
-      height: 40px;
-      background: #ef4444;
-      color: white;
+
+    .chat-input button {
+      padding: 0.5rem;
       border-radius: 9999px;
+      background: var(--primary-red);
+      border: none;
       display: flex;
       align-items: center;
       justify-content: center;
+      width: 40px;
+      height: 40px;
+      cursor: pointer;
       transition: background 0.2s ease, transform 0.2s ease;
     }
-    .send-btn:hover, .upload-btn:hover {
-      background: #dc2626;
+
+    .chat-input button:hover {
+      background: #d43f4e;
       transform: scale(1.05);
     }
-    .send-btn.dark, .upload-btn.dark {
-      background: #dc2626;
+
+    .chat-input button svg {
+      width: 24px;
+      height: 24px;
+      fill: var(--white);
     }
-    .send-btn.dark:hover, .upload-btn.dark:hover {
-      background: #b91c1c;
+
+    .error, .loading, .placeholder {
+      text-align: center;
+      padding: 1rem;
+      font-size: clamp(0.9rem, 3vw, 1rem);
     }
+
+    .error {
+      color: var(--primary-red);
+    }
+
+    .loading, .placeholder {
+      color: var(--text-dark);
+    }
+
     .loading-overlay {
       position: fixed;
       inset: 0;
@@ -279,424 +254,479 @@
       justify-content: center;
       z-index: 50;
     }
+
     .upload-progress {
       position: fixed;
       bottom: 80px;
       left: 50%;
       transform: translateX(-50%);
-      background: #111827;
-      color: white;
+      background: var(--text-dark);
+      color: var(--white);
       padding: 0.5rem 1rem;
       border-radius: 8px;
       font-size: 0.8rem;
       z-index: 20;
       display: none;
     }
+
     .upload-progress.active {
       display: block;
     }
-    .back-btn {
-      color: #6b7280;
-      cursor: pointer;
-      transition: color 0.2s ease;
-      margin-right: 0.75rem;
-    }
-    .back-btn:hover {
-      color: #ef4444;
-    }
-    .back-btn.dark {
-      color: #4b5563; /* Darker for readability */
-    }
-    .back-btn.dark:hover {
-      color: #dc2626;
+
+    @media (max-width: 414px) {
+      .chat-header img {
+        width: 32px;
+        height: 32px;
+      }
+
+      .chat-header span {
+        font-size: clamp(0.8rem, 2.5vw, 0.9rem);
+      }
+
+      .chat-header .status {
+        font-size: clamp(0.7rem, 2vw, 0.75rem);
+      }
+
+      .back-btn svg, .kebab-btn svg {
+        width: 20px;
+        height: 20px;
+      }
+
+      .chat-input input[type="text"] {
+        padding: 0.4rem 0.8rem;
+        font-size: clamp(0.75rem, 2vw, 0.8rem);
+      }
+
+      .chat-input button {
+        width: 36px;
+        height: 36px;
+        padding: 0.4rem;
+      }
+
+      .chat-input button svg {
+        width: 20px;
+        height: 20px;
+      }
+
+      .message {
+        font-size: clamp(0.75rem, 2vw, 0.8rem);
+      }
+
+      .kebab-menu {
+        top: 2.5rem;
+        right: 0.5rem;
+      }
+
+      .kebab-menu button {
+        font-size: clamp(0.75rem, 2vw, 0.8rem);
+        padding: 0.4rem 0.8rem;
+      }
     }
   </style>
 </head>
 <body>
-  <div class="loading-overlay" id="loading-overlay">
+  <div class="loading-overlay hidden" id="loading-overlay">
     <svg class="animate-spin h-8 w-8 text-red-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
       <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
       <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4z"/>
     </svg>
   </div>
   <div class="upload-progress" id="upload-progress">Uploading: 0%</div>
-
-  <header class="header dark:header">
-    <div class="chat-header dark:chat-header">
-      <svg class="back-btn dark:back-btn" id="back-btn" fill="none" stroke="currentColor" viewBox="0 0 24 24" width="24" height="24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
-      </svg>
-      <div class="relative">
-        <img id="chat-avatar" src="https://www.gravatar.com/avatar?d=mp" alt="User avatar" class="chat-avatar" />
-        <span id="status-dot" class="status-dot"></span>
+  <div class="container">
+    <div class="chat-header">
+      <button class="back-btn" aria-label="Back to main page">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+        </svg>
+      </button>
+      <img id="recipient-photo" src="https://www.gravatar.com/avatar?d=mp" alt="Recipient avatar">
+      <div>
+        <span id="recipient-username">Loading...</span>
+        <div id="recipient-status" class="status">Offline</div>
       </div>
-      <div class="chat-info dark:chat-info">
-        <h4 id="chat-username">User</h4>
-        <p id="chat-status" class="chat-status dark:chat-status">Offline</p>
+      <button class="kebab-btn" aria-label="Chat options">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v.01M12 12v.01M12 18v.01"/>
+        </svg>
+      </button>
+      <div class="kebab-menu" id="kebab-menu">
+        <button id="delete-chat-btn" class="delete">Delete Chat</button>
+        <button id="change-wallpaper-btn">Change Wallpaper</button>
       </div>
     </div>
-  </header>
-
-  <div class="chat-container">
-    <div id="messages-list" class="chat-messages dark:chat-messages" aria-live="polite" aria-relevant="additions"></div>
-    <div class="chat-input-container dark:chat-input-container">
-      <button id="upload-btn" class="upload-btn dark:upload-btn" aria-label="Upload media">
-        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="24" height="24">
+    <div id="chat-area" class="chat-area" aria-live="polite" aria-relevant="additions"></div>
+    <div class="chat-input">
+      <input type="file" id="file-input" accept="image/jpeg,image/png,image/gif" aria-label="Upload image">
+      <input type="file" id="wallpaper-input" accept="image/jpeg,image/png,image/gif" aria-label="Upload wallpaper">
+      <button id="upload-btn" class="upload-btn" aria-label="Upload image">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 002.828 2.828L18 9.828V15m0-12v12"/>
         </svg>
       </button>
-      <input id="chat-input" type="text" placeholder="Type a message..." class="chat-input dark:chat-input" />
-      <button id="send-btn" class="send-btn dark:send-btn" aria-label="Send message">
-        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="24" height="24">
+      <input id="message-input" type="text" placeholder="Type a message..." aria-label="Message input">
+      <button id="send-message-btn" aria-label="Send message">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
         </svg>
       </button>
     </div>
   </div>
 
-<script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
-  import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
-  import { getDatabase, ref, onValue, set, push, get, update, onDisconnect } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-database.js";
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
+    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
+    import { getDatabase, ref, onValue, set, push, get, update, remove, onDisconnect } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-database.js";
 
-  const firebaseConfig = {
-    apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
-    authDomain: "fire-b-a8878.firebaseapp.com",
-    databaseURL: "https://fire-b-a8878.firebaseio.com",
-    projectId: "fire-b-a8878",
-    storageBucket: "fire-b-a8878.appspot.com",
-    messagingSenderId: "658673187627",
-    appId: "1:658673187627:web:6e4c29af661785f0afa36e"
-  };
+    const firebaseConfig = {
+      apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
+      authDomain: "fire-b-a8878.firebaseapp.com",
+      databaseURL: "https://fire-b-a8878.firebaseio.com",
+      projectId: "fire-b-a8878",
+      storageBucket: "fire-b-a8878.appspot.com",
+      messagingSenderId: "658673187627",
+      appId: "1:658673187627:web:6e4c29af661785f0afa36e"
+    };
 
-  const app = initializeApp(firebaseConfig);
-  const auth = getAuth();
-  const db = getDatabase();
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth();
+    const db = getDatabase();
 
-  const loadingOverlay = document.getElementById("loading-overlay");
-  const backBtn = document.getElementById("back-btn");
-  const chatAvatar = document.getElementById("chat-avatar");
-  const statusDot = document.getElementById("status-dot");
-  const chatUsername = document.getElementById("chat-username");
-  const chatStatus = document.getElementById("chat-status");
-  const messagesList = document.getElementById("messages-list");
-  const chatInput = document.getElementById("chat-input");
-  const sendBtn = document.getElementById("send-btn");
-  const uploadBtn = document.getElementById("upload-btn");
-  const uploadProgress = document.getElementById("upload-progress");
+    const loadingOverlay = document.getElementById("loading-overlay");
+    const backBtn = document.querySelector(".back-btn");
+    const kebabBtn = document.querySelector(".kebab-btn");
+    const kebabMenu = document.getElementById("kebab-menu");
+    const deleteChatBtn = document.getElementById("delete-chat-btn");
+    const changeWallpaperBtn = document.getElementById("change-wallpaper-btn");
+    const recipientPhoto = document.getElementById("recipient-photo");
+    const recipientUsername = document.getElementById("recipient-username");
+    const recipientStatus = document.getElementById("recipient-status");
+    const chatArea = document.getElementById("chat-area");
+    const messageInput = document.getElementById("message-input");
+    const sendBtn = document.getElementById("send-message-btn");
+    const uploadBtn = document.getElementById("upload-btn");
+    const fileInput = document.getElementById("file-input");
+    const wallpaperInput = document.getElementById("wallpaper-input");
+    const uploadProgress = document.getElementById("upload-progress");
 
-  let currentUserUid = null;
-  let otherUserUid = null;
-  let chatId = null;
+    let currentUserUid = null;
+    let otherUserUid = null;
+    let chatId = null;
 
-  // Cloudinary configuration
-  const cloudinaryCloudName = 'YOUR_CLOUDINARY_CLOUD_NAME'; // Replace with your Cloudinary cloud name
-  const cloudinaryUploadPreset = 'YOUR_UPLOAD_PRESET'; // Replace with your unsigned upload preset
+    const cloudinaryCloudName = 'YOUR_CLOUDINARY_CLOUD_NAME';
+    const cloudinaryUploadPreset = 'YOUR_UPLOAD_PRESET';
+    const cloudinaryApiUrl = `https://api.cloudinary.com/v1_1/${cloudinaryCloudName}/image/upload`;
 
-  function showLoading() { loadingOverlay.classList.remove("hidden"); }
-  function hideLoading() { loadingOverlay.classList.add("hidden"); }
-  function showUploadProgress(percent) {
-    uploadProgress.textContent = `Uploading: ${percent}%`;
-    uploadProgress.classList.add("active");
-  }
-  function hideUploadProgress() { uploadProgress.classList.remove("active"); }
-
-  function applyTheme(themeValue) {
-    const isDark = themeValue === 'dark';
-    document.body.classList.toggle('dark', isDark);
-    document.querySelector('.header').classList.toggle('dark', isDark);
-    document.querySelector('.chat-header').classList.toggle('dark', isDark);
-    document.querySelector('.chat-input-container').classList.toggle('dark', isDark);
-    document.querySelector('.chat-messages').classList.toggle('dark', isDark);
-    document.querySelectorAll('.chat-info, .chat-status, .message, .status-dot, .send-btn, .upload-btn, .chat-input, .back-btn').forEach(el => el.classList.toggle('dark', isDark));
-  }
-
-  function timeAgo(timestamp) {
-    if (!timestamp) return "";
-    const now = Date.now();
-    const diff = now - timestamp;
-    if (diff < 60000) return "just now";
-    if (diff < 3600000) return Math.floor(diff / 60000) + "m ago";
-    if (diff < 86400000) return Math.floor(diff / 3600000) + "h ago";
-    return Math.floor(diff / 86400000) + "d ago";
-  }
-
-  async function getUserData(uid) {
-    const userRef = ref(db, `users/${uid}`);
-    const userSnap = await get(userRef);
-    return userSnap.exists() ? userSnap.val() : { photoURL: 'https://www.gravatar.com/avatar?d=mp', name: 'User' };
-  }
-
-  onAuthStateChanged(auth, async user => {
-    if (!user) {
-      location.href = "signup.html";
-      return;
+    function showLoading() { loadingOverlay.classList.remove("hidden"); }
+    function hideLoading() { loadingOverlay.classList.add("hidden"); }
+    function showUploadProgress(percent) {
+      uploadProgress.textContent = `Uploading: ${percent}%`;
+      uploadProgress.classList.add("active");
     }
-    currentUserUid = user.uid;
-    showLoading();
+    function hideUploadProgress() { uploadProgress.classList.remove("active"); }
 
-    try {
-      const userRef = ref(db, `users/${user.uid}`);
-      await onDisconnect(userRef).update({
-        presence: 'offline',
-        lastSeen: Date.now()
-      });
-      await update(userRef, {
-        presence: 'online',
-        lastSeen: Date.now()
-      });
+    function timeAgo(timestamp) {
+      if (!timestamp) return "Offline";
+      const now = Date.now();
+      const diff = now - timestamp;
+      if (diff < 60000) return "Online";
+      if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
+      if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
+      return `${Math.floor(diff / 86400000)}d ago`;
+    }
 
-      const snap = await get(ref(db, `users/${user.uid}/settings`));
-      const settings = snap.val() || {};
-      applyTheme(settings.theme || 'light');
+    function toggleKebabMenu() {
+      kebabMenu.classList.toggle("active");
+    }
 
-      const urlParams = new URLSearchParams(window.location.search);
-      otherUserUid = urlParams.get('uid');
-      if (!otherUserUid) {
-        alert("No user selected for chat.");
-        location.href = "friends.html";
+    kebabBtn.addEventListener('click', toggleKebabMenu);
+
+    document.addEventListener('click', (e) => {
+      if (!kebabBtn.contains(e.target) && !kebabMenu.contains(e.target)) {
+        kebabMenu.classList.remove("active");
+      }
+    });
+
+    onAuthStateChanged(auth, async user => {
+      if (!user) {
+        location.href = "signup.html";
         return;
       }
+      currentUserUid = user.uid;
+      showLoading();
 
-      await loadChat(user.uid, otherUserUid);
-    } catch (error) {
-      console.error('Error initializing chat:', error);
-      hideLoading();
-    }
-  });
-
-  async function loadChat(currentUid, otherUid) {
-    try {
-      chatId = currentUid < otherUid ? `${currentUid}_${otherUid}` : `${otherUid}_${currentUid}`;
-      const userData = await getUserData(otherUid);
-
-      chatAvatar.src = userData.photoURL || 'https://www.gravatar.com/avatar?d=mp';
-      chatUsername.textContent = userData.name || 'User';
-      const isOnline = userData.presence === 'online';
-      chatStatus.textContent = isOnline ? 'Online' : `Last seen ${timeAgo(userData.lastSeen)}`;
-      statusDot.classList.toggle('online', isOnline);
-
-      onValue(ref(db, `users/${otherUid}`), (snap) => {
-        if (snap.exists()) {
-          const data = snap.val();
-          const isOnline = data.presence === 'online';
-          chatStatus.textContent = isOnline ? 'Online' : `Last seen ${timeAgo(data.lastSeen)}`;
-          statusDot.classList.toggle('online', isOnline);
-        }
-      });
-
-      const chatRef = ref(db, `chats/${chatId}`);
-      const chatSnap = await get(chatRef);
-      if (!chatSnap.exists()) {
-        await set(chatRef, {
-          participants: {
-            [currentUid]: { unreadCount: 0 },
-            [otherUid]: { unreadCount: 0 }
-          },
-          createdAt: Date.now()
+      try {
+        const userRef = ref(db, `users/${user.uid}`);
+        await onDisconnect(userRef).update({
+          presence: 'offline',
+          lastSeen: Date.now()
         });
-      } else {
-        await update(ref(db, `chats/${chatId}/participants/${currentUid}`), { unreadCount: 0 });
-      }
+        await update(userRef, {
+          presence: 'online',
+          lastSeen: Date.now()
+        });
 
-      const messagesRef = ref(db, `messages/${chatId}`);
-      onValue(messagesRef, async (messagesSnap) => {
-        messagesList.innerHTML = '';
-        if (!messagesSnap.exists()) {
+        const urlParams = new URLSearchParams(window.location.search);
+        otherUserUid = urlParams.get('uid');
+        if (!otherUserUid) {
+          chatArea.innerHTML = `<p class="error">No user selected for chat.</p>`;
+          messageInput.disabled = true;
+          sendBtn.disabled = true;
+          fileInput.disabled = true;
+          wallpaperInput.disabled = true;
           hideLoading();
           return;
         }
 
-        const messages = messagesSnap.val();
-        const sortedMessages = Object.entries(messages).sort((a, b) => (a[1].timestamp || 0) - (b[1].timestamp || 0));
+        await loadChat(user.uid, otherUserUid);
+      } catch (error) {
+        console.error('Error initializing chat:', error);
+        chatArea.innerHTML = `<p class="error">Error initializing chat: ${error.message}</p>`;
+        hideLoading();
+      }
+    });
 
-        for (const [mid, message] of sortedMessages) {
-          const senderData = await getUserData(message.sender);
-          const messageElement = renderMessage(mid, message, currentUid, senderData);
-          messagesList.appendChild(messageElement);
+    async function loadChat(currentUid, otherUid) {
+      try {
+        chatId = currentUid < otherUid ? `${currentUid}_${otherUid}` : `${otherUid}_${currentUid}`;
+        const userData = await get(ref(db, `users/${otherUid}`)).then(snap => snap.val() || { name: 'Unknown', photoURL: null });
 
-          if (message.sender !== currentUid && !message.read) {
-            await update(ref(db, `messages/${chatId}/${mid}`), { read: true });
-            const chatSnap = await get(ref(db, `chats/${chatId}/participants/${currentUid}`));
-            const currentUnread = chatSnap.val()?.unreadCount || 0;
-            if (currentUnread > 0) {
-              await update(ref(db, `chats/${chatId}/participants/${currentUid}`), { unreadCount: currentUnread - 1 });
-            }
+        recipientPhoto.src = userData.photoURL || 'https://www.gravatar.com/avatar?d=mp';
+        recipientUsername.textContent = userData.name || 'Unknown';
+        recipientStatus.textContent = userData.presence === 'online' ? 'Online' : `Last seen ${timeAgo(userData.lastSeen)}`;
+
+        onValue(ref(db, `users/${otherUid}`), (snap) => {
+          if (snap.exists()) {
+            const data = snap.val();
+            recipientStatus.textContent = data.presence === 'online' ? 'Online' : `Last seen ${timeAgo(data.lastSeen)}`;
+          }
+        });
+
+        const chatRef = ref(db, `chats/${chatId}`);
+        const chatSnap = await get(chatRef);
+        if (!chatSnap.exists()) {
+          await set(chatRef, {
+            participants: {
+              [currentUid]: { unreadCount: 0 },
+              [otherUid]: { unreadCount: 0 }
+            },
+            createdAt: Date.now(),
+            wallpaper: null
+          });
+        } else {
+          await update(ref(db, `chats/${chatId}/participants/${currentUid}`), { unreadCount: 0 });
+          const chatData = chatSnap.val();
+          if (chatData.wallpaper) {
+            chatArea.style.backgroundImage = `url(${chatData.wallpaper})`;
           }
         }
 
-        messagesList.scrollTop = messagesList.scrollHeight;
-        hideLoading();
-      }, (error) => {
-        console.error('Error loading messages:', error);
-        hideLoading();
-      });
-    } catch (error) {
-      console.error('Error loading chat:', error);
-      hideLoading();
-    }
-  }
+        onValue(ref(db, `chats/${chatId}/wallpaper`), (snap) => {
+          const wallpaperUrl = snap.val();
+          chatArea.style.backgroundImage = wallpaperUrl ? `url(${wallpaperUrl})` : 'none';
+        });
 
-  function renderMessage(mid, message, currentUid, senderData) {
-    const isSent = message.sender === currentUid;
-    const div = document.createElement('div');
-    div.className = `message ${isSent ? 'sent' : 'received'} dark:${isSent ? 'sent' : 'received'}`;
-    div.dataset.mid = mid;
+        const messagesRef = ref(db, `messages/${chatId}`);
+        onValue(messagesRef, async (messagesSnap) => {
+          chatArea.innerHTML = '<div class="loading">Loading messages...</div>';
+          if (!messagesSnap.exists()) {
+            chatArea.innerHTML = '<div class="placeholder">No messages yet.</div>';
+            hideLoading();
+            return;
+          }
 
-    let mediaContent = '';
-    if (message.mediaUrl && message.mediaType) {
-      if (message.mediaType === 'image') {
-        mediaContent = `<img src="${message.mediaUrl}" alt="Uploaded image" class="message-media" />`;
-      } else if (message.mediaType === 'video') {
-        mediaContent = `<video src="${message.mediaUrl}" class="message-media" controls></video>`;
+          const messages = messagesSnap.val();
+          const sortedMessages = Object.entries(messages).sort((a, b) => (a[1].timestamp || 0) - (b[1].timestamp || 0));
+          chatArea.innerHTML = '';
+
+          for (const [mid, message] of sortedMessages) {
+            const messageElement = renderMessage(mid, message, currentUid);
+            chatArea.appendChild(messageElement);
+
+            if (message.sender !== currentUid && !message.read) {
+              await update(ref(db, `messages/${chatId}/${mid}`), { read: true });
+              const chatSnap = await get(ref(db, `chats/${chatId}/participants/${currentUid}`));
+              const currentUnread = chatSnap.val()?.unreadCount || 0;
+              if (currentUnread > 0) {
+                await update(ref(db, `chats/${chatId}/participants/${currentUid}`), { unreadCount: currentUnread - 1 });
+              }
+            }
+          }
+
+          chatArea.scrollTop = chatArea.scrollHeight;
+          hideLoading();
+        }, (error) => {
+          console.error('Error loading messages:', error);
+          chatArea.innerHTML = `<p class="error">Failed to load messages: ${error.message}</p>`;
+          hideLoading();
+        });
+      } catch (error) {
+        console.error('Error loading chat:', error);
+        chatArea.innerHTML = `<p class="error">Failed to load chat: ${error.message}</p>`;
+        hideLoading();
       }
     }
 
-    div.innerHTML = `
-      <img src="${senderData.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${senderData.name || 'User'} avatar" class="message-avatar" />
-      <div class="message-content">
+    function renderMessage(mid, message, currentUid) {
+      const div = document.createElement('div');
+      const isSent = message.sender === currentUid;
+      div.className = `message ${isSent ? 'sent' : 'received'}`;
+      div.dataset.mid = mid;
+
+      let mediaContent = '';
+      if (message.mediaUrl && message.mediaType) {
+        if (message.mediaType === 'image') {
+          mediaContent = `<img src="${message.mediaUrl}" alt="Uploaded image" class="message-media" />`;
+        }
+      }
+
+      div.innerHTML = `
         ${mediaContent}
         ${message.text ? `<p>${message.text}</p>` : ''}
-        <span class="message-time dark:${isSent ? 'sent' : 'received'}">${timeAgo(message.timestamp)}</span>
-      </div>
-    `;
-
-    div.addEventListener('contextmenu', (e) => {
-      e.preventDefault();
-    });
-
-    let longPressTimer;
-    const longPressDuration = 500;
-
-    div.addEventListener('mousedown', (e) => {
-      e.preventDefault();
-      longPressTimer = setTimeout(() => {
-        handleLongPress(div, message, senderData);
-      }, longPressDuration);
-    });
-
-    div.addEventListener('mouseup', () => {
-      clearTimeout(longPressTimer);
-    });
-
-    div.addEventListener('touchstart', (e) => {
-      e.preventDefault();
-      longPressTimer = setTimeout(() => {
-        handleLongPress(div, message, senderData);
-      }, longPressDuration);
-    });
-
-    div.addEventListener('touchend', () => {
-      clearTimeout(longPressTimer);
-    });
-
-    div.addEventListener('touchcancel', () => {
-      clearTimeout(longPressTimer);
-    });
-
-    return div;
-  }
-
-  function handleLongPress(element, message, senderData) {
-    alert(`Long press on message from ${senderData.name || 'User'}: "${message.text || 'Media message'}"`);
-  }
-
-  sendBtn.addEventListener('click', async () => {
-    if (!chatInput.value.trim() || !chatId) return;
-    try {
-      const messageRef = push(ref(db, `messages/${chatId}`));
-      await set(messageRef, {
-        sender: currentUserUid,
-        text: chatInput.value.trim(),
-        timestamp: Date.now(),
-        read: false
-      });
-      const chatSnap = await get(ref(db, `chats/${chatId}/participants/${otherUserUid}`));
-      const currentUnread = chatSnap.val()?.unreadCount || 0;
-      await update(ref(db, `chats/${chatId}/participants/${otherUserUid}`), { unreadCount: currentUnread + 1 });
-      chatInput.value = '';
-      messagesList.scrollTop = messagesList.scrollHeight;
-    } catch (error) {
-      console.error('Error sending message:', error);
+        <span class="message-time">${timeAgo(message.timestamp)}</span>
+      `;
+      return div;
     }
-  });
 
-  chatInput.addEventListener('keypress', async (e) => {
-    if (e.key === 'Enter' && chatInput.value.trim() && chatId) {
-      e.preventDefault();
+    sendBtn.addEventListener('click', async () => {
+      if (!messageInput.value.trim() || !chatId) return;
       try {
         const messageRef = push(ref(db, `messages/${chatId}`));
         await set(messageRef, {
           sender: currentUserUid,
-          text: chatInput.value.trim(),
+          text: messageInput.value.trim(),
           timestamp: Date.now(),
           read: false
         });
         const chatSnap = await get(ref(db, `chats/${chatId}/participants/${otherUserUid}`));
         const currentUnread = chatSnap.val()?.unreadCount || 0;
         await update(ref(db, `chats/${chatId}/participants/${otherUserUid}`), { unreadCount: currentUnread + 1 });
-        chatInput.value = '';
-        messagesList.scrollTop = messagesList.scrollHeight;
+        messageInput.value = '';
+        chatArea.scrollTop = chatArea.scrollHeight;
       } catch (error) {
         console.error('Error sending message:', error);
+        chatArea.innerHTML += `<p class="error">Failed to send message: ${error.message}</p>`;
       }
-    }
-  });
+    });
 
-  uploadBtn.addEventListener('click', () => {
-    const cloudinaryWidget = cloudinary.createUploadWidget(
-      {
-        cloudName: cloudinaryCloudName,
-        uploadPreset: cloudinaryUploadPreset,
-        resourceType: 'auto',
-        clientAllowedFormats: ['jpg', 'png', 'jpeg', 'gif', 'mp4', 'mov'],
-        maxFileSize: 10000000,
-        multiple: false,
-        cropping: false
-      },
-      async (error, result) => {
-        if (error) {
-          console.error('Cloudinary upload error:', error);
-          alert('Failed to upload media.');
-          hideUploadProgress();
-          return;
-        }
-        if (result.event === 'success') {
-          const mediaUrl = result.info.secure_url;
-          const mediaType = result.info.resource_type;
-          try {
-            const messageRef = push(ref(db, `messages/${chatId}`));
-            await set(messageRef, {
-              sender: currentUserUid,
-              text: '',
-              mediaUrl: mediaUrl,
-              mediaType: mediaType,
-              timestamp: Date.now(),
-              read: false
-            });
-            const chatSnap = await get(ref(db, `chats/${chatId}/participants/${otherUserUid}`));
-            const currentUnread = chatSnap.val()?.unreadCount || 0;
-            await update(ref(db, `chats/${chatId}/participants/${otherUserUid}`), { unreadCount: currentUnread + 1 });
-            messagesList.scrollTop = messagesList.scrollHeight;
-          } catch (error) {
-            console.error('Error saving media message:', error);
-            alert('Failed to save media message.');
+    messageInput.addEventListener('keypress', async (e) => {
+      if (e.key === 'Enter' && messageInput.value.trim() && chatId) {
+        e.preventDefault();
+        sendBtn.click();
+      }
+    });
+
+    async function uploadImage(file, isWallpaper) {
+      if (!file) return;
+      if (file.size > 10000000) {
+        chatArea.innerHTML += `<p class="error">File too large (max 10MB).</p>`;
+        return;
+      }
+      if (!['image/jpeg', 'image/png', 'image/gif'].includes(file.type)) {
+        chatArea.innerHTML += `<p class="error">Only JPEG, PNG, or GIF images are allowed.</p>`;
+        return;
+      }
+
+      try {
+        showUploadProgress(0);
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('upload_preset', cloudinaryUploadPreset);
+
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', cloudinaryApiUrl, true);
+
+        xhr.upload.onprogress = (event) => {
+          if (event.lengthComputable) {
+            const percent = Math.round((event.loaded / event.total) * 100);
+            showUploadProgress(percent);
+          }
+        };
+
+        xhr.onload = async () => {
+          if (xhr.status === 200) {
+            const response = JSON.parse(xhr.responseText);
+            const mediaUrl = response.secure_url;
+            try {
+              if (isWallpaper) {
+                await set(ref(db, `chats/${chatId}/wallpaper`), mediaUrl);
+                chatArea.style.backgroundImage = `url(${mediaUrl})`;
+              } else {
+                const messageRef = push(ref(db, `messages/${chatId}`));
+                await set(messageRef, {
+                  sender: currentUserUid,
+                  text: '',
+                  mediaUrl: mediaUrl,
+                  mediaType: 'image',
+                  timestamp: Date.now(),
+                  read: false
+                });
+                const chatSnap = await get(ref(db, `chats/${chatId}/participants/${otherUserUid}`));
+                const currentUnread = chatSnap.val()?.unreadCount || 0;
+                await update(ref(db, `chats/${chatId}/participants/${otherUserUid}`), { unreadCount: currentUnread + 1 });
+                chatArea.scrollTop = chatArea.scrollHeight;
+              }
+            } catch (error) {
+              console.error(`Error saving ${isWallpaper ? 'wallpaper' : 'image message'}:`, error);
+              chatArea.innerHTML += `<p class="error">Failed to save ${isWallpaper ? 'wallpaper' : 'image message'}.</p>`;
+            }
+          } else {
+            console.error('Cloudinary upload error:', xhr.statusText);
+            chatArea.innerHTML += `<p class="error">Failed to upload image.</p>`;
           }
           hideUploadProgress();
-        } else if (result.event === 'upload-added') {
-          showUploadProgress(0);
-        } else if (result.event === 'progress') {
-          const percent = Math.round((result.info.loaded / result.info.total) * 100);
-          showUploadProgress(percent);
-        }
-      }
-    );
-    cloudinaryWidget.open();
-  });
+        };
 
-  backBtn.addEventListener('click', () => {
-    window.location.href = 'friends.html';
-  });
-</script>
+        xhr.onerror = () => {
+          console.error('Cloudinary upload error:', xhr.statusText);
+          chatArea.innerHTML += `<p class="error">Failed to upload image.</p>`;
+          hideUploadProgress();
+        };
+
+        xhr.send(formData);
+      } catch (error) {
+        console.error('Error uploading image:', error);
+        chatArea.innerHTML += `<p class="error">Failed to upload image: ${error.message}</p>`;
+        hideUploadProgress();
+      }
+    }
+
+    uploadBtn.addEventListener('click', () => {
+      fileInput.click();
+    });
+
+    fileInput.addEventListener('change', () => {
+      uploadImage(fileInput.files[0], false);
+      fileInput.value = '';
+    });
+
+    changeWallpaperBtn.addEventListener('click', () => {
+      wallpaperInput.click();
+      kebabMenu.classList.remove("active");
+    });
+
+    wallpaperInput.addEventListener('change', () => {
+      uploadImage(wallpaperInput.files[0], true);
+      wallpaperInput.value = '';
+    });
+
+    deleteChatBtn.addEventListener('click', async () => {
+      if (!confirm('Are you sure you want to delete this chat? This action cannot be undone.')) return;
+      try {
+        showLoading();
+        await remove(ref(db, `messages/${chatId}`));
+        await remove(ref(db, `chats/${chatId}`));
+        window.location.href = 'index.html';
+      } catch (error) {
+        console.error('Error deleting chat:', error);
+        chatArea.innerHTML += `<p class="error">Failed to delete chat: ${error.message}</p>`;
+        hideLoading();
+      }
+      kebabMenu.classList.remove("active");
+    });
+
+    backBtn.addEventListener('click', () => {
+      window.location.href = 'index.html';
+    });
+  </script>
 </body>
 </html>
