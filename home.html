@@ -249,6 +249,57 @@
       border-radius: 8px;
     }
 
+    /* Post Footer */
+.post-footer {
+  padding: 0.75rem 1rem;
+  display: flex;
+  justify-content: flex-end;
+  border-top: 1px solid var(--border);
+}
+
+/* Follow Button in Post */
+.post-follow-btn {
+  padding: 0.5rem 1rem;
+  border-radius: 9999px;
+  font-size: clamp(0.7rem, 2.5vw, 0.75rem);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.2s ease, color 0.2s ease;
+  border: 1px solid var(--border);
+  background: var(--white);
+  color: var(--text-dark);
+}
+
+.post-follow-btn.follow {
+  background: var(--primary-red);
+  color: var(--white);
+  border: none;
+}
+
+.post-follow-btn.follow:hover {
+  background: #d43f4e;
+  transform: scale(1.05);
+}
+
+.post-follow-btn.following {
+  background: var(--white);
+  color: var(--primary-red);
+}
+
+.post-follow-btn.following:hover {
+  background: rgba(237, 73, 86, 0.1);
+  transform: scale(1.05);
+}
+
+@media (max-width: 414px) {
+  .post-follow-btn {
+    padding: 0.4rem 0.8rem;
+    font-size: clamp(0.65rem, 2vw, 0.7rem);
+  }
+}
+
+    
+
     /* Friends, Search, Profile Tabs */
     .friend-item {
       display: flex;
@@ -1172,15 +1223,14 @@
     });
 
     
-
-      async function loadPosts() {
+async function loadPosts() {
   const postsContainer = document.getElementById("posts-container");
   const postsRef = query(ref(db, "posts"), orderByChild("timestamp"), limitToLast(20));
 
   showLoading();
 
   try {
-    const [postsSnap, usersSnap] = await Promise.all([
+    const [postsSnap, usersSnap, followingSnap] = await Promise.all([
       Promise.race([
         new Promise(resolve => onValue(postsRef, resolve, { onlyOnce: true })),
         new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout loading posts")), 10000))
@@ -1188,11 +1238,16 @@
       Promise.race([
         get(ref(db, "users")),
         new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout loading users")), 10000))
+      ]),
+      Promise.race([
+        get(ref(db, `users/${currentUserUid}/following`)),
+        new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout loading following")), 10000))
       ])
     ]);
 
     const postsData = postsSnap.val() || {};
     const users = usersSnap.val() || {};
+    const followingData = followingSnap.val() || {};
 
     postsContainer.innerHTML = "";
     const posts = Object.entries(postsData)
@@ -1223,6 +1278,8 @@
     console.log(`Fetched ${finalPosts.length} posts and ${Object.keys(users).length} users`);
 
     finalPosts.forEach(post => {
+      const isFollowing = !!followingData[post.userId];
+      const showFollowButton = post.userId !== currentUserUid; // Only show for non-current user posts
       const postElement = document.createElement("div");
       postElement.className = "post";
       postElement.id = `post-${post.id}`;
@@ -1258,6 +1315,13 @@
         </div>
         ${post.caption ? `<div class="post-caption"><strong>${users[post.userId]?.username || 'Unknown'}:</strong> ${post.caption}</div>` : ''}
         ${post.song ? `<div class="post-caption song-display"><span>${post.song.title} - ${post.song.artist}</span></div>` : ''}
+        ${showFollowButton ? `
+          <div class="post-footer">
+            <button class="post-follow-btn ${isFollowing ? 'following' : 'follow'}" data-user-id="${post.userId}">
+              ${isFollowing ? 'Following' : 'Follow'}
+            </button>
+          </div>
+        ` : ''}
       `;
 
       const likeBtn = postElement.querySelector(".like-btn");
@@ -1295,8 +1359,16 @@
         });
       });
 
+      if (showFollowButton) {
+        const followBtn = postElement.querySelector(".post-follow-btn");
+        followBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          toggleFollow(post.userId, followBtn, 'posts-container');
+        });
+      }
+
       postElement.addEventListener("click", (e) => {
-        if (e.target.closest('.post-actions button, .song-display, .post-header img, .post-header .user-info span:first-child')) return;
+        if (e.target.closest('.post-actions button, .song-display, .post-header img, .post-header .user-info span:first-child, .post-follow-btn')) return;
         console.log("Navigating to post:", post.id);
         location.href = `post.html?id=${post.id}`;
         pauseAllMedia();
@@ -1311,6 +1383,7 @@
     hideLoading();
   }
 }
+      
 
     function toggleLike(postId, button) {
       const userId = currentUserUid;
