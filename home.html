@@ -269,6 +269,7 @@
       width: 100%;
       height: 30px;
       margin-top: 0.5rem;
+      border-radius: 8px;
     }
 
     /* Friends, Search, Profile Tabs */
@@ -669,17 +670,17 @@
     /* Floating Action Button */
     .fab {
       position: fixed;
-      bottom: 2rem;
-      right: 2rem;
+      bottom: 1.5rem;
+      right: 1.5rem;
       background: var(--primary-red);
       color: var(--white);
-      width: 60px;
-      height: 60px;
-      border-radius:  innego
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
       display: flex;
       align-items: center;
       justify-content: center;
-      box-shadow: 0 4px 12pxGenerally rgba(237, 73, 86, 0.3);
+      box-shadow: 0 4px 12px rgba(237, 73, 86, 0.3);
       z-index: 20;
       transition: transform 0.2s ease, box-shadow 0.2s ease;
     }
@@ -692,6 +693,7 @@
     .fab svg {
       width: 28px;
       height: 28px;
+      stroke-width: 2.5;
     }
 
     /* Responsive Design */
@@ -778,8 +780,8 @@
       }
 
       .fab {
-        width: 52px;
-        height Cardoso: 52px;
+        width: 48px;
+        height: 48px;
       }
 
       .fab svg {
@@ -840,7 +842,7 @@
   </div>
 
   <a href="upload.html" class="fab" aria-label="Upload new media">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
       <path d="M12 5v14m7-7H5"/>
     </svg>
   </a>
@@ -918,6 +920,7 @@
     const editProfileSubmit = document.getElementById("edit-profile-submit");
     const editProfileError = document.getElementById("edit-profile-error");
     let currentPostId = null;
+    let currentPlayingAudio = null;
 
     const CLOUDINARY_UPLOAD_PRESET = "banter_box";
     const CLOUDINARY_CLOUD_NAME = "dqkujefxj";
@@ -934,6 +937,21 @@
     function hideError(element) {
       element.textContent = "";
       element.style.display = "none";
+    }
+
+    function pauseAllMedia(exceptAudioId = null) {
+      const allMedia = document.querySelectorAll('audio');
+      allMedia.forEach(media => {
+        if (media.id !== exceptAudioId && !media.paused) {
+          media.pause();
+          media.currentTime = 0;
+        }
+      });
+      if (exceptAudioId) {
+        currentPlayingAudio = document.getElementById(exceptAudioId);
+      } else {
+        currentPlayingAudio = null;
+      }
     }
 
     onAuthStateChanged(auth, (user) => {
@@ -961,6 +979,7 @@
         btn.classList.add("active");
         btn.setAttribute("aria-selected", "true");
         document.getElementById(btn.dataset.tab).classList.add("active");
+        pauseAllMedia(); // Pause all audio when switching tabs
       });
     });
 
@@ -974,23 +993,13 @@
       return Math.floor(diff / 86400000) + "d ago";
     }
 
-    function pauseAllMedia(currentContainerId) {
-      const allMedia = document.querySelectorAll('audio');
-      allMedia.forEach(media => {
-        if (media.closest(`#${currentContainerId}`)) return;
-        if (!media.paused) {
-          media.pause();
-          media.currentTime = 0;
-        }
-      });
-    }
-
     async function showCommentSheet(postId) {
       currentPostId = postId;
       commentSheet.classList.remove("hidden");
       commentSheet.classList.add("open");
       commentsList.innerHTML = '<div class="loading">Loading comments...</div>';
       showLoading();
+      pauseAllMedia(); // Pause all audio when opening comments
       try {
         const postSnap = await Promise.race([
           get(ref(db, `posts/${postId}`)),
@@ -1121,6 +1130,7 @@
             `;
             storyItem.addEventListener("click", () => {
               console.log("Viewing story:", story.id);
+              pauseAllMedia();
               if (!story.viewedBy?.includes(currentUserUid)) {
                 update(ref(db, `stories/${story.id}`), {
                   viewedBy: [...(story.viewedBy || []), currentUserUid]
@@ -1146,6 +1156,27 @@
 
         console.log(`Fetched ${posts.length} posts and ${Object.keys(users).length} users`);
 
+        // Set up Intersection Observer for autoplay
+        const observer = new IntersectionObserver((entries) => {
+          entries.forEach(entry => {
+            const audio = entry.target.querySelector('audio');
+            if (!audio) return;
+            if (entry.isIntersecting && entry.intersectionRatio >= 0.5) {
+              pauseAllMedia(audio.id);
+              audio.play().catch(e => console.error("Audio autoplay error:", e.message));
+            } else if (!entry.isIntersecting && !audio.paused) {
+              audio.pause();
+              audio.currentTime = 0;
+              if (currentPlayingAudio === audio) {
+                currentPlayingAudio = null;
+              }
+            }
+          });
+        }, {
+          root: null,
+          threshold: 0.5 // Trigger when 50% of the post is visible
+        });
+
         posts.forEach(post => {
           const postElement = document.createElement("div");
           postElement.className = "post";
@@ -1169,7 +1200,7 @@
                 </svg>
               </button>
               ${post.song ? `
-                <button class="play-song-btn" aria-label="Play song">
+                <button class="play-song-btn" aria-label="Toggle song playback">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M9 18V5l12-2v13"></path>
                     <circle cx="6" cy="18" r="3"></circle>
@@ -1186,13 +1217,13 @@
           likeBtn.addEventListener("click", (e) => {
             e.stopPropagation();
             toggleLike(post.id, likeBtn);
+            pauseAllMedia();
           });
 
           const commentBtn = postElement.querySelector(".comment-btn");
           commentBtn.addEventListener("click", (e) => {
             e.stopPropagation();
             showCommentSheet(post.id);
-            pauseAllMedia("home");
           });
 
           if (post.song) {
@@ -1202,22 +1233,28 @@
             const playSongBtn = postElement.querySelector(".play-song-btn");
             playSongBtn.addEventListener("click", (e) => {
               e.stopPropagation();
-              pauseAllMedia("home");
+              pauseAllMedia(audio.id);
               if (audio.paused) {
                 audio.play().catch(e => console.error("Audio play error:", e.message));
               } else {
                 audio.pause();
+                audio.currentTime = 0;
+                currentPlayingAudio = null;
               }
             });
             postElement.querySelector(".song-display").addEventListener("click", (e) => {
               e.stopPropagation();
-              pauseAllMedia("home");
+              pauseAllMedia(audio.id);
               if (audio.paused) {
                 audio.play().catch(e => console.error("Audio play error:", e.message));
               } else {
                 audio.pause();
+                audio.currentTime = 0;
+                currentPlayingAudio = null;
               }
             });
+            // Observe post for autoplay
+            observer.observe(postElement);
           }
 
           postElement.querySelectorAll(".post-header img, .post-header span").forEach(el => {
@@ -1225,6 +1262,7 @@
               e.stopPropagation();
               console.log("Navigating to profile:", post.userId);
               location.href = `profile.html?uid=${post.userId}`;
+              pauseAllMedia();
             });
           });
 
@@ -1232,6 +1270,7 @@
             if (e.target.closest('.post-actions button, .song-display, .post-header img, .post-header span')) return;
             console.log("Navigating to post:", post.id);
             location.href = `post.html?id=${post.id}`;
+            pauseAllMedia();
           });
 
           postsContainer.appendChild(postElement);
@@ -1308,6 +1347,7 @@
             friendItem.addEventListener("click", () => {
               console.log("Navigating to profile:", friendUid);
               location.href = `profile.html?uid=${friendUid}`;
+              pauseAllMedia();
             });
             friendsContainer.appendChild(friendItem);
           }
@@ -1403,6 +1443,7 @@
               e.stopPropagation();
               console.log("Navigating to post:", post.id);
               location.href = `post.html?id=${post.id}`;
+              pauseAllMedia();
             });
             searchResults.appendChild(postElement);
           }
@@ -1486,6 +1527,7 @@
             e.stopPropagation();
             console.log("Navigating to post:", post.id);
             location.href = `post.html?id=${post.id}`;
+            pauseAllMedia();
           });
           profileContent.appendChild(postElement);
         }
@@ -1509,6 +1551,7 @@
     editProfileClose.addEventListener("click", () => {
       editProfileModal.classList.remove("open");
       setTimeout(() => editProfileModal.classList.add("hidden"), 300);
+      pauseAllMedia();
     });
 
     editProfileSubmit.addEventListener("click", async () => {
