@@ -8,13 +8,14 @@
   <style>
     :root {
       --primary-red: #ED4956;
-      --text-dark: #1a1a1a;
-      --text-light: #6b7280;
-      --border: #e5e7eb;
+      --text-dark: #262626;
+      --text-light: #8e8e8e;
+      --border: #dbdbdb;
       --white: #ffffff;
-      --background: #f3f4f6;
+      --background: #fafafa;
       --water-blue: #00a3e0;
       --water-light: #70c4e8;
+      --gradient: linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888);
     }
 
     * {
@@ -29,7 +30,7 @@
     }
 
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
       background: linear-gradient(135deg, var(--water-blue), var(--water-light), var(--background));
       color: var(--text-dark);
       line-height: 1.5;
@@ -68,7 +69,7 @@
     }
 
     header {
-      padding: 1rem 0;
+      padding: 0.75rem 0;
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -123,19 +124,14 @@
       object-fit: cover;
       margin: 0 auto 0.5rem;
       border: 2px solid var(--white);
-      background: linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888);
+      background: var(--gradient);
       padding: 2px;
     }
 
     .profile-username {
       font-size: clamp(1rem, 3vw, 1.2rem);
       font-weight: 600;
-      cursor: pointer;
-      transition: color 0.2s ease;
-    }
-
-    .profile-username:hover {
-      color: var(--water-blue);
+      color: var(--text-dark);
     }
 
     .profile-bio {
@@ -223,7 +219,7 @@
     .profile-posts {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-      gap: 2px;
+      gap: 0.5rem;
     }
 
     .profile-post {
@@ -284,18 +280,10 @@
       visibility: visible;
     }
 
-    .loading-spinner div {
+    .loading-spinner svg {
       width: 40px;
       height: 40px;
-      border: 4px solid var(--white);
-      border-top: 4px solid var(--primary-red);
-      border-radius: 50%;
-      animation: spin 1s linear infinite;
-    }
-
-    @keyframes spin {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
+      color: var(--primary-red);
     }
 
     .error {
@@ -345,14 +333,17 @@
 
       .profile-posts {
         grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-        gap: 1px;
+        gap: 0.3rem;
       }
     }
   </style>
 </head>
 <body>
   <div class="loading-spinner" id="loading-spinner">
-    <div></div>
+    <svg class="animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4z"/>
+    </svg>
   </div>
   <div class="container">
     <header>
@@ -395,7 +386,7 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
     import { getDatabase, ref, get, query, orderByChild, equalTo, set } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
-    import { getAuth } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
+    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
@@ -514,16 +505,6 @@
         document.getElementById("follower-count").textContent = Object.keys(followerData).length;
         document.getElementById("friend-count").textContent = Object.keys(friendData).length;
 
-        // Make username clickable
-        const usernameElements = document.querySelectorAll(".profile-username");
-        usernameElements.forEach(el => {
-          el.addEventListener("click", (e) => {
-            e.stopPropagation();
-            console.log(`Navigating to profile: ${targetUid} from username`);
-            location.href = `profile.html?uid=${targetUid}`;
-          });
-        });
-
         // Follow button
         if (targetUid !== currentUserUid) {
           const followBtn = document.getElementById("profile-follow-btn");
@@ -544,7 +525,7 @@
         const posts = Object.entries(postsData)
           .map(([id, post]) => ({ id, ...post }))
           .filter(post => post.imageUrls?.length > 0 || post.imageUrl)
-          .sort((a, b) => b.timestamp - a.timestamp); // Newest first
+          .sort((a, b) => b.timestamp - a.timestamp);
 
         if (posts.length === 0) {
           profilePosts.innerHTML = '<div class="placeholder">No posts available.</div>';
@@ -553,7 +534,7 @@
             const imageUrl = Array.isArray(post.imageUrls) ? post.imageUrls[0] : post.imageUrl;
             const postElement = document.createElement("div");
             postElement.className = "profile-post";
-            postElement.style.animationDelay = `${index * 0.1}s`; // Staggered animation
+            postElement.style.animationDelay = `${index * 0.1}s`;
             postElement.innerHTML = `
               <img src="${imageUrl}" alt="Post thumbnail" onerror="this.src='https://via.placeholder.com/150?text=Image+Not+Found';">
             `;
@@ -579,12 +560,12 @@
           loadProfile();
         } else {
           console.log("No user logged in, redirecting to login");
-          location.href = "index.html"; // Redirect to splash screen
+          location.href = "index.html";
         }
       });
 
       document.querySelector(".back-btn").addEventListener("click", () => {
-        location.href = "home.html"; // Changed to home.html for consistency
+        location.href = "home.html";
       });
     });
   </script>
