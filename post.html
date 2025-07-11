@@ -345,6 +345,18 @@
       opacity: 0;
       pointer-events: none;
     }
+    .spinner {
+      width: 40px;
+      height: 40px;
+      border: 4px solid rgba(255, 255, 255, 0.3);
+      border-top: 4px solid var(--primary-red);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
     .error-message {
       position: absolute;
       bottom: 1rem;
@@ -356,6 +368,60 @@
       border-radius: 8px;
       font-size: clamp(0.8rem, 3.5vw, 0.85rem);
       z-index: 3;
+    }
+    .alert-dialog {
+      display: none;
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0, 0, 0, 0.9);
+      border-radius: 12px;
+      padding: 1.5rem;
+      max-width: 300px;
+      width: 90%;
+      color: var(--text-dark);
+      z-index: 60;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+      text-align: center;
+    }
+    .alert-dialog.active {
+      display: block;
+    }
+    .alert-dialog h2 {
+      font-size: clamp(1rem, 4vw, 1.2rem);
+      margin: 0 0 1rem 0;
+    }
+    .alert-dialog p {
+      font-size: clamp(0.85rem, 3.5vw, 0.9rem);
+      margin: 0 0 1.5rem 0;
+    }
+    .alert-dialog-buttons {
+      display: flex;
+      justify-content: space-between;
+      gap: 1rem;
+    }
+    .alert-dialog button {
+      flex: 1;
+      padding: 0.75rem;
+      border: none;
+      border-radius: 8px;
+      font-size: clamp(0.8rem, 3.5vw, 0.85rem);
+      cursor: pointer;
+    }
+    .alert-dialog .cancel-btn {
+      background: var(--text-light);
+      color: var(--text-dark);
+    }
+    .alert-dialog .cancel-btn:hover {
+      background: #a0a0a0;
+    }
+    .alert-dialog .delete-btn {
+      background: var(--primary-red);
+      color: var(--white);
+    }
+    .alert-dialog .delete-btn:hover {
+      background: #d43f4e;
     }
     @media (max-width: 414px) {
       .reels-container {
@@ -386,16 +452,25 @@
         width: 20px;
         height: 20px;
       }
+      .alert-dialog {
+        padding: 1rem;
+        max-width: 250px;
+      }
     }
   </style>
 </head>
 <body>
   <div class="reels-container" id="reels-container"></div>
   <div id="loading-overlay" class="loading-overlay">
-    <svg class="animate-spin h-8 w-8 text-red-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4z"/>
-    </svg>
+    <div class="spinner"></div>
+  </div>
+  <div id="alert-dialog" class="alert-dialog" aria-live="assertive">
+    <h2>Delete Reel</h2>
+    <p>Are you sure you want to delete this reel?</p>
+    <div class="alert-dialog-buttons">
+      <button type="button" class="cancel-btn">Cancel</button>
+      <button type="button" class="delete-btn">Delete</button>
+    </div>
   </div>
   <p id="error-message" class="error-message" aria-live="polite"></p>
 
@@ -421,9 +496,13 @@
     const reelsContainer = document.getElementById("reels-container");
     const loadingOverlay = document.getElementById("loading-overlay");
     const errorMessage = document.getElementById("error-message");
+    const alertDialog = document.getElementById("alert-dialog");
+    const alertCancelBtn = alertDialog.querySelector(".cancel-btn");
+    const alertDeleteBtn = alertDialog.querySelector(".delete-btn");
 
     let reels = [];
     let currentReelIndex = 0;
+    let pendingDeleteReelId = null;
 
     function formatTime(seconds) {
       const min = Math.floor(seconds / 60);
@@ -440,6 +519,16 @@
         console.error("Error fetching profile picture:", error);
         return 'https://via.placeholder.com/32';
       }
+    }
+
+    function showAlertDialog(reelId) {
+      pendingDeleteReelId = reelId;
+      alertDialog.classList.add("active");
+    }
+
+    function hideAlertDialog() {
+      alertDialog.classList.remove("active");
+      pendingDeleteReelId = null;
     }
 
     function showReel(index) {
@@ -461,7 +550,9 @@
 
         if (i === index) {
           reel.classList.add("active");
+          loadingOverlay.classList.remove("hidden"); // Show spinner
           video.play().catch(() => {
+            loadingOverlay.classList.add("hidden");
             errorMessage.textContent = "Error playing video.";
             setTimeout(() => (errorMessage.textContent = ""), 3000);
           });
@@ -473,6 +564,15 @@
             videoSeekBar.value = video.currentTime;
             videoTimeDisplay.textContent = `${formatTime(video.currentTime)} / ${formatTime(video.duration || 0)}`;
           });
+          video.addEventListener("waiting", () => {
+            loadingOverlay.classList.remove("hidden"); // Show spinner when buffering
+          }, { once: true });
+          video.addEventListener("playing", () => {
+            loadingOverlay.classList.add("hidden"); // Hide spinner when playing
+          }, { once: true });
+          video.addEventListener("canplay", () => {
+            loadingOverlay.classList.add("hidden"); // Hide spinner when video can play
+          }, { once: true });
           if (currentPlaybackState && currentPlaybackState.reelId === reel.dataset.reelId) {
             video.currentTime = currentPlaybackState.time;
             video.muted = currentPlaybackState.muted;
@@ -557,6 +657,7 @@
         }
       });
       video.addEventListener("error", () => {
+        loadingOverlay.classList.add("hidden");
         errorMessage.textContent = "Error loading video.";
         setTimeout(() => (errorMessage.textContent = ""), 3000);
       });
@@ -567,18 +668,8 @@
 
       if (isOwner) {
         const deleteBtn = reel.querySelector(".delete-btn");
-        deleteBtn.addEventListener("click", async () => {
-          if (confirm("Are you sure you want to delete this reel?")) {
-            try {
-              const reelRef = ref(db, `reels/${reelId}`);
-              await remove(reelRef);
-              errorMessage.textContent = "Reel deleted successfully.";
-              setTimeout(() => (errorMessage.textContent = ""), 3000);
-            } catch (error) {
-              errorMessage.textContent = "Error deleting reel: " + error.message;
-              setTimeout(() => (errorMessage.textContent = ""), 3000);
-            }
-          }
+        deleteBtn.addEventListener("click", () => {
+          showAlertDialog(reelId);
         });
       }
 
@@ -586,11 +677,34 @@
       return reel;
     }
 
+    alertCancelBtn.addEventListener("click", () => {
+      hideAlertDialog();
+    });
+
+    alertDeleteBtn.addEventListener("click", async () => {
+      if (pendingDeleteReelId) {
+        try {
+          loadingOverlay.classList.remove("hidden"); // Show spinner during deletion
+          const reelRef = ref(db, `reels/${pendingDeleteReelId}`);
+          await remove(reelRef);
+          errorMessage.textContent = "Reel deleted successfully.";
+          setTimeout(() => (errorMessage.textContent = ""), 3000);
+        } catch (error) {
+          errorMessage.textContent = "Error deleting reel: " + error.message;
+          setTimeout(() => (errorMessage.textContent = ""), 3000);
+        } finally {
+          loadingOverlay.classList.add("hidden");
+          hideAlertDialog();
+        }
+      }
+    });
+
     onAuthStateChanged(auth, (user) => {
       if (!user) {
         location.href = "index.html";
       } else {
         const reelsRef = ref(db, "reels");
+        loadingOverlay.classList.remove("hidden"); // Show spinner during initial load
         onValue(reelsRef, async (snapshot) => {
           const currentReel = reels[currentReelIndex];
           const currentVideo = currentReel?.querySelector("video");
@@ -634,9 +748,9 @@
           }
           loadingOverlay.classList.add("hidden");
         }, (error) => {
+          loadingOverlay.classList.add("hidden");
           errorMessage.textContent = "Error loading reels: " + error.message;
           setTimeout(() => (errorMessage.textContent = ""), 3000);
-          loadingOverlay.classList.add("hidden");
         });
       }
     });
