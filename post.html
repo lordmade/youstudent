@@ -510,6 +510,15 @@
       return `${min}:${sec < 10 ? '0' : ''}${sec}`;
     }
 
+    // Fisher-Yates shuffle algorithm to randomize array
+    function shuffleArray(array) {
+      for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+      }
+      return array;
+    }
+
     async function getUserProfilePic(userId) {
       try {
         const userRef = ref(db, `users/${userId}/photoURL`);
@@ -625,152 +634,4 @@
           ` : ""}
           <div class="video-player">
             <input type="range" class="video-seek-bar" min="0" max="100" value="0" aria-label="Seek video"/>
-            <span class="video-time-display">0:00 / 0:00</span>
-          </div>
-          <div class="bottom-sheet">
-            <div class="bottom-sheet-header">
-              <h2>Comments</h2>
-              <button type="button" class="close-btn" aria-label="Close comments">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M18 6L6 18M6 6l12 12"/>
-                </svg>
-              </button>
-            </div>
-            <div class="comments-section" aria-live="polite"></div>
-            <div class="comment-input">
-              <input type="text" placeholder="Add a comment..." aria-label="Add a comment"/>
-              <button type="button">Post</button>
-            </div>
-          </div>
-        </div>
-      `;
-
-      const video = reel.querySelector("video");
-      video.addEventListener("click", () => {
-        const muteIcon = reel.querySelector(".mute-icon");
-        video.muted = !video.muted;
-        if (video.muted) {
-          muteIcon.classList.add("active");
-          setTimeout(() => muteIcon.classList.remove("active"), 1000);
-        } else {
-          muteIcon.classList.remove("active");
-        }
-      });
-      video.addEventListener("error", () => {
-        loadingOverlay.classList.add("hidden");
-        errorMessage.textContent = "Error loading video.";
-        setTimeout(() => (errorMessage.textContent = ""), 3000);
-      });
-      const videoSeekBar = reel.querySelector(".video-seek-bar");
-      videoSeekBar.addEventListener("input", () => {
-        video.currentTime = videoSeekBar.value;
-      });
-
-      if (isOwner) {
-        const deleteBtn = reel.querySelector(".delete-btn");
-        deleteBtn.addEventListener("click", () => {
-          showAlertDialog(reelId);
-        });
-      }
-
-      reelsContainer.appendChild(reel);
-      return reel;
-    }
-
-    alertCancelBtn.addEventListener("click", () => {
-      hideAlertDialog();
-    });
-
-    alertDeleteBtn.addEventListener("click", async () => {
-      if (pendingDeleteReelId) {
-        try {
-          loadingOverlay.classList.remove("hidden"); // Show spinner during deletion
-          const reelRef = ref(db, `reels/${pendingDeleteReelId}`);
-          await remove(reelRef);
-          errorMessage.textContent = "Reel deleted successfully.";
-          setTimeout(() => (errorMessage.textContent = ""), 3000);
-        } catch (error) {
-          errorMessage.textContent = "Error deleting reel: " + error.message;
-          setTimeout(() => (errorMessage.textContent = ""), 3000);
-        } finally {
-          loadingOverlay.classList.add("hidden");
-          hideAlertDialog();
-        }
-      }
-    });
-
-    onAuthStateChanged(auth, (user) => {
-      if (!user) {
-        location.href = "index.html";
-      } else {
-        const reelsRef = ref(db, "reels");
-        loadingOverlay.classList.remove("hidden"); // Show spinner during initial load
-        onValue(reelsRef, async (snapshot) => {
-          const currentReel = reels[currentReelIndex];
-          const currentVideo = currentReel?.querySelector("video");
-          const currentPlaybackState = currentVideo ? {
-            time: currentVideo.currentTime,
-            muted: currentVideo.muted,
-            reelId: currentReel.dataset.reelId
-          } : null;
-
-          reels = [];
-          reelsContainer.innerHTML = "";
-          const data = snapshot.val();
-          if (data) {
-            const sortedReels = Object.entries(data).sort(([, a], [, b]) => b.timestamp - a.timestamp);
-            for (const [reelId, reelData] of sortedReels) {
-              if (reelData.videoUrl) {
-                reels.push(await createReelElement(reelData, reelId));
-              }
-            }
-            if (reels.length > 0) {
-              let newIndex = 0;
-              if (currentPlaybackState) {
-                newIndex = reels.findIndex(reel => reel.dataset.reelId === currentPlaybackState.reelId);
-                if (newIndex === -1) newIndex = 0;
-              }
-              currentReelIndex = Math.min(newIndex, reels.length - 1);
-              showReel(currentReelIndex);
-              const newCurrentReel = reels[currentReelIndex];
-              const newCurrentVideo = newCurrentReel.querySelector("video");
-              if (currentPlaybackState && currentPlaybackState.reelId === newCurrentReel.dataset.reelId) {
-                newCurrentVideo.currentTime = currentPlaybackState.time;
-                newCurrentVideo.muted = currentPlaybackState.muted;
-              }
-            } else {
-              errorMessage.textContent = "No reels available.";
-              setTimeout(() => (errorMessage.textContent = ""), 3000);
-            }
-          } else {
-            errorMessage.textContent = "No reels available.";
-            setTimeout(() => (errorMessage.textContent = ""), 3000);
-          }
-          loadingOverlay.classList.add("hidden");
-        }, (error) => {
-          loadingOverlay.classList.add("hidden");
-          errorMessage.textContent = "Error loading reels: " + error.message;
-          setTimeout(() => (errorMessage.textContent = ""), 3000);
-        });
-      }
-    });
-
-    let touchStartY = 0;
-    let touchEndY = 0;
-
-    reelsContainer.addEventListener("touchstart", (e) => {
-      touchStartY = e.changedTouches[0].screenY;
-    });
-
-    reelsContainer.addEventListener("touchend", (e) => {
-      touchEndY = e.changedTouches[0].screenY;
-      const deltaY = touchStartY - touchEndY;
-      if (deltaY > 50 && currentReelIndex < reels.length - 1) {
-        showReel(currentReelIndex + 1);
-      } else if (deltaY < -50 && currentReelIndex > 0) {
-        showReel(currentReelIndex - 1);
-      }
-    });
-  </script>
-</body>
-</html>
+            <span class="video-time
