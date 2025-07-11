@@ -247,22 +247,8 @@
       50% { transform: translate(-50%, -50%) scale(1.2); opacity: 1; }
       100% { transform: translate(-50%, -50%) scale(1); opacity: 0; }
     }
-    .comments-button {
-      background: rgba(0, 0, 0, 0.7);
-      color: var(--text-dark);
-      border: none;
-      border-radius: 9999px;
-      padding: 0.5rem 1.5rem;
-      font-size: clamp(0.8rem, 3.5vw, 0.85rem);
-      cursor: pointer;
-      margin: 0.5rem auto;
-      display: block;
-      text-align: center;
-    }
-    .comments-button:hover {
-      background: rgba(0, 0, 0, 0.9);
-    }
     .bottom-sheet {
+      display: none; /* Hidden as comment button is removed */
       position: fixed;
       bottom: 0;
       left: 0;
@@ -368,7 +354,7 @@
       color: var(--text-light);
     }
     .comment-input {
-      display: flex;
+      display: none; /* Hidden as comment button is removed */
       gap: 0.5rem;
       padding: 0.5rem 1rem;
       border-top: 1px solid var(--border);
@@ -494,7 +480,7 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
     import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
-    import { getDatabase, ref, onValue, set, remove, push } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
+    import { getDatabase, ref, onValue, set, remove } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
@@ -505,7 +491,6 @@
       messagingSenderId: "658673187627",
       appId: "1:658673187627:web:6e4c29af661785f0afa36e"
     };
-
 
     const app = initializeApp(firebaseConfig);
     const auth = getAuth();
@@ -628,7 +613,8 @@
       const currentVideo = currentReel?.querySelector("video");
       const currentPlaybackState = currentVideo ? {
         time: currentVideo.currentTime,
-        paused: currentVideo.paused
+        paused: currentVideo.paused,
+        reelId: currentReel.dataset.reelId
       } : null;
       const wasAudioPlaying = audio && !audio.paused;
 
@@ -637,7 +623,6 @@
         const pauseIcon = reel.querySelector(".pause-icon");
         const videoSeekBar = reel.querySelector(".video-seek-bar");
         const videoTimeDisplay = reel.querySelector(".video-time-display");
-        const bottomSheet = reel.querySelector(".bottom-sheet");
         const mediaPlayer = reel.querySelector(".media-player");
 
         if (i === index) {
@@ -659,7 +644,7 @@
             videoTimeDisplay.textContent = `${formatTime(video.currentTime)} / ${formatTime(video.duration || 0)}`;
           });
           // Restore or start playback
-          if (currentReel === reel && currentPlaybackState) {
+          if (currentPlaybackState && currentPlaybackState.reelId === reel.dataset.reelId) {
             video.currentTime = currentPlaybackState.time;
             if (!currentPlaybackState.paused) {
               video.play().catch(() => {
@@ -685,7 +670,6 @@
               });
             }
           }
-          bottomSheet.classList.remove("active");
         } else {
           reel.classList.remove("active");
           video.pause();
@@ -693,7 +677,6 @@
           video.volume = 1;
           pauseIcon.classList.remove("active");
           mediaPlayer.classList.remove("active");
-          bottomSheet.classList.remove("active");
           if (audio && reel === currentReel) {
             audio.pause();
             audio = null;
@@ -765,21 +748,21 @@
             <input type="range" class="video-seek-bar" min="0" max="100" value="0" aria-label="Seek video"/>
             <span class="video-time-display">0:00 / 0:00</span>
           </div>
-          <button type="button" class="comments-button" aria-label="View comments">Comments</button>
-        </div>
-        <div class="bottom-sheet">
-          <div class="bottom-sheet-header">
-            <h2>Comments</h2>
-            <button type="button" class="close-btn" aria-label="Close comments">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M18 6L6 18M6 6l12 12"/>
-              </svg>
-            </button>
-          </div>
-          <div class="comments-section" aria-live="polite"></div>
-          <div class="comment-input">
-            <input type="text" placeholder="Add a comment..." aria-label="Add a comment"/>
-            <button type="button">Post</button>
+          <!-- Comments button removed -->
+          <div class="bottom-sheet">
+            <div class="bottom-sheet-header">
+              <h2>Comments</h2>
+              <button type="button" class="close-btn" aria-label="Close comments">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M18 6L6 18M6 6l12 12"/>
+                </svg>
+              </button>
+            </div>
+            <div class="comments-section" aria-live="polite"></div>
+            <div class="comment-input">
+              <input type="text" placeholder="Add a comment..." aria-label="Add a comment"/>
+              <button type="button">Post</button>
+            </div>
           </div>
         </div>
       `;
@@ -822,6 +805,9 @@
         if (now - lastTap < 300) {
           const user = auth.currentUser;
           if (user) {
+            const wasPlaying = !video.paused;
+            const currentTime = video.currentTime;
+            const wasAudioPlaying = audio && !audio.paused;
             const userLikeRef = ref(db, `reels/${reelId}/likes/${user.uid}`);
             const snapshot = await new Promise((resolve) => onValue(userLikeRef, resolve, { onlyOnce: true }));
             if (!snapshot.val()) {
@@ -830,6 +816,24 @@
               likeAnimation.style.display = "block";
               setTimeout(() => (likeAnimation.style.display = "none"), 500);
             }
+            if (reel.classList.contains("active")) {
+              video.currentTime = currentTime;
+              if (wasPlaying) {
+                video.play().catch(() => {
+                  errorMessage.textContent = "Error playing video.";
+                  setTimeout(() => (errorMessage.textContent = ""), 3000);
+                });
+              }
+              if (wasAudioPlaying && audio) {
+                audio.play().catch(() => {
+                  errorMessage.textContent = "Error playing song.";
+                  setTimeout(() => (errorMessage.textContent = ""), 3000);
+                });
+              }
+            }
+          } else {
+            errorMessage.textContent = "Please sign in to like.";
+            setTimeout(() => (errorMessage.textContent = ""), 3000);
           }
         }
         lastTap = now;
@@ -840,9 +844,29 @@
       const likeCount = reel.querySelector(".like-count");
       const likesRef = ref(db, `reels/${reelId}/likes`);
       onValue(likesRef, (snapshot) => {
+        const wasPlaying = reel.classList.contains("active") && !video.paused;
+        const currentTime = video.currentTime;
+        const wasAudioPlaying = audio && !audio.paused;
+
         const likes = snapshot.val() || {};
         likeCount.textContent = Object.keys(likes).length;
         likeBtn.classList.toggle("liked", likes[auth.currentUser?.uid]);
+
+        if (reel.classList.contains("active")) {
+          video.currentTime = currentTime;
+          if (wasPlaying) {
+            video.play().catch(() => {
+              errorMessage.textContent = "Error playing video.";
+              setTimeout(() => (errorMessage.textContent = ""), 3000);
+            });
+          }
+          if (wasAudioPlaying && audio) {
+            audio.play().catch(() => {
+              errorMessage.textContent = "Error playing song.";
+              setTimeout(() => (errorMessage.textContent = ""), 3000);
+            });
+          }
+        }
       });
       likeBtn.addEventListener("click", async () => {
         const user = auth.currentUser;
@@ -851,12 +875,30 @@
           setTimeout(() => (errorMessage.textContent = ""), 3000);
           return;
         }
+        const wasPlaying = !video.paused;
+        const currentTime = video.currentTime;
+        const wasAudioPlaying = audio && !audio.paused;
         const userLikeRef = ref(db, `reels/${reelId}/likes/${user.uid}`);
         const snapshot = await new Promise((resolve) => onValue(userLikeRef, resolve, { onlyOnce: true }));
         if (snapshot.val()) {
           await remove(userLikeRef);
         } else {
           await set(userLikeRef, true);
+        }
+        if (reel.classList.contains("active")) {
+          video.currentTime = currentTime;
+          if (wasPlaying) {
+            video.play().catch(() => {
+              errorMessage.textContent = "Error playing video.";
+              setTimeout(() => (errorMessage.textContent = ""), 3000);
+            });
+          }
+          if (wasAudioPlaying && audio) {
+            audio.play().catch(() => {
+              errorMessage.textContent = "Error playing song.";
+              setTimeout(() => (errorMessage.textContent = ""), 3000);
+            });
+          }
         }
       });
 
@@ -878,150 +920,6 @@
         } catch (err) {
           errorMessage.textContent = "Failed to share.";
           setTimeout(() => (errorMessage.textContent = ""), 3000);
-        }
-      });
-
-      // Comment functionality
-      const commentsButton = reel.querySelector(".comments-button");
-      const bottomSheet = reel.querySelector(".bottom-sheet");
-      const closeBtn = reel.querySelector(".close-btn");
-      const commentsSection = reel.querySelector(".comments-section");
-      const commentInput = reel.querySelector(".comment-input input");
-      const commentBtn = reel.querySelector(".comment-input button");
-
-      commentsButton.addEventListener("click", () => {
-        bottomSheet.classList.add("active");
-      });
-      closeBtn.addEventListener("click", () => {
-        bottomSheet.classList.remove("active");
-      });
-      bottomSheet.addEventListener("click", (e) => {
-        if (e.target === bottomSheet) {
-          bottomSheet.classList.remove("active");
-        }
-      });
-
-      const commentsRef = ref(db, `reels/${reelId}/comments`);
-      onValue(commentsRef, async (snapshot) => {
-        const wasPlaying = !video.paused;
-        const currentTime = video.currentTime;
-        const wasAudioPlaying = audio && !audio.paused;
-
-        commentsSection.innerHTML = "";
-        const comments = snapshot.val() || {};
-        const sortedComments = Object.entries(comments).sort(([, a], [, b]) => a.timestamp - b.timestamp);
-        for (const [commentId, comment] of sortedComments) {
-          const commentProfilePic = await getUserProfilePic(comment.userId);
-          const commentDiv = document.createElement("div");
-          commentDiv.className = "comment";
-          commentDiv.innerHTML = `
-            <img src="${commentProfilePic}" class="comment-profile-pic" alt="Profile picture of ${comment.username || 'Anonymous'}" />
-            <div class="comment-content">
-              <span class="comment-username">${comment.username || 'Anonymous'}</span>
-              <div class="comment-text">${comment.text}</div>
-            </div>
-            <div class="comment-actions">
-              <button type="button" class="comment-like-btn" aria-label="Like comment">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/>
-                </svg>
-              </button>
-              <span class="comment-like-count">0</span>
-              ${comment.userId === auth.currentUser?.uid ? `
-                <button type="button" class="comment-delete-btn" aria-label="Delete comment">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m-10 5v6m4-6v6m4-6v6M4 6h16v12a2 2 0 01-2 2H6a2 2 0 01-2-2V6z"/>
-                  </svg>
-                </button>
-              ` : ''}
-            `;
-          const commentLikeBtn = commentDiv.querySelector(".comment-like-btn");
-          const commentLikeCount = commentDiv.querySelector(".comment-like-count");
-          const commentDeleteBtn = commentDiv.querySelector(".comment-delete-btn");
-          const commentLikesRef = ref(db, `reels/${reelId}/comments/${commentId}/likes`);
-          onValue(commentLikesRef, (snapshot) => {
-            const likes = snapshot.val() || {};
-            commentLikeCount.textContent = Object.keys(likes).length;
-            commentLikeBtn.classList.toggle("liked", likes[auth.currentUser?.uid]);
-          });
-          commentLikeBtn.addEventListener("click", async () => {
-            const user = auth.currentUser;
-            if (!user) {
-              errorMessage.textContent = "Please sign in to like comments.";
-              setTimeout(() => (errorMessage.textContent = ""), 3000);
-              return;
-            }
-            const userCommentLikeRef = ref(db, `reels/${reelId}/comments/${commentId}/likes/${user.uid}`);
-            const snapshot = await new Promise((resolve) => onValue(userCommentLikeRef, resolve, { onlyOnce: true }));
-            if (snapshot.val()) {
-              await remove(userCommentLikeRef);
-            } else {
-              await set(userCommentLikeRef, true);
-            }
-          });
-          if (commentDeleteBtn) {
-            commentDeleteBtn.addEventListener("click", async () => {
-              await remove(ref(db, `reels/${reelId}/comments/${commentId}`));
-            });
-          }
-          commentsSection.appendChild(commentDiv);
-        }
-
-        if (reel.classList.contains("active")) {
-          video.currentTime = currentTime;
-          if (wasPlaying) {
-            video.play().catch(() => {
-              errorMessage.textContent = "Error playing video.";
-              setTimeout(() => (errorMessage.textContent = ""), 3000);
-            });
-          }
-          if (wasAudioPlaying && audio) {
-            audio.play().catch(() => {
-              errorMessage.textContent = "Error playing song.";
-              setTimeout(() => (errorMessage.textContent = ""), 3000);
-            });
-          }
-        }
-      });
-
-      commentBtn.addEventListener("click", async () => {
-        const text = commentInput.value.trim();
-        if (!text) {
-          errorMessage.textContent = "Comment cannot be empty.";
-          setTimeout(() => (errorMessage.textContent = ""), 3000);
-          return;
-        }
-        const user = auth.currentUser;
-        if (!user) {
-          errorMessage.textContent = "Please sign in to comment.";
-          setTimeout(() => (errorMessage.textContent = ""), 3000);
-          return;
-        }
-        const wasPlaying = !video.paused;
-        const currentTime = video.currentTime;
-        const wasAudioPlaying = audio && !audio.paused;
-        const newCommentRef = push(commentsRef);
-        await set(newCommentRef, {
-          userId: user.uid,
-          username: user.displayName || "Anonymous",
-          text,
-          timestamp: Date.now()
-        });
-        commentInput.value = "";
-        if (reel.classList.contains("active")) {
-          video.currentTime = currentTime;
-          if (wasPlaying) {
-            video.play().catch(() => {
-              errorMessage.textContent = "Error playing video.";
-              setTimeout(() => (errorMessage.textContent = ""), 3000);
-            });
-          }
-          if (wasAudioPlaying && audio) {
-            audio.play().catch(() => {
-              errorMessage.textContent = "Error playing song.";
-              setTimeout(() => (errorMessage.textContent = ""), 3000);
-            });
-          }
         }
       });
 
@@ -1055,7 +953,6 @@
               }
             }
             if (reels.length > 0) {
-              // Restore index if current reel still exists
               let newIndex = 0;
               if (currentPlaybackState) {
                 newIndex = reels.findIndex(reel => reel.dataset.reelId === currentPlaybackState.reelId);
