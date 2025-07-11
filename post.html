@@ -3,9 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>Instagram - Reels & Live</title>
+  <title>Instagram - Reels</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://webrtc.github.io/adapter/adapter-latest.js"></script>
   <style>
     :root {
       --primary-red: #ed4956;
@@ -82,7 +81,6 @@
       display: flex;
       align-items: center;
       gap: 0.5rem;
-      position: relative;
     }
     .profile-pic {
       width: 32px;
@@ -91,30 +89,11 @@
       object-fit: cover;
       border: 2px solid var(--white);
     }
-    .live-badge {
-      position: absolute;
-      top: -8px;
-      left: -8px;
-      background: var(--primary-red);
-      color: var(--white);
-      font-size: clamp(0.6rem, 2vw, 0.65rem);
-      padding: 0.2rem 0.4rem;
-      border-radius: 4px;
-      border: 1px solid var(--white);
-      text-transform: uppercase;
-      font-weight: 600;
-      animation: pulse 1.5s infinite ease-in-out;
-    }
-    @keyframes pulse {
-      0% { transform: scale(1); opacity: 1; }
-      50% { transform: scale(1.1); opacity: 0.8; }
-      100% { transform: scale(1); opacity: 1; }
-    }
     .username {
       font-weight: 600;
       font-size: clamp(0.9rem, 4vw, 1rem);
     }
-    .follow-btn, .join-live-btn {
+    .follow-btn {
       background: var(--primary-red);
       color: var(--white);
       border: none;
@@ -128,7 +107,7 @@
       background: var(--text-light);
       color: var(--text-dark);
     }
-    .follow-btn:hover, .join-live-btn:hover {
+    .follow-btn:hover {
       background: #d43f4e;
     }
     .follow-btn.following:hover {
@@ -245,6 +224,7 @@
       fill: var(--white);
     }
     .bottom-sheet {
+      display: none; /* Hidden as comment button is removed */
       position: fixed;
       bottom: 0;
       left: 0;
@@ -286,46 +266,76 @@
       width: 24px;
       height: 24px;
     }
-    .chat-section {
+    .comments-section {
       flex-grow: 1;
       overflow-y: auto;
       padding: 0.5rem 1rem;
     }
-    .chat-message {
+    .comment {
       display: flex;
       align-items: flex-start;
       gap: 0.5rem;
       padding: 0.5rem 0;
       border-bottom: 1px solid var(--border);
     }
-    .chat-message:last-child {
+    .comment:last-child {
       border-bottom: none;
     }
-    .chat-profile-pic {
+    .comment-profile-pic {
       width: 24px;
       height: 24px;
       border-radius: 50%;
       object-fit: cover;
       border: 1px solid var(--white);
     }
-    .chat-content {
+    .comment-content {
       flex-grow: 1;
       font-size: clamp(0.75rem, 3vw, 0.8rem);
       color: var(--text-dark);
     }
-    .chat-username {
+    .comment-username {
       font-weight: 600;
     }
-    .chat-text {
+    .comment-text {
       word-break: break-word;
     }
-    .chat-input {
+    .comment-actions {
       display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .comment-like-btn, .comment-delete-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: var(--text-dark);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 20px;
+      height: 20px;
+    }
+    .comment-like-btn.liked {
+      color: var(--primary-red);
+    }
+    .comment-like-btn:hover, .comment-delete-btn:hover {
+      color: var(--primary-red);
+    }
+    .comment-like-btn svg, .comment-delete-btn svg {
+      width: 16px;
+      height: 16px;
+    }
+    .comment-like-count {
+      font-size: clamp(0.7rem, 2.5vw, 0.75rem);
+      color: var(--text-light);
+    }
+    .comment-input {
+      display: none; /* Hidden as comment button is removed */
       gap: 0.5rem;
       padding: 0.5rem 1rem;
       border-top: 1px solid var(--border);
     }
-    .chat-input input {
+    .comment-input input {
       flex-grow: 1;
       padding: 0.5rem;
       border: 1px solid var(--border);
@@ -334,7 +344,7 @@
       color: var(--text-dark);
       font-size: clamp(0.8rem, 3.5vw, 0.85rem);
     }
-    .chat-input button {
+    .comment-input button {
       background: var(--primary-red);
       color: var(--white);
       border: none;
@@ -343,7 +353,7 @@
       font-size: clamp(0.8rem, 3.5vw, 0.85rem);
       cursor: pointer;
     }
-    .chat-input button:hover {
+    .comment-input button:hover {
       background: #d43f4e;
     }
     .loading-overlay {
@@ -463,7 +473,7 @@
       .bottom-sheet {
         max-height: 70vh;
       }
-      .chat-profile-pic {
+      .comment-profile-pic {
         width: 20px;
         height: 20px;
       }
@@ -471,15 +481,9 @@
         padding: 1rem;
         max-width: 250px;
       }
-      .follow-btn, .join-live-btn {
+      .follow-btn {
         padding: 0.2rem 0.6rem;
         font-size: clamp(0.7rem, 2.5vw, 0.75rem);
-      }
-      .live-badge {
-        top: -6px;
-        left: -6px;
-        padding: 0.15rem 0.3rem;
-        font-size: clamp(0.55rem, 1.8vw, 0.6rem);
       }
     }
   </style>
@@ -502,7 +506,7 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
     import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
-    import { getDatabase, ref, onValue, remove, update, get, push } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
+    import { getDatabase, ref, onValue, remove, update, get } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
@@ -528,7 +532,6 @@
     let reels = [];
     let currentReelIndex = 0;
     let pendingDeleteReelId = null;
-    let peerConnections = {};
 
     function formatTime(seconds) {
       const min = Math.floor(seconds / 60);
@@ -615,106 +618,7 @@
       pendingDeleteReelId = null;
     }
 
-    async function setupWebRTCViewer(videoElement, streamId, userId) {
-      try {
-        const configuration = {
-          iceServers: [
-            { urls: 'stun:stun.l.google.com:19302' },
-            // Add TURN server if needed
-          ]
-        };
-        const peerConnection = new RTCPeerConnection(configuration);
-        peerConnections[streamId] = peerConnection;
-
-        peerConnection.ontrack = (event) => {
-          videoElement.srcObject = event.streams[0];
-          videoElement.play().catch(() => {
-            errorMessage.textContent = "Error playing live stream.";
-            setTimeout(() => (errorMessage.textContent = ""), 3000);
-          });
-        };
-
-        // Signaling via Firebase
-        const offerRef = ref(db, `liveStreams/${userId}/offer`);
-        const answerRef = ref(db, `liveStreams/${userId}/answers/${auth.currentUser.uid}`);
-        const iceCandidatesRef = ref(db, `liveStreams/${userId}/iceCandidates/${auth.currentUser.uid}`);
-
-        // Listen for offer
-        onValue(offerRef, async (snapshot) => {
-          const offer = snapshot.val();
-          if (offer) {
-            await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
-            const answer = await peerConnection.createAnswer();
-            await peerConnection.setLocalDescription(answer);
-            await update(answerRef, answer);
-          }
-        });
-
-        // Send ICE candidates
-        peerConnection.onicecandidate = (event) => {
-          if (event.candidate) {
-            push(iceCandidatesRef, event.candidate.toJSON());
-          }
-        };
-
-        // Listen for ICE candidates from broadcaster
-        onValue(ref(db, `liveStreams/${userId}/iceCandidates/${auth.currentUser.uid}`), (snapshot) => {
-          const candidates = snapshot.val();
-          if (candidates) {
-            Object.values(candidates).forEach(candidate => {
-              peerConnection.addIceCandidate(new RTCIceCandidate(candidate)).catch(e => console.error("Error adding ICE candidate:", e));
-            });
-          }
-        });
-
-      } catch (error) {
-        console.error("Error setting up WebRTC viewer:", error);
-        errorMessage.textContent = "Error joining live stream: " + error.message;
-        setTimeout(() => (errorMessage.textContent = ""), 3000);
-      }
-    }
-
-    async function showChat(userId, bottomSheet) {
-      const chatSection = bottomSheet.querySelector(".chat-section");
-      chatSection.innerHTML = "";
-      const commentsRef = ref(db, `liveStreams/${userId}/comments`);
-      onValue(commentsRef, async (snapshot) => {
-        chatSection.innerHTML = "";
-        const comments = snapshot.val() || {};
-        for (const [commentId, comment] of Object.entries(comments)) {
-          const commentElement = document.createElement("div");
-          commentElement.className = "chat-message";
-          const profilePic = await getUserProfilePic(comment.userId);
-          commentElement.innerHTML = `
-            <img src="${profilePic}" class="chat-profile-pic" alt="Profile picture of ${comment.username}" />
-            <div class="chat-content">
-              <span class="chat-username">${comment.username}</span>
-              <p class="chat-text">${comment.text}</p>
-            </div>
-          `;
-          chatSection.appendChild(commentElement);
-        }
-        chatSection.scrollTop = chatSection.scrollHeight;
-      });
-    }
-
-    async function sendChatMessage(userId, text) {
-      try {
-        const commentsRef = ref(db, `liveStreams/${userId}/comments`);
-        await push(commentsRef, {
-          userId: auth.currentUser.uid,
-          username: await getUsername(auth.currentUser.uid),
-          text,
-          timestamp: Date.now()
-        });
-      } catch (error) {
-        console.error("Error sending chat message:", error);
-        errorMessage.textContent = "Error sending message: " + error.message;
-        setTimeout(() => (errorMessage.textContent = ""), 3000);
-      }
-    }
-
-    async function showReel(index) {
+    function showReel(index) {
       if (index < 0 || index >= reels.length) return;
 
       const currentReel = reels[currentReelIndex];
@@ -730,79 +634,62 @@
         const muteIcon = reel.querySelector(".mute-icon");
         const videoSeekBar = reel.querySelector(".video-seek-bar");
         const videoTimeDisplay = reel.querySelector(".video-time-display");
-        const bottomSheet = reel.querySelector(".bottom-sheet");
 
         if (i === index) {
           reel.classList.add("active");
-          if (!reel.dataset.isLive) {
-            loadingOverlay.classList.remove("hidden");
-            video.play().catch(() => {
-              loadingOverlay.classList.add("hidden");
-              errorMessage.textContent = "Error playing video.";
-              setTimeout(() => (errorMessage.textContent = ""), 3000);
-            });
-            video.addEventListener("loadedmetadata", () => {
-              videoSeekBar.max = video.duration || 100;
-              videoTimeDisplay.textContent = `0:00 / ${formatTime(video.duration || 0)}`;
-            }, { once: true });
-            video.addEventListener("timeupdate", () => {
-              videoSeekBar.value = video.currentTime;
-              videoTimeDisplay.textContent = `${formatTime(video.currentTime)} / ${formatTime(video.duration || 0)}`;
-            });
-            video.addEventListener("waiting", () => {
-              loadingOverlay.classList.remove("hidden");
-            }, { once: true });
-            video.addEventListener("playing", () => {
-              loadingOverlay.classList.add("hidden");
-            }, { once: true });
-            video.addEventListener("canplay", () => {
-              loadingOverlay.classList.add("hidden");
-            }, { once: true });
-            if (currentPlaybackState && currentPlaybackState.reelId === reel.dataset.reelId) {
-              video.currentTime = currentPlaybackState.time;
-              video.muted = currentPlaybackState.muted;
-            }
-          } else if (auth.currentUser.uid !== reel.dataset.userId) {
-            setupWebRTCViewer(video, reel.dataset.reelId, reel.dataset.userId);
-          }
-          if (reel.dataset.isLive) {
-            bottomSheet.classList.add("active");
-            showChat(reel.dataset.userId, bottomSheet);
+          loadingOverlay.classList.remove("hidden"); // Show spinner
+          video.play().catch(() => {
+            loadingOverlay.classList.add("hidden");
+            errorMessage.textContent = "Error playing video.";
+            setTimeout(() => (errorMessage.textContent = ""), 3000);
+          });
+          video.addEventListener("loadedmetadata", () => {
+            videoSeekBar.max = video.duration || 100;
+            videoTimeDisplay.textContent = `0:00 / ${formatTime(video.duration || 0)}`;
+          }, { once: true });
+          video.addEventListener("timeupdate", () => {
+            videoSeekBar.value = video.currentTime;
+            videoTimeDisplay.textContent = `${formatTime(video.currentTime)} / ${formatTime(video.duration || 0)}`;
+          });
+          video.addEventListener("waiting", () => {
+            loadingOverlay.classList.remove("hidden"); // Show spinner when buffering
+          }, { once: true });
+          video.addEventListener("playing", () => {
+            loadingOverlay.classList.add("hidden"); // Hide spinner when playing
+          }, { once: true });
+          video.addEventListener("canplay", () => {
+            loadingOverlay.classList.add("hidden"); // Hide spinner when video can play
+          }, { once: true });
+          if (currentPlaybackState && currentPlaybackState.reelId === reel.dataset.reelId) {
+            video.currentTime = currentPlaybackState.time;
+            video.muted = currentPlaybackState.muted;
           }
         } else {
           reel.classList.remove("active");
           video.pause();
           video.currentTime = 0;
-          video.srcObject = null;
           muteIcon.classList.remove("active");
-          bottomSheet.classList.remove("active");
-          if (peerConnections[reel.dataset.reelId]) {
-            peerConnections[reel.dataset.reelId].close();
-            delete peerConnections[reel.dataset.reelId];
-          }
         }
       });
       currentReelIndex = index;
     }
 
-    async function createReelElement(data, id, isLive = false) {
-      const profilePic = await getUserProfilePic(data.userId);
-      const username = await getUsername(data.userId);
-      const isOwner = auth.currentUser && data.userId === auth.currentUser.uid;
-      const isFollowingUser = !isOwner && auth.currentUser ? await isFollowing(auth.currentUser.uid, data.userId) : false;
+    async function createReelElement(reelData, reelId) {
+      const profilePic = await getUserProfilePic(reelData.userId);
+      const username = await getUsername(reelData.userId);
+      const isOwner = auth.currentUser && reelData.userId === auth.currentUser.uid;
+      const isFollowingUser = !isOwner && auth.currentUser ? await isFollowing(auth.currentUser.uid, reelData.userId) : false;
       const reel = document.createElement("div");
       reel.className = "reel";
-      reel.dataset.reelId = isLive ? data.streamId : id;
-      reel.dataset.userId = data.userId;
-      reel.dataset.isLive = isLive;
+      reel.dataset.reelId = reelId;
       reel.innerHTML = `
-        <video ${isLive ? '' : `src="${data.videoUrl || ''}" loop`} playsinline aria-label="${isLive ? 'Live stream' : 'Reel video'} by ${username}"></video>
+        <video src="${reelData.videoUrl || ''}" loop playsinline aria-label="Reel video by ${username}"></video>
         <div class="mute-icon">
           <svg viewBox="0 0 24 24">
             <path d="M3.63 3.27a.75.75 0 011.06 0L21 19.54a.75.75 0 11-1.06 1.06L3.63 4.33a.75.75 0 010-1.06zM12 3c-.42 0-.83.04-1.24.11L12 4.34V3zm0 2.66v4.84l-1.5-1.5V5.66h1.5zm3 0h1.5v3.84l-1.5-1.5V5.66zm-6 0H7.5v8.68l-1.5-1.5V5.66H9zm-3 8.68H4.5v-6.02l-1.5-1.5v7.52H6zm9 0h1.5v-3.84l-1.5 1.5v2.34zm3-8.68h-1.5v4.84l1.5 1.5V5.66zm-3 8.68v4.84l1.24.11c.41-.07.82-.11 1.24-.11v-4.84h-2.48z"/>
           </svg>
         </div>
-        ${isOwner && !isLive ? `
+        ${isOwner ? `
           <div class="actions">
             <button type="button" class="delete-btn" aria-label="Delete reel">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -815,25 +702,21 @@
           <div class="reel-header">
             <div class="reel-info">
               <img src="${profilePic}" class="profile-pic" alt="Profile picture of ${username}" />
-              ${isLive ? `<span class="live-badge">Live</span>` : ''}
               <span class="username">${username}</span>
             </div>
             ${!isOwner && auth.currentUser ? `
-              <div>
-                <button type="button" class="follow-btn ${isFollowingUser ? 'following' : ''}" aria-label="${isFollowingUser ? 'Unfollow' : 'Follow'} ${username}">
-                  ${isFollowingUser ? 'Following' : 'Follow'}
-                </button>
-                ${isLive ? `<button type="button" class="join-live-btn" aria-label="Join live stream">Join Live</button>` : ''}
-              </div>
+              <button type="button" class="follow-btn ${isFollowingUser ? 'following' : ''}" aria-label="${isFollowingUser ? 'Unfollow' : 'Follow'} ${username}">
+                ${isFollowingUser ? 'Following' : 'Follow'}
+              </button>
             ` : ''}
           </div>
-          ${data.caption && !isLive ? `<p class="caption">${data.caption}</p>` : ""}
-          ${data.song && !isLive ? `
+          ${reelData.caption ? `<p class="caption">${reelData.caption}</p>` : ""}
+          ${reelData.song ? `
             <div class="song-info">
               <svg viewBox="0 0 24 24" fill="currentColor">
                 <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/>
               </svg>
-              ${data.song.title} by ${data.song.artist}
+              ${reelData.song.title} by ${reelData.song.artist}
             </div>
           ` : ""}
           <div class="video-player">
@@ -842,20 +725,18 @@
           </div>
           <div class="bottom-sheet">
             <div class="bottom-sheet-header">
-              <h2>Chat</h2>
-              <button type="button" class="close-btn" aria-label="Close chat">
+              <h2>Comments</h2>
+              <button type="button" class="close-btn" aria-label="Close comments">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M18 6L6 18M6 6l12 12"/>
                 </svg>
               </button>
             </div>
-            <div class="chat-section" aria-live="polite"></div>
-            ${isLive ? `
-              <div class="chat-input">
-                <input type="text" placeholder="Send a message..." aria-label="Send a message"/>
-                <button type="button">Send</button>
-              </div>
-            ` : ''}
+            <div class="comments-section" aria-live="polite"></div>
+            <div class="comment-input">
+              <input type="text" placeholder="Add a comment..." aria-label="Add a comment"/>
+              <button type="button">Post</button>
+            </div>
           </div>
         </div>
       `;
@@ -873,72 +754,26 @@
       });
       video.addEventListener("error", () => {
         loadingOverlay.classList.add("hidden");
-        errorMessage.textContent = `Error loading ${isLive ? 'live stream' : 'video'}.`;
+        errorMessage.textContent = "Error loading video.";
         setTimeout(() => (errorMessage.textContent = ""), 3000);
       });
       const videoSeekBar = reel.querySelector(".video-seek-bar");
-      const videoTimeDisplay = reel.querySelector(".video-time-display");
-      if (!isLive) {
-        videoSeekBar.addEventListener("input", () => {
-          video.currentTime = videoSeekBar.value;
-        });
-        video.addEventListener("loadedmetadata", () => {
-          videoSeekBar.max = video.duration || 100;
-          videoTimeDisplay.textContent = `0:00 / ${formatTime(video.duration || 0)}`;
-        }, { once: true });
-        video.addEventListener("timeupdate", () => {
-          videoSeekBar.value = video.currentTime;
-          videoTimeDisplay.textContent = `${formatTime(video.currentTime)} / ${formatTime(video.duration || 0)}`;
-        });
-      } else {
-        videoTimeDisplay.textContent = "Live";
-        videoSeekBar.style.display = "none";
-      }
+      videoSeekBar.addEventListener("input", () => {
+        video.currentTime = videoSeekBar.value;
+      });
 
-      if (isOwner && !isLive) {
+      if (isOwner) {
         const deleteBtn = reel.querySelector(".delete-btn");
         deleteBtn.addEventListener("click", () => {
-          showAlertDialog(id);
+          showAlertDialog(reelId);
         });
       } else if (auth.currentUser) {
         const followBtn = reel.querySelector(".follow-btn");
         if (followBtn) {
           followBtn.addEventListener("click", () => {
-            toggleFollow(auth.currentUser.uid, data.userId, followBtn);
+            toggleFollow(auth.currentUser.uid, reelData.userId, followBtn);
           });
         }
-        if (isLive && !isOwner) {
-          const joinLiveBtn = reel.querySelector(".join-live-btn");
-          joinLiveBtn.addEventListener("click", () => {
-            setupWebRTCViewer(video, id, data.userId);
-            bottomSheet.classList.add("active");
-            showChat(data.userId, bottomSheet);
-          });
-        }
-      }
-
-      if (isLive) {
-        const bottomSheet = reel.querySelector(".bottom-sheet");
-        const chatInput = bottomSheet.querySelector(".chat-input input");
-        const sendBtn = bottomSheet.querySelector(".chat-input button");
-        if (chatInput && sendBtn) {
-          sendBtn.addEventListener("click", () => {
-            if (chatInput.value.trim()) {
-              sendChatMessage(data.userId, chatInput.value.trim());
-              chatInput.value = "";
-            }
-          });
-          chatInput.addEventListener("keypress", (e) => {
-            if (e.key === "Enter" && chatInput.value.trim()) {
-              sendChatMessage(data.userId, chatInput.value.trim());
-              chatInput.value = "";
-            }
-          });
-        }
-        const closeBtn = bottomSheet.querySelector(".close-btn");
-        closeBtn.addEventListener("click", () => {
-          bottomSheet.classList.remove("active");
-        });
       }
 
       reelsContainer.appendChild(reel);
@@ -952,7 +787,7 @@
     alertDeleteBtn.addEventListener("click", async () => {
       if (pendingDeleteReelId) {
         try {
-          loadingOverlay.classList.remove("hidden");
+          loadingOverlay.classList.remove("hidden"); // Show spinner during deletion
           const reelRef = ref(db, `reels/${pendingDeleteReelId}`);
           await remove(reelRef);
           errorMessage.textContent = "Reel deleted successfully.";
@@ -974,48 +809,25 @@
         const urlParams = new URLSearchParams(window.location.search);
         const targetReelId = urlParams.get("reelId");
         const reelsRef = ref(db, "reels");
-        const liveStreamsRef = ref(db, "liveStreams");
-        loadingOverlay.classList.remove("hidden");
-        onValue(reelsRef, async (reelSnapshot) => {
-          onValue(liveStreamsRef, async (liveSnapshot) => {
-            const currentReel = reels[currentReelIndex];
-            const currentVideo = currentReel?.querySelector("video");
-            const currentPlaybackState = currentVideo ? {
-              time: currentVideo.currentTime,
-              muted: currentVideo.muted,
-              reelId: currentReel.dataset.reelId
-            } : null;
+        loadingOverlay.classList.remove("hidden"); // Show spinner during initial load
+        onValue(reelsRef, async (snapshot) => {
+          const currentReel = reels[currentReelIndex];
+          const currentVideo = currentReel?.querySelector("video");
+          const currentPlaybackState = currentVideo ? {
+            time: currentVideo.currentTime,
+            muted: currentVideo.muted,
+            reelId: currentReel.dataset.reelId
+          } : null;
 
-            reels = [];
-            reelsContainer.innerHTML = "";
-            Object.values(peerConnections).forEach(pc => pc.close());
-            peerConnections = {};
-
-            const liveData = liveSnapshot.val();
-            const reelData = reelSnapshot.val();
-
-            let liveEntries = [];
-            if (liveData) {
-              liveEntries = Object.entries(liveData)
-                .filter(([, liveData]) => liveData.isLive && liveData.streamId)
-                .map(([userId, liveData]) => [liveData.streamId, { ...liveData, userId }]);
+          reels = [];
+          reelsContainer.innerHTML = "";
+          const data = snapshot.val();
+          if (data) {
+            let reelEntries = Object.entries(data).filter(([, reelData]) => reelData.videoUrl);
+            reelEntries = shuffleArray(reelEntries); // Randomize reels
+            for (const [reelId, reelData] of reelEntries) {
+              reels.push(await createReelElement(reelData, reelId));
             }
-
-            let reelEntries = [];
-            if (reelData) {
-              reelEntries = Object.entries(reelData)
-                .filter(([, reelData]) => reelData.videoUrl)
-                .map(([reelId, reelData]) => [reelId, { ...reelData, userId: reelData.userId }]);
-              reelEntries = shuffleArray(reelEntries);
-            }
-
-            const combinedEntries = [...liveEntries, ...reelEntries];
-
-            for (const [id, data] of combinedEntries) {
-              const isLive = liveData && Object.values(liveData).some(ld => ld.streamId === id);
-              reels.push(await createReelElement(data, id, isLive));
-            }
-
             if (reels.length > 0) {
               let newIndex = 0;
               if (targetReelId) {
@@ -1029,20 +841,19 @@
               showReel(currentReelIndex);
               const newCurrentReel = reels[currentReelIndex];
               const newCurrentVideo = newCurrentReel.querySelector("video");
-              if (currentPlaybackState && currentPlaybackState.reelId === newCurrentReel.dataset.reelId && !newCurrentReel.dataset.isLive) {
+              if (currentPlaybackState && currentPlaybackState.reelId === newCurrentReel.dataset.reelId) {
                 newCurrentVideo.currentTime = currentPlaybackState.time;
                 newCurrentVideo.muted = currentPlaybackState.muted;
               }
             } else {
-              errorMessage.textContent = "No reels or live streams available.";
+              errorMessage.textContent = "No reels available.";
               setTimeout(() => (errorMessage.textContent = ""), 3000);
             }
-            loadingOverlay.classList.add("hidden");
-          }, (error) => {
-            loadingOverlay.classList.add("hidden");
-            errorMessage.textContent = "Error loading live streams: " + error.message;
+          } else {
+            errorMessage.textContent = "No reels available.";
             setTimeout(() => (errorMessage.textContent = ""), 3000);
-          });
+          }
+          loadingOverlay.classList.add("hidden");
         }, (error) => {
           loadingOverlay.classList.add("hidden");
           errorMessage.textContent = "Error loading reels: " + error.message;
