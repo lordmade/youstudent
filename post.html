@@ -1,368 +1,333 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <meta name="description" content="BanterBox Reels - Watch and share short videos, photos, and music with friends."/>
-  <meta name="theme-color" content="#EF4444"/>
-  <title>BanterBox Reels</title>
-  <link rel="icon" href="/favicon.ico"/>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css"/>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Reels - BanterBox</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
   <style>
+    :root {
+      --primary-red: #ED4956;
+      --text-dark: #262626;
+      --text-light: #8e8e8e;
+      --border: #dbdbdb;
+      --white: #ffffff;
+      --background: #fafafa;
+      --gradient: linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888);
+    }
+
     * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
       user-select: none;
       -webkit-user-select: none;
       -moz-user-select: none;
       -ms-user-select: none;
-      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
     }
-    html, body {
-      margin: 0; padding: 0; height: 100vh; width: 100vw; overflow: hidden;
-      font-family: 'Inter', sans-serif; background: #000;
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      background: var(--background);
+      color: var(--text-dark);
+      line-height: 1.5;
+      min-height: 100vh;
+      overflow: hidden;
     }
-    body.dark {
-      background: #111827;
-    }
-    .reel-container {
-      height: 100vh; width: 100vw; scroll-snap-type: y mandatory; overflow-y: scroll;
-      scroll-behavior: smooth; -webkit-overflow-scrolling: touch;
-      transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-    }
-    .reel {
-      height: 100vh; width: 100vw; position: relative; scroll-snap-align: start;
-      display: flex; align-items: center; justify-content: center; background: #000;
-      transition: opacity 0.4s ease, transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-    }
-    .reel-media {
-      height: 100%; width: 100%; object-fit: contain; position: absolute; top: 0; left: 0;
-      z-index: 1; transition: opacity 0.3s ease;
-    }
-    .reel-media:not(.playing) {
-      opacity: 0.8;
-    }
-    .reel-media.playing {
-      opacity: 1;
-    }
-    .reel-overlay {
-      position: absolute; bottom: 4rem; left: 1rem; color: white;
-      text-shadow: 0 0 8px rgba(0, 0, 0, 0.8); max-width: 60%; z-index: 10;
-    }
-    .reel-user-info {
-      display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.75rem;
-    }
-    .reel-user-info img {
-      height: 40px; width: 40px; border-radius: 50%; object-fit: cover;
-      border: 2px solid #EF4444;
-      transition: border-color 0.2s ease;
-    }
-    .reel-user-info img.dark {
-      border-color: #B91C1C;
-    }
-    .reel-user-info a {
-      color: white; font-weight: 600; font-size: 0.95rem; text-decoration: none;
-      transition: color 0.2s ease;
-    }
-    .reel-user-info a:hover {
-      color: #f87171;
-    }
-    .reel-caption {
-      font-size: 0.9rem; line-height: 1.4; color: #e5e7eb;
-      display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
-      overflow: hidden; text-overflow: ellipsis;
-    }
-    .reel-track-info {
-      margin-top: 0.5rem;
-      display: flex; flex-direction: column; gap: 0.25rem;
-    }
-    .reel-track-info audio {
-      width: 100%; max-width: 300px; border-radius: 8px; margin-top: 0.5rem;
-    }
-    .reel-track-info p {
-      font-size: 0.85rem; color: #e5e7eb; text-shadow: 0 0 4px rgba(0, 0, 0, 0.8);
-    }
-    .reel-track-info a {
-      font-size: 0.8rem; color: #3b82f6; text-decoration: underline;
-      text-shadow: 0 0 4px rgba(0, 0, 0, 0.8);
-    }
-    .reel-track-info a:hover {
-      color: #60a5fa;
-    }
-    .reel-actions {
-      position: absolute; right: 1rem; top: 50%;
-      transform: translateY(-50%);
-      display: flex; flex-direction: column; gap: 1.5rem; align-items: center; z-index: 10;
-    }
-    .reel-action-btn {
-      background: rgba(255, 255, 255, 0.3);
-      border: none; padding: 0.9rem;
-      border-radius: 50%; color: white; cursor: pointer;
-      transition: transform 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
-    }
-    .reel-action-btn:hover {
-      background: rgba(255, 255, 255, 0.4); transform: scale(1.1);
-      box-shadow: 0 4px 12px rgba(255, 255, 255, 0.2);
-    }
-    .reel-action-btn:focus {
-      outline: 2px solid #EF4444;
-      outline-offset: 2px;
-    }
-    .reel-action-btn.reacted {
-      color: #ef4444;
-    }
-    .reel-action-btn svg {
-      width: 28px; height: 28px; stroke-width: 2.5;
-      transition: fill 0.2s ease;
-    }
-    .reel-action-btn.reacted svg {
-      fill: #ef4444; stroke: #ef4444;
-    }
-    .reel-action-count {
-      color: white; font-size: 0.85rem; font-weight: 500;
-      text-shadow: 0 0 4px rgba(0, 0, 0, 0.8); text-align: center;
-    }
-    .reel-mute-toggle {
-      position: absolute; bottom: 1.5rem; right: 1.5rem;
-      background: rgba(255, 255, 255, 0.4);
-      border-radius: 50%; padding: 0.6rem;
-      color: white; cursor: pointer; z-index: 10;
-      transition: background 0.2s ease, transform 0.2s ease;
-    }
-    .reel-mute-toggle:hover {
-      background: rgba(255, 255, 255, 0.6);
-      transform: scale(1.1);
-    }
-    .reel-mute-toggle svg {
-      width: 28px; height: 28px; stroke-width: 2.5;
-    }
-    .home-btn {
-      position: fixed; top: 1rem; left: 1rem; z-index: 50;
-      background: rgba(255, 255, 255, 0.1); color: white;
-      padding: 0.5rem 1rem; border-radius: 9999px; font-weight: 600;
-      font-size: 0.9rem; border: 1px solid white; text-decoration: none;
-      display: flex; align-items: center; gap: 0.5rem;
-      transition: background 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
-    }
-    .home-btn:hover {
-      background: rgba(255, 255, 255, 0.2); transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(255, 255, 255, 0.2);
-    }
-    .home-btn svg {
-      width: 20px; height: 20px; stroke-width: 2;
-    }
-    .loading-overlay {
-      position: fixed; inset: 0; background: rgba(0, 0, 0, 0.6);
-      display: flex; align-items: center; justify-content: center; z-index: 100;
-      transition: opacity 0.3s ease;
-    }
-    .loading-overlay.hidden {
-      opacity: 0; pointer-events: none;
-    }
-    .loading-spinner {
-      width: 48px; height: 48px; border: 4px solid #e5e7eb;
-      border-top-color: #EF4444;
-      border-radius: 50%;
-      animation: spin 0.8s ease-in-out infinite;
-    }
-    .loading-spinner.dark {
-      border-color: #374151; border-top-color: #B91C1C;
-    }
-    .modal {
-      position: fixed; inset: 0; background: rgba(0, 0, 0, 0.8);
-      display: none; justify-content: center; align-items: center; z-index: 1000;
-      transition: opacity 0.3s ease;
-    }
-    .modal.active {
+
+    .container {
+      max-width: 414px;
+      margin: 0 auto;
+      height: 100vh;
       display: flex;
+      flex-direction: column;
+      position: relative;
     }
-    .modal-content {
-      background: white; border-radius: 16px; padding: 1.5rem; width: 90%; max-width: 420px;
-      max-height: 80vh; overflow-y: auto; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
-      border: 2px solid transparent;
-      background: linear-gradient(white, white) padding-box, linear-gradient(to right, #EF4444, #F87171) border-box;
-      transition: transform 0.3s ease, box-shadow 0.3s ease;
+
+    header {
+      padding: 0.75rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border);
+      background: var(--white);
+      position: sticky;
+      top: 0;
+      z-index: 10;
     }
-    .modal-content.dark {
-      background: linear-gradient(#121212, #121212) padding-box, linear-gradient(to right, #B91C1C, #F87171) border-box;
-      color: #e5e7eb;
-    }
-    .modal-content:hover {
-      transform: translateY(-5px); box-shadow: 0 6px 25px rgba(0, 0, 0, 0.15);
-    }
-    .modal-title {
-      font-size: 1.5rem; font-weight: 600; color: #111827; margin-bottom: 1rem;
-      display: flex; align-items: center; gap: 0.5rem;
-    }
-    .modal-title.dark {
-      color: #e5e7eb;
-    }
-    .modal-buttons {
-      display: flex; gap: 0.75rem; justify-content: flex-end; margin-top: 1rem;
-    }
-    .modal-btn {
-      padding: 0.75rem 1.5rem; border-radius: 8px; font-weight: 600; font-size: 0.95rem;
-      transition: transform 0.2s ease, box-shadow 0.2s ease; border: none;
-    }
-    .modal-btn-confirm {
-      background: #EF4444; color: white;
-    }
-    .modal-btn-confirm:hover {
-      background: #B91C1C; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
-    }
-    .modal-btn-confirm.dark {
-      background: #B91C1C;
-    }
-    .modal-btn-cancel {
-      background: #6b7280; color: white;
-    }
-    .modal-btn-cancel:hover {
-      transform: translateY(-2px); box-shadow: 0 4px 12px rgba(107, 114, 128, 0.3);
-    }
-    .modal-btn-cancel.dark {
-      background: #4b5563;
-    }
-    .modal-btn-cancel.dark:hover {
-      box-shadow: 0 4px 12px rgba(75, 85, 99, 0.3);
-    }
-    .suggested-reels {
-      position: absolute; bottom: 8rem; left: 0; right: 0; padding: 0.5rem;
-      display: flex; gap: 0.5rem; overflow-x: auto; white-space: nowrap; z-index: 10;
-      background: rgba(0, 0, 0, 0.3); backdrop-filter: blur(5px);
-      scroll-behavior: smooth;
-    }
-    .suggested-reel {
-      width: 80px; height: 120px; flex-shrink: 0; position: relative;
-      border-radius: 8px; overflow: hidden; cursor: pointer;
+
+    .back-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 0.5rem;
       transition: transform 0.2s ease;
     }
-    .suggested-reel:hover {
+
+    .back-btn:hover {
+      transform: scale(1.1);
+    }
+
+    .back-btn svg {
+      width: 24px;
+      height: 24px;
+      stroke: var(--text-dark);
+    }
+
+    .selected-image {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 2px solid var(--white);
+      background: var(--gradient);
+      padding: 2px;
+    }
+
+    .reels-container {
+      flex: 1;
+      overflow-y: auto;
+      scroll-snap-type: y mandatory;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .reel {
+      height: 100vh;
+      scroll-snap-align: start;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      background: var(--white);
+    }
+
+    .reel video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .reel-overlay {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      padding: 1rem;
+      background: linear-gradient(to top, rgba(0, 0, 0, 0.5), transparent);
+      color: var(--white);
+    }
+
+    .reel-username {
+      font-size: clamp(0.9rem, 2.5vw, 1rem);
+      font-weight: 600;
+      margin-bottom: 0.25rem;
+      cursor: pointer;
+    }
+
+    .reel-caption {
+      font-size: clamp(0.8rem, 2vw, 0.9rem);
+      margin-bottom: 0.5rem;
+    }
+
+    .reel-actions {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .reel-action {
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+      cursor: pointer;
+      transition: transform 0.2s ease;
+    }
+
+    .reel-action:hover {
+      transform: scale(1.1);
+    }
+
+    .reel-action svg {
+      width: 24px;
+      height: 24px;
+      fill: var(--white);
+    }
+
+    .reel-action.liked svg {
+      fill: var(--primary-red);
+    }
+
+    .reel-action span {
+      font-size: clamp(0.8rem, 2vw, 0.9rem);
+      color: var(--white);
+    }
+
+    .mute-btn {
+      position: absolute;
+      top: 1rem;
+      right: 1rem;
+      background: rgba(0, 0, 0, 0.5);
+      border: none;
+      border-radius: 50%;
+      padding: 0.5rem;
+      cursor: pointer;
+      transition: transform 0.2s ease;
+    }
+
+    .mute-btn:hover {
+      transform: scale(1.1);
+    }
+
+    .mute-btn svg {
+      width: 20px;
+      height: 20px;
+      fill: var(--white);
+    }
+
+    .fab {
+      position: fixed;
+      bottom: 1rem;
+      right: 1rem;
+      background: var(--primary-red);
+      border: none;
+      border-radius: 50%;
+      width: 56px;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+      cursor: pointer;
+      transition: transform 0.2s ease;
+    }
+
+    .fab:hover {
       transform: scale(1.05);
     }
-    .suggested-reel img {
-      width: 100%; height: 100%; object-fit: cover;
+
+    .fab svg {
+      width: 24px;
+      height: 24px;
+      fill: var(--white);
     }
-    .suggested-reel-overlay {
-      position: absolute; bottom: 0; left: 0; right: 0; padding: 0.25rem;
-      background: rgba(0, 0, 0, 0.5); color: white; font-size: 0.75rem;
-      text-align: center; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;
+
+    .loading-spinner {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      visibility: hidden;
     }
-    .error-message {
-      color: #ef4444; text-align: center; padding: 1rem; font-size: 0.9rem;
-      text-shadow: 0 0 4px rgba(0, 0, 0, 0.8);
+
+    .loading-spinner.active {
+      visibility: visible;
     }
-    .love-animation {
-      position: absolute;
-      width: 40px; height: 40px; z-index: 20;
-      color: #ef4444; fill: #ef4444;
-      animation: loveFloat 1.5s ease-in-out forwards;
-      pointer-events: none;
+
+    .loading-spinner svg {
+      width: 40px;
+      height: 40px;
+      color: var(--primary-red);
     }
-    @media (min-width: 640px) {
-      .reel-media {
-        max-width: 480px; margin: 0 auto;
-      }
-      .reel-overlay {
-        max-width: 480px; left: 50%; transform: translateX(-50%);
-      }
-      .reel-actions {
-        right: calc(50% + 240px + 1rem);
-        top: 50%; transform: translateY(-50%);
-      }
-      .reel-mute-toggle {
-        right: calc(50% + 240px + 1rem);
-      }
-      .suggested-reels {
-        max-width: 480px; left: 50%; transform: translateX(-50%);
-      }
+
+    .error {
+      color: var(--white);
+      text-align: center;
+      padding: 1rem;
+      font-size: clamp(0.8rem, 2.5vw, 0.9rem);
+      background: rgba(0, 0, 0, 0.7);
     }
-    @media (max-width: 640px) {
-      .reel-overlay {
-        bottom: 3rem; left: 0.75rem; max-width: 65%;
-      }
-      .reel-actions {
-        right: 0.75rem; top: 50%; transform: translateY(-50%); gap: 1rem;
-      }
-      .reel-mute-toggle {
-        bottom: 1rem; right: 1rem; padding: 0.5rem;
-      }
-      .home-btn {
-        top: 0.75rem; left: 0.75rem; padding: 0.4rem 0.8rem; font-size: 0.85rem;
-      }
-      .suggested-reels {
-        bottom: 7rem; padding: 0.5rem;
-      }
-      .reel-track-info audio {
-        max-width: 250px;
-      }
+
+    .placeholder {
+      color: var(--white);
+      text-align: center;
+      padding: 1rem;
+      font-size: clamp(0.8rem, 2.5vw, 0.9rem);
+      background: rgba(0, 0, 0, 0.7);
     }
-    @keyframes spin {
-      to { transform: rotate(360deg); }
-    }
-    @keyframes likeAnimation {
-      0% { transform: scale(1); }
-      50% { transform: scale(1.3); }
-      100% { transform: scale(1); }
-    }
-    @keyframes loveFloat {
-      0% {
-        transform: translateY(0) scale(1);
-        opacity: 1;
-        bottom: 10%;
+
+    @media (max-width: 414px) {
+      .container {
+        padding: 0;
       }
-      50% {
-        transform: translateY(-40vh) scale(1.2);
-        opacity: 0.8;
+
+      .selected-image {
+        width: 32px;
+        height: 32px;
       }
-      100% {
-        transform: translateY(-80vh) scale(0.8);
-        opacity: 0;
+
+      .reel-username {
+        font-size: clamp(0.8rem, 2vw, 0.9rem);
+      }
+
+      .reel-caption {
+        font-size: clamp(0.7rem, 1.8vw, 0.8rem);
+      }
+
+      .reel-action svg {
+        width: 20px;
+        height: 20px;
+      }
+
+      .reel-action span {
+        font-size: clamp(0.7rem, 1.8vw, 0.8rem);
+      }
+
+      .mute-btn {
+        padding: 0.4rem;
+      }
+
+      .mute-btn svg {
+        width: 16px;
+        height: 16px;
+      }
+
+      .fab {
+        width: 48px;
+        height: 48px;
+      }
+
+      .fab svg {
+        width: 20px;
+        height: 20px;
       }
     }
   </style>
 </head>
 <body>
-  <!-- Home Button -->
-  <a href="friends.html" class="home-btn" aria-label="Go to Friends">
-    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7m-7 7v-10"/>
+  <div class="loading-spinner" id="loading-spinner">
+    <svg class="animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4z"/>
     </svg>
-    Friends
-  </a>
-
-  <!-- Reel Container -->
-  <div class="reel-container" id="reelContainer"></div>
-
-  <!-- Share Modal -->
-  <div id="shareModal" class="modal">
-    <div class="modal-content dark:modal-content">
-      <h2 class="modal-title dark:modal-title">
-        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/>
-        </svg>
-        Share Reel
-      </h2>
-      <div id="friendList" class="friends-list"></div>
-      <button id="copyLinkBtn" class="modal-btn modal-btn-confirm dark:modal-btn-confirm mt-2">
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
-        </svg>
-        Copy Link
-      </button>
-      <button id="closeShareModalBtn" class="modal-btn modal-btn-cancel dark:modal-btn-cancel mt-2">Close</button>
-    </div>
   </div>
-
-  <!-- Loading Overlay -->
-  <div id="loadingOverlay" class="loading-overlay hidden">
-    <div class="loading-spinner dark:loading-spinner"></div>
+  <div class="container">
+    <header>
+      <button class="back-btn" aria-label="Back to home">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M15 18l-6-6 6-6"/>
+        </svg>
+      </button>
+      <img class="selected-image" id="selected-image" src="https://www.gravatar.com/avatar?d=mp" alt="Selected profile or post image">
+      <span>Reels</span>
+    </header>
+    <div class="reels-container" id="reels-container"></div>
+    <button class="fab" aria-label="Upload reel">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+        <path d="M12 4v16m8-8H4"/>
+      </svg>
+    </button>
   </div>
 
   <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
-    import { getDatabase, ref, onValue, get, set, push, update } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-database.js";
-    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
+    import { getDatabase, ref, get, query, orderByChild, equalTo, set, onValue } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
+    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
@@ -378,698 +343,219 @@
     const db = getDatabase(app);
     const auth = getAuth(app);
 
-    const reelContainer = document.getElementById('reelContainer');
-    const shareModal = document.getElementById('shareModal');
-    const friendList = document.getElementById('friendList');
-    const copyLinkBtn = document.getElementById('copyLinkBtn');
-    const closeShareModalBtn = document.getElementById('closeShareModalBtn');
-    const loadingOverlay = document.getElementById('loadingOverlay');
-    let currentUser = null;
-    let activeReelId = null;
-    let friendUids = new Set();
-    let touchStartY = 0;
-    let touchMoved = false;
+    let currentUserUid = null;
+    let currentReelIndex = 0;
+    let reels = [];
 
-    function showLoading() { 
-      console.log('Showing loading overlay');
-      loadingOverlay.classList.remove('hidden'); 
-    }
-    function hideLoading() { 
-      console.log('Hiding loading overlay');
-      loadingOverlay.classList.add('hidden'); 
+    function showLoading() {
+      document.getElementById("loading-spinner").classList.add("active");
     }
 
-    function showToast(message, isError = false) {
-      console.log('Toast:', message, isError ? 'Error' : 'Success');
-      Toastify({
-        text: message,
-        duration: 3000,
-        gravity: "bottom",
-        position: "right",
-        backgroundColor: isError ? "#EF4444" : "#10B981",
-        className: isError ? "friend-result error" : "friend-result",
-      }).showToast();
-    }
-
-    function applyTheme(themeValue) {
-      console.log('Applying theme:', themeValue);
-      const isDark = themeValue === 'dark';
-      document.body.classList.toggle('dark', isDark);
-      document.querySelectorAll('.modal-content, .modal-title, .modal-btn-cancel, .modal-btn-confirm, .reel-user-info img, .loading-spinner').forEach(el => el.classList.toggle('dark', isDark));
+    function hideLoading() {
+      document.getElementById("loading-spinner").classList.remove("active");
     }
 
     function timeAgo(timestamp) {
-      const now = new Date('2025-07-08T23:14:00+02:00').getTime(); // 11:14 PM SAST, July 08, 2025
-      const diff = now - (timestamp || now);
-      const seconds = Math.floor(diff / 1000);
+      const now = Date.now();
+      const seconds = Math.floor((now - timestamp) / 1000);
+      if (seconds < 60) return "just now";
       const minutes = Math.floor(seconds / 60);
-      const hours = Math.floor(minutes / 60);
-      const days = Math.floor(hours / 24);
-      if (seconds < 60) return `${seconds}s ago`;
       if (minutes < 60) return `${minutes}m ago`;
+      const hours = Math.floor(minutes / 60);
       if (hours < 24) return `${hours}h ago`;
-      if (days < 7) return `${days}d ago`;
-      return new Date(timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      const days = Math.floor(hours / 24);
+      return `${days}d ago`;
     }
 
-    function sanitizeInput(input) {
-      const div = document.createElement('div');
-      div.textContent = input || '';
-      return div.innerHTML;
+    function pauseAllVideos() {
+      document.querySelectorAll("video").forEach(video => video.pause());
     }
 
-    function createLoveAnimation(reel) {
-      console.log('Creating love animation');
-      const numHearts = 5;
-      for (let i = 0; i < numHearts; i++) {
-        const heart = document.createElement('svg');
-        heart.className = 'love-animation';
-        heart.style.left = `${50 + (Math.random() - 0.5) * 20}%`;
-        heart.style.bottom = '10%';
-        heart.innerHTML = `
-          <svg viewBox="0 0 24 24" width="40" height="40">
-            <path fill="currentColor" d="M4.318 6.318a4.5 4.5 0 016.364 0L12 7.636l1.318-1.318a4.5 4.5 0 016.364 0 4.5 4.5 0 010 6.364L12 20.364l-7.682-7.682a4.5 4.5 0 010-6.364z"/>
-          </svg>`;
-        reel.appendChild(heart);
-        setTimeout(() => heart.remove(), 1500);
-      }
-    }
-
-    async function loadFriends() {
-      console.log('Loading friends');
-      friendUids.clear();
-      try {
-        const chatsRef = ref(db, 'chats');
-        const chatsSnap = await get(chatsRef);
-        if (chatsSnap.exists()) {
-          const chats = chatsSnap.val();
-          for (const chatId in chats) {
-            const participants = chats[chatId].participants || {};
-            if (participants[currentUser.uid]) {
-              for (const uid in participants) {
-                if (uid !== currentUser.uid) friendUids.add(uid);
-              }
-            }
-          }
-        }
-        console.log('Friends loaded:', Array.from(friendUids));
-      } catch (error) {
-        console.error('Error loading friends:', error);
-        showToast('Error loading friends.', true);
-      }
-    }
-
-    async function loadReels(targetStatusId = null) {
-      console.log('Loading reels, targetStatusId:', targetStatusId);
+    async function toggleLike(postId, likeBtn) {
+      if (!currentUserUid) return;
       showLoading();
       try {
-        const statusesRef = ref(db, 'statuses');
-        const statusesSnap = await get(statusesRef);
-        const statuses = statusesSnap.val() || {};
-        console.log('Statuses fetched:', statuses);
+        const likeRef = ref(db, `posts/${postId}/likes/${currentUserUid}`);
+        const likeSnap = await get(likeRef);
+        const isLiked = likeSnap.exists();
 
-        if (!Object.keys(statuses).length) {
-          console.log('No statuses found');
-          reelContainer.innerHTML = '<p class="error-message">No reels available.</p>';
+        await set(likeRef, isLiked ? null : true);
+        likeBtn.classList.toggle("liked", !isLiked);
+      } catch (error) {
+        console.error("Error toggling like:", error.message);
+      } finally {
+        hideLoading();
+      }
+    }
+
+    async function loadReels() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const targetUid = urlParams.get("uid");
+      const postId = urlParams.get("postId");
+      showLoading();
+
+      try {
+        let selectedImage = "https://www.gravatar.com/avatar?d=mp";
+        if (targetUid) {
+          const userSnap = await get(ref(db, `users/${targetUid}`));
+          if (userSnap.exists()) {
+            selectedImage = userSnap.val().photoURL || selectedImage;
+          }
+        } else if (postId) {
+          const postSnap = await get(ref(db, `posts/${postId}`));
+          if (postSnap.exists()) {
+            const post = postSnap.val();
+            selectedImage = post.imageUrls?.[0] || post.videoUrl || selectedImage;
+          }
+        }
+        document.getElementById("selected-image").src = selectedImage;
+
+        const reelsQuery = targetUid
+          ? query(ref(db, "posts"), orderByChild("userId"), equalTo(targetUid))
+          : query(ref(db, "posts"), orderByChild("postType"), equalTo("reel"));
+        const reelsSnap = await get(reelsQuery);
+
+        reels = Object.entries(reelsSnap.val() || {})
+          .map(([id, post]) => ({ id, ...post }))
+          .filter(post => post.postType === "reel" && post.videoUrl)
+          .sort((a, b) => b.timestamp - a.timestamp);
+
+        if (reels.length === 0) {
+          document.getElementById("reels-container").innerHTML = '<div class="placeholder">No reels available.</div>';
           hideLoading();
           return;
         }
 
-        const statusEntries = Object.entries(statuses)
-          .filter(([_, status]) => {
-            const hasValidMedia = status.media && Array.isArray(status.media) && status.media.some(media => ['video', 'image'].includes(media.type));
-            const hasValidTrack = status.track && status.track.url && status.track.name && status.track.artist && status.track.jamendoUrl;
-            return hasValidMedia || hasValidTrack;
-          })
-          .sort((a, b) => (b[1].timestamp || 0) - (a[1].timestamp || 0));
-        console.log('Filtered status entries:', statusEntries);
+        if (postId) {
+          currentReelIndex = reels.findIndex(reel => reel.id === postId);
+          if (currentReelIndex === -1) currentReelIndex = 0;
+        }
 
-        let targetReelElement = null;
-        reelContainer.innerHTML = '';
-
-        for (const [statusId, status] of statusEntries) {
-          console.log('Processing status:', statusId, status);
-          try {
-            const userSnap = await get(ref(db, `users/${status.userId}`));
-            const userInfo = userSnap.val() || { name: 'Anonymous', photoURL: 'https://www.gravatar.com/avatar?d=mp' };
-            console.log('User info for', status.userId, ':', userInfo);
-
-            // Handle media (videos/images)
-            const mediaItems = Array.isArray(status.media) ? status.media : [];
-            mediaItems.forEach((media, idx) => {
-              if (!['video', 'image'].includes(media.type)) return;
-
-              console.log('Creating reel for media:', media);
-              const reel = document.createElement('div');
-              reel.className = 'reel';
-              reel.dataset.sid = statusId;
-              reel.dataset.mediaIndex = idx;
-
-              let mediaElement;
-              if (media.type === 'video') {
-                mediaElement = document.createElement('video');
-                mediaElement.src = media.url || '';
-                mediaElement.loop = true;
-                mediaElement.muted = media.muted !== false;
-                mediaElement.playsInline = true;
-                mediaElement.className = 'reel-media';
-                mediaElement.poster = media.thumbnail || 'https://via.placeholder.com/640x360?text=Reel+Thumbnail';
-              } else {
-                mediaElement = document.createElement('img');
-                mediaElement.src = media.url || 'https://via.placeholder.com/640x360?text=Image';
-                mediaElement.alt = 'Reel image';
-                mediaElement.className = 'reel-media';
-              }
-
-              const loadingSpinner = document.createElement('div');
-              loadingSpinner.className = 'loading-spinner dark:loading-spinner';
-              loadingSpinner.style.display = 'none';
-
-              const overlay = document.createElement('div');
-              overlay.className = 'reel-overlay';
-              overlay.innerHTML = `
-                <div class="reel-user-info">
-                  <a href="profile.html?uid=${status.userId}&owner=${status.userId === currentUser.uid}" aria-label="View ${sanitizeInput(userInfo.name)}'s profile">
-                    <img src="${sanitizeInput(userInfo.photoURL)}" alt="${sanitizeInput(userInfo.name)} avatar" class="dark:reel-user-info img"/>
-                  </a>
-                  <a href="profile.html?uid=${status.userId}&owner=${status.userId === currentUser.uid}" class="hover:underline">${sanitizeInput(userInfo.name)}</a>
+        const reelsContainer = document.getElementById("reels-container");
+        reelsContainer.innerHTML = "";
+        reels.forEach((reel, index) => {
+          const userRef = ref(db, `users/${reel.userId}`);
+          get(userRef).then(userSnap => {
+            const user = userSnap.val() || {};
+            const reelElement = document.createElement("div");
+            reelElement.className = "reel";
+            reelElement.innerHTML = `
+              <video src="${reel.videoUrl}" loop playsinline ${index === currentReelIndex ? "autoplay" : ""} ${reel.isMuted ? "muted" : ""}></video>
+              <div class="reel-overlay">
+                <div class="reel-username">${user.username || "Unknown"}</div>
+                <div class="reel-caption">${reel.caption || ""} • ${timeAgo(reel.timestamp)}</div>
+                <div class="reel-actions">
+                  <div class="reel-action like-btn" data-post-id="${reel.id}">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                      <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+                    </svg>
+                    <span class="like-count">0</span>
+                  </div>
+                  <div class="reel-action comment-btn" data-post-id="${reel.id}">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                      <path d="M21 6h-2V4H3v16l4-4h14V6zm-2 8H7.83L5 16.83V4h12v10z"/>
+                    </svg>
+                    <span class="comment-count">0</span>
+                  </div>
                 </div>
-                <p class="reel-caption">${sanitizeInput(status.text || '')}</p>
-              `;
+              </div>
+              <button class="mute-btn" data-post-id="${reel.id}">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                  ${reel.isMuted ? '<path d="M3 9v6h4l5 5V4l-5 5H3zm13 3a4 4 0 0 0-4-4v8a4 4 0 0 0 4-4zm3 0a7 7 0 0 0-7-7v14a7 7 0 0 0 7-7z"/>' : '<path d="M3 9v6h4l5 5V4l-5 5H3zm13.11 3.47l1.54-1.54 1.54 1.54 1.54-1.54-1.54-1.54 1.54-1.54-1.54-1.54-1.54 1.54-1.54-1.54-1.54 1.54 1.54 1.54-1.54 1.54 1.54 1.54z"/>'}
+                </svg>
+              </button>
+            `;
+            reelsContainer.appendChild(reelElement);
 
-              // Add track info if present
-              if (status.track && status.track.url && status.track.name && status.track.artist && status.track.jamendoUrl) {
-                console.log('Adding track info:', status.track);
-                const trackInfo = document.createElement('div');
-                trackInfo.className = 'reel-track-info';
-                trackInfo.innerHTML = `
-                  <audio src="${sanitizeInput(status.track.url)}" controls class="reel-media" data-duration="30" aria-label="Track: ${sanitizeInput(status.track.name)} by ${sanitizeInput(status.track.artist)}"></audio>
-                  <p>${sanitizeInput(status.track.name)} by ${sanitizeInput(status.track.artist)}</p>
-                  <a href="${sanitizeInput(status.track.jamendoUrl)}" target="_blank" class="hover:underline" aria-label="Listen to ${sanitizeInput(status.track.name)} on Jamendo">Listen on Jamendo</a>
-                `;
-                overlay.appendChild(trackInfo);
-                // Limit audio to 30 seconds
-                const audio = trackInfo.querySelector('audio');
-                audio.addEventListener('timeupdate', () => {
-                  if (audio.currentTime > 30) {
-                    audio.pause();
-                    audio.currentTime = 0;
-                    audio.classList.remove('playing');
-                  }
-                });
-              }
-
-              const actions = document.createElement('div');
-              actions.className = 'reel-actions';
-
-              const likeBtn = document.createElement('button');
-              likeBtn.className = `reel-action-btn ${status.reactions?.[currentUser.uid] ? 'reacted' : ''}`;
-              likeBtn.innerHTML = `
-                <svg class="w-7 h-7" fill="${status.reactions?.[currentUser.uid] ? '#ef4444' : 'none'}" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4.318 6.318a4.5 4.5 0 016.364 0L12 7.636l1.318-1.318a4.5 4.5 0 016.364 0 4.5 4.5 0 010 6.364L12 20.364l-7.682-7.682a4.5 4.5 0 010-6.364z"/>
-                </svg>`;
-              likeBtn.setAttribute('aria-label', status.reactions?.[currentUser.uid] ? 'Unlike reel' : 'Like reel');
-              likeBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                if (!status.reactions?.[currentUser.uid]) createLoveAnimation(reel);
-                toggleLike(statusId, likeBtn);
-              });
-
-              const likeCount = document.createElement('span');
-              likeCount.className = 'reel-action-count';
-              likeCount.textContent = status.reactions ? Object.keys(status.reactions).length : 0;
-
-              const shareBtn = document.createElement('button');
-              shareBtn.className = 'reel-action-btn';
-              shareBtn.innerHTML = `
-                <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/>
-                </svg>`;
-              shareBtn.setAttribute('aria-label', 'Share reel');
-              shareBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                openShareModal(statusId);
-              });
-
-              const muteToggle = document.createElement('div');
-              if (media.type === 'video') {
-                muteToggle.className = 'reel-mute-toggle';
-                muteToggle.innerHTML = `
-                  <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    ${mediaElement.muted ? 
-                      `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707A1 1 0 0112 5v14a1 1 0 01-1.707.707L5.586 15zm8.879-2.121a3 3 0 000-4.242m2.828 7.071a6 6 0 000-8.485"/>` :
-                      `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.900a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707A1 1 0 0112 5v14a1 1 0 01-1.707.707L5.586 15z"/>`}
-                  </svg>`;
-                muteToggle.addEventListener('click', (e) => {
-                  e.stopPropagation();
-                  mediaElement.muted = !mediaElement.muted;
-                  muteToggle.innerHTML = `
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      ${mediaElement.muted ? 
-                        `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707A1 1 0 0112 5v14a1 1 0 01-1.707.707L5.586 15zm8.879-2.121a3 3 0 000-4.242m2.828 7.071a6 6 0 000-8.485"/>` :
-                        `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.900a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707A1 1 0 0112 5v14a1 1 0 01-1.707.707L5.586 15z"/>`}
-                    </svg>`;
-                  update(ref(db, `statuses/${statusId}/media/${idx}`), { muted: mediaElement.muted });
-                });
-              }
-
-              const suggestedReels = document.createElement('div');
-              suggestedReels.className = 'suggested-reels';
-              statusEntries.slice(0, 5).forEach(([sid, s]) => {
-                if (sid === statusId || !s.media?.[0]?.thumbnail) return;
-                const thumb = document.createElement('div');
-                thumb.className = 'suggested-reel';
-                thumb.innerHTML = `
-                  <img src="${sanitizeInput(s.media[0].thumbnail || 'https://via.placeholder.com/80x120?text=Reel')}" alt="Suggested reel"/>
-                  <div class="suggested-reel-overlay">${sanitizeInput(s.text || 'Reel')}</div>
-                `;
-                thumb.addEventListener('click', () => {
-                  const target = reelContainer.querySelector(`[data-sid="${sid}"]`);
-                  if (target) target.scrollIntoView({ behavior: 'smooth' });
-                });
-                suggestedReels.appendChild(thumb);
-              });
-
-              actions.append(likeBtn, likeCount, shareBtn);
-              reel.append(mediaElement, loadingSpinner, overlay, actions);
-              if (media.type === 'video') reel.append(muteToggle);
-              reel.append(suggestedReels);
-              reelContainer.appendChild(reel);
-
-              if (media.type === 'video') {
-                mediaElement.addEventListener('click', (e) => {
-                  e.stopPropagation();
-                  if (mediaElement.paused) {
-                    loadingSpinner.style.display = 'block';
-                    mediaElement.play().then(() => {
-                      mediaElement.classList.add('playing');
-                      loadingSpinner.style.display = 'none';
-                    }).catch(error => {
-                      console.error('Error playing video:', error);
-                      showToast('Error playing video.', true);
-                      loadingSpinner.style.display = 'none';
-                    });
-                  } else {
-                    mediaElement.pause();
-                    mediaElement.classList.remove('playing');
-                  }
-                });
-
-                mediaElement.addEventListener('waiting', () => loadingSpinner.style.display = 'block');
-                mediaElement.addEventListener('stalled', () => loadingSpinner.style.display = 'block');
-                mediaElement.addEventListener('canplay', () => loadingSpinner.style.display = 'none');
-                mediaElement.addEventListener('playing', () => mediaElement.classList.add('playing'));
-                mediaElement.addEventListener('pause', () => mediaElement.classList.remove('playing'));
-              } else {
-                mediaElement.addEventListener('load', () => loadingSpinner.style.display = 'none');
-                mediaElement.addEventListener('error', () => {
-                  console.error('Error loading image:', mediaElement.src);
-                  showToast('Error loading image.', true);
-                  loadingSpinner.style.display = 'none';
-                });
-              }
-
-              if (statusId === targetStatusId && idx === 0) {
-                targetReelElement = reel;
-                if (media.type === 'video') {
-                  loadingSpinner.style.display = 'block';
-                  mediaElement.play().then(() => {
-                    mediaElement.classList.add('playing');
-                    loadingSpinner.style.display = 'none';
-                  }).catch(error => {
-                    console.error('Error auto-playing video:', error);
-                    loadingSpinner.style.display = 'none';
-                  });
-                }
-              }
-
-              reel.addEventListener('touchstart', (e) => {
-                touchStartY = e.touches[0].clientY;
-                touchMoved = false;
-              });
-
-              reel.addEventListener('touchmove', (e) => {
-                touchMoved = true;
-              });
-
-              reel.addEventListener('touchend', (e) => {
-                if (touchMoved) {
-                  const touchEndY = e.changedTouches[0].clientY;
-                  const deltaY = touchStartY - touchEndY;
-                  if (Math.abs(deltaY) > 50) {
-                    const nextReel = deltaY > 0 ? reel.nextElementSibling : reel.previousElementSibling;
-                    if (nextReel) {
-                      reel.style.opacity = '0';
-                      reel.style.transform = `translateY(${deltaY > 0 ? '100vh' : '-100vh'})`;
-                      setTimeout(() => {
-                        nextReel.scrollIntoView({ behavior: 'smooth' });
-                        reel.style.opacity = '1';
-                        reel.style.transform = 'translateY(0)';
-                      }, 400);
-                    }
-                  }
-                }
-              });
+            // Real-time like and comment counts
+            onValue(ref(db, `posts/${reel.id}/likes`), snap => {
+              const likes = snap.val() || {};
+              const likeCount = Object.keys(likes).length;
+              reelElement.querySelector(".like-count").textContent = likeCount;
+              reelElement.querySelector(".like-btn").classList.toggle("liked", likes[currentUserUid]);
             });
 
-            // Handle track-only reels (no media)
-            if (!mediaItems.length && status.track && status.track.url && status.track.name && status.track.artist && status.track.jamendoUrl) {
-              console.log('Creating track-only reel for:', statusId);
-              const reel = document.createElement('div');
-              reel.className = 'reel';
-              reel.dataset.sid = statusId;
-              reel.dataset.mediaIndex = -1;
+            onValue(ref(db, `posts/${reel.id}/comments`), snap => {
+              const comments = snap.val() || {};
+              reelElement.querySelector(".comment-count").textContent = Object.keys(comments).length;
+            });
 
-              const placeholder = document.createElement('img');
-              placeholder.src = 'https://via.placeholder.com/640x360?text=Music+Reel';
-              placeholder.alt = 'Music reel placeholder';
-              placeholder.className = 'reel-media';
+            // Event listeners
+            const video = reelElement.querySelector("video");
+            video.addEventListener("click", () => {
+              video.paused ? video.play() : video.pause();
+            });
 
-              const loadingSpinner = document.createElement('div');
-              loadingSpinner.className = 'loading-spinner dark:loading-spinner';
-              loadingSpinner.style.display = 'none';
+            reelElement.querySelector(".reel-username").addEventListener("click", (e) => {
+              e.stopPropagation();
+              location.href = `profile.html?uid=${reel.userId}`;
+            });
 
-              const overlay = document.createElement('div');
-              overlay.className = 'reel-overlay';
-              overlay.innerHTML = `
-                <div class="reel-user-info">
-                  <a href="profile.html?uid=${status.userId}&owner=${status.userId === currentUser.uid}" aria-label="View ${sanitizeInput(userInfo.name)}'s profile">
-                    <img src="${sanitizeInput(userInfo.photoURL)}" alt="${sanitizeInput(userInfo.name)} avatar" class="dark:reel-user-info img"/>
-                  </a>
-                  <a href="profile.html?uid=${status.userId}&owner=${status.userId === currentUser.uid}" class="hover:underline">${sanitizeInput(userInfo.name)}</a>
-                </div>
-                <p class="reel-caption">${sanitizeInput(status.text || '')}</p>
-                <div class="reel-track-info">
-                  <audio src="${sanitizeInput(status.track.url)}" controls class="reel-media" data-duration="30" aria-label="Track: ${sanitizeInput(status.track.name)} by ${sanitizeInput(status.track.artist)}"></audio>
-                  <p>${sanitizeInput(status.track.name)} by ${sanitizeInput(status.track.artist)}</p>
-                  <a href="${sanitizeInput(status.track.jamendoUrl)}" target="_blank" class="hover:underline" aria-label="Listen to ${sanitizeInput(status.track.name)} on Jamendo">Listen on Jamendo</a>
-                </div>
-              `;
-              // Limit audio to 30 seconds
-              const audio = overlay.querySelector('audio');
-              audio.addEventListener('timeupdate', () => {
-                if (audio.currentTime > 30) {
-                  audio.pause();
-                  audio.currentTime = 0;
-                  audio.classList.remove('playing');
-                }
-              });
+            reelElement.querySelector(".like-btn").addEventListener("click", (e) => {
+              e.stopPropagation();
+              toggleLike(reel.id, e.currentTarget);
+            });
 
-              const actions = document.createElement('div');
-              actions.className = 'reel-actions';
+            reelElement.querySelector(".comment-btn").addEventListener("click", (e) => {
+              e.stopPropagation();
+              location.href = `post.html?id=${reel.id}`;
+            });
 
-              const likeBtn = document.createElement('button');
-              likeBtn.className = `reel-action-btn ${status.reactions?.[currentUser.uid] ? 'reacted' : ''}`;
-              likeBtn.innerHTML = `
-                <svg class="w-7 h-7" fill="${status.reactions?.[currentUser.uid] ? '#ef4444' : 'none'}" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4.318 6.318a4.5 4.5 0 016.364 0L12 7.636l1.318-1.318a4.5 4.5 0 016.364 0 4.5 4.5 0 010 6.364L12 20.364l-7.682-7.682a4.5 4.5 0 010-6.364z"/>
-                </svg>`;
-              likeBtn.setAttribute('aria-label', status.reactions?.[currentUser.uid] ? 'Unlike reel' : 'Like reel');
-              likeBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                if (!status.reactions?.[currentUser.uid]) createLoveAnimation(reel);
-                toggleLike(statusId, likeBtn);
-              });
-
-              const likeCount = document.createElement('span');
-              likeCount.className = 'reel-action-count';
-              likeCount.textContent = status.reactions ? Object.keys(status.reactions).length : 0;
-
-              const shareBtn = document.createElement('button');
-              shareBtn.className = 'reel-action-btn';
-              shareBtn.innerHTML = `
-                <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/>
-                </svg>`;
-              shareBtn.setAttribute('aria-label', 'Share reel');
-              shareBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                openShareModal(statusId);
-              });
-
-              actions.append(likeBtn, likeCount, shareBtn);
-              reel.append(placeholder, loadingSpinner, overlay, actions);
-              reelContainer.appendChild(reel);
-
-              if (statusId === targetStatusId) {
-                targetReelElement = reel;
-              }
-
-              reel.addEventListener('touchstart', (e) => {
-                touchStartY = e.touches[0].clientY;
-                touchMoved = false;
-              });
-
-              reel.addEventListener('touchmove', (e) => {
-                touchMoved = true;
-              });
-
-              reel.addEventListener('touchend', (e) => {
-                if (touchMoved) {
-                  const touchEndY = e.changedTouches[0].clientY;
-                  const deltaY = touchStartY - touchEndY;
-                  if (Math.abs(deltaY) > 50) {
-                    const nextReel = deltaY > 0 ? reel.nextElementSibling : reel.previousElementSibling;
-                    if (nextReel) {
-                      reel.style.opacity = '0';
-                      reel.style.transform = `translateY(${deltaY > 0 ? '100vh' : '-100vh'})`;
-                      setTimeout(() => {
-                        nextReel.scrollIntoView({ behavior: 'smooth' });
-                        reel.style.opacity = '1';
-                        reel.style.transform = 'translateY(0)';
-                      }, 400);
-                    }
-                  }
-                }
-              });
-            }
-          } catch (error) {
-            console.error(`Error processing status ${statusId}:`, error);
-            showToast(`Error processing reel ${statusId}.`, true);
-          }
-        }
-
-        if (reelContainer.children.length === 0) {
-          console.log('No reels rendered');
-          reelContainer.innerHTML = '<p class="error-message">No reels available.</p>';
-        } else {
-          console.log('Observing media for', reelContainer.children.length, 'reels');
-          observeMedia();
-          if (targetReelElement) {
-            console.log('Scrolling to target reel:', targetStatusId);
-            targetReelElement.scrollIntoView({ behavior: 'smooth' });
-          }
-        }
-
-        onValue(ref(db, 'statuses'), (snapshot) => {
-          console.log('Statuses updated:', snapshot.val());
-          const statuses = snapshot.val() || {};
-          document.querySelectorAll('.reel').forEach(reel => {
-            const sid = reel.dataset.sid;
-            const status = statuses[sid];
-            if (status) {
-              const likeBtn = reel.querySelector('.reel-action-btn[aria-label*="Like"]');
-              if (likeBtn) {
-                const isLiked = status.reactions?.[currentUser.uid];
-                likeBtn.innerHTML = `
-                  <svg class="w-7 h-7" fill="${isLiked ? '#ef4444' : 'none'}" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4.318 6.318a4.5 4.5 0 016.364 0L12 7.636l1.318-1.318a4.5 4.5 0 016.364 0 4.5 4.5 0 010 6.364L12 20.364l-7.682-7.682a4.5 4.5 0 010-6.364z"/>
-                  </svg>`;
-                likeBtn.setAttribute('aria-label', isLiked ? 'Unlike reel' : 'Like reel');
-                likeBtn.classList.toggle('reacted', !!isLiked);
-              }
-              const likeCount = reel.querySelector('.reel-action-count');
-              if (likeCount) likeCount.textContent = status.reactions ? Object.keys(status.reactions).length : 0;
-            }
+            reelElement.querySelector(".mute-btn").addEventListener("click", (e) => {
+              e.stopPropagation();
+              video.muted = !video.muted;
+              set(ref(db, `posts/${reel.id}/isMuted`), video.muted);
+              e.currentTarget.innerHTML = video.muted
+                ? `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4l-5 5H3zm13 3a4 4 0 0 0-4-4v8a4 4 0 0 0 4-4zm3 0a7 7 0 0 0-7-7v14a7 7 0 0 0 7-7z"/></svg>`
+                : `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4l-5 5H3zm13.11 3.47l1.54-1.54 1.54 1.54 1.54-1.54-1.54-1.54 1.54-1.54-1.54-1.54-1.54 1.54-1.54-1.54-1.54 1.54 1.54 1.54-1.54 1.54 1.54 1.54z"/></svg>`;
+            });
           });
         });
 
-        hideLoading();
-      } catch (error) {
-        console.error('Error loading reels:', error);
-        reelContainer.innerHTML = '<p class="error-message">Error loading reels.</p>';
-        showToast('Error loading reels.', true);
-        hideLoading();
-      }
-    }
-
-    function toggleLike(statusId, likeBtn) {
-      console.log('Toggling like for status:', statusId);
-      const isLiked = likeBtn.classList.contains('reacted');
-      likeBtn.style.animation = isLiked ? 'none' : 'likeAnimation 0.3s ease';
-      setTimeout(() => likeBtn.style.animation = 'none', 300);
-      set(ref(db, `statuses/${statusId}/reactions/${currentUser.uid}`), isLiked ? null : { timestamp: Date.now() })
-        .then(() => {
-          likeBtn.innerHTML = `
-            <svg class="w-7 h-7" fill="${isLiked ? 'none' : '#ef4444'}" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4.318 6.318a4.5 4.5 0 016.364 0L12 7.636l1.318-1.318a4.5 4.5 0 016.364 0 4.5 4.5 0 010 6.364L12 20.364l-7.682-7.682a4.5 4.5 0 010-6.364z"/>
-            </svg>`;
-          likeBtn.setAttribute('aria-label', isLiked ? 'Like reel' : 'Unlike reel');
-          likeBtn.classList.toggle('reacted', !isLiked);
-          showToast(isLiked ? 'Unliked reel.' : 'Liked reel.');
-        })
-        .catch(error => {
-          console.error('Error toggling like:', error);
-          showToast('Error toggling like.', true);
-        });
-    }
-
-    async function openShareModal(statusId) {
-      console.log('Opening share modal for status:', statusId);
-      activeReelId = statusId;
-      shareModal.classList.add('active');
-      friendList.innerHTML = '<p class="text-center text-gray-500 dark:text-gray-400">Loading friends...</p>';
-
-      try {
-        await loadFriends();
-        const usersRef = ref(db, 'users');
-        const usersSnap = await get(usersRef);
-        const users = usersSnap.val() || {};
-        friendList.innerHTML = '';
-
-        if (friendUids.size === 0) {
-          friendList.innerHTML = '<p class="text-center text-gray-500 dark:text-gray-400">No friends to share with.</p>';
-          return;
-        }
-
-        for (const uid of friendUids) {
-          const user = users[uid] || { name: 'Unknown', photoURL: 'https://www.gravatar.com/avatar?d=mp' };
-          const friendItem = document.createElement('div');
-          friendItem.className = 'friend-item cursor-pointer';
-          friendItem.innerHTML = `
-            <img src="${sanitizeInput(user.photoURL)}" alt="${sanitizeInput(user.name)} avatar" class="w-10 h-10 rounded-full border-2 border-[#EF4444] dark:border-[#B91C1C]"/>
-            <div class="friend-content flex-grow">
-              <p class="font-semibold text-sm text-[#111827] dark:text-[#e5e7eb]">${sanitizeInput(user.name)}</p>
-              <p class="text-xs text-[#374151] dark:text-[#d1d5db]">${sanitizeInput(user.email || 'No email')}</p>
-            </div>
-          `;
-          friendItem.addEventListener('click', () => shareToFriend(uid, statusId));
-          friendList.appendChild(friendItem);
-        }
-      } catch (error) {
-        console.error('Error loading friends for sharing:', error);
-        friendList.innerHTML = '<p class="error-message">Error loading friends.</p>';
-        showToast('Error loading friends.', true);
-      }
-    }
-
-    async function shareToFriend(friendUid, statusId) {
-      console.log('Sharing reel to friend:', friendUid, 'status:', statusId);
-      try {
-        const chatId = currentUser.uid < friendUid ? `${currentUser.uid}_${friendUid}` : `${friendUid}_${currentUser.uid}`;
-        const messageRef = push(ref(db, `chats/${chatId}/messages`));
-        await set(messageRef, {
-          senderId: currentUser.uid,
-          text: `Check out this reel: ${window.location.origin}/reels.html?sid=${statusId}`,
-          timestamp: Date.now(),
-          read: false
-        });
-        await set(ref(db, `chats/${chatId}/participants`), {
-          [currentUser.uid]: true,
-          [friendUid]: true
-        });
-        shareModal.classList.remove('active');
-        showToast('Reel shared successfully!');
-      } catch (error) {
-        console.error('Error sharing reel:', error);
-        showToast('Error sharing reel.', true);
-      }
-    }
-
-    function observeMedia() {
-      console.log('Setting up IntersectionObserver');
-      const observer = new IntersectionObserver(entries => {
-        entries.forEach(entry => {
-          const media = entry.target;
-          const spinner = media.parentElement.querySelector('.loading-spinner');
-          if (entry.isIntersecting) {
-            console.log('Media intersecting:', media.tagName, media.src);
-            spinner.style.display = 'block';
-            if (media.tagName === 'VIDEO' || media.tagName === 'AUDIO') {
-              media.play().then(() => {
-                media.classList.add('playing');
-                spinner.style.display = 'none';
-                console.log('Playing:', media.tagName, media.src);
-              }).catch(error => {
-                console.error(`Error playing ${media.tagName.toLowerCase()}:`, error);
-                spinner.style.display = 'none';
-                showToast(`Error playing ${media.tagName.toLowerCase()}.`, true);
-              });
+        // Autoplay logic
+        const observer = new IntersectionObserver((entries) => {
+          entries.forEach(entry => {
+            const video = entry.target.querySelector("video");
+            if (entry.isIntersecting) {
+              pauseAllVideos();
+              video.play().catch(() => {});
+              currentReelIndex = reels.findIndex(reel => reel.id === entry.target.querySelector(".like-btn").dataset.postId);
             } else {
-              spinner.style.display = 'none';
+              video.pause();
             }
-          } else if (media.tagName === 'VIDEO' || media.tagName === 'AUDIO') {
-            media.pause();
-            media.classList.remove('playing');
-            spinner.style.display = 'none';
-            console.log('Paused:', media.tagName, media.src);
-          }
-        });
-      }, { threshold: 0.6 });
+          });
+        }, { threshold: 0.5 });
 
-      document.querySelectorAll('.reel-media').forEach(media => {
-        console.log('Observing media:', media.tagName, media.src);
-        observer.observe(media);
-      });
-    }
-
-    onAuthStateChanged(auth, async user => {
-      console.log('Auth state changed:', user ? `Logged in as ${user.uid}` : 'Not logged in');
-      if (!user) {
-        console.log('Redirecting to signup.html');
-        window.location.href = 'signup.html';
-        return;
-      }
-      currentUser = user;
-      try {
-        const userRef = ref(db, `users/${user.uid}/settings`);
-        const snap = await get(userRef);
-        const settings = snap.val() || {};
-        console.log('User settings:', settings);
-        applyTheme(settings.theme || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
-        const urlParams = new URLSearchParams(window.location.search);
-        const statusId = urlParams.get('sid');
-        console.log('Target status ID from URL:', statusId);
-        await loadReels(statusId);
+        document.querySelectorAll(".reel").forEach(reel => observer.observe(reel));
       } catch (error) {
-        console.error('Error initializing user:', error);
-        reelContainer.innerHTML = '<p class="error-message">Failed to load reels.</p>';
-        showToast('Error initializing user.', true);
+        console.error("Error loading reels:", error.message);
+        document.getElementById("reels-container").innerHTML = `<div class="error">Failed to load reels: ${error.message}</div>`;
+      } finally {
         hideLoading();
       }
-    });
-
-    copyLinkBtn.addEventListener('click', () => {
-      console.log('Copying link for status:', activeReelId);
-      if (!activeReelId) return;
-      navigator.clipboard.writeText(`${window.location.origin}/reels.html?sid=${activeReelId}`)
-        .then(() => {
-          showToast('Reel link copied!');
-          shareModal.classList.remove('active');
-        })
-        .catch(error => {
-          console.error('Error copying link:', error);
-          showToast('Error copying link.', true);
-        });
-    });
-
-    closeShareModalBtn.addEventListener('click', () => {
-      console.log('Closing share modal');
-      shareModal.classList.remove('active');
-      activeReelId = null;
-    });
-
-    document.addEventListener('click', (e) => {
-      if (!shareModal.contains(e.target) && !e.target.closest('.reel-action-btn')) {
-        console.log('Closing share modal on outside click');
-        shareModal.classList.remove('active');
-        activeReelId = null;
-      }
-    });
-
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js').catch(error => console.error('Service Worker registration failed:', error));
     }
+
+    document.addEventListener("DOMContentLoaded", async () => {
+      auth.onAuthStateChanged(user => {
+        if (user) {
+          currentUserUid = user.uid;
+          loadReels();
+        } else {
+          console.log("No user logged in, redirecting to login");
+          location.href = "index.html";
+        }
+      });
+
+      document.querySelector(".back-btn").addEventListener("click", () => {
+        pauseAllVideos();
+        location.href = "home.html";
+      });
+
+      document.querySelector(".fab").addEventListener("click", () => {
+        pauseAllVideos();
+        location.href = "upload.html?type=reel";
+      });
+    });
   </script>
 </body>
 </html>
