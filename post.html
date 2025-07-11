@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>Instagram - Reels</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://webrtc.github.io/adapter/adapter-latest.js"></script>
   <style>
     :root {
       --primary-red: #ed4956;
@@ -77,7 +76,7 @@
       opacity: 1;
       transform: translateY(0);
     }
-    .reel video, .live-reel video {
+    .reel video {
       position: absolute;
       top: 0;
       left: 0;
@@ -135,7 +134,7 @@
       width: 16px;
       height: 16px;
     }
-    .follow-btn, .leave-live-btn {
+    .follow-btn, .watch-live-btn {
       background: var(--primary-red);
       color: var(--white);
       border: none;
@@ -149,7 +148,7 @@
       background: var(--text-light);
       color: var(--text-dark);
     }
-    .follow-btn:hover, .leave-live-btn:hover {
+    .follow-btn:hover, .watch-live-btn:hover {
       background: #d43f4e;
     }
     .follow-btn.following:hover {
@@ -264,6 +263,139 @@
       width: 24px;
       height: 24px;
       fill: var(--white);
+    }
+    .bottom-sheet {
+      display: none;
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      max-width: 414px;
+      margin: 0 auto;
+      background: rgba(0, 0, 0, 0.9);
+      border-top-left-radius: 16px;
+      border-top-right-radius: 16px;
+      transform: translateY(100%);
+      transition: transform 0.3s ease;
+      z-index: 3;
+      max-height: 80vh;
+      display: flex;
+      flex-direction: column;
+    }
+    .bottom-sheet.active {
+      transform: translateY(0);
+    }
+    .bottom-sheet-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.5rem 1rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .bottom-sheet-header h2 {
+      font-size: clamp(0.9rem, 4vw, 1rem);
+      color: var(--text-dark);
+      margin: 0;
+    }
+    .close-btn {
+      background: none;
+      border: none;
+      color: var(--text-dark);
+      cursor: pointer;
+    }
+    .close-btn svg {
+      width: 24px;
+      height: 24px;
+    }
+    .comments-section {
+      flex-grow: 1;
+      overflow-y: auto;
+      padding: 0.5rem 1rem;
+    }
+    .comment {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.5rem;
+      padding: 0.5rem 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .comment:last-child {
+      border-bottom: none;
+    }
+    .comment-profile-pic {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 1px solid var(--white);
+    }
+    .comment-content {
+      flex-grow: 1;
+      font-size: clamp(0.75rem, 3vw, 0.8rem);
+      color: var(--text-dark);
+    }
+    .comment-username {
+      font-weight: 600;
+    }
+    .comment-text {
+      word-break: break-word;
+    }
+    .comment-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .comment-like-btn, .comment-delete-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: var(--text-dark);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 20px;
+      height: 20px;
+    }
+    .comment-like-btn.liked {
+      color: var(--primary-red);
+    }
+    .comment-like-btn:hover, .comment-delete-btn:hover {
+      color: var(--primary-red);
+    }
+    .comment-like-btn svg, .comment-delete-btn svg {
+      width: 16px;
+      height: 16px;
+    }
+    .comment-like-count {
+      font-size: clamp(0.7rem, 2.5vw, 0.75rem);
+      color: var(--text-light);
+    }
+    .comment-input {
+      display: none;
+      gap: 0.5rem;
+      padding: 0.5rem 1rem;
+      border-top: 1px solid var(--border);
+    }
+    .comment-input input {
+      flex-grow: 1;
+      padding: 0.5rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.1);
+      color: var(--text-dark);
+      font-size: clamp(0.8rem, 3.5vw, 0.85rem);
+    }
+    .comment-input button {
+      background: var(--primary-red);
+      color: var(--white);
+      border: none;
+      border-radius: 9999px;
+      padding: 0.5rem 1rem;
+      font-size: clamp(0.8rem, 3.5vw, 0.85rem);
+      cursor: pointer;
+    }
+    .comment-input button:hover {
+      background: #d43f4e;
     }
     .loading-overlay {
       position: fixed;
@@ -387,13 +519,20 @@
         width: 28px;
         height: 28px;
       }
-      .follow-btn, .leave-live-btn {
+      .follow-btn, .watch-live-btn {
         padding: 0.2rem 0.6rem;
         font-size: clamp(0.7rem, 2.5vw, 0.75rem);
       }
       .live-badge {
         padding: 0.2rem 0.6rem;
         font-size: clamp(0.7rem, 2.5vw, 0.75rem);
+      }
+      .bottom-sheet {
+        max-height: 70vh;
+      }
+      .comment-profile-pic {
+        width: 20px;
+        height: 20px;
       }
       .alert-dialog {
         padding: 1rem;
@@ -425,7 +564,7 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
     import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
-    import { getDatabase, ref, onValue, remove, update, get, set, push } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
+    import { getDatabase, ref, onValue, remove, update, get } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
@@ -451,7 +590,6 @@
     let items = [];
     let currentItemIndex = 0;
     let pendingDeleteReelId = null;
-    let peerConnection = null;
 
     function formatTime(seconds) {
       const min = Math.floor(seconds / 60);
@@ -528,85 +666,6 @@
       return array;
     }
 
-    async function setupWebRTCViewer(liveElement, broadcasterId) {
-      try {
-        loadingOverlay.classList.remove("hidden");
-        const username = await getUsername(broadcasterId);
-        const video = liveElement.querySelector("video");
-        const configuration = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
-        peerConnection = new RTCPeerConnection(configuration);
-
-        peerConnection.ontrack = (event) => {
-          video.srcObject = event.streams[0];
-          video.play().catch(() => {
-            errorMessage.textContent = "Error playing live stream.";
-            setTimeout(() => (errorMessage.textContent = ""), 3000);
-          });
-        };
-
-        peerConnection.onicecandidate = (event) => {
-          if (event.candidate) {
-            push(ref(db, `liveStreams/${broadcasterId}/iceCandidates`), event.candidate.toJSON());
-          }
-        };
-
-        const liveRef = ref(db, `liveStreams/${broadcasterId}`);
-        const snapshot = await get(liveRef);
-        const liveData = snapshot.val();
-        if (!liveData || !liveData.isLive || !liveData.offer) {
-          throw new Error("Live stream not available.");
-        }
-
-        await peerConnection.setRemoteDescription(new RTCSessionDescription(liveData.offer));
-        const answer = await peerConnection.createAnswer();
-        await peerConnection.setLocalDescription(answer);
-        await set(ref(db, `liveStreams/${broadcasterId}/answers/${auth.currentUser.uid}`), answer);
-
-        onValue(ref(db, `liveStreams/${broadcasterId}/iceCandidates`), (snapshot) => {
-          const candidates = snapshot.val();
-          if (candidates) {
-            Object.values(candidates).forEach(candidate => {
-              peerConnection.addIceCandidate(new RTCIceCandidate(candidate)).catch(e => console.error("Error adding ICE candidate:", e));
-            });
-          }
-        });
-
-        errorMessage.textContent = `Watching ${username}'s live stream!`;
-        setTimeout(() => (errorMessage.textContent = ""), 3000);
-      } catch (error) {
-        console.error("Error joining live stream:", error);
-        errorMessage.textContent = "Error joining live stream: " + error.message;
-        setTimeout(() => (errorMessage.textContent = ""), 3000);
-        liveElement.querySelector("video").remove();
-        liveElement.querySelector("img").style.display = "block";
-      } finally {
-        loadingOverlay.classList.add("hidden");
-      }
-    }
-
-    async function leaveLiveStream(liveElement, broadcasterId) {
-      try {
-        loadingOverlay.classList.remove("hidden");
-        if (peerConnection) {
-          peerConnection.close();
-          peerConnection = null;
-        }
-        await remove(ref(db, `liveStreams/${broadcasterId}/answers/${auth.currentUser.uid}`));
-        errorMessage.textContent = "Left the live stream.";
-        setTimeout(() => (errorMessage.textContent = ""), 3000);
-        liveElement.querySelector("video").remove();
-        liveElement.querySelector("img").style.display = "block";
-        const leaveBtn = liveElement.querySelector(".leave-live-btn");
-        if (leaveBtn) leaveBtn.remove();
-      } catch (error) {
-        console.error("Error leaving live stream:", error);
-        errorMessage.textContent = "Error leaving live stream: " + error.message;
-        setTimeout(() => (errorMessage.textContent = ""), 3000);
-      } finally {
-        loadingOverlay.classList.add("hidden");
-      }
-    }
-
     function showAlertDialog(reelId) {
       pendingDeleteReelId = reelId;
       alertDialog.classList.add("active");
@@ -642,9 +701,11 @@
           </div>
         ` : ''}
         <div class="reel-overlay">
-          <div class="reel-info">
-            <img src="${profilePic}" class="profile-pic" alt="Profile picture of ${username}" />
-            <span class="username">${username}</span>
+          <div class="reel-header">
+            <div class="reel-info">
+              <img src="${profilePic}" class="profile-pic" alt="Profile picture of ${username}" />
+              <span class="username">${username}</span>
+            </div>
             ${!isOwner && auth.currentUser ? `
               <button type="button" class="follow-btn ${isFollowingUser ? 'following' : ''}" aria-label="${isFollowingUser ? 'Unfollow' : 'Follow'} ${username}">
                 ${isFollowingUser ? 'Following' : 'Follow'}
@@ -663,6 +724,21 @@
           <div class="video-player">
             <input type="range" class="video-seek-bar" min="0" max="100" value="0" aria-label="Seek video"/>
             <span class="video-time-display">0:00 / 0:00</span>
+          </div>
+          <div class="bottom-sheet">
+            <div class="bottom-sheet-header">
+              <h2>Comments</h2>
+              <button type="button" class="close-btn" aria-label="Close comments">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M18 6L6 18M6 6l12 12"/>
+                </svg>
+              </button>
+            </div>
+            <div class="comments-section" aria-live="polite"></div>
+            <div class="comment-input">
+              <input type="text" placeholder="Add a comment..." aria-label="Add a comment"/>
+              <button type="button">Post</button>
+            </div>
           </div>
         </div>
       `;
@@ -714,49 +790,40 @@
       live.className = "live-reel";
       live.dataset.itemId = `live-${userId}`;
       live.innerHTML = `
-        <img src="${profilePic}" alt="Live stream placeholder for ${username}" style="display: block;" />
-        <video style="display: none;" autoplay playsinline aria-label="Live stream by ${username}"></video>
-        <div class="mute-icon">
-          <svg viewBox="0 0 24 24">
-            <path d="M3.63 3.27a.75.75 0 011.06 0L21 19.54a.75.75 0 11-1.06 1.06L3.63 4.33a.75.75 0 010-1.06zM12 3c-.42 0-.83.04-1.24.11L12 4.34V3zm0 2.66v4.84l-1.5-1.5V5.66h1.5zm3 0h1.5v3.84l-1.5-1.5V5.66zm-6 0H7.5v8.68l-1.5-1.5V5.66H9zm-3 8.68H4.5v-6.02l-1.5-1.5v7.52H6zm9 0h1.5v-3.84l-1.5 1.5v2.34zm3-8.68h-1.5v4.84l1.5 1.5V5.66zm-3 8.68v4.84l1.24.11c.41-.07.82-.11 1.24-.11v-4.84h-2.48z"/>
-          </svg>
-        </div>
+        <img src="${profilePic}" alt="Live stream placeholder for ${username}" />
         <div class="reel-overlay">
-          <div class="reel-info">
-            <img src="${profilePic}" class="profile-pic" alt="Profile picture of ${username}" />
-            <span class="username">${username}</span>
-            <span class="live-badge">
-              <svg viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
-              </svg>
-              Live
-            </span>
+          <div class="reel-header">
+            <div class="reel-info">
+              <img src="${profilePic}" class="profile-pic" alt="Profile picture of ${username}" />
+              <span class="username">${username}</span>
+              <span class="live-badge">
+                <svg viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+                </svg>
+                Live
+              </span>
+            </div>
             ${!isOwner && auth.currentUser ? `
-              <button type="button" class="leave-live-btn" style="display: none;" aria-label="Leave live stream of ${username}">
-                Leave Live
-              </button>
-            ` : ''}
-            ${!isOwner && auth.currentUser ? `
-              <button type="button" class="follow-btn ${isFollowingUser ? 'following' : ''}" aria-label="${isFollowingUser ? 'Unfollow' : 'Follow'} ${username}">
-                ${isFollowingUser ? 'Following' : 'Follow'}
-              </button>
+              <div>
+                <button type="button" class="watch-live-btn" aria-label="Watch live stream of ${username}">
+                  Watch Live
+                </button>
+                <button type="button" class="follow-btn ${isFollowingUser ? 'following' : ''}" aria-label="${isFollowingUser ? 'Unfollow' : 'Follow'} ${username}">
+                  ${isFollowingUser ? 'Following' : 'Follow'}
+                </button>
+              </div>
             ` : ''}
           </div>
         </div>
       `;
 
       if (!isOwner && auth.currentUser) {
-        const video = live.querySelector("video");
-        video.addEventListener("click", () => {
-          const muteIcon = live.querySelector(".mute-icon");
-          video.muted = !video.muted;
-          if (video.muted) {
-            muteIcon.classList.add("active");
-            setTimeout(() => muteIcon.classList.remove("active"), 1000);
-          } else {
-            muteIcon.classList.remove("active");
-          }
-        });
+        const watchLiveBtn = live.querySelector(".watch-live-btn");
+        if (watchLiveBtn) {
+          watchLiveBtn.addEventListener("click", () => {
+            location.href = `live.html?liveUserId=${userId}`;
+          });
+        }
         const followBtn = live.querySelector(".follow-btn");
         if (followBtn) {
           followBtn.addEventListener("click", () => {
@@ -772,22 +839,14 @@
       if (index < 0 || index >= items.length) return;
 
       const currentItem = items[currentItemIndex];
-      const currentVideo = currentItem?.querySelector("video");
+      const currentVideo = currentItem?.element.querySelector("video");
       const currentPlaybackState = currentVideo && currentItem.type === 'reel' ? {
         time: currentVideo.currentTime,
         muted: currentVideo.muted,
         itemId: currentItem.element.dataset.itemId
       } : null;
 
-      // Disconnect any existing WebRTC connection
-      if (peerConnection) {
-        const currentLiveElement = items[currentItemIndex]?.element;
-        if (currentLiveElement?.classList.contains("live-reel")) {
-          leaveLiveStream(currentLiveElement, currentLiveElement.dataset.itemId.split('-')[1]);
-        }
-      }
-
-      items.forEach(async (item, i) => {
+      items.forEach((item, i) => {
         const video = item.element.querySelector("video");
         const muteIcon = item.element.querySelector(".mute-icon");
         const videoSeekBar = item.element.querySelector(".video-seek-bar");
@@ -823,32 +882,13 @@
               video.currentTime = currentPlaybackState.time;
               video.muted = currentPlaybackState.muted;
             }
-          } else if (item.type === 'live' && !item.element.querySelector(".leave-live-btn")) {
-            // Start WebRTC for live stream
-            const broadcasterId = item.element.dataset.itemId.split('-')[1];
-            item.element.querySelector("img").style.display = "none";
-            item.element.querySelector("video").style.display = "block";
-            if (auth.currentUser && broadcasterId !== auth.currentUser.uid) {
-              const leaveBtn = document.createElement("button");
-              leaveBtn.className = "leave-live-btn";
-              leaveBtn.textContent = "Leave Live";
-              leaveBtn.setAttribute("aria-label", `Leave live stream of ${item.element.querySelector(".username").textContent}`);
-              leaveBtn.addEventListener("click", () => leaveLiveStream(item.element, broadcasterId));
-              item.element.querySelector(".reel-info").appendChild(leaveBtn);
-              await setupWebRTCViewer(item.element, broadcasterId);
-            }
           }
         } else {
           item.element.classList.remove("active");
-          if (video && item.type === 'reel') {
+          if (video) {
             video.pause();
             video.currentTime = 0;
             muteIcon.classList.remove("active");
-          } else if (item.type === 'live') {
-            video.style.display = "none";
-            item.element.querySelector("img").style.display = "block";
-            const leaveBtn = item.element.querySelector(".leave-live-btn");
-            if (leaveBtn) leaveBtn.remove();
           }
         }
       });
@@ -915,6 +955,7 @@
               const data = snapshot.val();
               if (data) {
                 let reelEntries = Object.entries(data).filter(([, reelData]) => reelData.videoUrl);
+                reelEntries = shuffleArray(reelEntries);
                 for (const [reelId, reelData] of reelEntries) {
                   const reelElement = await createReelElement(reelData, reelId);
                   items.push({ element: reelElement, timestamp: reelData.timestamp, type: 'reel' });
