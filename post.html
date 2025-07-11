@@ -584,6 +584,7 @@
     let currentReelIndex = 0;
     let posts = [];
     let lastTap = 0;
+    let observer = null;
 
     function showLoading() {
       document.getElementById("loading-spinner").classList.add("active");
@@ -628,10 +629,13 @@
       return `${days}d`;
     }
 
-    function pauseAllMedia() {
-      document.querySelectorAll("video").forEach(video => {
-        video.pause();
-        video.currentTime = 0;
+    function pauseAllMedia(currentReel = null) {
+      document.querySelectorAll(".reel video").forEach(video => {
+        if (video !== currentReel) {
+          video.pause();
+          video.currentTime = 0;
+          video.removeAttribute("autoplay");
+        }
       });
     }
 
@@ -800,28 +804,43 @@
               reelElement.querySelector(".comment-count").textContent = commentCount > 999 ? `${(commentCount / 1000).toFixed(1)}k` : commentCount;
             });
 
-            // Video buffering and error handling
+            // Video event listeners
             if (isVideo) {
               const video = reelElement.querySelector("video");
-              video.addEventListener("click", (e) => {
+              const muteBtn = reelElement.querySelector(".mute-btn");
+
+              const handleClick = (e) => {
                 e.stopPropagation();
                 video.paused ? video.play() : video.pause();
-              });
-
-              video.addEventListener("waiting", () => showBuffering(reelElement));
-              video.addEventListener("canplay", () => hideBuffering(reelElement));
-              video.addEventListener("error", () => {
-                showBuffering(reelElement);
-                reelElement.querySelector(".buffering-spinner").innerHTML = `<div class="error">Network error: Unable to load video</div>`;
-              });
-
-              reelElement.querySelector(".mute-btn").addEventListener("click", (e) => {
+              };
+              const handleMute = (e) => {
                 e.stopPropagation();
                 video.muted = !video.muted;
                 set(ref(db, `posts/${post.id}/isMuted`), video.muted);
-                e.currentTarget.innerHTML = video.muted
+                muteBtn.innerHTML = video.muted
                   ? `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4l-5 5H3zm13 3a4 4 0 0 0-4-4v8a4 4 0 0 0 4-4zm3 0a7 7 0 0 0-7-7v14a7 7 0 0 0 7-7z"/></svg>`
                   : `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4l-5 5H3zm13.11 3.47l1.54-1.54 1.54 1.54 1.54-1.54-1.54-1.54 1.54-1.54-1.54-1.54-1.54 1.54-1.54-1.54-1.54 1.54 1.54 1.54-1.54 1.54 1.54 1.54z"/></svg>`;
+              };
+              const handleWaiting = () => showBuffering(reelElement);
+              const handleCanPlay = () => hideBuffering(reelElement);
+              const handleError = () => {
+                showBuffering(reelElement);
+                reelElement.querySelector(".buffering-spinner").innerHTML = `<div class="error">Network error: Unable to load video</div>`;
+              };
+
+              video.addEventListener("click", handleClick);
+              video.addEventListener("waiting", handleWaiting);
+              video.addEventListener("canplay", handleCanPlay);
+              video.addEventListener("error", handleError);
+              muteBtn.addEventListener("click", handleMute);
+
+              // Store listeners for cleanup
+              reelElement.dataset.listeners = JSON.stringify({
+                click: handleClick,
+                waiting: handleWaiting,
+                canplay: handleCanPlay,
+                error: handleError,
+                mute: handleMute
               });
             }
 
@@ -887,13 +906,16 @@
           });
         });
 
-        // Autoplay logic for videos
-        const observer = new IntersectionObserver((entries) => {
+        // Autoplay logic with strict non-interference
+        if (observer) {
+          observer.disconnect();
+        }
+        observer = new IntersectionObserver((entries) => {
           entries.forEach(entry => {
             const video = entry.target.querySelector("video");
             if (video) {
               if (entry.isIntersecting) {
-                pauseAllMedia();
+                pauseAllMedia(video);
                 video.play().catch(() => showBuffering(entry.target));
                 currentReelIndex = posts.findIndex(post => post.id === entry.target.querySelector(".like-btn").dataset.postId);
               } else {
