@@ -1230,21 +1230,59 @@
     });
 
     const tabBtns = document.querySelectorAll(".tab-btn");
-    const tabs = document.querySelectorAll(".tab-content");
+const tabs = document.querySelectorAll(".tab-content");
 
-    tabBtns.forEach(btn => {
-      btn.addEventListener("click", () => {
-        tabBtns.forEach(b => {
-          b.classList.remove("active");
-          b.setAttribute("aria-selected", "false");
-        });
-        tabs.forEach(t => t.classList.remove("active"));
-        btn.classList.add("active");
-        btn.setAttribute("aria-selected", "true");
-        document.getElementById(btn.dataset.tab).classList.add("active");
-        pauseAllMedia();
-      });
+tabBtns.forEach(btn => {
+  btn.addEventListener("click", async () => {
+    tabBtns.forEach(b => {
+      b.classList.remove("active");
+      b.setAttribute("aria-selected", "false");
     });
+    tabs.forEach(t => t.classList.remove("active"));
+    btn.classList.add("active");
+    btn.setAttribute("aria-selected", "true");
+
+    const tabId = btn.dataset.tab;
+    if (tabId === "reels") {
+      showLoading(); // Show loading overlay
+      try {
+        // Fetch reels from Firebase
+        const reelsRef = ref(db, "reels");
+        const snapshot = await Promise.race([
+          get(reelsRef),
+          new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout fetching reels")), 10000))
+        ]);
+        const reelsData = snapshot.val() || {};
+        const reelIds = Object.keys(reelsData).filter(id => reelsData[id].videoUrl); // Filter valid reels
+
+        if (reelIds.length === 0) {
+          console.log("No reels available for randomization");
+          location.href = "post.html"; // Redirect without reelId if no reels
+          return;
+        }
+
+        // Fisher-Yates shuffle to randomize reelIds
+        for (let i = reelIds.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [reelIds[i], reelIds[j]] = [reelIds[j], reelIds[i]]; // Swap elements
+        }
+
+        // Select the first reelId from shuffled array
+        const randomReelId = reelIds[0];
+        console.log("Navigating to random reel:", randomReelId);
+        location.href = `post.html?reelId=${randomReelId}`;
+      } catch (error) {
+        console.error("Error selecting random reel:", error.message);
+        location.href = "post.html"; // Fallback redirect
+      } finally {
+        hideLoading();
+      }
+    } else {
+      document.getElementById(tabId).classList.add("active");
+    }
+    pauseAllMedia();
+  });
+});
 
     function timeAgo(timestamp) {
       if (!timestamp) return "";
