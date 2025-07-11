@@ -74,7 +74,7 @@
       to { opacity: 1; }
     }
 
-    .reel img, .reel video {
+    .reel video {
       width: 100%;
       height: 100%;
       object-fit: cover;
@@ -111,6 +111,21 @@
       font-size: clamp(0.85rem, 2vw, 0.95rem);
       max-width: 80%;
       line-height: 1.4;
+    }
+
+    .reel-song {
+      font-size: clamp(0.8rem, 2vw, 0.9rem);
+      color: var(--white);
+      opacity: 0.8;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .reel-song svg {
+      width: 16px;
+      height: 16px;
+      fill: var(--white);
     }
 
     .follow-btn {
@@ -199,11 +214,6 @@
       padding: 0.5rem;
       cursor: pointer;
       transition: transform 0.2s ease, opacity 0.2s ease;
-      display: none;
-    }
-
-    .mute-btn.active {
-      display: block;
     }
 
     .mute-btn:hover {
@@ -479,7 +489,7 @@
         font-size: clamp(0.85rem, 2vw, 0.95rem);
       }
 
-      .reel-caption {
+      .reel-caption, .reel-song {
         font-size: clamp(0.75rem, 1.8vw, 0.85rem);
       }
 
@@ -616,6 +626,7 @@
     let posts = [];
     let lastTap = 0;
     let observer = null;
+    let audio = null;
 
     function showLoading() {
       document.getElementById("loading-spinner").classList.add("active");
@@ -668,13 +679,17 @@
           video.removeAttribute("autoplay");
         }
       });
+      if (audio && (!currentReel || currentReel.paused)) {
+        audio.pause();
+        audio.currentTime = 0;
+      }
     }
 
     async function toggleLike(postId, likeBtn) {
       if (!currentUserUid) return;
       showLoading();
       try {
-        const likeRef = ref(db, `posts/${postId}/likes/${currentUserUid}`);
+        const likeRef = ref(db, `reels/${postId}/likes/${currentUserUid}`);
         const likeSnap = await get(likeRef);
         const isLiked = likeSnap.exists();
 
@@ -709,7 +724,7 @@
       const commentList = document.getElementById("comment-list");
       commentList.innerHTML = "";
       try {
-        const commentsSnap = await get(ref(db, `posts/${postId}/comments`));
+        const commentsSnap = await get(ref(db, `reels/${postId}/comments`));
         const comments = commentsSnap.val() || {};
         for (const [commentId, comment] of Object.entries(comments)) {
           const userSnap = await get(ref(db, `users/${comment.userId}`));
@@ -735,7 +750,7 @@
       if (!currentUserUid || !commentText.trim()) return;
       showLoading();
       try {
-        const commentRef = ref(db, `posts/${postId}/comments`);
+        const commentRef = ref(db, `reels/${postId}/comments`);
         await push(commentRef, {
           userId: currentUserUid,
           text: commentText,
@@ -770,22 +785,23 @@
       document.getElementById("comment-sheet-overlay").classList.remove("active");
       document.getElementById("comment-list").innerHTML = "";
       document.getElementById("comment-input").value = "";
+      pauseAllMedia();
     }
 
-    async function loadPosts() {
+    async function loadReels() {
       const urlParams = new URLSearchParams(window.location.search);
       const postId = urlParams.get("postId");
       showLoading();
 
       try {
-        const postsSnap = await get(ref(db, "posts"));
-        posts = Object.entries(postsSnap.val() || {})
+        const reelsSnap = await get(ref(db, "reels"));
+        posts = Object.entries(reelsSnap.val() || {})
           .map(([id, post]) => ({ id, ...post }))
-          .filter(post => post.imageUrls?.length > 0 || post.videoUrl)
+          .filter(post => post.postType === "reel" && post.videoUrl)
           .sort(() => Math.random() - 0.5);
 
         if (posts.length === 0) {
-          document.getElementById("reels-container").innerHTML = '<div class="placeholder">No posts available</div>';
+          document.getElementById("reels-container").innerHTML = '<div class="placeholder">No reels available</div>';
           hideLoading();
           return;
         }
@@ -801,30 +817,33 @@
           const userRef = ref(db, `users/${post.userId}`);
           get(userRef).then(userSnap => {
             const user = userSnap.val() || {};
-            const isVideo = post.videoUrl && (post.postType === "reel" || !post.imageUrls);
             const reelElement = document.createElement("div");
             reelElement.className = "reel";
-            reelElement.setAttribute("aria-label", `Post by ${user.username || 'Unknown'}`);
+            reelElement.setAttribute("aria-label", `Reel by ${user.username || 'Unknown'}`);
             reelElement.setAttribute("tabindex", "0");
             reelElement.innerHTML = `
-              ${isVideo ? `
-                <video src="${post.videoUrl}" loop playsinline ${index === currentReelIndex ? "autoplay" : ""} muted="${post.isMuted || false}" loading="lazy"></video>
-                <button class="mute-btn ${isVideo ? 'active' : ''}" data-post-id="${post.id}" aria-label="Toggle mute">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-                    ${post.isMuted ? '<path d="M3 9v6h4l5 5V4l-5 5H3zm13 3a4 4 0 0 0-4-4v8a4 4 0 0 0 4-4zm3 0a7 7 0 0 0-7-7v14a7 7 0 0 0 7-7z"/>' : '<path d="M3 9v6h4l5 5V4l-5 5H3zm13.11 3.47l1.54-1.54 1.54 1.54 1.54-1.54-1.54-1.54 1.54-1.54-1.54-1.54-1.54 1.54-1.54-1.54-1.54 1.54 1.54 1.54-1.54 1.54 1.54 1.54z"/>'
+              <video src="${post.videoUrl}" loop playsinline ${index === currentReelIndex ? "autoplay" : ""} muted="${post.isMuted || false}" loading="lazy"></video>
+              <button class="mute-btn" data-post-id="${post.id}" aria-label="Toggle mute">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                  ${post.isMuted ? '<path d="M3 9v6h4l5 5V4l-5 5H3zm13 3a4 4 0 0 0-4-4v8a4 4 0 0 0 4-4zm3 0a7 7 0 0 0-7-7v14a7 7 0 0 0 7-7z"/>' : '<path d="M3 9v6h4l5 5V4l-5 5H3zm13.11 3.47l1.54-1.54 1.54 1.54 1.54-1.54-1.54-1.54 1.54-1.54-1.54-1.54-1.54 1.54-1.54-1.54-1.54 1.54 1.54 1.54-1.54 1.54 1.54 1.54z"/>'
                 }
-                  </svg>
-                </button>
-              ` : `
-                <img src="${post.imageUrls?.[0] || post.imageUrl}" alt="Post image" loading="lazy" onerror="this.src='https://via.placeholder.com/414x736?text=Image+Not+Found';">
-              `}
+                </svg>
+              </button>
               <div class="reel-overlay">
                 <div class="reel-username">${user.username || "Unknown"}</div>
-                <div class="reel-caption">${post.caption || ""} • ${timeAgo(post.timestamp)}</div>
+                <div class="reel-caption">${timeAgo(post.timestamp)}</div>
+                ${post.song ? `
+                  <div class="reel-song">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                      <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/>
+                    </svg>
+                    ${post.song.title} by ${post.song.artist}
+                  </div>
+                ` : ''}
                 ${currentUserUid && currentUserUid !== post.userId ? `<button class="follow-btn" data-user-id="${post.userId}" aria-label="Follow ${user.username || 'Unknown'}">Follow</button>` : ''}
               </div>
               <div class="reel-actions">
-                <div class="reel-action like-btn" data-post-id="${post.id}" aria-label="Like post" tabindex="0">
+                <div class="reel-action like-btn" data-post-id="${post.id}" aria-label="Like reel" tabindex="0">
                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
                     <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
                   </svg>
@@ -841,14 +860,14 @@
             reelsContainer.appendChild(reelElement);
 
             // Real-time like and comment counts
-            onValue(ref(db, `posts/${post.id}/likes`), snap => {
+            onValue(ref(db, `reels/${post.id}/likes`), snap => {
               const likes = snap.val() || {};
               const likeCount = Object.keys(likes).length;
               reelElement.querySelector(".like-count").textContent = likeCount > 999 ? `${(likeCount / 1000).toFixed(1)}k` : likeCount;
               reelElement.querySelector(".like-btn").classList.toggle("liked", likes[currentUserUid]);
             });
 
-            onValue(ref(db, `posts/${post.id}/comments`), snap => {
+            onValue(ref(db, `reels/${post.id}/comments`), snap => {
               const comments = snap.val() || {};
               const commentCount = Object.keys(comments).length;
               reelElement.querySelector(".comment-count").textContent = commentCount > 999 ? `${(commentCount / 1000).toFixed(1)}k` : commentCount;
@@ -876,42 +895,67 @@
               });
             }
 
-            // Video event listeners
-            if (isVideo) {
-              const video = reelElement.querySelector("video");
-              const muteBtn = reelElement.querySelector(".mute-btn");
+            // Video and audio event listeners
+            const video = reelElement.querySelector("video");
+            const muteBtn = reelElement.querySelector(".mute-btn");
 
-              const handleClick = (e) => {
-                e.stopPropagation();
-                video.paused ? video.play() : video.pause();
-              };
-              const handleMute = (e) => {
-                e.stopPropagation();
-                video.muted = !video.muted;
-                set(ref(db, `posts/${post.id}/isMuted`), video.muted);
-                muteBtn.innerHTML = video.muted
-                  ? `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4l-5 5H3zm13 3a4 4 0 0 0-4-4v8a4 4 0 0 0 4-4zm3 0a7 7 0 0 0-7-7v14a7 7 0 0 0 7-7z"/></svg>`
-                  : `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4l-5 5H3zm13.11 3.47l1.54-1.54 1.54 1.54 1.54-1.54-1.54-1.54 1.54-1.54-1.54-1.54-1.54 1.54-1.54-1.54-1.54 1.54 1.54 1.54-1.54 1.54 1.54 1.54z"/></svg>`;
-              };
-              const handleWaiting = () => showBuffering(reelElement);
-              const handleCanPlay = () => hideBuffering(reelElement);
-              const handleError = () => {
-                showBuffering(reelElement);
-                reelElement.querySelector(".buffering-spinner").innerHTML = `<div class="error">Network error: Unable to load video</div>`;
-              };
+            const handleClick = (e) => {
+              e.stopPropagation();
+              if (video.paused) {
+                video.play();
+                if (post.song && audio) audio.play();
+              } else {
+                video.pause();
+                if (audio) audio.pause();
+              }
+            };
 
-              video.addEventListener("click", handleClick);
-              video.addEventListener("waiting", handleWaiting);
-              video.addEventListener("canplay", handleCanPlay);
-              video.addEventListener("error", handleError);
-              muteBtn.addEventListener("click", handleMute);
+            const handleMute = (e) => {
+              e.stopPropagation();
+              video.muted = !video.muted;
+              if (audio) audio.muted = video.muted;
+              set(ref(db, `reels/${post.id}/isMuted`), video.muted);
+              muteBtn.innerHTML = video.muted
+                ? `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4l-5 5H3zm13 3a4 4 0 0 0-4-4v8a4 4 0 0 0 4-4zm3 0a7 7 0 0 0-7-7v14a7 7 0 0 0 7-7z"/></svg>`
+                : `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4l-5 5H3zm13.11 3.47l1.54-1.54 1.54 1.54 1.54-1.54-1.54-1.54 1.54-1.54-1.54-1.54-1.54 1.54-1.54-1.54-1.54 1.54 1.54 1.54-1.54 1.54 1.54 1.54z"/></svg>`;
+            };
 
-              reelElement.dataset.listeners = JSON.stringify({
-                click: handleClick,
-                waiting: handleWaiting,
-                canplay: handleCanPlay,
-                error: handleError,
-                mute: handleMute
+            const handleWaiting = () => showBuffering(reelElement);
+            const handleCanPlay = () => {
+              hideBuffering(reelElement);
+              if (index === currentReelIndex && !video.paused) {
+                if (post.song && audio) audio.play();
+              }
+            };
+            const handleError = () => {
+              showBuffering(reelElement);
+              reelElement.querySelector(".buffering-spinner").innerHTML = `<div class="error">Network error: Unable to load video</div>`;
+            };
+
+            video.addEventListener("click", handleClick);
+            video.addEventListener("waiting", handleWaiting);
+            video.addEventListener("canplay", handleCanPlay);
+            video.addEventListener("error", handleError);
+            muteBtn.addEventListener("click", handleMute);
+
+            reelElement.dataset.listeners = JSON.stringify({
+              click: handleClick,
+              waiting: handleWaiting,
+              canplay: handleCanPlay,
+              error: handleError,
+              mute: handleMute
+            });
+
+            // Initialize audio if song exists
+            if (post.song) {
+              audio = new Audio(post.song.audioUrl);
+              audio.muted = video.muted;
+              audio.loop = true;
+              audio.addEventListener("canplay", () => {
+                if (!video.paused && index === currentReelIndex) audio.play();
+              });
+              audio.addEventListener("error", () => {
+                console.error("Error loading audio:", post.song.audioUrl);
               });
             }
 
@@ -988,10 +1032,17 @@
               if (entry.isIntersecting) {
                 pauseAllMedia(video);
                 video.play().catch(() => showBuffering(entry.target));
+                if (posts[currentReelIndex].song && audio) {
+                  audio.play().catch(() => console.error("Error playing audio"));
+                }
                 currentReelIndex = posts.findIndex(post => post.id === entry.target.querySelector(".like-btn").dataset.postId);
               } else {
                 video.pause();
                 video.currentTime = 0;
+                if (audio) {
+                  audio.pause();
+                  audio.currentTime = 0;
+                }
                 hideBuffering(entry.target);
               }
             }
@@ -1000,8 +1051,8 @@
 
         document.querySelectorAll(".reel").forEach(reel => observer.observe(reel));
       } catch (error) {
-        console.error("Error loading posts:", error.message);
-        document.getElementById("reels-container").innerHTML = `<div class="error">Failed to load posts: ${error.message}</div>`;
+        console.error("Error loading reels:", error.message);
+        document.getElementById("reels-container").innerHTML = `<div class="error">Failed to load reels: ${error.message}</div>`;
       } finally {
         hideLoading();
       }
@@ -1012,7 +1063,7 @@
         if (user) {
           currentUserUid = user.uid;
           currentUser = user;
-          loadPosts();
+          loadReels();
         } else {
           console.log("No user logged in, redirecting to login");
           location.href = "index.html";
