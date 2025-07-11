@@ -108,22 +108,20 @@
       height: 20px;
     }
     .video-player {
-      position: absolute;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      background: transparent;
-      padding: 0;
-      margin: 0;
-      height: 4px;
-      z-index: 2;
+      display: none;
+      background: rgba(0, 0, 0, 0.7);
+      border-radius: 8px;
+      padding: 0.5rem;
+      margin-bottom: 0.5rem;
+      align-items: center;
+      gap: 0.5rem;
     }
     .video-seek-bar {
-      width: 100%;
+      flex-grow: 1;
       -webkit-appearance: none;
       appearance: none;
       height: 4px;
-      background: rgba(255, 255, 255, 0.3);
+      background: var(--border);
       border-radius: 2px;
       outline: none;
       cursor: pointer;
@@ -131,57 +129,24 @@
     .video-seek-bar::-webkit-slider-thumb {
       -webkit-appearance: none;
       appearance: none;
-      width: 8px;
-      height: 8px;
+      width: 10px;
+      height: 10px;
       background: var(--primary-red);
       border-radius: 50%;
       cursor: pointer;
     }
     .video-seek-bar::-moz-range-thumb {
-      width: 8px;
-      height: 8px;
+      width: 10px;
+      height: 10px;
       background: var(--primary-red);
       border-radius: 50%;
       cursor: pointer;
     }
-    .video-seek-bar::-webkit-slider-runnable-track {
-      background: linear-gradient(to right, var(--primary-red) calc(var(--value) * 100%), rgba(255, 255, 255, 0.3) 0);
-    }
-    .video-seek-bar::-moz-range-progress {
-      background: var(--primary-red);
-      height: 4px;
-      border-radius: 2px;
-    }
     .video-time-display {
-      display: none; /* Hidden to keep seekbar minimal */
-    }
-    .actions {
-      position: absolute;
-      right: 1rem;
-      bottom: 4rem;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 1rem;
-      z-index: 2;
-    }
-    .delete-btn {
-      background: none;
-      border: none;
-      cursor: pointer;
+      font-size: clamp(0.7rem, 3vw, 0.75rem);
       color: var(--text-dark);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      width: 40px;
-      height: 40px;
-    }
-    .delete-btn:hover {
-      color: var(--primary-red);
-    }
-    .delete-btn svg {
-      width: 24px;
-      height: 24px;
+      width: 70px;
+      text-align: right;
     }
     .mute-icon {
       position: absolute;
@@ -372,22 +337,11 @@
         margin-bottom: 0.4rem;
       }
       .video-player {
-        height: 3px;
+        padding: 0.4rem;
       }
-      .video-seek-bar {
-        height: 3px;
-      }
-      .video-seek-bar::-webkit-slider-thumb {
-        width: 6px;
-        height: 6px;
-      }
-      .video-seek-bar::-moz-range-thumb {
-        width: 6px;
-        height: 6px;
-      }
-      .actions {
-        right: 0.5rem;
-        bottom: 3.5rem;
+      .video-time-display {
+        width: 60px;
+        font-size: clamp(0.65rem, 2.5vw, 0.7rem);
       }
       .profile-pic {
         width: 28px;
@@ -416,7 +370,7 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
     import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
-    import { getDatabase, ref, onValue, remove } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
+    import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
@@ -481,12 +435,10 @@
           });
           video.addEventListener("loadedmetadata", () => {
             videoSeekBar.max = video.duration || 100;
-            videoSeekBar.style.setProperty('--value', video.currentTime / video.duration || 0);
             videoTimeDisplay.textContent = `0:00 / ${formatTime(video.duration || 0)}`;
           }, { once: true });
           video.addEventListener("timeupdate", () => {
             videoSeekBar.value = video.currentTime;
-            videoSeekBar.style.setProperty('--value', video.currentTime / video.duration || 0);
             videoTimeDisplay.textContent = `${formatTime(video.currentTime)} / ${formatTime(video.duration || 0)}`;
           });
           if (currentPlaybackState && currentPlaybackState.reelId === reel.dataset.reelId) {
@@ -498,7 +450,6 @@
           video.pause();
           video.currentTime = 0;
           muteIcon.classList.remove("active");
-          videoSeekBar.style.setProperty('--value', 0);
         }
       });
       currentReelIndex = index;
@@ -506,7 +457,6 @@
 
     async function createReelElement(reelData, reelId) {
       const profilePic = await getUserProfilePic(reelData.userId);
-      const isOwner = auth.currentUser && reelData.userId === auth.currentUser.uid;
       const reel = document.createElement("div");
       reel.className = "reel";
       reel.dataset.reelId = reelId;
@@ -517,15 +467,6 @@
             <path d="M3.63 3.27a.75.75 0 011.06 0L21 19.54a.75.75 0 11-1.06 1.06L3.63 4.33a.75.75 0 010-1.06zM12 3c-.42 0-.83.04-1.24.11L12 4.34V3zm0 2.66v4.84l-1.5-1.5V5.66h1.5zm3 0h1.5v3.84l-1.5-1.5V5.66zm-6 0H7.5v8.68l-1.5-1.5V5.66H9zm-3 8.68H4.5v-6.02l-1.5-1.5v7.52H6zm9 0h1.5v-3.84l-1.5 1.5v2.34zm3-8.68h-1.5v4.84l1.5 1.5V5.66zm-3 8.68v4.84l1.24.11c.41-.07.82-.11 1.24-.11v-4.84h-2.48z"/>
           </svg>
         </div>
-        ${isOwner ? `
-          <div class="actions">
-            <button type="button" class="delete-btn" aria-label="Delete reel">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m-12 0v14a2 2 0 002 2h10a2 2 0 002-2V6m-7 4v8m-4-8v8m8-8v8"/>
-              </svg>
-            </button>
-          </div>
-        ` : ''}
         <div class="reel-overlay">
           <div class="reel-info">
             <img src="${profilePic}" class="profile-pic" alt="Profile picture of ${reelData.username || 'Anonymous'}" />
@@ -579,28 +520,8 @@
       });
       const videoSeekBar = reel.querySelector(".video-seek-bar");
       videoSeekBar.addEventListener("input", () => {
-        video.currentTime = videondash;
-System: ```javascript
         video.currentTime = videoSeekBar.value;
-        videoSeekBar.style.setProperty('--value', video.currentTime / video.duration || 0);
       });
-
-      if (isOwner) {
-        const deleteBtn = reel.querySelector(".delete-btn");
-        deleteBtn.addEventListener("click", async () => {
-          if (confirm("Are you sure you want to delete this reel?")) {
-            try {
-              const reelRef = ref(db, `reels/${reelId}`);
-              await remove(reelRef);
-              errorMessage.textContent = "Reel deleted successfully.";
-              setTimeout(() => (errorMessage.textContent = ""), 3000);
-            } catch (error) {
-              errorMessage.textContent = "Error deleting reel: " + error.message;
-              setTimeout(() => (errorMessage.textContent = ""), 3000);
-            }
-          }
-        });
-      }
 
       reelsContainer.appendChild(reel);
       return reel;
