@@ -148,56 +148,27 @@
       width: 70px;
       text-align: right;
     }
-    .actions {
-      position: absolute;
-      right: 1rem;
-      bottom: 4rem;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 1rem;
-      z-index: 2;
-    }
-    .like-btn {
-      background: none;
-      border: none;
-      cursor: pointer;
-      color: var(--text-dark);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      width: 40px;
-      height: 40px;
-    }
-    .like-btn.liked {
-      color: var(--primary-red);
-    }
-    .like-btn:hover {
-      color: var(--primary-red);
-    }
-    .like-btn svg {
-      width: 24px;
-      height: 24px;
-    }
-    .like-count {
-      font-size: clamp(0.75rem, 3vw, 0.8rem);
-      color: var(--text-dark);
-    }
-    .like-animation {
+    .mute-icon {
       position: absolute;
       top: 50%;
       left: 50%;
-      transform: translate(-50%, -50%) scale(0);
-      width: 80px;
-      height: 80px;
-      color: var(--primary-red);
+      transform: translate(-50%, -50%);
+      width: 48px;
+      height: 48px;
+      background: rgba(0, 0, 0, 0.5);
+      border-radius: 50%;
+      display: none;
+      align-items: center;
+      justify-content: center;
       z-index: 2;
-      animation: likePop 0.5s ease-out forwards;
     }
-    @keyframes likePop {
-      0% { transform: translate(-50%, -50%) scale(0); opacity: 0; }
-      50% { transform: translate(-50%, -50%) scale(1.2); opacity: 1; }
-      100% { transform: translate(-50%, -50%) scale(1); opacity: 0; }
+    .mute-icon.active {
+      display: flex;
+    }
+    .mute-icon svg {
+      width: 24px;
+      height: 24px;
+      fill: var(--white);
     }
     .bottom-sheet {
       display: none; /* Hidden as comment button is removed */
@@ -293,7 +264,7 @@
     }
     .comment-like-btn.liked {
       color: var(--primary-red);
-2025-07-11 14:33:36.380 }
+    }
     .comment-like-btn:hover, .comment-delete-btn:hover {
       color: var(--primary-red);
     }
@@ -358,28 +329,6 @@
       font-size: clamp(0.8rem, 3.5vw, 0.85rem);
       z-index: 3;
     }
-    .pause-icon {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      width: 48px;
-      height: 48px;
-      background: rgba(0, 0, 0, 0.5);
-      border-radius: 50%;
-      display: none;
-      align-items: center;
-      justify-content: center;
-      z-index: 2;
-    }
-    .pause-icon.active {
-      display: flex;
-    }
-    .pause-icon svg {
-      width: 24px;
-      height: 24px;
-      fill: var(--white);
-    }
     @media (max-width: 414px) {
       .reels-container {
         max-width: 100%;
@@ -393,10 +342,6 @@
       .video-time-display {
         width: 60px;
         font-size: clamp(0.65rem, 2.5vw, 0.7rem);
-      }
-      .actions {
-        right: 0.5rem;
-        bottom: 3.5rem;
       }
       .profile-pic {
         width: 28px;
@@ -425,7 +370,7 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
     import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
-    import { getDatabase, ref, onValue, set, remove } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
+    import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
@@ -472,19 +417,22 @@
       const currentVideo = currentReel?.querySelector("video");
       const currentPlaybackState = currentVideo ? {
         time: currentVideo.currentTime,
-        paused: currentVideo.paused,
+        muted: currentVideo.muted,
         reelId: currentReel.dataset.reelId
       } : null;
 
       reels.forEach((reel, i) => {
         const video = reel.querySelector("video");
-        const pauseIcon = reel.querySelector(".pause-icon");
+        const muteIcon = reel.querySelector(".mute-icon");
         const videoSeekBar = reel.querySelector(".video-seek-bar");
         const videoTimeDisplay = reel.querySelector(".video-time-display");
 
         if (i === index) {
           reel.classList.add("active");
-          video.volume = 1;
+          video.play().catch(() => {
+            errorMessage.textContent = "Error playing video.";
+            setTimeout(() => (errorMessage.textContent = ""), 3000);
+          });
           video.addEventListener("loadedmetadata", () => {
             videoSeekBar.max = video.duration || 100;
             videoTimeDisplay.textContent = `0:00 / ${formatTime(video.duration || 0)}`;
@@ -495,24 +443,13 @@
           });
           if (currentPlaybackState && currentPlaybackState.reelId === reel.dataset.reelId) {
             video.currentTime = currentPlaybackState.time;
-            if (!currentPlaybackState.paused) {
-              video.play().catch(() => {
-                errorMessage.textContent = "Error playing video.";
-                setTimeout(() => (errorMessage.textContent = ""), 3000);
-              });
-            }
-          } else {
-            video.play().catch(() => {
-              errorMessage.textContent = "Error playing video.";
-              setTimeout(() => (errorMessage.textContent = ""), 3000);
-            });
+            video.muted = currentPlaybackState.muted;
           }
         } else {
           reel.classList.remove("active");
           video.pause();
           video.currentTime = 0;
-          video.volume = 1;
-          pauseIcon.classList.remove("active");
+          muteIcon.classList.remove("active");
         }
       });
       currentReelIndex = index;
@@ -525,19 +462,10 @@
       reel.dataset.reelId = reelId;
       reel.innerHTML = `
         <video src="${reelData.videoUrl || ''}" loop playsinline aria-label="Reel video by ${reelData.username || 'Anonymous'}"></video>
-        <div class="pause-icon">
-          <svg viewBox="0 0 24 24"><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg>
-        </div>
-        <svg class="like-animation" viewBox="0 0 24 24" fill="currentColor" style="display: none;">
-          <path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/>
-        </svg>
-        <div class="actions">
-          <button type="button" class="like-btn" aria-label="Like">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/>
-            </svg>
-          </button>
-          <span class="like-count">0</span>
+        <div class="mute-icon">
+          <svg viewBox="0 0 24 24">
+            <path d="M3.63 3.27a.75.75 0 011.06 0L21 19.54a.75.75 0 11-1.06 1.06L3.63 4.33a.75.75 0 010-1.06zM12 3c-.42 0-.83.04-1.24.11L12 4.34V3zm0 2.66v4.84l-1.5-1.5V5.66h1.5zm3 0h1.5v3.84l-1.5-1.5V5.66zm-6 0H7.5v8.68l-1.5-1.5V5.66H9zm-3 8.68H4.5v-6.02l-1.5-1.5v7.52H6zm9 0h1.5v-3.84l-1.5 1.5v2.34zm3-8.68h-1.5v4.84l1.5 1.5V5.66zm-3 8.68v4.84l1.24.11c.41-.07.82-.11 1.24-.11v-4.84h-2.48z"/>
+          </svg>
         </div>
         <div class="reel-overlay">
           <div class="reel-info">
@@ -577,17 +505,13 @@
 
       const video = reel.querySelector("video");
       video.addEventListener("click", () => {
-        const pauseIcon = reel.querySelector(".pause-icon");
-        if (video.paused) {
-          video.play().catch(() => {
-            errorMessage.textContent = "Error playing video.";
-            setTimeout(() => (errorMessage.textContent = ""), 3000);
-          });
-          pauseIcon.classList.remove("active");
+        const muteIcon = reel.querySelector(".mute-icon");
+        video.muted = !video.muted;
+        if (video.muted) {
+          muteIcon.classList.add("active");
+          setTimeout(() => muteIcon.classList.remove("active"), 1000);
         } else {
-          video.pause();
-          pauseIcon.classList.add("active");
-          setTimeout(() => pauseIcon.classList.remove("active"), 1000);
+          muteIcon.classList.remove("active");
         }
       });
       video.addEventListener("error", () => {
@@ -597,87 +521,6 @@
       const videoSeekBar = reel.querySelector(".video-seek-bar");
       videoSeekBar.addEventListener("input", () => {
         video.currentTime = videoSeekBar.value;
-      });
-
-      let lastTap = 0;
-      video.addEventListener("touchend", async (e) => {
-        const now = Date.now();
-        if (now - lastTap < 300) {
-          const user = auth.currentUser;
-          if (user) {
-            const wasPlaying = !video.paused;
-            const currentTime = video.currentTime;
-            const userLikeRef = ref(db, `reels/${reelId}/likes/${user.uid}`);
-            const snapshot = await new Promise((resolve) => onValue(userLikeRef, resolve, { onlyOnce: true }));
-            if (!snapshot.val()) {
-              await set(userLikeRef, true);
-              const likeAnimation = reel.querySelector(".like-animation");
-              likeAnimation.style.display = "block";
-              setTimeout(() => (likeAnimation.style.display = "none"), 500);
-            }
-            if (reel.classList.contains("active")) {
-              video.currentTime = currentTime;
-              if (wasPlaying) {
-                video.play().catch(() => {
-                  errorMessage.textContent = "Error playing video.";
-                  setTimeout(() => (errorMessage.textContent = ""), 3000);
-                });
-              }
-            }
-          } else {
-            errorMessage.textContent = "Please sign in to like.";
-            setTimeout(() => (errorMessage.textContent = ""), 3000);
-          }
-        }
-        lastTap = now;
-      });
-
-      const likeBtn = reel.querySelector(".like-btn");
-      const likeCount = reel.querySelector(".like-count");
-      const likesRef = ref(db, `reels/${reelId}/likes`);
-      onValue(likesRef, (snapshot) => {
-        const wasPlaying = reel.classList.contains("active") && !video.paused;
-        const currentTime = video.currentTime;
-
-        const likes = snapshot.val() || {};
-        likeCount.textContent = Object.keys(likes).length;
-        likeBtn.classList.toggle("liked", likes[auth.currentUser?.uid]);
-
-        if (reel.classList.contains("active")) {
-          video.currentTime = currentTime;
-          if (wasPlaying) {
-            video.play().catch(() => {
-              errorMessage.textContent = "Error playing video.";
-              setTimeout(() => (errorMessage.textContent = ""), 3000);
-            });
-          }
-        }
-      });
-      likeBtn.addEventListener("click", async () => {
-        const user = auth.currentUser;
-        if (!user) {
-          errorMessage.textContent = "Please sign in to like.";
-          setTimeout(() => (errorMessage.textContent = ""), 3000);
-          return;
-        }
-        const wasPlaying = !video.paused;
-        const currentTime = video.currentTime;
-        const userLikeRef = ref(db, `reels/${reelId}/likes/${user.uid}`);
-        const snapshot = await new Promise((resolve) => onValue(userLikeRef, resolve, { onlyOnce: true }));
-        if (snapshot.val()) {
-          await remove(userLikeRef);
-        } else {
-          await set(userLikeRef, true);
-        }
-        if (reel.classList.contains("active")) {
-          video.currentTime = currentTime;
-          if (wasPlaying) {
-            video.play().catch(() => {
-              errorMessage.textContent = "Error playing video.";
-              setTimeout(() => (errorMessage.textContent = ""), 3000);
-            });
-          }
-        }
       });
 
       reelsContainer.appendChild(reel);
@@ -694,7 +537,7 @@
           const currentVideo = currentReel?.querySelector("video");
           const currentPlaybackState = currentVideo ? {
             time: currentVideo.currentTime,
-            paused: currentVideo.paused,
+            muted: currentVideo.muted,
             reelId: currentReel.dataset.reelId
           } : null;
 
@@ -720,12 +563,7 @@
               const newCurrentVideo = newCurrentReel.querySelector("video");
               if (currentPlaybackState && currentPlaybackState.reelId === newCurrentReel.dataset.reelId) {
                 newCurrentVideo.currentTime = currentPlaybackState.time;
-                if (!currentPlaybackState.paused) {
-                  newCurrentVideo.play().catch(() => {
-                    errorMessage.textContent = "Error playing video.";
-                    setTimeout(() => (errorMessage.textContent = ""), 3000);
-                  });
-                }
+                newCurrentVideo.muted = currentPlaybackState.muted;
               }
             } else {
               errorMessage.textContent = "No reels available.";
