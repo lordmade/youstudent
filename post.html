@@ -332,7 +332,7 @@
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
-    import { getDatabase, ref, get, query, orderByChild, onValue } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
+    import { getDatabase, ref, get, query, orderByChild, set, onValue } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
     import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
 
     const firebaseConfig = {
@@ -417,16 +417,14 @@
         document.getElementById("selected-image").src = selectedImage;
         document.getElementById("selected-image").addEventListener("click", () => {
           pauseAllMedia();
-          location.href = targetUid ? `profile.html?uid=${targetUid}` : `post.html?id=${postId}`;
+          location.href = targetUid ? `profile.html?uid=${targetUid}` : postId ? `post.html?id=${postId}` : "home.html";
         });
 
-        const postsQuery = query(ref(db, "posts"), orderByChild("timestamp"));
-        const postsSnap = await get(postsQuery);
-
+        const postsSnap = await get(ref(db, "posts"));
         posts = Object.entries(postsSnap.val() || {})
           .map(([id, post]) => ({ id, ...post }))
           .filter(post => post.imageUrls?.length > 0 || post.videoUrl)
-          .sort(() => Math.random() - 0.5); // Shuffle for random order
+          .sort(() => Math.random() - 0.5); // Random shuffle
 
         if (posts.length === 0) {
           document.getElementById("reels-container").innerHTML = '<div class="placeholder">No posts available.</div>';
@@ -445,7 +443,7 @@
           const userRef = ref(db, `users/${post.userId}`);
           get(userRef).then(userSnap => {
             const user = userSnap.val() || {};
-            const isVideo = post.postType === "reel" && post.videoUrl;
+            const isVideo = post.videoUrl && (post.postType === "reel" || !post.imageUrls);
             const reelElement = document.createElement("div");
             reelElement.className = "reel";
             reelElement.innerHTML = `
