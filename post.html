@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>Instagram - Reels...</title>
+  <title>Instagram - Reels & Live</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     :root {
@@ -81,6 +81,7 @@
       display: flex;
       align-items: center;
       gap: 0.5rem;
+      position: relative;
     }
     .profile-pic {
       width: 32px;
@@ -88,6 +89,19 @@
       border-radius: 50%;
       object-fit: cover;
       border: 2px solid var(--white);
+    }
+    .live-badge {
+      position: absolute;
+      top: -8px;
+      left: -8px;
+      background: var(--primary-red);
+      color: var(--white);
+      font-size: clamp(0.6rem, 2vw, 0.65rem);
+      padding: 0.2rem 0.4rem;
+      border-radius: 4px;
+      border: 1px solid var(--white);
+      text-transform: uppercase;
+      font-weight: 600;
     }
     .username {
       font-weight: 600;
@@ -485,6 +499,12 @@
         padding: 0.2rem 0.6rem;
         font-size: clamp(0.7rem, 2.5vw, 0.75rem);
       }
+      .live-badge {
+        top: -6px;
+        left: -6px;
+        padding: 0.15rem 0.3rem;
+        font-size: clamp(0.55rem, 1.8vw, 0.6rem);
+      }
     }
   </style>
 </head>
@@ -674,22 +694,22 @@
       currentReelIndex = index;
     }
 
-    async function createReelElement(reelData, reelId) {
-      const profilePic = await getUserProfilePic(reelData.userId);
-      const username = await getUsername(reelData.userId);
-      const isOwner = auth.currentUser && reelData.userId === auth.currentUser.uid;
-      const isFollowingUser = !isOwner && auth.currentUser ? await isFollowing(auth.currentUser.uid, reelData.userId) : false;
+    async function createReelElement(data, id, isLive = false) {
+      const profilePic = await getUserProfilePic(data.userId);
+      const username = await getUsername(data.userId);
+      const isOwner = auth.currentUser && data.userId === auth.currentUser.uid;
+      const isFollowingUser = !isOwner && auth.currentUser ? await isFollowing(auth.currentUser.uid, data.userId) : false;
       const reel = document.createElement("div");
       reel.className = "reel";
-      reel.dataset.reelId = reelId;
+      reel.dataset.reelId = id;
       reel.innerHTML = `
-        <video src="${reelData.videoUrl || ''}" loop playsinline aria-label="Reel video by ${username}"></video>
+        <video src="${isLive ? data.streamUrl : data.videoUrl || ''}" ${isLive ? '' : 'loop'} playsinline aria-label="${isLive ? 'Live stream' : 'Reel video'} by ${username}"></video>
         <div class="mute-icon">
           <svg viewBox="0 0 24 24">
             <path d="M3.63 3.27a.75.75 0 011.06 0L21 19.54a.75.75 0 11-1.06 1.06L3.63 4.33a.75.75 0 010-1.06zM12 3c-.42 0-.83.04-1.24.11L12 4.34V3zm0 2.66v4.84l-1.5-1.5V5.66h1.5zm3 0h1.5v3.84l-1.5-1.5V5.66zm-6 0H7.5v8.68l-1.5-1.5V5.66H9zm-3 8.68H4.5v-6.02l-1.5-1.5v7.52H6zm9 0h1.5v-3.84l-1.5 1.5v2.34zm3-8.68h-1.5v4.84l1.5 1.5V5.66zm-3 8.68v4.84l1.24.11c.41-.07.82-.11 1.24-.11v-4.84h-2.48z"/>
           </svg>
         </div>
-        ${isOwner ? `
+        ${isOwner && !isLive ? `
           <div class="actions">
             <button type="button" class="delete-btn" aria-label="Delete reel">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -702,6 +722,7 @@
           <div class="reel-header">
             <div class="reel-info">
               <img src="${profilePic}" class="profile-pic" alt="Profile picture of ${username}" />
+              ${isLive ? `<span class="live-badge">Live</span>` : ''}
               <span class="username">${username}</span>
             </div>
             ${!isOwner && auth.currentUser ? `
@@ -710,13 +731,13 @@
               </button>
             ` : ''}
           </div>
-          ${reelData.caption ? `<p class="caption">${reelData.caption}</p>` : ""}
-          ${reelData.song ? `
+          ${data.caption && !isLive ? `<p class="caption">${data.caption}</p>` : ""}
+          ${data.song && !isLive ? `
             <div class="song-info">
               <svg viewBox="0 0 24 24" fill="currentColor">
                 <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/>
               </svg>
-              ${reelData.song.title} by ${reelData.song.artist}
+              ${data.song.title} by ${data.song.artist}
             </div>
           ` : ""}
           <div class="video-player">
@@ -754,24 +775,40 @@
       });
       video.addEventListener("error", () => {
         loadingOverlay.classList.add("hidden");
-        errorMessage.textContent = "Error loading video.";
+        errorMessage.textContent = `Error loading ${isLive ? 'live stream' : 'video'}.`;
         setTimeout(() => (errorMessage.textContent = ""), 3000);
       });
       const videoSeekBar = reel.querySelector(".video-seek-bar");
       videoSeekBar.addEventListener("input", () => {
-        video.currentTime = videoSeekBar.value;
+        if (!isLive) {
+          video.currentTime = videoSeekBar.value;
+        }
       });
+      if (!isLive) {
+        video.addEventListener("loadedmetadata", () => {
+          videoSeekBar.max = video.duration || 100;
+          videoTimeDisplay.textContent = `0:00 / ${formatTime(video.duration || 0)}`;
+        }, { once: true });
+        video.addEventListener("timeupdate", () => {
+          videoSeekBar.value = video.currentTime;
+          videoTimeDisplay.textContent = `${formatTime(video.currentTime)} / ${formatTime(video.duration || 0)}`;
+        });
+      } else {
+        const videoTimeDisplay = reel.querySelector(".video-time-display");
+        videoTimeDisplay.textContent = "Live";
+        videoSeekBar.style.display = "none"; // Hide seek bar for live streams
+      }
 
-      if (isOwner) {
+      if (isOwner && !isLive) {
         const deleteBtn = reel.querySelector(".delete-btn");
         deleteBtn.addEventListener("click", () => {
-          showAlertDialog(reelId);
+          showAlertDialog(id);
         });
       } else if (auth.currentUser) {
         const followBtn = reel.querySelector(".follow-btn");
         if (followBtn) {
           followBtn.addEventListener("click", () => {
-            toggleFollow(auth.currentUser.uid, reelData.userId, followBtn);
+            toggleFollow(auth.currentUser.uid, data.userId, followBtn);
           });
         }
       }
@@ -809,25 +846,48 @@
         const urlParams = new URLSearchParams(window.location.search);
         const targetReelId = urlParams.get("reelId");
         const reelsRef = ref(db, "reels");
+        const liveStreamsRef = ref(db, "liveStreams");
         loadingOverlay.classList.remove("hidden"); // Show spinner during initial load
-        onValue(reelsRef, async (snapshot) => {
-          const currentReel = reels[currentReelIndex];
-          const currentVideo = currentReel?.querySelector("video");
-          const currentPlaybackState = currentVideo ? {
-            time: currentVideo.currentTime,
-            muted: currentVideo.muted,
-            reelId: currentReel.dataset.reelId
-          } : null;
+        onValue(reelsRef, async (reelSnapshot) => {
+          onValue(liveStreamsRef, async (liveSnapshot) => {
+            const currentReel = reels[currentReelIndex];
+            const currentVideo = currentReel?.querySelector("video");
+            const currentPlaybackState = currentVideo ? {
+              time: currentVideo.currentTime,
+              muted: currentVideo.muted,
+              reelId: currentReel.dataset.reelId
+            } : null;
 
-          reels = [];
-          reelsContainer.innerHTML = "";
-          const data = snapshot.val();
-          if (data) {
-            let reelEntries = Object.entries(data).filter(([, reelData]) => reelData.videoUrl);
-            reelEntries = shuffleArray(reelEntries); // Randomize reels
-            for (const [reelId, reelData] of reelEntries) {
-              reels.push(await createReelElement(reelData, reelId));
+            reels = [];
+            reelsContainer.innerHTML = "";
+            const liveData = liveSnapshot.val();
+            const reelData = reelSnapshot.val();
+
+            // Process live streams
+            let liveEntries = [];
+            if (liveData) {
+              liveEntries = Object.entries(liveData)
+                .filter(([, liveData]) => liveData.isLive && liveData.streamUrl)
+                .map(([userId, liveData]) => [userId, { ...liveData, userId }]);
             }
+
+            // Process reels
+            let reelEntries = [];
+            if (reelData) {
+              reelEntries = Object.entries(reelData)
+                .filter(([, reelData]) => reelData.videoUrl)
+                .map(([reelId, reelData]) => [reelId, { ...reelData, userId: reelData.userId }]);
+              reelEntries = shuffleArray(reelEntries); // Randomize reels
+            }
+
+            // Combine live streams (first) and reels
+            const combinedEntries = [...liveEntries, ...reelEntries];
+
+            for (const [id, data] of combinedEntries) {
+              const isLive = liveData && Object.keys(liveData).includes(id);
+              reels.push(await createReelElement(data, id, isLive));
+            }
+
             if (reels.length > 0) {
               let newIndex = 0;
               if (targetReelId) {
@@ -841,19 +901,20 @@
               showReel(currentReelIndex);
               const newCurrentReel = reels[currentReelIndex];
               const newCurrentVideo = newCurrentReel.querySelector("video");
-              if (currentPlaybackState && currentPlaybackState.reelId === newCurrentReel.dataset.reelId) {
+              if (currentPlaybackState && currentPlaybackState.reelId === newCurrentReel.dataset.reelId && !liveData?.[newCurrentReel.dataset.reelId]) {
                 newCurrentVideo.currentTime = currentPlaybackState.time;
                 newCurrentVideo.muted = currentPlaybackState.muted;
               }
             } else {
-              errorMessage.textContent = "No reels available.";
+              errorMessage.textContent = "No reels or live streams available.";
               setTimeout(() => (errorMessage.textContent = ""), 3000);
             }
-          } else {
-            errorMessage.textContent = "No reels available.";
+            loadingOverlay.classList.add("hidden");
+          }, (error) => {
+            loadingOverlay.classList.add("hidden");
+            errorMessage.textContent = "Error loading live streams: " + error.message;
             setTimeout(() => (errorMessage.textContent = ""), 3000);
-          }
-          loadingOverlay.classList.add("hidden");
+          });
         }, (error) => {
           loadingOverlay.classList.add("hidden");
           errorMessage.textContent = "Error loading reels: " + error.message;
