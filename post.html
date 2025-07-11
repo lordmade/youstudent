@@ -131,13 +131,20 @@
     }
 
     .reel-actions {
+      position: absolute;
+      right: 1rem;
+      top: 50%;
+      transform: translateY(-50%);
       display: flex;
+      flex-direction: column;
       align-items: center;
-      gap: 1rem;
+      gap: 1.5rem;
+      z-index: 5;
     }
 
     .reel-action {
       display: flex;
+      flex-direction: column;
       align-items: center;
       gap: 0.25rem;
       cursor: pointer;
@@ -149,8 +156,8 @@
     }
 
     .reel-action svg {
-      width: 24px;
-      height: 24px;
+      width: 32px;
+      height: 32px;
       fill: var(--white);
     }
 
@@ -161,6 +168,18 @@
     .reel-action span {
       font-size: clamp(0.8rem, 2vw, 0.9rem);
       color: var(--white);
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+    }
+
+    .reel-profile-pic {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 2px solid var(--white);
+      background: var(--gradient);
+      padding: 2px;
+      cursor: pointer;
     }
 
     .mute-btn {
@@ -276,12 +295,17 @@
       }
 
       .reel-action svg {
-        width: 20px;
-        height: 20px;
+        width: 28px;
+        height: 28px;
       }
 
       .reel-action span {
         font-size: clamp(0.7rem, 1.8vw, 0.8rem);
+      }
+
+      .reel-profile-pic {
+        width: 32px;
+        height: 32px;
       }
 
       .mute-btn {
@@ -374,7 +398,10 @@
     }
 
     function pauseAllMedia() {
-      document.querySelectorAll("video").forEach(video => video.pause());
+      document.querySelectorAll("video").forEach(video => {
+        video.pause();
+        video.currentTime = 0; // Reset to start
+      });
     }
 
     async function toggleLike(postId, likeBtn) {
@@ -461,19 +488,20 @@
               <div class="reel-overlay">
                 <div class="reel-username">${user.username || "Unknown"}</div>
                 <div class="reel-caption">${post.caption || ""} • ${timeAgo(post.timestamp)}</div>
-                <div class="reel-actions">
-                  <div class="reel-action like-btn" data-post-id="${post.id}">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-                      <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
-                    </svg>
-                    <span class="like-count">0</span>
-                  </div>
-                  <div class="reel-action comment-btn" data-post-id="${post.id}">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-                      <path d="M21 6h-2V4H3v16l4-4h14V6zm-2 8H7.83L5 16.83V4h12v10z"/>
-                    </svg>
-                    <span class="comment-count">0</span>
-                  </div>
+              </div>
+              <div class="reel-actions">
+                <img class="reel-profile-pic" src="${user.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${user.username || 'Unknown'}'s profile picture">
+                <div class="reel-action like-btn" data-post-id="${post.id}">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                    <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+                  </svg>
+                  <span class="like-count">0</span>
+                </div>
+                <div class="reel-action comment-btn" data-post-id="${post.id}">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                    <path d="M21 6h-2V4H3v16l4-4h14V6zm-2 8H7.83L5 16.83V4h12v10z"/>
+                  </svg>
+                  <span class="comment-count">0</span>
                 </div>
               </div>
             `;
@@ -516,6 +544,12 @@
               location.href = `profile.html?uid=${post.userId}`;
             });
 
+            reelElement.querySelector(".reel-profile-pic").addEventListener("click", (e) => {
+              e.stopPropagation();
+              pauseAllMedia();
+              location.href = `profile.html?uid=${post.userId}`;
+            });
+
             reelElement.querySelector(".like-btn").addEventListener("click", (e) => {
               e.stopPropagation();
               toggleLike(post.id, e.currentTarget);
@@ -540,6 +574,7 @@
                 currentReelIndex = posts.findIndex(post => post.id === entry.target.querySelector(".like-btn").dataset.postId);
               } else {
                 video.pause();
+                video.currentTime = 0; // Reset to start
               }
             }
           });
