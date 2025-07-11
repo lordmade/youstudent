@@ -83,6 +83,7 @@
       border: 2px solid var(--white);
       background: var(--gradient);
       padding: 2px;
+      cursor: pointer;
     }
 
     .reels-container {
@@ -101,7 +102,7 @@
       background: var(--white);
     }
 
-    .reel video {
+    .reel img, .reel video {
       width: 100%;
       height: 100%;
       object-fit: cover;
@@ -172,6 +173,11 @@
       padding: 0.5rem;
       cursor: pointer;
       transition: transform 0.2s ease;
+      display: none;
+    }
+
+    .mute-btn.active {
+      display: block;
     }
 
     .mute-btn:hover {
@@ -317,7 +323,7 @@
       <span>Reels</span>
     </header>
     <div class="reels-container" id="reels-container"></div>
-    <button class="fab" aria-label="Upload reel">
+    <button class="fab" aria-label="Upload post">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
         <path d="M12 4v16m8-8H4"/>
       </svg>
@@ -326,7 +332,7 @@
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
-    import { getDatabase, ref, get, query, orderByChild, equalTo, set, onValue } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
+    import { getDatabase, ref, get, query, orderByChild, onValue } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
     import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
 
     const firebaseConfig = {
@@ -345,7 +351,7 @@
 
     let currentUserUid = null;
     let currentReelIndex = 0;
-    let reels = [];
+    let posts = [];
 
     function showLoading() {
       document.getElementById("loading-spinner").classList.add("active");
@@ -367,7 +373,7 @@
       return `${days}d ago`;
     }
 
-    function pauseAllVideos() {
+    function pauseAllMedia() {
       document.querySelectorAll("video").forEach(video => video.pause());
     }
 
@@ -388,7 +394,7 @@
       }
     }
 
-    async function loadReels() {
+    async function loadPosts() {
       const urlParams = new URLSearchParams(window.location.search);
       const targetUid = urlParams.get("uid");
       const postId = urlParams.get("postId");
@@ -409,49 +415,62 @@
           }
         }
         document.getElementById("selected-image").src = selectedImage;
+        document.getElementById("selected-image").addEventListener("click", () => {
+          pauseAllMedia();
+          location.href = targetUid ? `profile.html?uid=${targetUid}` : `post.html?id=${postId}`;
+        });
 
-        const reelsQuery = targetUid
-          ? query(ref(db, "posts"), orderByChild("userId"), equalTo(targetUid))
-          : query(ref(db, "posts"), orderByChild("postType"), equalTo("reel"));
-        const reelsSnap = await get(reelsQuery);
+        const postsQuery = query(ref(db, "posts"), orderByChild("timestamp"));
+        const postsSnap = await get(postsQuery);
 
-        reels = Object.entries(reelsSnap.val() || {})
+        posts = Object.entries(postsSnap.val() || {})
           .map(([id, post]) => ({ id, ...post }))
-          .filter(post => post.postType === "reel" && post.videoUrl)
-          .sort((a, b) => b.timestamp - a.timestamp);
+          .filter(post => post.imageUrls?.length > 0 || post.videoUrl)
+          .sort(() => Math.random() - 0.5); // Shuffle for random order
 
-        if (reels.length === 0) {
-          document.getElementById("reels-container").innerHTML = '<div class="placeholder">No reels available.</div>';
+        if (posts.length === 0) {
+          document.getElementById("reels-container").innerHTML = '<div class="placeholder">No posts available.</div>';
           hideLoading();
           return;
         }
 
         if (postId) {
-          currentReelIndex = reels.findIndex(reel => reel.id === postId);
+          currentReelIndex = posts.findIndex(post => post.id === postId);
           if (currentReelIndex === -1) currentReelIndex = 0;
         }
 
         const reelsContainer = document.getElementById("reels-container");
         reelsContainer.innerHTML = "";
-        reels.forEach((reel, index) => {
-          const userRef = ref(db, `users/${reel.userId}`);
+        posts.forEach((post, index) => {
+          const userRef = ref(db, `users/${post.userId}`);
           get(userRef).then(userSnap => {
             const user = userSnap.val() || {};
+            const isVideo = post.postType === "reel" && post.videoUrl;
             const reelElement = document.createElement("div");
             reelElement.className = "reel";
             reelElement.innerHTML = `
-              <video src="${reel.videoUrl}" loop playsinline ${index === currentReelIndex ? "autoplay" : ""} ${reel.isMuted ? "muted" : ""}></video>
+              ${isVideo ? `
+                <video src="${post.videoUrl}" loop playsinline ${index === currentReelIndex ? "autoplay" : ""} ${post.isMuted ? "muted" : ""}></video>
+                <button class="mute-btn ${isVideo ? 'active' : ''}" data-post-id="${post.id}">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                    ${post.isMuted ? '<path d="M3 9v6h4l5 5V4l-5 5H3zm13 3a4 4 0 0 0-4-4v8a4 4 0 0 0 4-4zm3 0a7 7 0 0 0-7-7v14a7 7 0 0 0 7-7z"/>' : '<path d="M3 9v6h4l5 5V4l-5 5H3zm13.11 3.47l1.54-1.54 1.54 1.54 1.54-1.54-1.54-1.54 1.54-1.54-1.54-1.54-1.54 1.54-1.54-1.54-1.54 1.54 1.54 1.54-1.54 1.54 1.54 1.54z"/>'
+                }
+                  </svg>
+                </button>
+              ` : `
+                <img src="${post.imageUrls?.[0] || post.imageUrl}" alt="Post image" onerror="this.src='https://via.placeholder.com/414x736?text=Image+Not+Found';">
+              `}
               <div class="reel-overlay">
                 <div class="reel-username">${user.username || "Unknown"}</div>
-                <div class="reel-caption">${reel.caption || ""} • ${timeAgo(reel.timestamp)}</div>
+                <div class="reel-caption">${post.caption || ""} • ${timeAgo(post.timestamp)}</div>
                 <div class="reel-actions">
-                  <div class="reel-action like-btn" data-post-id="${reel.id}">
+                  <div class="reel-action like-btn" data-post-id="${post.id}">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
                       <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
                     </svg>
                     <span class="like-count">0</span>
                   </div>
-                  <div class="reel-action comment-btn" data-post-id="${reel.id}">
+                  <div class="reel-action comment-btn" data-post-id="${post.id}">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
                       <path d="M21 6h-2V4H3v16l4-4h14V6zm-2 8H7.83L5 16.83V4h12v10z"/>
                     </svg>
@@ -459,77 +478,79 @@
                   </div>
                 </div>
               </div>
-              <button class="mute-btn" data-post-id="${reel.id}">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-                  ${reel.isMuted ? '<path d="M3 9v6h4l5 5V4l-5 5H3zm13 3a4 4 0 0 0-4-4v8a4 4 0 0 0 4-4zm3 0a7 7 0 0 0-7-7v14a7 7 0 0 0 7-7z"/>' : '<path d="M3 9v6h4l5 5V4l-5 5H3zm13.11 3.47l1.54-1.54 1.54 1.54 1.54-1.54-1.54-1.54 1.54-1.54-1.54-1.54-1.54 1.54-1.54-1.54-1.54 1.54 1.54 1.54-1.54 1.54 1.54 1.54z"/>'}
-                </svg>
-              </button>
             `;
             reelsContainer.appendChild(reelElement);
 
             // Real-time like and comment counts
-            onValue(ref(db, `posts/${reel.id}/likes`), snap => {
+            onValue(ref(db, `posts/${post.id}/likes`), snap => {
               const likes = snap.val() || {};
               const likeCount = Object.keys(likes).length;
               reelElement.querySelector(".like-count").textContent = likeCount;
               reelElement.querySelector(".like-btn").classList.toggle("liked", likes[currentUserUid]);
             });
 
-            onValue(ref(db, `posts/${reel.id}/comments`), snap => {
+            onValue(ref(db, `posts/${post.id}/comments`), snap => {
               const comments = snap.val() || {};
               reelElement.querySelector(".comment-count").textContent = Object.keys(comments).length;
             });
 
             // Event listeners
-            const video = reelElement.querySelector("video");
-            video.addEventListener("click", () => {
-              video.paused ? video.play() : video.pause();
-            });
+            if (isVideo) {
+              const video = reelElement.querySelector("video");
+              video.addEventListener("click", (e) => {
+                e.stopPropagation();
+                video.paused ? video.play() : video.pause();
+              });
+
+              reelElement.querySelector(".mute-btn").addEventListener("click", (e) => {
+                e.stopPropagation();
+                video.muted = !video.muted;
+                set(ref(db, `posts/${post.id}/isMuted`), video.muted);
+                e.currentTarget.innerHTML = video.muted
+                  ? `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4l-5 5H3zm13 3a4 4 0 0 0-4-4v8a4 4 0 0 0 4-4zm3 0a7 7 0 0 0-7-7v14a7 7 0 0 0 7-7z"/></svg>`
+                  : `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4l-5 5H3zm13.11 3.47l1.54-1.54 1.54 1.54 1.54-1.54-1.54-1.54 1.54-1.54-1.54-1.54-1.54 1.54-1.54-1.54-1.54 1.54 1.54 1.54-1.54 1.54 1.54 1.54z"/></svg>`;
+              });
+            }
 
             reelElement.querySelector(".reel-username").addEventListener("click", (e) => {
               e.stopPropagation();
-              location.href = `profile.html?uid=${reel.userId}`;
+              pauseAllMedia();
+              location.href = `profile.html?uid=${post.userId}`;
             });
 
             reelElement.querySelector(".like-btn").addEventListener("click", (e) => {
               e.stopPropagation();
-              toggleLike(reel.id, e.currentTarget);
+              toggleLike(post.id, e.currentTarget);
             });
 
             reelElement.querySelector(".comment-btn").addEventListener("click", (e) => {
               e.stopPropagation();
-              location.href = `post.html?id=${reel.id}`;
-            });
-
-            reelElement.querySelector(".mute-btn").addEventListener("click", (e) => {
-              e.stopPropagation();
-              video.muted = !video.muted;
-              set(ref(db, `posts/${reel.id}/isMuted`), video.muted);
-              e.currentTarget.innerHTML = video.muted
-                ? `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4l-5 5H3zm13 3a4 4 0 0 0-4-4v8a4 4 0 0 0 4-4zm3 0a7 7 0 0 0-7-7v14a7 7 0 0 0 7-7z"/></svg>`
-                : `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4l-5 5H3zm13.11 3.47l1.54-1.54 1.54 1.54 1.54-1.54-1.54-1.54 1.54-1.54-1.54-1.54-1.54 1.54-1.54-1.54-1.54 1.54 1.54 1.54-1.54 1.54 1.54 1.54z"/></svg>`;
+              pauseAllMedia();
+              location.href = `post.html?id=${post.id}`;
             });
           });
         });
 
-        // Autoplay logic
+        // Autoplay logic for videos
         const observer = new IntersectionObserver((entries) => {
           entries.forEach(entry => {
             const video = entry.target.querySelector("video");
-            if (entry.isIntersecting) {
-              pauseAllVideos();
-              video.play().catch(() => {});
-              currentReelIndex = reels.findIndex(reel => reel.id === entry.target.querySelector(".like-btn").dataset.postId);
-            } else {
-              video.pause();
+            if (video) {
+              if (entry.isIntersecting) {
+                pauseAllMedia();
+                video.play().catch(() => {});
+                currentReelIndex = posts.findIndex(post => post.id === entry.target.querySelector(".like-btn").dataset.postId);
+              } else {
+                video.pause();
+              }
             }
           });
         }, { threshold: 0.5 });
 
         document.querySelectorAll(".reel").forEach(reel => observer.observe(reel));
       } catch (error) {
-        console.error("Error loading reels:", error.message);
-        document.getElementById("reels-container").innerHTML = `<div class="error">Failed to load reels: ${error.message}</div>`;
+        console.error("Error loading posts:", error.message);
+        document.getElementById("reels-container").innerHTML = `<div class="error">Failed to load posts: ${error.message}</div>`;
       } finally {
         hideLoading();
       }
@@ -539,7 +560,7 @@
       auth.onAuthStateChanged(user => {
         if (user) {
           currentUserUid = user.uid;
-          loadReels();
+          loadPosts();
         } else {
           console.log("No user logged in, redirecting to login");
           location.href = "index.html";
@@ -547,13 +568,13 @@
       });
 
       document.querySelector(".back-btn").addEventListener("click", () => {
-        pauseAllVideos();
+        pauseAllMedia();
         location.href = "home.html";
       });
 
       document.querySelector(".fab").addEventListener("click", () => {
-        pauseAllVideos();
-        location.href = "upload.html?type=reel";
+        pauseAllMedia();
+        location.href = "upload.html";
       });
     });
   </script>
