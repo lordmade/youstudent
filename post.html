@@ -506,7 +506,6 @@
       appId: "1:658673187627:web:6e4c29af661785f0afa36e"
     };
 
-
     const app = initializeApp(firebaseConfig);
     const auth = getAuth();
     const db = getDatabase();
@@ -617,19 +616,33 @@
 
     function showReel(index) {
       if (index < 0 || index >= reels.length) return;
+
+      // Store playback state of the current reel before switching
+      const currentReel = reels[currentReelIndex];
+      const currentVideo = currentReel?.querySelector("video");
+      const currentPlaybackState = currentVideo ? {
+        time: currentVideo.currentTime,
+        paused: currentVideo.paused
+      } : null;
+
       reels.forEach((reel, i) => {
-        reel.classList.toggle("active", i === index);
         const video = reel.querySelector("video");
         const pauseIcon = reel.querySelector(".pause-icon");
         const videoSeekBar = reel.querySelector(".video-seek-bar");
         const videoTimeDisplay = reel.querySelector(".video-time-display");
         const bottomSheet = reel.querySelector(".bottom-sheet");
+        const mediaPlayer = reel.querySelector(".media-player");
+
         if (i === index) {
+          reel.classList.add("active");
           video.volume = 1;
-          video.play().catch(() => {
-            errorMessage.textContent = "Error playing video.";
-            setTimeout(() => (errorMessage.textContent = ""), 3000);
-          });
+          const songData = reel.dataset.song ? JSON.parse(reel.dataset.song) : null;
+          if (songData) {
+            mediaPlayer.classList.add("active");
+            initializeAudio(songData, reel, video);
+          } else {
+            mediaPlayer.classList.remove("active");
+          }
           video.addEventListener("loadedmetadata", () => {
             videoSeekBar.max = video.duration || 100;
             videoTimeDisplay.textContent = `0:00 / ${formatTime(video.duration || 0)}`;
@@ -638,32 +651,46 @@
             videoSeekBar.value = video.currentTime;
             videoTimeDisplay.textContent = `${formatTime(video.currentTime)} / ${formatTime(video.duration || 0)}`;
           });
-          const songData = reel.dataset.song ? JSON.parse(reel.dataset.song) : null;
-          const mediaPlayer = reel.querySelector(".media-player");
-          if (songData) {
-            mediaPlayer.classList.add("active");
-            initializeAudio(songData, reel, video);
-            if (!video.paused) {
-              audio?.play().catch(() => {
+          // Restore or start playback
+          if (currentReel === reel && currentPlaybackState) {
+            video.currentTime = currentPlaybackState.time;
+            if (!currentPlaybackState.paused) {
+              video.play().catch(() => {
+                errorMessage.textContent = "Error playing video.";
+                setTimeout(() => (errorMessage.textContent = ""), 3000);
+              });
+              if (songData && audio && !audio.paused) {
+                audio.play().catch(() => {
+                  errorMessage.textContent = "Error playing song.";
+                  setTimeout(() => (errorMessage.textContent = ""), 3000);
+                });
+              }
+            }
+          } else {
+            video.play().catch(() => {
+              errorMessage.textContent = "Error playing video.";
+              setTimeout(() => (errorMessage.textContent = ""), 3000);
+            });
+            if (songData && audio) {
+              audio.play().catch(() => {
                 errorMessage.textContent = "Error playing song.";
                 setTimeout(() => (errorMessage.textContent = ""), 3000);
               });
             }
-          } else {
-            mediaPlayer.classList.remove("active");
           }
-          bottomSheet.classList.remove("active"); // Close bottom sheet when switching reels
+          bottomSheet.classList.remove("active"); // Close bottom sheet when switching
         } else {
+          reel.classList.remove("active");
           video.pause();
-          video.currentTime = 0;
+          video.currentTime = 0; // Reset non-active videos
           video.volume = 1;
           pauseIcon.classList.remove("active");
-          if (audio) {
+          mediaPlayer.classList.remove("active");
+          bottomSheet.classList.remove("active");
+          if (audio && reel === currentReel) {
             audio.pause();
             audio = null;
           }
-          reel.querySelector(".media-player").classList.remove("active");
-          bottomSheet.classList.remove("active");
         }
       });
       currentReelIndex = index;
@@ -749,6 +776,7 @@
           </div>
         </div>
       `;
+
       const video = reel.querySelector("video");
       video.addEventListener("click", () => {
         const pauseIcon = reel.querySelector(".pause-icon");
@@ -861,6 +889,11 @@
 
       const commentsRef = ref(db, `reels/${reelId}/comments`);
       onValue(commentsRef, async (snapshot) => {
+        // Store video state before updating comments
+        const wasPlaying = !video.paused;
+        const currentTime = video.currentTime;
+        const wasAudioPlaying = audio && !audio.paused;
+
         commentsSection.innerHTML = "";
         const comments = snapshot.val() || {};
         const sortedComments = Object.entries(comments).sort(([, a], [, b]) => a.timestamp - b.timestamp);
@@ -916,6 +949,23 @@
           }
           commentsSection.appendChild(commentDiv);
         }
+
+        // Restore video state after updating comments
+        if (reel.classList.contains("active")) {
+          video.currentTime = currentTime;
+          if (wasPlaying) {
+            video.play().catch(() => {
+              errorMessage.textContent = "Error playing video.";
+              setTimeout(() => (errorMessage.textContent = ""), 3000);
+            });
+          }
+          if (wasAudioPlaying && audio) {
+            audio.play().catch(() => {
+              errorMessage.textContent = "Error playing song.";
+              setTimeout(() => (errorMessage.textContent = ""), 3000);
+            });
+          }
+        }
       });
 
       commentBtn.addEventListener("click", async () => {
@@ -923,6 +973,9 @@
         if (!text) return;
         const user = auth.currentUser;
         if (!user) return;
+        const wasPlaying = !video.paused;
+        const currentTime = video.currentTime;
+        const wasAudioPlaying = audio && !audio.paused;
         const newCommentRef = push(commentsRef);
         await set(newCommentRef, {
           userId: user.uid,
@@ -931,6 +984,22 @@
           timestamp: Date.now()
         });
         commentInput.value = "";
+        // Restore playback state
+        if (reel.classList.contains("active")) {
+          video.currentTime = currentTime;
+          if (wasPlaying) {
+            video.play().catch(() => {
+              errorMessage.textContent = "Error playing video.";
+              setTimeout(() => (errorMessage.textContent = ""), 3000);
+            });
+          }
+          if (wasAudioPlaying && audio) {
+            audio.play().catch(() => {
+              errorMessage.textContent = "Error playing song.";
+              setTimeout(() => (errorMessage.textContent = ""), 3000);
+            });
+          }
+        }
       });
 
       reelsContainer.appendChild(reel);
@@ -943,6 +1012,15 @@
       } else {
         const reelsRef = ref(db, "reels");
         onValue(reelsRef, async (snapshot) => {
+          // Store playback state of the current reel
+          const currentReel = reels[currentReelIndex];
+          const currentVideo = currentReel?.querySelector("video");
+          const currentPlaybackState = currentVideo ? {
+            time: currentVideo.currentTime,
+            paused: currentVideo.paused
+          } : null;
+          const wasAudioPlaying = audio && !audio.paused;
+
           reels = [];
           reelsContainer.innerHTML = "";
           const data = snapshot.val();
@@ -954,7 +1032,27 @@
               }
             }
             if (reels.length > 0) {
-              showReel(0);
+              // Ensure currentReelIndex is valid
+              currentReelIndex = Math.min(currentReelIndex, reels.length - 1);
+              showReel(currentReelIndex);
+              // Restore playback state for the current reel
+              const newCurrentReel = reels[currentReelIndex];
+              const newCurrentVideo = newCurrentReel.querySelector("video");
+              if (currentPlaybackState && currentReel?.dataset.reelId === newCurrentReel.dataset.reelId) {
+                newCurrentVideo.currentTime = currentPlaybackState.time;
+                if (!currentPlaybackState.paused) {
+                  newCurrentVideo.play().catch(() => {
+                    errorMessage.textContent = "Error playing video.";
+                    setTimeout(() => (errorMessage.textContent = ""), 3000);
+                  });
+                  if (wasAudioPlaying && audio) {
+                    audio.play().catch(() => {
+                      errorMessage.textContent = "Error playing song.";
+                      setTimeout(() => (errorMessage.textContent = ""), 3000);
+                    });
+                  }
+                }
+              }
             } else {
               errorMessage.textContent = "No reels available.";
               setTimeout(() => (errorMessage.textContent = ""), 3000);
