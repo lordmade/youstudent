@@ -71,11 +71,16 @@
       background: linear-gradient(to top, rgba(0, 0, 0, 0.5), transparent);
       color: var(--text-dark);
     }
+    .reel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.5rem;
+    }
     .reel-info {
       display: flex;
       align-items: center;
       gap: 0.5rem;
-      margin-bottom: 0.5rem;
     }
     .profile-pic {
       width: 32px;
@@ -87,6 +92,26 @@
     .username {
       font-weight: 600;
       font-size: clamp(0.9rem, 4vw, 1rem);
+    }
+    .follow-btn {
+      background: var(--primary-red);
+      color: var(--white);
+      border: none;
+      border-radius: 9999px;
+      padding: 0.25rem 0.75rem;
+      font-size: clamp(0.75rem, 3vw, 0.8rem);
+      cursor: pointer;
+      transition: background 0.2s ease;
+    }
+    .follow-btn.following {
+      background: var(--text-light);
+      color: var(--text-dark);
+    }
+    .follow-btn:hover {
+      background: #d43f4e;
+    }
+    .follow-btn.following:hover {
+      background: #a0a0a0;
     }
     .caption {
       font-size: clamp(0.85rem, 3.5vw, 0.9rem);
@@ -456,6 +481,10 @@
         padding: 1rem;
         max-width: 250px;
       }
+      .follow-btn {
+        padding: 0.2rem 0.6rem;
+        font-size: clamp(0.7rem, 2.5vw, 0.75rem);
+      }
     }
   </style>
 </head>
@@ -477,7 +506,7 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
     import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
-    import { getDatabase, ref, onValue, remove } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
+    import { getDatabase, ref, onValue, remove, update, get } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
@@ -519,6 +548,64 @@
         console.error("Error fetching profile picture:", error);
         return 'https://via.placeholder.com/32';
       }
+    }
+
+    async function getUsername(userId) {
+      try {
+        const userRef = ref(db, `users/${userId}/username`);
+        const snapshot = await new Promise((resolve) => onValue(userRef, resolve, { onlyOnce: true }));
+        return snapshot.val() || 'Anonymous';
+      } catch (error) {
+        console.error("Error fetching username:", error);
+        return 'Anonymous';
+      }
+    }
+
+    async function isFollowing(currentUserId, targetUserId) {
+      try {
+        const followingRef = ref(db, `users/${currentUserId}/following`);
+        const snapshot = await get(followingRef);
+        const following = snapshot.val() || [];
+        return following.includes(targetUserId);
+      } catch (error) {
+        console.error("Error checking follow status:", error);
+        return false;
+      }
+    }
+
+    async function toggleFollow(currentUserId, targetUserId, followBtn) {
+      try {
+        loadingOverlay.classList.remove("hidden");
+        const followingRef = ref(db, `users/${currentUserId}/following`);
+        const snapshot = await get(followingRef);
+        let following = snapshot.val() || [];
+        
+        if (following.includes(targetUserId)) {
+          following = following.filter(id => id !== targetUserId);
+          followBtn.classList.remove("following");
+          followBtn.textContent = "Follow";
+        } else {
+          following.push(targetUserId);
+          followBtn.classList.add("following");
+          followBtn.textContent = "Following";
+        }
+        
+        await update(followingRef, following);
+      } catch (error) {
+        console.error("Error toggling follow:", error);
+        errorMessage.textContent = "Error updating follow status: " + error.message;
+        setTimeout(() => (errorMessage.textContent = ""), 3000);
+      } finally {
+        loadingOverlay.classList.add("hidden");
+      }
+    }
+
+    function shuffleArray(array) {
+      for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+      }
+      return array;
     }
 
     function showAlertDialog(reelId) {
@@ -589,12 +676,14 @@
 
     async function createReelElement(reelData, reelId) {
       const profilePic = await getUserProfilePic(reelData.userId);
+      const username = await getUsername(reelData.userId);
       const isOwner = auth.currentUser && reelData.userId === auth.currentUser.uid;
+      const isFollowingUser = !isOwner && auth.currentUser ? await isFollowing(auth.currentUser.uid, reelData.userId) : false;
       const reel = document.createElement("div");
       reel.className = "reel";
       reel.dataset.reelId = reelId;
       reel.innerHTML = `
-        <video src="${reelData.videoUrl || ''}" loop playsinline aria-label="Reel video by ${reelData.username || 'Anonymous'}"></video>
+        <video src="${reelData.videoUrl || ''}" loop playsinline aria-label="Reel video by ${username}"></video>
         <div class="mute-icon">
           <svg viewBox="0 0 24 24">
             <path d="M3.63 3.27a.75.75 0 011.06 0L21 19.54a.75.75 0 11-1.06 1.06L3.63 4.33a.75.75 0 010-1.06zM12 3c-.42 0-.83.04-1.24.11L12 4.34V3zm0 2.66v4.84l-1.5-1.5V5.66h1.5zm3 0h1.5v3.84l-1.5-1.5V5.66zm-6 0H7.5v8.68l-1.5-1.5V5.66H9zm-3 8.68H4.5v-6.02l-1.5-1.5v7.52H6zm9 0h1.5v-3.84l-1.5 1.5v2.34zm3-8.68h-1.5v4.84l1.5 1.5V5.66zm-3 8.68v4.84l1.24.11c.41-.07.82-.11 1.24-.11v-4.84h-2.48z"/>
@@ -610,9 +699,16 @@
           </div>
         ` : ''}
         <div class="reel-overlay">
-          <div class="reel-info">
-            <img src="${profilePic}" class="profile-pic" alt="Profile picture of ${reelData.username || 'Anonymous'}" />
-            <span class="username">${reelData.username || 'Anonymous'}</span>
+          <div class="reel-header">
+            <div class="reel-info">
+              <img src="${profilePic}" class="profile-pic" alt="Profile picture of ${username}" />
+              <span class="username">${username}</span>
+            </div>
+            ${!isOwner && auth.currentUser ? `
+              <button type="button" class="follow-btn ${isFollowingUser ? 'following' : ''}" aria-label="${isFollowingUser ? 'Unfollow' : 'Follow'} ${username}">
+                ${isFollowingUser ? 'Following' : 'Follow'}
+              </button>
+            ` : ''}
           </div>
           ${reelData.caption ? `<p class="caption">${reelData.caption}</p>` : ""}
           ${reelData.song ? `
@@ -671,6 +767,13 @@
         deleteBtn.addEventListener("click", () => {
           showAlertDialog(reelId);
         });
+      } else if (auth.currentUser) {
+        const followBtn = reel.querySelector(".follow-btn");
+        if (followBtn) {
+          followBtn.addEventListener("click", () => {
+            toggleFollow(auth.currentUser.uid, reelData.userId, followBtn);
+          });
+        }
       }
 
       reelsContainer.appendChild(reel);
@@ -703,6 +806,8 @@
       if (!user) {
         location.href = "index.html";
       } else {
+        const urlParams = new URLSearchParams(window.location.search);
+        const targetReelId = urlParams.get("reelId");
         const reelsRef = ref(db, "reels");
         loadingOverlay.classList.remove("hidden"); // Show spinner during initial load
         onValue(reelsRef, async (snapshot) => {
@@ -718,15 +823,17 @@
           reelsContainer.innerHTML = "";
           const data = snapshot.val();
           if (data) {
-            const sortedReels = Object.entries(data).sort(([, a], [, b]) => b.timestamp - a.timestamp);
-            for (const [reelId, reelData] of sortedReels) {
-              if (reelData.videoUrl) {
-                reels.push(await createReelElement(reelData, reelId));
-              }
+            let reelEntries = Object.entries(data).filter(([, reelData]) => reelData.videoUrl);
+            reelEntries = shuffleArray(reelEntries); // Randomize reels
+            for (const [reelId, reelData] of reelEntries) {
+              reels.push(await createReelElement(reelData, reelId));
             }
             if (reels.length > 0) {
               let newIndex = 0;
-              if (currentPlaybackState) {
+              if (targetReelId) {
+                newIndex = reels.findIndex(reel => reel.dataset.reelId === targetReelId);
+                if (newIndex === -1) newIndex = 0;
+              } else if (currentPlaybackState) {
                 newIndex = reels.findIndex(reel => reel.dataset.reelId === currentPlaybackState.reelId);
                 if (newIndex === -1) newIndex = 0;
               }
