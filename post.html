@@ -16,7 +16,6 @@
       --background: #fafafa;
       --gradient: linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888);
       --shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
-      --shadow-light: 0 2px 8px rgba(0, 0, 0, 0.1);
     }
 
     * {
@@ -46,63 +45,7 @@
       display: flex;
       flex-direction: column;
       position: relative;
-      background: var(--white);
-    }
-
-    header {
-      padding: 0.75rem 1rem;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      border-bottom: 1px solid var(--border);
-      background: var(--white);
-      position: sticky;
-      top: 0;
-      z-index: 20;
-      box-shadow: var(--shadow-light);
-    }
-
-    .back-btn {
-      background: none;
-      border: none;
-      cursor: pointer;
-      padding: 0.5rem;
-      transition: transform 0.2s ease, opacity 0.2s ease;
-    }
-
-    .back-btn:hover {
-      transform: scale(1.1);
-      opacity: 0.8;
-    }
-
-    .back-btn svg {
-      width: 24px;
-      height: 24px;
-      stroke: var(--text-dark);
-      stroke-width: 2;
-    }
-
-    .selected-image {
-      width: 40px;
-      height: 40px;
-      border-radius: 50%;
-      object-fit: cover;
-      border: 2px solid var(--white);
-      background: var(--gradient);
-      padding: 2px;
-      cursor: pointer;
-      transition: transform 0.2s ease, box-shadow 0.2s ease;
-    }
-
-    .selected-image:hover {
-      transform: scale(1.05);
-      box-shadow: var(--shadow);
-    }
-
-    .header-title {
-      font-size: 1.125rem;
-      font-weight: 600;
-      color: var(--text-dark);
+      background: #000;
     }
 
     .reels-container {
@@ -119,7 +62,7 @@
       position: relative;
       display: flex;
       flex-direction: column;
-      background: var(--white);
+      background: #000;
       opacity: 0;
       animation: fadeIn 0.4s ease forwards;
     }
@@ -162,7 +105,7 @@
     .reel-caption {
       font-size: clamp(0.85rem, 2vw, 0.95rem);
       margin-bottom: 0.5rem;
-      max-width: 65%;
+      max-width: 80%;
       line-height: 1.4;
     }
 
@@ -215,23 +158,6 @@
       font-weight: 600;
       color: var(--white);
       text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
-    }
-
-    .reel-profile-pic {
-      width: 44px;
-      height: 44px;
-      border-radius: 50%;
-      object-fit: cover;
-      border: 2px solid var(--white);
-      background: var(--gradient);
-      padding: 2px;
-      cursor: pointer;
-      transition: transform 0.2s ease, box-shadow 0.2s ease;
-    }
-
-    .reel-profile-pic:hover {
-      transform: scale(1.1);
-      box-shadow: var(--shadow);
     }
 
     .mute-btn {
@@ -368,15 +294,6 @@
         padding: 0;
       }
 
-      .selected-image {
-        width: 32px;
-        height: 32px;
-      }
-
-      .header-title {
-        font-size: 1rem;
-      }
-
       .reel-username {
         font-size: clamp(0.85rem, 2vw, 0.95rem);
       }
@@ -392,11 +309,6 @@
 
       .reel-action span {
         font-size: clamp(0.75rem, 1.8vw, 0.85rem);
-      }
-
-      .reel-profile-pic {
-        width: 36px;
-        height: 36px;
       }
 
       .mute-btn {
@@ -438,15 +350,6 @@
     </svg>
   </div>
   <div class="container">
-    <header>
-      <button class="back-btn" aria-label="Back to home">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M15 18l-6-6 6-6"/>
-        </svg>
-      </button>
-      <img class="selected-image" id="selected-image" src="https://www.gravatar.com/avatar?d=mp" alt="Selected profile or post image">
-      <span class="header-title">Reels</span>
-    </header>
     <div class="reels-container" id="reels-container"></div>
     <button class="fab" aria-label="Upload post">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
@@ -525,30 +428,10 @@
 
     async function loadPosts() {
       const urlParams = new URLSearchParams(window.location.search);
-      const targetUid = urlParams.get("uid");
       const postId = urlParams.get("postId");
       showLoading();
 
       try {
-        let selectedImage = "https://www.gravatar.com/avatar?d=mp";
-        if (targetUid) {
-          const userSnap = await get(ref(db, `users/${targetUid}`));
-          if (userSnap.exists()) {
-            selectedImage = userSnap.val().photoURL || selectedImage;
-          }
-        } else if (postId) {
-          const postSnap = await get(ref(db, `posts/${postId}`));
-          if (postSnap.exists()) {
-            const post = postSnap.val();
-            selectedImage = post.imageUrls?.[0] || post.videoUrl || selectedImage;
-          }
-        }
-        document.getElementById("selected-image").src = selectedImage;
-        document.getElementById("selected-image").addEventListener("click", () => {
-          pauseAllMedia();
-          location.href = targetUid ? `profile.html?uid=${targetUid}` : postId ? `post.html?id=${postId}` : "home.html";
-        });
-
         const postsSnap = await get(ref(db, "posts"));
         posts = Object.entries(postsSnap.val() || {})
           .map(([id, post]) => ({ id, ...post }))
@@ -594,7 +477,6 @@
                 <div class="reel-caption">${post.caption || ""} • ${timeAgo(post.timestamp)}</div>
               </div>
               <div class="reel-actions">
-                <img class="reel-profile-pic" src="${user.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${user.username || 'Unknown'}'s profile picture" aria-label="View ${user.username || 'Unknown'}'s profile" tabindex="0">
                 <div class="reel-action like-btn" data-post-id="${post.id}" aria-label="Like post" tabindex="0">
                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
                     <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
@@ -649,13 +531,7 @@
               location.href = `profile.html?uid=${post.userId}`;
             });
 
-            reelElement.querySelector(".reel-profile-pic").addEventListener("click", (e) => {
-              e.stopPropagation();
-              pauseAllMedia();
-              location.href = `profile.html?uid=${post.userId}`;
-            });
-
-            reelElement.querySelector(".reel-profile-pic").addEventListener("keydown", (e) => {
+            reelElement.querySelector(".reel-username").addEventListener("keydown", (e) => {
               if (e.key === "Enter" || e.key === " ") {
                 e.stopPropagation();
                 pauseAllMedia();
@@ -746,11 +622,6 @@
           console.log("No user logged in, redirecting to login");
           location.href = "index.html";
         }
-      });
-
-      document.querySelector(".back-btn").addEventListener("click", () => {
-        pauseAllMedia();
-        location.href = "home.html";
       });
 
       document.querySelector(".fab").addEventListener("click", () => {
