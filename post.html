@@ -73,9 +73,16 @@
     }
     .reel-info {
       display: flex;
-      align-items: flex-end;
+      align-items: center;
       gap: 0.5rem;
       margin-bottom: 0.5rem;
+    }
+    .profile-pic {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 2px solid var(--white);
     }
     .username {
       font-weight: 600;
@@ -171,7 +178,7 @@
       gap: 0.5rem;
       width: 80px;
     }
-    .volume-btn {
+    .mute-btn {
       background: none;
       border: none;
       cursor: pointer;
@@ -182,12 +189,47 @@
       width: 20px;
       height: 20px;
     }
-    .volume-btn:hover {
+    .mute-btn:hover {
       color: var(--primary-red);
     }
-    .volume-btn svg {
+    .mute-btn svg {
       width: 18px;
       height: 18px;
+    }
+    .actions {
+      position: absolute;
+      right: 1rem;
+      bottom: 4rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1rem;
+      z-index: 2;
+    }
+    .like-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: var(--text-dark);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 40px;
+      height: 40px;
+    }
+    .like-btn.liked {
+      color: var(--primary-red);
+    }
+    .like-btn:hover {
+      color: var(--primary-red);
+    }
+    .like-btn svg {
+      width: 24px;
+      height: 24px;
+    }
+    .like-count {
+      font-size: clamp(0.75rem, 3vw, 0.8rem);
+      color: var(--text-dark);
     }
     .loading-overlay {
       position: fixed;
@@ -258,6 +300,14 @@
       .volume-container {
         width: 70px;
       }
+      .actions {
+        right: 0.5rem;
+        bottom: 3.5rem;
+      }
+      .profile-pic {
+        width: 28px;
+        height: 28px;
+      }
     }
   </style>
 </head>
@@ -274,7 +324,7 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
     import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
-    import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
+    import { getDatabase, ref, onValue, set, remove } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
@@ -304,7 +354,13 @@
       return `${min}:${sec < 10 ? '0' : ''}${sec}`;
     }
 
-    function initializeAudio(songData, reelElement) {
+    async function getUserProfilePic(userId) {
+      const userRef = ref(db, `users/${userId}/photoURL`);
+      const snapshot = await new Promise((resolve) => onValue(userRef, resolve, { onlyOnce: true }));
+      return snapshot.val() || auth.currentUser?.photoURL || 'https://via.placeholder.com/32';
+    }
+
+    function initializeAudio(songData, reelElement, video) {
       if (audio) {
         audio.pause();
         audio = null;
@@ -315,7 +371,7 @@
       const seekBar = mediaPlayer.querySelector(".seek-bar");
       const timeDisplay = mediaPlayer.querySelector(".time-display");
       const playPauseBtn = mediaPlayer.querySelector(".play-pause-btn");
-      const volumeBtn = mediaPlayer.querySelector(".volume-btn");
+      const muteBtn = mediaPlayer.querySelector(".mute-btn");
       const volumeBar = mediaPlayer.querySelector(".volume-bar");
 
       audio.addEventListener("loadedmetadata", () => {
@@ -344,10 +400,12 @@
             errorMessage.textContent = "Error playing song.";
             setTimeout(() => (errorMessage.textContent = ""), 3000);
           });
+          video.play().catch(() => {});
           playPauseBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg>`;
           playPauseBtn.setAttribute("aria-label", "Pause");
         } else {
           audio.pause();
+          video.pause();
           playPauseBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>`;
           playPauseBtn.setAttribute("aria-label", "Play");
         }
@@ -357,27 +415,30 @@
         if (audio) audio.currentTime = seekBar.value;
       });
 
-      volumeBtn.addEventListener("click", () => {
-        if (audio.volume === 0) {
+      muteBtn.addEventListener("click", () => {
+        if (audio.volume === 0 || video.volume === 0) {
           audio.volume = volumeBar.value || 1;
+          video.volume = volumeBar.value || 1;
           volumeBar.value = audio.volume;
-          volumeBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 5L6 9H2v6h4l5 4V5zM19.07 4.93a10 10 0 010 14.14M15.54 8.46a5 5 0 010 7.07"/></svg>`;
-          volumeBtn.setAttribute("aria-label", "Mute");
+          muteBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 5L6 9H2v6h4l5 4V5zM19.07 4.93a10 10 0 010 14.14M15.54 8.46a5 5 0 010 7.07"/></svg>`;
+          muteBtn.setAttribute("aria-label", "Mute");
         } else {
           audio.volume = 0;
+          video.volume = 0;
           volumeBar.value = 0;
-          volumeBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 5L6 9H2v6h4l5 4V5zM22 9l-6 6M16 9l6 6"/></svg>`;
-          volumeBtn.setAttribute("aria-label", "Unmute");
+          muteBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 5L6 9H2v6h4l5 4V5zM22 9l-6 6M16 9l6 6"/></svg>`;
+          muteBtn.setAttribute("aria-label", "Unmute");
         }
       });
 
       volumeBar.addEventListener("input", () => {
         if (audio) {
           audio.volume = volumeBar.value;
-          volumeBtn.innerHTML = audio.volume === 0
+          video.volume = volumeBar.value;
+          muteBtn.innerHTML = audio.volume === 0
             ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 5L6 9H2v6h4l5 4V5zM22 9l-6 6M16 9l6 6"/></svg>`
             : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 5L6 9H2v6h4l5 4V5zM19.07 4.93a10 10 0 010 14.14M15.54 8.46a5 5 0 010 7.07"/></svg>`;
-          volumeBtn.setAttribute("aria-label", audio.volume === 0 ? "Unmute" : "Mute");
+          muteBtn.setAttribute("aria-label", audio.volume === 0 ? "Unmute" : "Mute");
         }
       });
     }
@@ -389,6 +450,7 @@
         const video = reel.querySelector("video");
         const pauseIcon = reel.querySelector(".pause-icon");
         if (i === index) {
+          video.volume = 1; // Ensure video sound is on
           video.play().catch(() => {
             errorMessage.textContent = "Error playing video.";
             setTimeout(() => (errorMessage.textContent = ""), 3000);
@@ -397,13 +459,20 @@
           const mediaPlayer = reel.querySelector(".media-player");
           if (songData) {
             mediaPlayer.classList.add("active");
-            initializeAudio(songData, reel);
+            initializeAudio(songData, reel, video);
+            if (!video.paused) {
+              audio?.play().catch(() => {
+                errorMessage.textContent = "Error playing song.";
+                setTimeout(() => (errorMessage.textContent = ""), 3000);
+              });
+            }
           } else {
             mediaPlayer.classList.remove("active");
           }
         } else {
           video.pause();
           video.currentTime = 0;
+          video.volume = 1;
           pauseIcon.classList.remove("active");
           if (audio) {
             audio.pause();
@@ -415,19 +484,30 @@
       currentReelIndex = index;
     }
 
-    function createReelElement(reelData) {
+    async function createReelElement(reelData, reelId) {
+      const profilePic = await getUserProfilePic(reelData.userId);
       const reel = document.createElement("div");
       reel.className = "reel";
+      reel.dataset.reelId = reelId;
       if (reelData.song) {
         reel.dataset.song = JSON.stringify(reelData.song);
       }
       reel.innerHTML = `
-        <video src="${reelData.videoUrl || ''}" muted loop playsinline aria-label="Reel video by ${reelData.username || 'Anonymous'}"></video>
+        <video src="${reelData.videoUrl || ''}" loop playsinline aria-label="Reel video by ${reelData.username || 'Anonymous'}"></video>
         <div class="pause-icon">
           <svg viewBox="0 0 24 24"><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg>
         </div>
+        <div class="actions">
+          <button type="button" class="like-btn" aria-label="Like">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/>
+            </svg>
+          </button>
+          <span class="like-count">0</span>
+        </div>
         <div class="reel-overlay">
           <div class="reel-info">
+            <img src="${profilePic}" class="profile-pic" alt="Profile picture of ${reelData.username || 'Anonymous'}" />
             <span class="username">${reelData.username || 'Anonymous'}</span>
           </div>
           ${reelData.caption ? `<p class="caption">${reelData.caption}</p>` : ""}
@@ -446,7 +526,7 @@
             <input type="range" class="seek-bar" min="0" max="100" value="0" aria-label="Seek audio"/>
             <span class="time-display">0:00 / 0:00</span>
             <div class="volume-container">
-              <button type="button" class="volume-btn" aria-label="Mute">
+              <button type="button" class="mute-btn" aria-label="Mute">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M11 5L6 9H2v6h4l5 4V5zM19.07 4.93a10 10 0 010 14.14M15.54 8.46a5 5 0 010 7.07"/>
                 </svg>
@@ -464,9 +544,13 @@
             errorMessage.textContent = "Error playing video.";
             setTimeout(() => (errorMessage.textContent = ""), 3000);
           });
+          if (audio && reel.classList.contains("active")) {
+            audio.play().catch(() => {});
+          }
           pauseIcon.classList.remove("active");
         } else {
           video.pause();
+          if (audio) audio.pause();
           pauseIcon.classList.add("active");
           setTimeout(() => pauseIcon.classList.remove("active"), 1000);
         }
@@ -475,6 +559,28 @@
         errorMessage.textContent = "Error loading video.";
         setTimeout(() => (errorMessage.textContent = ""), 3000);
       });
+
+      // Like button functionality
+      const likeBtn = reel.querySelector(".like-btn");
+      const likeCount = reel.querySelector(".like-count");
+      const likesRef = ref(db, `reels/${reelId}/likes`);
+      onValue(likesRef, (snapshot) => {
+        const likes = snapshot.val() || {};
+        likeCount.textContent = Object.keys(likes).length;
+        likeBtn.classList.toggle("liked", likes[auth.currentUser?.uid]);
+      });
+      likeBtn.addEventListener("click", async () => {
+        const user = auth.currentUser;
+        if (!user) return;
+        const userLikeRef = ref(db, `reels/${reelId}/likes/${user.uid}`);
+        const snapshot = await new Promise((resolve) => onValue(userLikeRef, resolve, { onlyOnce: true }));
+        if (snapshot.val()) {
+          await remove(userLikeRef);
+        } else {
+          await set(userLikeRef, true);
+        }
+      });
+
       reelsContainer.appendChild(reel);
       return reel;
     }
@@ -484,18 +590,17 @@
         location.href = "index.html";
       } else {
         const reelsRef = ref(db, "reels");
-        onValue(reelsRef, (snapshot) => {
+        onValue(reelsRef, async (snapshot) => {
           reels = [];
           reelsContainer.innerHTML = "";
           const data = snapshot.val();
           if (data) {
-            // Sort reels by timestamp (newest first)
-            const sortedReels = Object.values(data).sort((a, b) => b.timestamp - a.timestamp);
-            sortedReels.forEach((reelData) => {
-              if (reelData.videoUrl) { // Ensure videoUrl exists
-                reels.push(createReelElement(reelData));
+            const sortedReels = Object.entries(data).sort(([, a], [, b]) => b.timestamp - a.timestamp);
+            for (const [reelId, reelData] of sortedReels) {
+              if (reelData.videoUrl) {
+                reels.push(await createReelElement(reelData, reelId));
               }
-            });
+            }
             if (reels.length > 0) {
               showReel(0);
             } else {
