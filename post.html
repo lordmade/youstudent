@@ -91,12 +91,14 @@
       background: linear-gradient(to top, rgba(0, 0, 0, 0.65), transparent);
       color: var(--white);
       z-index: 10;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
     }
 
     .reel-username {
       font-size: clamp(0.95rem, 2.5vw, 1.1rem);
       font-weight: 700;
-      margin-bottom: 0.25rem;
       cursor: pointer;
       transition: opacity 0.2s ease;
     }
@@ -107,9 +109,33 @@
 
     .reel-caption {
       font-size: clamp(0.85rem, 2vw, 0.95rem);
-      margin-bottom: 0.5rem;
       max-width: 80%;
       line-height: 1.4;
+    }
+
+    .follow-btn {
+      background: transparent;
+      border: 2px solid var(--primary-red);
+      color: var(--white);
+      font-size: clamp(0.8rem, 2vw, 0.9rem);
+      font-weight: 600;
+      padding: 0.5rem 1rem;
+      border-radius: 20px;
+      cursor: pointer;
+      transition: background 0.2s ease, transform 0.2s ease, opacity 0.2s ease;
+      align-self: flex-start;
+    }
+
+    .follow-btn:hover {
+      background: var(--primary-red);
+      transform: scale(1.05);
+      opacity: 0.9;
+    }
+
+    .follow-btn.followed {
+      background: var(--primary-red);
+      border-color: var(--primary-red);
+      color: var(--white);
     }
 
     .reel-actions {
@@ -457,6 +483,11 @@
         font-size: clamp(0.75rem, 1.8vw, 0.85rem);
       }
 
+      .follow-btn {
+        font-size: clamp(0.75rem, 1.8vw, 0.85rem);
+        padding: 0.4rem 0.8rem;
+      }
+
       .reel-action svg {
         width: 30px;
         height: 30px;
@@ -656,6 +687,24 @@
       }
     }
 
+    async function toggleFollow(userId, followBtn) {
+      if (!currentUserUid || currentUserUid === userId) return;
+      showLoading();
+      try {
+        const followRef = ref(db, `users/${currentUserUid}/following/${userId}`);
+        const followSnap = await get(followRef);
+        const isFollowing = followSnap.exists();
+
+        await set(followRef, isFollowing ? null : true);
+        followBtn.classList.toggle("followed", !isFollowing);
+        followBtn.textContent = isFollowing ? "Follow" : "Following";
+      } catch (error) {
+        console.error("Error toggling follow:", error.message);
+      } finally {
+        hideLoading();
+      }
+    }
+
     async function loadComments(postId) {
       const commentList = document.getElementById("comment-list");
       commentList.innerHTML = "";
@@ -772,6 +821,7 @@
               <div class="reel-overlay">
                 <div class="reel-username">${user.username || "Unknown"}</div>
                 <div class="reel-caption">${post.caption || ""} • ${timeAgo(post.timestamp)}</div>
+                ${currentUserUid && currentUserUid !== post.userId ? `<button class="follow-btn" data-user-id="${post.userId}" aria-label="Follow ${user.username || 'Unknown'}">Follow</button>` : ''}
               </div>
               <div class="reel-actions">
                 <div class="reel-action like-btn" data-post-id="${post.id}" aria-label="Like post" tabindex="0">
@@ -804,6 +854,28 @@
               reelElement.querySelector(".comment-count").textContent = commentCount > 999 ? `${(commentCount / 1000).toFixed(1)}k` : commentCount;
             });
 
+            // Real-time follow status
+            if (currentUserUid && currentUserUid !== post.userId) {
+              const followBtn = reelElement.querySelector(".follow-btn");
+              onValue(ref(db, `users/${currentUserUid}/following/${post.userId}`), snap => {
+                const isFollowing = snap.exists();
+                followBtn.classList.toggle("followed", isFollowing);
+                followBtn.textContent = isFollowing ? "Following" : "Follow";
+              });
+
+              followBtn.addEventListener("click", (e) => {
+                e.stopPropagation();
+                toggleFollow(post.userId, followBtn);
+              });
+
+              followBtn.addEventListener("keydown", (e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.stopPropagation();
+                  toggleFollow(post.userId, followBtn);
+                }
+              });
+            }
+
             // Video event listeners
             if (isVideo) {
               const video = reelElement.querySelector("video");
@@ -834,7 +906,6 @@
               video.addEventListener("error", handleError);
               muteBtn.addEventListener("click", handleMute);
 
-              // Store listeners for cleanup
               reelElement.dataset.listeners = JSON.stringify({
                 click: handleClick,
                 waiting: handleWaiting,
