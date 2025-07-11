@@ -1032,6 +1032,69 @@
   .tab-btn[data-tab="reels"].active::after {
     display: none;
   }
+/* Delete Post Modal */
+.delete-post-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 60;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+
+.delete-post-modal.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.delete-post-modal-content {
+  background: var(--white);
+  border-radius: 16px;
+  padding: 1.5rem;
+  max-width: 90%;
+  width: 400px;
+  position: relative;
+  text-align: center;
+}
+
+.delete-post-modal-content h3 {
+  font-size: clamp(1rem, 4vw, 1.1rem);
+  color: var(--text-dark);
+  margin-bottom: 0.5rem;
+}
+
+.delete-post-modal-content p {
+  font-size: clamp(0.85rem, 3.5vw, 0.9rem);
+  color: var(--text-light);
+  margin-bottom: 1rem;
+}
+
+.delete-post-modal-content .close-modal {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  background: none;
+  border: none;
+  color: var(--text-light);
+  cursor: pointer;
+}
+
+.delete-post-modal-content .close-modal svg {
+  width: 24px;
+  height: 24px;
+}
+
+@media (max-width: 414px) {
+  .delete-post-modal-content {
+    width: 90%;
+    padding: 1rem;
+  }
+}
+    
   </style>
 </head>
 <body>
@@ -1148,6 +1211,22 @@
       <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4z"/>
     </svg>
   </div>
+
+  <div id="delete-post-modal" class="edit-profile-modal hidden">
+  <div class="edit-profile-modal-content">
+    <button id="delete-post-close" class="close-modal">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+      </svg>
+    </button>
+    <h3>Delete Post</h3>
+    <p>Are you sure you want to delete this post? This action cannot be undone.</p>
+    <div class="flex justify-end gap-2 mt-4">
+      <button id="delete-post-cancel" class="post-follow-btn">Cancel</button>
+      <button id="delete-post-confirm" class="post-follow-btn follow">Delete</button>
+    </div>
+  </div>
+</div>
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
@@ -2031,137 +2110,130 @@ async function loadPosts() {
       });
     }
 
-    function loadProfile() {
-      const profileContainer = document.getElementById("profile-container");
-      showLoading();
-      Promise.all([
-        Promise.race([
-          get(ref(db, `users/${currentUserUid}`)),
-          new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout loading user")), 10000))
-        ]),
-        Promise.race([
-          new Promise(resolve => onValue(query(ref(db, "posts"), orderByChild("userId"), limitToLast(20)), resolve, { onlyOnce: true })),
-          new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout loading posts")), 10000))
-        ])
-      ]).then(([userSnap, postsSnap]) => {
-        const user = userSnap.val() || { username: "Anonymous", photoURL: null, bio: "" };
-        profileContainer.innerHTML = `
-          <div class="profile-header">
-            <img src="${user.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="Profile"/>
-            <h2>${user.username}</h2>
-            <p>${user.bio || "No bio available."}</p>
-            <button id="edit-profile-btn" class="edit-profile-btn">Edit Profile</button>
-          </div>
-          <div class="profile-content" id="profile-posts"></div>
-        `;
-        const profileContent = document.getElementById("profile-posts");
-        const posts = [];
-        postsSnap.forEach(child => {
-          const post = child.val();
-          if (post.userId === currentUserUid) posts.push({ id: child.key, ...post });
-        });
-        posts.sort((a, b) => b.timestamp - a.timestamp);
-        if (posts.length === 0) {
-          profileContent.innerHTML = '<div class="placeholder">No posts yet.</div>';
-          hideLoading();
-          document.getElementById("edit-profile-btn").addEventListener("click", () => {
-            editUsername.value = user.username;
-            editBio.value = user.bio || "";
-            editPhoto.value = "";
-            hideError(editProfileError);
-            editProfileModal.classList.remove("hidden");
-            editProfileModal.classList.add("open");
-            editUsername.focus();
-          });
-          return;
-        }
-        for (const post of posts) {
-          const postId = `profile-post-${post.id}`;
-          const postElement = document.createElement("div");
-          postElement.className = "post";
-          postElement.id = postId;
-          postElement.innerHTML = `
-            <img class="post-image" src="${post.imageUrl}" alt="Post">
-          `;
-          postElement.addEventListener("click", (e) => {
-            e.stopPropagation();
-            console.log("Navigating to post:", post.id);
-            location.href = `post.html?id=${post.id}`;
-            pauseAllMedia();
-          });
-          profileContent.appendChild(postElement);
-        }
-        hideLoading();
-        document.getElementById("edit-profile-btn").addEventListener("click", () => {
-          editUsername.value = user.username;
-          editBio.value = user.bio || "";
-          editPhoto.value = "";
-          hideError(editProfileError);
-          editProfileModal.classList.remove("hidden");
-          editProfileModal.classList.add("open");
-          editUsername.focus();
-        });
-      }).catch(error => {
-        console.error("Error loading profile:", error.code, error.message);
-        profileContainer.innerHTML = `<p class="error">Failed to load profile: ${error.message}</p>`;
-        hideLoading();
-      });
-    }
+    
+        function loadProfile() {
+  const profileContainer = document.getElementById("profile-container");
+  const deletePostModal = document.getElementById("delete-post-modal");
+  const deletePostClose = document.getElementById("delete-post-close");
+  const deletePostCancel = document.getElementById("delete-post-cancel");
+  const deletePostConfirm = document.getElementById("delete-post-confirm");
+  let currentDeletePostId = null;
+  let currentDeletePostElement = null;
 
-    editProfileClose.addEventListener("click", () => {
-      editProfileModal.classList.remove("open");
-      setTimeout(() => editProfileModal.classList.add("hidden"), 300);
-      pauseAllMedia();
+  showLoading();
+  Promise.all([
+    Promise.race([
+      get(ref(db, `users/${currentUserUid}`)),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout loading user")), 10000))
+    ]),
+    Promise.race([
+      new Promise(resolve => onValue(query(ref(db, "posts"), orderByChild("userId"), limitToLast(20)), resolve, { onlyOnce: true })),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout loading posts")), 10000))
+    ])
+  ]).then(([userSnap, postsSnap]) => {
+    const user = userSnap.val() || { username: "Anonymous", photoURL: null, bio: "" };
+    profileContainer.innerHTML = `
+      <div class="profile-header">
+        <img src="${user.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="Profile"/>
+        <h2>${user.username}</h2>
+        <p>${user.bio || "No bio available."}</p>
+        <button id="edit-profile-btn" class="edit-profile-btn">Edit Profile</button>
+      </div>
+      <div class="profile-content" id="profile-posts"></div>
+    `;
+    const profileContent = document.getElementById("profile-posts");
+    const posts = [];
+    postsSnap.forEach(child => {
+      const post = child.val();
+      if (post.userId === currentUserUid) posts.push({ id: child.key, ...post });
+    });
+    posts.sort((a, b) => b.timestamp - a.timestamp);
+    if (posts.length === 0) {
+      profileContent.innerHTML = '<div class="placeholder">No posts yet.</div>';
+      hideLoading();
+      document.getElementById("edit-profile-btn").addEventListener("click", () => {
+        editUsername.value = user.username;
+        editBio.value = user.bio || "";
+        editPhoto.value = "";
+        hideError(editProfileError);
+        editProfileModal.classList.remove("hidden");
+        editProfileModal.classList.add("open");
+        editUsername.focus();
+      });
+      return;
+    }
+    for (const post of posts) {
+      const postId = `profile-post-${post.id}`;
+      const postElement = document.createElement("div");
+      postElement.className = "post";
+      postElement.id = postId;
+      // Handle single image (backward compatibility) or multiple images
+      const imageUrl = Array.isArray(post.imageUrls) && post.imageUrls.length > 0 ? post.imageUrls[0] : post.imageUrl;
+      postElement.innerHTML = `
+        <img class="post-image" src="${imageUrl || 'https://via.placeholder.com/150?text=Image+Not+Found'}" alt="Post">
+      `;
+      postElement.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (post.userId === currentUserUid) {
+          currentDeletePostId = post.id;
+          currentDeletePostElement = postElement;
+          deletePostModal.classList.remove("hidden");
+          deletePostModal.classList.add("open");
+        } else {
+          console.log("Navigating to post:", post.id);
+          location.href = `post.html?id=${post.id}`;
+          pauseAllMedia();
+        }
+      });
+      profileContent.appendChild(postElement);
+    }
+    hideLoading();
+    document.getElementById("edit-profile-btn").addEventListener("click", () => {
+      editUsername.value = user.username;
+      editBio.value = user.bio || "";
+      editPhoto.value = "";
+      hideError(editProfileError);
+      editProfileModal.classList.remove("hidden");
+      editProfileModal.classList.add("open");
+      editUsername.focus();
     });
 
-    editProfileSubmit.addEventListener("click", async () => {
-      const username = editUsername.value.trim();
-      const bio = editBio.value.trim();
-      const photo = editPhoto.files[0];
+    // Delete modal event listeners
+    const closeModal = () => {
+      deletePostModal.classList.remove("open");
+      setTimeout(() => deletePostModal.classList.add("hidden"), 300);
+      currentDeletePostId = null;
+      currentDeletePostElement = null;
+      pauseAllMedia();
+    };
 
-      if (!username) {
-        showError(editProfileError, "Username is required.");
-        return;
-      }
+    deletePostClose.addEventListener("click", closeModal);
+    deletePostCancel.addEventListener("click", closeModal);
 
+    deletePostConfirm.addEventListener("click", async () => {
+      if (!currentDeletePostId || !currentDeletePostElement) return;
       showLoading();
       try {
-        let photoURL = null;
-        if (photo) {
-          const formData = new FormData();
-          formData.append("file", photo);
-          formData.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
-          formData.append("cloud_name", CLOUDINARY_CLOUD_NAME);
-
-          const response = await fetch(CLOUDINARY_UPLOAD_URL, {
-            method: "POST",
-            body: formData,
-          });
-          const data = await response.json();
-          if (data.secure_url) {
-            photoURL = data.secure_url;
-          } else {
-            throw new Error(data.error?.message || "Failed to upload image to Cloudinary.");
-          }
+        const postRef = ref(db, `posts/${currentDeletePostId}`);
+        await set(postRef, null); // Delete post from Firebase
+        currentDeletePostElement.remove(); // Remove post from DOM
+        if (!profileContent.querySelector(".post")) {
+          profileContent.innerHTML = '<div class="placeholder">No posts yet.</div>';
         }
-
-        const userRef = ref(db, `users/${currentUserUid}`);
-        const updates = {
-          username,
-          bio,
-          ...(photoURL && { photoURL }),
-        };
-        await set(userRef, updates);
-        editProfileModal.classList.remove("open");
-        setTimeout(() => editProfileModal.classList.add("hidden"), 300);
-        loadProfile();
+        closeModal();
       } catch (error) {
-        console.error("Error updating profile:", error.message);
-        showError(editProfileError, `Failed to update profile: ${error.message}`);
+        console.error("Error deleting post:", error.message);
+        profileContent.innerHTML = `<p class="error">Failed to delete post: ${error.message}</p>`;
       } finally {
         hideLoading();
       }
     });
+  }).catch(error => {
+    console.error("Error loading profile:", error.code, error.message);
+    profileContainer.innerHTML = `<p class="error">Failed to load profile: ${error.message}</p>`;
+    hideLoading();
+  });
+}
   </script>
 </body>
 </html>
