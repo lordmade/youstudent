@@ -497,13 +497,13 @@
     import { getDatabase, ref, onValue, set, remove, push } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
 
     const firebaseConfig = {
-      apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
-      authDomain: "fire-b-a8878.firebaseapp.com",
-      databaseURL: "https://fire-b-a8878.firebaseio.com",
-      projectId: "fire-b-a8878",
-      storageBucket: "fire-b-a8878.appspot.com",
-      messagingSenderId: "658673187627",
-      appId: "1:658673187627:web:6e4c29af661785f0afa36e"
+      apiKey: "YOUR_API_KEY",
+      authDomain: "YOUR_AUTH_DOMAIN",
+      databaseURL: "YOUR_DATABASE_URL",
+      projectId: "YOUR_PROJECT_ID",
+      storageBucket: "YOUR_STORAGE_BUCKET",
+      messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+      appId: "YOUR_APP_ID"
     };
 
     const app = initializeApp(firebaseConfig);
@@ -526,9 +526,14 @@
     }
 
     async function getUserProfilePic(userId) {
-      const userRef = ref(db, `users/${userId}/photoURL`);
-      const snapshot = await new Promise((resolve) => onValue(userRef, resolve, { onlyOnce: true }));
-      return snapshot.val() || auth.currentUser?.photoURL || 'https://via.placeholder.com/32';
+      try {
+        const userRef = ref(db, `users/${userId}/photoURL`);
+        const snapshot = await new Promise((resolve) => onValue(userRef, resolve, { onlyOnce: true }));
+        return snapshot.val() || auth.currentUser?.photoURL || 'https://via.placeholder.com/32';
+      } catch (error) {
+        console.error("Error fetching profile picture:", error);
+        return 'https://via.placeholder.com/32';
+      }
     }
 
     function initializeAudio(songData, reelElement, video) {
@@ -617,13 +622,14 @@
     function showReel(index) {
       if (index < 0 || index >= reels.length) return;
 
-      // Store playback state of the current reel before switching
+      // Store playback state of the current reel
       const currentReel = reels[currentReelIndex];
       const currentVideo = currentReel?.querySelector("video");
       const currentPlaybackState = currentVideo ? {
         time: currentVideo.currentTime,
         paused: currentVideo.paused
       } : null;
+      const wasAudioPlaying = audio && !audio.paused;
 
       reels.forEach((reel, i) => {
         const video = reel.querySelector("video");
@@ -659,7 +665,7 @@
                 errorMessage.textContent = "Error playing video.";
                 setTimeout(() => (errorMessage.textContent = ""), 3000);
               });
-              if (songData && audio && !audio.paused) {
+              if (songData && audio && wasAudioPlaying) {
                 audio.play().catch(() => {
                   errorMessage.textContent = "Error playing song.";
                   setTimeout(() => (errorMessage.textContent = ""), 3000);
@@ -678,11 +684,11 @@
               });
             }
           }
-          bottomSheet.classList.remove("active"); // Close bottom sheet when switching
+          bottomSheet.classList.remove("active");
         } else {
           reel.classList.remove("active");
           video.pause();
-          video.currentTime = 0; // Reset non-active videos
+          video.currentTime = 0;
           video.volume = 1;
           pauseIcon.classList.remove("active");
           mediaPlayer.classList.remove("active");
@@ -786,7 +792,10 @@
             setTimeout(() => (errorMessage.textContent = ""), 3000);
           });
           if (audio && reel.classList.contains("active")) {
-            audio.play().catch(() => {});
+            audio.play().catch(() => {
+              errorMessage.textContent = "Error playing song.";
+              setTimeout(() => (errorMessage.textContent = ""), 3000);
+            });
           }
           pauseIcon.classList.remove("active");
         } else {
@@ -836,7 +845,11 @@
       });
       likeBtn.addEventListener("click", async () => {
         const user = auth.currentUser;
-        if (!user) return;
+        if (!user) {
+          errorMessage.textContent = "Please sign in to like.";
+          setTimeout(() => (errorMessage.textContent = ""), 3000);
+          return;
+        }
         const userLikeRef = ref(db, `reels/${reelId}/likes/${user.uid}`);
         const snapshot = await new Promise((resolve) => onValue(userLikeRef, resolve, { onlyOnce: true }));
         if (snapshot.val()) {
@@ -889,7 +902,6 @@
 
       const commentsRef = ref(db, `reels/${reelId}/comments`);
       onValue(commentsRef, async (snapshot) => {
-        // Store video state before updating comments
         const wasPlaying = !video.paused;
         const currentTime = video.currentTime;
         const wasAudioPlaying = audio && !audio.paused;
@@ -933,7 +945,11 @@
           });
           commentLikeBtn.addEventListener("click", async () => {
             const user = auth.currentUser;
-            if (!user) return;
+            if (!user) {
+              errorMessage.textContent = "Please sign in to like comments.";
+              setTimeout(() => (errorMessage.textContent = ""), 3000);
+              return;
+            }
             const userCommentLikeRef = ref(db, `reels/${reelId}/comments/${commentId}/likes/${user.uid}`);
             const snapshot = await new Promise((resolve) => onValue(userCommentLikeRef, resolve, { onlyOnce: true }));
             if (snapshot.val()) {
@@ -950,7 +966,6 @@
           commentsSection.appendChild(commentDiv);
         }
 
-        // Restore video state after updating comments
         if (reel.classList.contains("active")) {
           video.currentTime = currentTime;
           if (wasPlaying) {
@@ -970,9 +985,17 @@
 
       commentBtn.addEventListener("click", async () => {
         const text = commentInput.value.trim();
-        if (!text) return;
+        if (!text) {
+          errorMessage.textContent = "Comment cannot be empty.";
+          setTimeout(() => (errorMessage.textContent = ""), 3000);
+          return;
+        }
         const user = auth.currentUser;
-        if (!user) return;
+        if (!user) {
+          errorMessage.textContent = "Please sign in to comment.";
+          setTimeout(() => (errorMessage.textContent = ""), 3000);
+          return;
+        }
         const wasPlaying = !video.paused;
         const currentTime = video.currentTime;
         const wasAudioPlaying = audio && !audio.paused;
@@ -984,7 +1007,6 @@
           timestamp: Date.now()
         });
         commentInput.value = "";
-        // Restore playback state
         if (reel.classList.contains("active")) {
           video.currentTime = currentTime;
           if (wasPlaying) {
@@ -1012,12 +1034,12 @@
       } else {
         const reelsRef = ref(db, "reels");
         onValue(reelsRef, async (snapshot) => {
-          // Store playback state of the current reel
           const currentReel = reels[currentReelIndex];
           const currentVideo = currentReel?.querySelector("video");
           const currentPlaybackState = currentVideo ? {
             time: currentVideo.currentTime,
-            paused: currentVideo.paused
+            paused: currentVideo.paused,
+            reelId: currentReel.dataset.reelId
           } : null;
           const wasAudioPlaying = audio && !audio.paused;
 
@@ -1032,13 +1054,17 @@
               }
             }
             if (reels.length > 0) {
-              // Ensure currentReelIndex is valid
-              currentReelIndex = Math.min(currentReelIndex, reels.length - 1);
+              // Restore index if current reel still exists
+              let newIndex = 0;
+              if (currentPlaybackState) {
+                newIndex = reels.findIndex(reel => reel.dataset.reelId === currentPlaybackState.reelId);
+                if (newIndex === -1) newIndex = 0;
+              }
+              currentReelIndex = Math.min(newIndex, reels.length - 1);
               showReel(currentReelIndex);
-              // Restore playback state for the current reel
               const newCurrentReel = reels[currentReelIndex];
               const newCurrentVideo = newCurrentReel.querySelector("video");
-              if (currentPlaybackState && currentReel?.dataset.reelId === newCurrentReel.dataset.reelId) {
+              if (currentPlaybackState && currentPlaybackState.reelId === newCurrentReel.dataset.reelId) {
                 newCurrentVideo.currentTime = currentPlaybackState.time;
                 if (!currentPlaybackState.paused) {
                   newCurrentVideo.play().catch(() => {
