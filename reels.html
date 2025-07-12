@@ -194,17 +194,6 @@
       width: 0%;
       transition: width linear;
     }
-    .video-loading {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      z-index: 10;
-      display: none;
-    }
-    .reel.loading .video-loading {
-      display: flex;
-    }
     .carousel-arrow {
       position: absolute;
       left: 50%;
@@ -448,7 +437,6 @@
         const progressBar = video.parentElement.querySelector(".progress-bar-fill");
         if (progressBar) progressBar.style.width = "0%";
         video.classList.remove("played");
-        video.parentElement.classList.remove("loading");
       });
     }
 
@@ -517,12 +505,6 @@
                 <div class="progress-bar-fill"></div>
               </div>
               <video src="${reel.videoUrl}" playsinline ${index === currentReelIndex ? "autoplay" : ""} loop></video>
-              <div class="video-loading">
-                <svg class="animate-spin h-8 w-8 text-red-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4z"/>
-                </svg>
-              </div>
               <div class="reel-overlay">
                 <div class="reel-header">
                   <img src="${users[reel.userId]?.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${users[reel.userId]?.username || 'User'} avatar">
@@ -554,45 +536,15 @@
             `;
             reelsContainer.appendChild(reelElement);
             const video = reelElement.querySelector("video");
-            let loadingTimeout = null;
-
-            // Clear any existing listeners to prevent duplicates
-            video.removeEventListener("canplaythrough", null);
-            video.removeEventListener("playing", null);
-            video.removeEventListener("waiting", null);
-            video.removeEventListener("error", null);
-
             if (index === currentReelIndex) {
-              reelElement.classList.add("loading");
-              // Start timeout to hide spinner after 10 seconds as fallback
-              loadingTimeout = setTimeout(() => {
-                reelElement.classList.remove("loading");
-              }, 10000);
-              video.addEventListener("canplaythrough", () => {
-                clearTimeout(loadingTimeout);
-                reelElement.classList.remove("loading");
+              video.addEventListener("canplay", () => {
                 video.classList.add("played");
                 video.play().catch(() => {
-                  reelElement.classList.remove("loading");
+                  showError("Failed to play video.");
                 });
               }, { once: true });
             }
-            video.addEventListener("playing", () => {
-              clearTimeout(loadingTimeout);
-              reelElement.classList.remove("loading");
-              video.classList.add("played");
-            });
-            video.addEventListener("waiting", () => {
-              reelElement.classList.add("loading");
-              // Reset timeout for buffering scenarios
-              clearTimeout(loadingTimeout);
-              loadingTimeout = setTimeout(() => {
-                reelElement.classList.remove("loading");
-              }, 10000);
-            });
             video.addEventListener("error", () => {
-              clearTimeout(loadingTimeout);
-              reelElement.classList.remove("loading");
               showError("Failed to load video.");
             });
             updateProgressBar(video);
@@ -637,8 +589,7 @@
             });
 
             if (index !== currentReelIndex) {
-              video.addEventListener("canplaythrough", () => {
-                reel.classList.remove("loading");
+              video.addEventListener("canplay", () => {
                 video.classList.add("played");
               }, { once: true });
             }
@@ -651,17 +602,10 @@
               reel.classList.toggle("active", i === currentReelIndex);
               if (i === currentReelIndex) {
                 const video = reel.querySelector("video");
-                let loadingTimeout = setTimeout(() => {
-                  reel.classList.remove("loading");
-                }, 10000);
-                reel.classList.add("loading");
                 video.play().then(() => {
-                  clearTimeout(loadingTimeout);
-                  reel.classList.remove("loading");
                   video.classList.add("played");
                 }).catch(() => {
-                  clearTimeout(loadingTimeout);
-                  reel.classList.remove("loading");
+                  showError("Failed to play video.");
                 });
               }
             });
