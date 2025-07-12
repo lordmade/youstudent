@@ -1235,6 +1235,38 @@
     left: -1.2rem;
   }
 }
+
+    /* Verified Icon */
+.verified-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  background: #0095f6; /* Instagram-like blue */
+  border-radius: 50%;
+  margin-left: 0.3rem;
+  vertical-align: middle;
+}
+
+.verified-icon svg {
+  width: 12px;
+  height: 12px;
+  fill: var(--white);
+}
+
+/* Responsive Design */
+@media (max-width: 414px) {
+  .verified-icon {
+    width: 14px;
+    height: 14px;
+  }
+
+  .verified-icon svg {
+    width: 10px;
+    height: 10px;
+  }
+}
   
   </style>
 </head>
@@ -1600,10 +1632,6 @@ tabBtns.forEach(btn => {
         commentSubmit.click();
       }
     });
-
-
-    
-    
 async function loadPosts() {
   const postsContainer = document.getElementById("posts-container");
   const postsRef = query(ref(db, "posts"), orderByChild("timestamp"), limitToLast(20));
@@ -1629,6 +1657,14 @@ async function loadPosts() {
     const postsData = postsSnap.val() || {};
     const users = usersSnap.val() || {};
     const followingData = followingSnap.val() || {};
+
+    // Count posts per user
+    const userPostCounts = {};
+    Object.values(postsData).forEach(post => {
+      if (post.userId) {
+        userPostCounts[post.userId] = (userPostCounts[post.userId] || 0) + 1;
+      }
+    });
 
     postsContainer.innerHTML = "";
     const posts = Object.entries(postsData)
@@ -1661,8 +1697,8 @@ async function loadPosts() {
     finalPosts.forEach(post => {
       const isFollowing = !!followingData[post.userId];
       const showFollowButton = post.userId !== currentUserUid;
-      // Handle single image (backward compatibility) or multiple images
       const imageUrls = Array.isArray(post.imageUrls) ? post.imageUrls : [post.imageUrl].filter(Boolean);
+      const isVerified = userPostCounts[post.userId] >= 10; // Verified if user has 10+ posts
       const postElement = document.createElement("div");
       postElement.className = "post";
       postElement.id = `post-${post.id}`;
@@ -1670,7 +1706,11 @@ async function loadPosts() {
         <div class="post-header">
           <img src="${users[post.userId]?.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${users[post.userId]?.username || 'User'} avatar">
           <div class="user-info">
-            <span>${users[post.userId]?.username || 'Unknown'}</span>
+            <span>${users[post.userId]?.username || 'Unknown'}${
+              isVerified
+                ? `<span class="verified-icon" aria-label="Verified user" title="Verified user"><svg viewBox="0 0 24 24"><path d="M9 16.2l-3.5-3.5L4 14.1 9 19 20 8l-1.4-1.4z"/></svg></span>`
+                : ''
+            }</span>
             <span class="timestamp">${timeAgo(post.timestamp)}</span>
           </div>
         </div>
@@ -1706,11 +1746,11 @@ async function loadPosts() {
             <span class="like-count">${post.likes || 0}</span>
           </button>
           <button class="comment-btn" aria-label="Comment on post">
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-    <path d="M21 11.5a8.5 8.5 0 01-11.4 7.9l-4.6 1.5 1.5-4.6A8.5 8.5 0 1121 11.5z"/>
-  </svg>
-  <span class="comment-count">${Object.keys(post.comments || {}).length}</span>
-</button>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 11.5a8.5 8.5 0 01-11.4 7.9l-4.6 1.5 1.5-4.6A8.5 8.5 0 1121 11.5z"/>
+            </svg>
+            <span class="comment-count">${Object.keys(post.comments || {}).length}</span>
+          </button>
           ${post.song ? `
             <button class="play-song-btn" aria-label="Toggle song playback" disabled>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1721,7 +1761,7 @@ async function loadPosts() {
             </button>
           ` : ''}
         </div>
-        ${post.caption ? `<div class="post-caption"><strong>${users[post.userId]?.username || 'Unknown'}:</strong> ${post.caption}</div>` : ''}
+        ${post.caption ? `<div class="post-caption"><strong>${users[post.userId]?.username || 'Unknown'}${isVerified ? `<span class="verified-icon" aria-label="Verified user" title="Verified user"><svg viewBox="0 0 24 24"><path d="M9 16.2l-3.5-3.5L4 14.1 9 19 20 8l-1.4-1.4z"/></svg></span>` : ''}:</strong> ${post.caption}</div>` : ''}
         ${post.song ? `<div class="post-caption song-display"><span>${post.song.title} - ${post.song.artist}</span></div>` : ''}
         ${showFollowButton ? `
           <div class="post-footer">
@@ -1856,136 +1896,6 @@ async function loadPosts() {
   }
 }
       
-
-    function toggleLike(postId, button) {
-      const userId = currentUserUid;
-      const postRef = ref(db, `posts/${postId}`);
-      const likeCountSpan = button.querySelector(".like-count");
-      const likeIcon = button.querySelector("svg");
-
-      get(postRef).then((snapshot) => {
-        const post = snapshot.val() || {};
-        const currentLikes = post.likes || 0;
-        const likedBy = post.likedBy || [];
-        const isLiked = likedBy.includes(userId);
-
-        if (isLiked) {
-          update(postRef, {
-            likes: currentLikes - 1,
-            likedBy: likedBy.filter(id => id !== userId)
-          }).then(() => {
-            likeCountSpan.textContent = currentLikes - 1;
-            likeIcon.classList.remove("text-red-500");
-            likeIcon.classList.add("text-gray-500");
-          });
-        } else {
-          update(postRef, {
-            likes: currentLikes + 1,
-            likedBy: [...likedBy, userId]
-          }).then(() => {
-            likeCountSpan.textContent = currentLikes + 1;
-            likeIcon.classList.remove("text-gray-500");
-            likeIcon.classList.add("text-red-500");
-          });
-        }
-      }).catch((error) => {
-        console.error("Error updating like:", error.message);
-      });
-    }
-
-    async function toggleFollow(targetUid, button, containerId) {
-  if (targetUid === currentUserUid) return;
-  showLoading();
-  try {
-    const followingRef = ref(db, `users/${currentUserUid}/following/${targetUid}`);
-    const followerRef = ref(db, `users/${targetUid}/followers/${currentUserUid}`);
-    const followingSnap = await get(followingRef);
-    const isFollowing = followingSnap.exists();
-
-    if (isFollowing) {
-      await set(followingRef, null);
-      await set(followerRef, null);
-      const isMutual = await get(ref(db, `users/${currentUserUid}/followers/${targetUid}`));
-      if (isMutual.exists()) {
-        await set(ref(db, `users/${currentUserUid}/friends/${targetUid}`), null);
-        await set(ref(db, `users/${targetUid}/friends/${currentUserUid}`), null);
-      }
-      button.textContent = "Follow";
-      button.classList.remove("following");
-      button.classList.add("follow");
-    } else {
-      await set(followingRef, true);
-      await set(followerRef, true);
-      const isMutual = await get(ref(db, `users/${currentUserUid}/followers/${targetUid}`));
-      if (isMutual.exists()) {
-        await set(ref(db, `users/${currentUserUid}/friends/${targetUid}`), true);
-        await set(ref(db, `users/${targetUid}/friends/${currentUserUid}`), true);
-      }
-      button.textContent = "Following";
-      button.classList.remove("follow");
-      button.classList.add("following");
-    }
-
-    // Handle container updates
-    if (['friends-container', 'followers-container', 'following-container'].includes(containerId)) {
-      const containerRef = {
-        'friends-container': ref(db, `users/${currentUserUid}/friends`),
-        'followers-container': ref(db, `users/${currentUserUid}/followers`),
-        'following-container': ref(db, `users/${currentUserUid}/following`)
-      }[containerId];
-
-      const snapshot = await get(containerRef);
-      const data = snapshot.val() || {};
-      const container = document.getElementById(containerId);
-      container.innerHTML = "";
-      if (Object.keys(data).length === 0) {
-        container.innerHTML = `<div class="placeholder">No ${containerId.replace('-container', '')} found.</div>`;
-      } else {
-        const usersSnap = await get(ref(db, "users"));
-        const users = usersSnap.val() || {};
-        for (const uid in data) {
-          const userData = users[uid] || { username: "Unknown", photoURL: null };
-          const item = document.createElement("div");
-          item.className = "friend-item";
-          item.innerHTML = `
-            <img src="${userData.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${userData.username} avatar"/>
-            <span>${userData.username}</span>
-            <button class="friend-item-btn ${containerId === 'friends-container' ? 'message' : containerId === 'followers-container' ? (await get(ref(db, `users/${currentUserUid}/following/${uid}`)).exists() ? 'following' : 'follow') : 'following'}">
-              ${containerId === 'friends-container' ? 'Message' : containerId === 'followers-container' ? (await get(ref(db, `users/${currentUserUid}/following/${uid}`)).exists() ? 'Following' : 'Follow') : 'Following'}
-            </button>
-          `;
-          item.querySelector(".friend-item-btn").addEventListener("click", (e) => {
-            e.stopPropagation();
-            if (containerId === 'friends-container') {
-              console.log(`Initiate message to user: ${uid}`);
-            } else {
-              toggleFollow(uid, e.target, containerId);
-            }
-          });
-          item.addEventListener("click", (e) => {
-            if (e.target.classList.contains("friend-item-btn")) return;
-            console.log("Navigating to profile:", uid);
-            location.href = `profile.html?uid=${uid}`;
-            pauseAllMedia();
-          });
-          container.appendChild(item);
-        }
-      }
-    } else if (containerId === 'posts-container') {
-      // Reload posts to update follow button states
-      await loadPosts();
-    }
-  } catch (error) {
-    console.error("Error toggling follow:", error.message);
-    if (['friends-container', 'followers-container', 'following-container'].includes(containerId)) {
-      document.getElementById(containerId).innerHTML = `<p class="error">Failed to load ${containerId.replace('-container', '')}: ${error.message}</p>`;
-    } else {
-      console.error("Error in posts-container follow action:", error.message);
-    }
-  } finally {
-    hideLoading();
-  }
-}
 
     function loadFriends() {
   const friendsContainer = document.getElementById("friends-container");
