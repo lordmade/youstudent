@@ -188,6 +188,7 @@
       background: var(--white);
       background-size: cover;
       background-position: center;
+      touch-action: pan-y;
     }
 
     .message {
@@ -201,6 +202,9 @@
       display: flex;
       align-items: flex-start;
       gap: 0.5rem;
+      position: relative;
+      transition: transform 0.3s ease;
+      will-change: transform;
     }
 
     .message.sent {
@@ -217,6 +221,27 @@
       color: var(--text-dark);
       align-self: flex-start;
       border-bottom-left-radius: 0.25rem;
+    }
+
+    .message.deleted {
+      background: #f3f3f3;
+      color: #6b7280;
+      border: none;
+      font-style: italic;
+      max-width: 70%;
+      padding: 0.5rem 1rem;
+    }
+
+    .message.deleted .message-content p {
+      margin: 0;
+    }
+
+    .message.deleted .profile-pic,
+    .message.deleted .message-time,
+    .message.deleted .message-status,
+    .message.deleted .message-media,
+    .message.deleted .message-audio {
+      display: none;
     }
 
     .message img.profile-pic {
@@ -631,6 +656,81 @@
       border-radius: 8px;
     }
 
+    .delete-modal {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: var(--white);
+      border-radius: 12px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+      z-index: 300;
+      width: 80%;
+      max-width: 300px;
+      padding: 1rem;
+      display: none;
+      flex-direction: column;
+      gap: 0.5rem;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+
+    .delete-modal.active {
+      display: flex;
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .delete-modal h3 {
+      font-size: clamp(1rem, 3vw, 1.1rem);
+      font-weight: 600;
+      color: var(--text-dark);
+      margin-bottom: 0.5rem;
+      text-align: center;
+    }
+
+    .delete-modal button {
+      padding: 0.5rem;
+      border: none;
+      border-radius: 8px;
+      font-size: clamp(0.85rem, 2.5vw, 0.9rem);
+      cursor: pointer;
+      transition: background 0.2s ease, transform 0.2s ease;
+      pointer-events: auto;
+    }
+
+    .delete-modal button.delete-for-me {
+      background: var(--border);
+      color: var(--text-dark);
+    }
+
+    .delete-modal button.delete-for-everyone {
+      background: var(--primary-red);
+      color: var(--white);
+    }
+
+    .delete-modal button.cancel {
+      background: none;
+      color: #6b7280;
+      border: 1px solid var(--border);
+    }
+
+    .delete-modal button:hover {
+      transform: scale(1.05);
+    }
+
+    .delete-modal button.delete-for-me:hover {
+      background: #d1d5db;
+    }
+
+    .delete-modal button.delete-for-everyone:hover {
+      background: #d43f4e;
+    }
+
+    .delete-modal button.cancel:hover {
+      background: var(--border);
+    }
+
     @media (max-width: 414px) {
       .chat-header img {
         width: 32px;
@@ -741,6 +841,21 @@
         font-size: 0.9rem;
         padding: 0.4rem 0.8rem;
       }
+
+      .delete-modal {
+        width: 90%;
+        max-width: 280px;
+        padding: 0.75rem;
+      }
+
+      .delete-modal h3 {
+        font-size: clamp(0.9rem, 2.5vw, 1rem);
+      }
+
+      .delete-modal button {
+        font-size: clamp(0.75rem, 2vw, 0.8rem);
+        padding: 0.4rem;
+      }
     }
   </style>
 </head>
@@ -770,6 +885,12 @@
   </div>
   <div class="upload-progress" id="upload-progress">Uploading: 0%</div>
   <div class="recording-indicator" id="recording-indicator">Recording...</div>
+  <div class="delete-modal" id="delete-modal" role="dialog" aria-label="Delete message options">
+    <h3>Delete Message</h3>
+    <button id="delete-for-me-btn" class="delete-for-me">Delete for Me</button>
+    <button id="delete-for-everyone-btn" class="delete-for-everyone">Delete for Everyone</button>
+    <button id="cancel-delete-btn" class="cancel">Cancel</button>
+  </div>
   <div class="container">
     <div class="chat-header">
       <button class="back-btn" aria-label="Back to main page" id="back-btn">
@@ -863,6 +984,10 @@
     const wallpaperInput = document.getElementById("wallpaper-input");
     const uploadProgress = document.getElementById("upload-progress");
     const recordingIndicator = document.getElementById("recording-indicator");
+    const deleteModal = document.getElementById("delete-modal");
+    const deleteForMeBtn = document.getElementById("delete-for-me-btn");
+    const deleteForEveryoneBtn = document.getElementById("delete-for-everyone-btn");
+    const cancelDeleteBtn = document.getElementById("cancel-delete-btn");
 
     let currentUserUid = null;
     let otherUserUid = null;
@@ -876,6 +1001,7 @@
     let mediaRecorder = null;
     let audioChunks = [];
     let isRecording = false;
+    let currentMessageId = null;
 
     const cloudinaryCloudName = 'dqkujefxj';
     const cloudinaryUploadPreset = 'banter_box';
@@ -927,6 +1053,18 @@
     function hideRecordingIndicator() {
       console.log("Hiding recording indicator");
       recordingIndicator.classList.remove("active");
+    }
+
+    function showDeleteModal(messageId) {
+      console.log("Showing delete modal for message:", messageId);
+      currentMessageId = messageId;
+      deleteModal.classList.add("active");
+    }
+
+    function hideDeleteModal() {
+      console.log("Hiding delete modal");
+      deleteModal.classList.remove("active");
+      currentMessageId = null;
     }
 
     function showVideoCall(statusText) {
@@ -1012,6 +1150,16 @@
       if (!kebabBtn.contains(e.target) && !kebabMenu.contains(e.target)) {
         kebabMenu.classList.remove("active");
       }
+      if (!deleteModal.contains(e.target) && deleteModal.classList.contains('active')) {
+        hideDeleteModal();
+      }
+    });
+
+    document.addEventListener('touchend', (e) => {
+      if (!deleteModal.contains(e.target) && deleteModal.classList.contains('active')) {
+        e.preventDefault();
+        hideDeleteModal();
+      }
     });
 
     const closeImageViewer = debounce(() => {
@@ -1026,16 +1174,15 @@
     });
 
     document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && imageViewer.classList.contains('active')) {
-        console.log("Escape key pressed, closing image viewer");
-        hideImageViewer();
-      }
-    });
-
-    imageViewer.addEventListener('click', (e) => {
-      if (e.target === imageViewer) {
-        console.log("Clicked outside image, closing viewer");
-        hideImageViewer();
+      if (e.key === 'Escape') {
+        if (imageViewer.classList.contains('active')) {
+          console.log("Escape key pressed, closing image viewer");
+          hideImageViewer();
+        }
+        if (deleteModal.classList.contains('active')) {
+          console.log("Escape key pressed, closing delete modal");
+          hideDeleteModal();
+        }
       }
     });
 
@@ -1206,7 +1353,7 @@
             const messageElement = renderMessage(mid, message, currentUid);
             fragment.appendChild(messageElement);
 
-            if (message.sender !== currentUid && !message.read) {
+            if (message.sender !== currentUid && !message.read && !message.deleted) {
               messagesToUpdate.push({ mid, path: `messages/${chatId}/${mid}` });
             }
           }
@@ -1273,6 +1420,8 @@
             });
           });
 
+          setupSwipeGestures();
+
           for (const { mid, path } of messagesToUpdate) {
             await update(ref(db, path), { read: true });
             const chatSnap = await get(ref(db, `chats/${chatId}/participants/${currentUid}`));
@@ -1302,8 +1451,17 @@
     function renderMessage(mid, message, currentUid) {
       const div = document.createElement('div');
       const isSent = message.sender === currentUid;
-      div.className = `message ${isSent ? 'sent' : 'received'} paused`;
+      div.className = `message ${isSent ? 'sent' : 'received'} ${message.deleted ? 'deleted' : ''} ${message.mediaType === 'audio' && !message.deleted ? 'paused' : ''}`;
       div.dataset.mid = mid;
+
+      if (message.deleted) {
+        div.innerHTML = `
+          <div class="message-content">
+            <p>Message was deleted</p>
+          </div>
+        `;
+        return div;
+      }
 
       const userData = userCache[message.sender] || { photoURL: 'https://www.gravatar.com/avatar?d=mp' };
       let mediaContent = '';
@@ -1339,6 +1497,159 @@
       `;
       return div;
     }
+
+    function setupSwipeGestures() {
+      const messages = chatArea.querySelectorAll('.message:not(.deleted)');
+      messages.forEach(message => {
+        let startX = 0;
+        let currentX = 0;
+        let isSwiping = false;
+
+        const handleTouchStart = (e) => {
+          if (message.classList.contains('deleted')) return;
+          startX = e.touches[0].clientX;
+          isSwiping = true;
+          message.style.transition = 'none';
+        };
+
+        const handleTouchMove = (e) => {
+          if (!isSwiping || message.classList.contains('deleted')) return;
+          currentX = e.touches[0].clientX;
+          const diffX = startX - currentX;
+          if (diffX > 0) {
+            const translateX = Math.min(diffX, 100);
+            message.style.transform = `translateX(-${translateX}px)`;
+          }
+        };
+
+        const handleTouchEnd = (e) => {
+          if (!isSwiping || message.classList.contains('deleted')) return;
+          isSwiping = false;
+          message.style.transition = 'transform 0.3s ease';
+          const diffX = startX - currentX;
+          if (diffX > 50 && message.dataset.mid) {
+            if (message.classList.contains('sent')) {
+              showDeleteModal(message.dataset.mid);
+            } else {
+              showDeleteModalForReceived(message.dataset.mid);
+            }
+          }
+          message.style.transform = 'translateX(0)';
+        };
+
+        message.addEventListener('touchstart', handleTouchStart);
+        message.addEventListener('touchmove', handleTouchMove);
+        message.addEventListener('touchend', handleTouchEnd);
+
+        // Prevent default scrolling on messages during swipe
+        message.addEventListener('touchmove', (e) => {
+          if (isSwiping) {
+            e.stopPropagation();
+          }
+        });
+      });
+    }
+
+    async function deleteMessageForMe(messageId) {
+      try {
+        showLoading();
+        const messageRef = ref(db, `messages/${chatId}/${messageId}`);
+        const messageSnap = await get(messageRef);
+        if (!messageSnap.exists()) {
+          console.error("Message does not exist");
+          return;
+        }
+        const messageData = messageSnap.val();
+        if (messageData.sender !== currentUserUid) {
+          await update(messageRef, { deletedFor: { [currentUserUid]: true } });
+        } else {
+          await update(messageRef, { deletedFor: { [currentUserUid]: true } });
+        }
+        hideDeleteModal();
+        hideLoading();
+      } catch (error) {
+        console.error('Error deleting message for me:', error.message);
+        chatArea.innerHTML += `<p class="error">Failed to delete message: ${error.message}</p>`;
+        hideLoading();
+      }
+    }
+
+    async function deleteMessageForEveryone(messageId) {
+      try {
+        showLoading();
+        const messageRef = ref(db, `messages/${chatId}/${messageId}`);
+        const messageSnap = await get(messageRef);
+        if (!messageSnap.exists()) {
+          console.error("Message does not exist");
+          return;
+        }
+        const messageData = messageSnap.val();
+        if (messageData.sender !== currentUserUid) {
+          console.error("Cannot delete message for everyone: not the sender");
+          chatArea.innerHTML += `<p class="error">You can only delete your own messages for everyone.</p>`;
+          hideDeleteModal();
+          hideLoading();
+          return;
+        }
+        await update(messageRef, {
+          deleted: true,
+          text: '',
+          mediaUrl: null,
+          mediaType: null
+        });
+        hideDeleteModal();
+        hideLoading();
+      } catch (error) {
+        console.error('Error deleting message for everyone:', error.message);
+        chatArea.innerHTML += `<p class="error">Failed to delete message: ${error.message}</p>`;
+        hideLoading();
+      }
+    }
+
+    function showDeleteModalForReceived(messageId) {
+      deleteForEveryoneBtn.style.display = 'none';
+      showDeleteModal(messageId);
+    }
+
+    const deleteForMe = debounce(() => {
+      if (currentMessageId) {
+        console.log("Deleting message for me:", currentMessageId);
+        deleteMessageForMe(currentMessageId);
+      }
+    }, 200);
+
+    deleteForMeBtn.addEventListener('click', deleteForMe);
+    deleteForMeBtn.addEventListener('touchend', (e) => {
+      e.preventDefault();
+      console.log("Delete for me button touchend triggered");
+      deleteForMe();
+    });
+
+    const deleteForEveryone = debounce(() => {
+      if (currentMessageId) {
+        console.log("Deleting message for everyone:", currentMessageId);
+        deleteMessageForEveryone(currentMessageId);
+      }
+    }, 200);
+
+    deleteForEveryoneBtn.addEventListener('click', deleteForEveryone);
+    deleteForEveryoneBtn.addEventListener('touchend', (e) => {
+      e.preventDefault();
+      console.log("Delete for everyone button touchend triggered");
+      deleteForEveryone();
+    });
+
+    const cancelDelete = debounce(() => {
+      console.log("Cancel delete button clicked");
+      hideDeleteModal();
+    }, 200);
+
+    cancelDeleteBtn.addEventListener('click', cancelDelete);
+    cancelDeleteBtn.addEventListener('touchend', (e) => {
+      e.preventDefault();
+      console.log("Cancel delete button touchend triggered");
+      cancelDelete();
+    });
 
     async function setupCallListeners() {
       const callRef = ref(db, `calls/${chatId}`);
@@ -1586,7 +1897,9 @@
                 mediaUrl: mediaUrl,
                 mediaType: 'audio',
                 timestamp: Date.now(),
-                read: false
+                read: false,
+                deleted: false,
+                deletedFor: {}
               });
               const chatSnap = await get(ref(db, `chats/${chatId}/participants/${otherUserUid}`));
               const currentUnread = chatSnap.val()?.unreadCount || 0;
@@ -1625,7 +1938,9 @@
           sender: currentUserUid,
           text: messageInput.value.trim(),
           timestamp: Date.now(),
-          read: false
+          read: false,
+          deleted: false,
+          deletedFor: {}
         });
         const chatSnap = await get(ref(db, `chats/${chatId}/participants/${otherUserUid}`));
         const currentUnread = chatSnap.val()?.unreadCount || 0;
@@ -1731,79 +2046,82 @@
                   mediaUrl: mediaUrl,
                   mediaType: 'image',
                   timestamp: Date.now(),
-                  read: false
+                  read: false,
+                  deleted: false,
+                  deletedFor: {}
                 });
                 const chatSnap = await get(ref(db, `chats/${chatId}/participants/${otherUserUid}`));
                 const currentUnread = chatSnap.val()?.unreadCount || 0;
                 await update(ref(db, `chats/${chatId}/participants/${otherUserUid}`), { unreadCount: currentUnread + 1 });
               }
-            } catch (error) {
-              console.error(`Error saving ${isWallpaper ? 'wallpaper' : 'image message'}:`, error.message);
-              chatArea.innerHTML += `<p class="error">Failed to save ${isWallpaper ? 'wallpaper' : 'image message'}.</p>`;
+              hideUploadProgress();
+            } else {
+              console.error('Cloudinary upload error:', xhr.statusText);
+              chatArea.innerHTML += `<p class="error">Failed to upload image.</p>`;
+              hideUploadProgress();
             }
-          } else {
+          };
+
+          xhr.onerror = () => {
             console.error('Cloudinary upload error:', xhr.statusText);
             chatArea.innerHTML += `<p class="error">Failed to upload image.</p>`;
-          }
-          hideUploadProgress();
-        };
+            hideUploadProgress();
+          };
 
-        xhr.onerror = () => {
-          console.error('Cloudinary upload error:', xhr.statusText);
-          chatArea.innerHTML += `<p class="error">Failed to upload image.</p>`;
+          xhr.send(formData);
+        } catch (error) {
+          console.error('Error uploading image:', error.message);
+          chatArea.innerHTML += `<p class="error">Failed to upload image: ${error.message}</p>`;
           hideUploadProgress();
-        };
-
-        xhr.send(formData);
-      } catch (error) {
-        console.error('Error uploading image:', error.message);
-        chatArea.innerHTML += `<p class="error">Failed to upload image: ${error.message}</p>`;
-        hideUploadProgress();
+        }
       }
     }
 
-    const uploadImageTrigger = debounce(() => {
+    const triggerUpload = debounce(() => {
       console.log("Upload button clicked");
       fileInput.click();
     }, 200);
 
-    uploadBtn.addEventListener('click', uploadImageTrigger);
+    uploadBtn.addEventListener('click', triggerUpload);
     uploadBtn.addEventListener('touchend', (e) => {
       e.preventDefault();
       console.log("Upload button touchend triggered");
-      uploadImageTrigger();
+      triggerUpload();
     });
 
-    fileInput.addEventListener('change', () => {
-      uploadImage(fileInput.files[0], false);
-      fileInput.value = '';
+    fileInput.addEventListener('change', async (e) => {
+      if (e.target.files.length > 0) {
+        console.log("Uploading image file");
+        await uploadImage(e.target.files[0], false);
+      }
     });
 
-    const changeWallpaperTrigger = debounce(() => {
+    const triggerWallpaperUpload = debounce(() => {
       console.log("Change wallpaper button clicked");
       wallpaperInput.click();
-      kebabMenu.classList.remove("active");
     }, 200);
 
-    changeWallpaperBtn.addEventListener('click', changeWallpaperTrigger);
+    changeWallpaperBtn.addEventListener('click', triggerWallpaperUpload);
     changeWallpaperBtn.addEventListener('touchend', (e) => {
       e.preventDefault();
       console.log("Change wallpaper button touchend triggered");
-      changeWallpaperTrigger();
+      triggerWallpaperUpload();
     });
 
-    wallpaperInput.addEventListener('change', () => {
-      uploadImage(wallpaperInput.files[0], true);
-      wallpaperInput.value = '';
+    wallpaperInput.addEventListener('change', async (e) => {
+      if (e.target.files.length > 0) {
+        console.log("Uploading wallpaper file");
+        await uploadImage(e.target.files[0], true);
+      }
     });
 
     const deleteChat = debounce(async () => {
-      if (!confirm('Are you sure you want to delete this chat? This action cannot be undone.')) return;
+      if (!chatId) return;
       console.log("Deleting chat");
       try {
         showLoading();
-        await remove(ref(db, `messages/${chatId}`));
         await remove(ref(db, `chats/${chatId}`));
+        await remove(ref(db, `messages/${chatId}`));
         await remove(ref(db, `calls/${chatId}`));
         window.location.href = 'index.html';
       } catch (error) {
@@ -1811,7 +2129,6 @@
         chatArea.innerHTML += `<p class="error">Failed to delete chat: ${error.message}</p>`;
         hideLoading();
       }
-      kebabMenu.classList.remove("active");
     }, 200);
 
     deleteChatBtn.addEventListener('click', deleteChat);
@@ -1822,7 +2139,7 @@
     });
 
     const goBack = debounce(() => {
-      console.log("Back button clicked, redirecting to index.html");
+      console.log("Back button clicked");
       window.location.href = 'index.html';
     }, 200);
 
@@ -1831,6 +2148,25 @@
       e.preventDefault();
       console.log("Back button touchend triggered");
       goBack();
+    });
+
+    // Prevent pinch-to-zoom and double-tap zoom
+    document.addEventListener('gesturestart', (e) => e.preventDefault());
+    document.addEventListener('gesturechange', (e) => e.preventDefault());
+    document.addEventListener('gestureend', (e) => e.preventDefault());
+
+    // Prevent browser's default pull-to-refresh
+    document.addEventListener('touchstart', (e) => {
+      if (e.touches.length === 1 && window.scrollY === 0) {
+        e.preventDefault();
+      }
+    }, { passive: false });
+
+    // Ensure chat area scrolls to bottom on resize (e.g., keyboard open)
+    window.addEventListener('resize', () => {
+      requestAnimationFrame(() => {
+        chatArea.scrollTop = chatArea.scrollHeight;
+      });
     });
   </script>
 </body>
