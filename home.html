@@ -1178,7 +1178,30 @@
     height: 10px;
   }
 }
-    
+
+.friend-item .last-message-timestamp {
+  font-size: clamp(0.7rem, 2.5vw, 0.75rem);
+  color: var(--text-light);
+  margin-top: 0.2rem;
+}
+
+.friend-item {
+  display: flex;
+  align-items: center;
+  padding: 0.75rem;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  transition: background 0.2s ease;
+  justify-content: space-between;
+}
+
+.friend-item .friend-info {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  margin-left: 1rem;
+}
+  
   </style>
 </head>
 <body>
@@ -1952,48 +1975,96 @@ async function loadPosts() {
   });
 
   // Friends Tab
-  const friendsRef = ref(db, `users/${currentUserUid}/friends`);
-  showLoading();
-  onValue(friendsRef, async (snapshot) => {
-    friendsContainer.innerHTML = '<div class="loading">Loading friends...</div>';
-    try {
-      const friendsData = snapshot.val() || {};
-      friendsContainer.innerHTML = "";
-      if (Object.keys(friendsData).length === 0) {
-        friendsContainer.innerHTML = '<div class="placeholder">No friends found.</div>';
-      } else {
-        const usersSnap = await get(ref(db, "users"));
-        const users = usersSnap.val() || {};
-        for (const friendUid in friendsData) {
-          const userData = users[friendUid] || { username: "Unknown", photoURL: null };
-          const friendItem = document.createElement("div");
-          friendItem.className = "friend-item";
-          friendItem.innerHTML = `
-            <img src="${userData.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${userData.username} avatar"/>
-            <span>${userData.username}</span>
-            <button class="friend-item-btn message">Message</button>
-          `;
-          friendItem.querySelector(".friend-item-btn").addEventListener("click", (e) => {
-            e.stopPropagation();
-            console.log(`Navigating to chat with user: ${friendUid}`);
-            location.href = `chat.html?uid=${friendUid}`;
-          });
-          friendItem.addEventListener("click", (e) => {
-            if (e.target.classList.contains("friend-item-btn")) return;
-            console.log("Navigating to profile:", friendUid);
-            location.href = `profile.html?uid=${friendUid}`;
-            pauseAllMedia();
-          });
-          friendsContainer.appendChild(friendItem);
+  // Friends Tab
+const friendsRef = ref(db, `users/${currentUserUid}/friends`);
+showLoading();
+onValue(friendsRef, async (snapshot) => {
+  friendsContainer.innerHTML = '<div class="loading">Loading friends...</div>';
+  try {
+    const friendsData = snapshot.val() || {};
+    friendsContainer.innerHTML = "";
+    if (Object.keys(friendsData).length === 0) {
+      friendsContainer.innerHTML = '<div class="placeholder">No friends found.</div>';
+    } else {
+      const usersSnap = await get(ref(db, "users"));
+      const users = usersSnap.val() || {};
+      for (const friendUid in friendsData) {
+        const userData = users[friendUid] || { username: "Unknown", photoURL: null };
+        // Fetch the most recent message for this friend
+        let lastMessageTimestamp = null;
+        let lastMessageTimeAgo = "No messages yet";
+        try {
+          // Create composite keys for both directions (user1_user2 and user2_user1)
+          const chatKey1 = `${currentUserUid}_${friendUid}`;
+          const chatKey2 = `${friendUid}_${currentUserUid}`;
+          // Query messages for both directions
+          const messagesRef1 = query(ref(db, `messages/${chatKey1}`), orderByChild("timestamp"), limitToLast(1));
+          const messagesRef2 = query(ref(db, `messages/${chatKey2}`), orderByChild("timestamp"), limitToLast(1));
+          const [snap1, snap2] = await Promise.all([
+            Promise.race([
+              get(messagesRef1),
+              new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout fetching messages")), 5000))
+            ]).catch(() => null),
+            Promise.race([
+              get(messagesRef2),
+              new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout fetching messages")), 5000))
+            ]).catch(() => null)
+          ]);
+          // Find the most recent message from either direction
+          let latestMessage = null;
+          if (snap1 && snap1.exists()) {
+            snap1.forEach(child => {
+              latestMessage = { id: child.key, ...child.val() };
+            });
+          }
+          if (snap2 && snap2.exists()) {
+            let tempMessage;
+            snap2.forEach(child => {
+              tempMessage = { id: child.key, ...child.val() };
+            });
+            if (!latestMessage || (tempMessage && tempMessage.timestamp > latestMessage.timestamp)) {
+              latestMessage = tempMessage;
+            }
+          }
+          if (latestMessage) {
+            lastMessageTimestamp = latestMessage.timestamp;
+            lastMessageTimeAgo = timeAgo(lastMessageTimestamp);
+          }
+        } catch (error) {
+          console.warn(`Error fetching last message for friend ${friendUid}:`, error.message);
+          lastMessageTimeAgo = "No messages yet";
         }
+        const friendItem = document.createElement("div");
+        friendItem.className = "friend-item";
+        friendItem.innerHTML = `
+          <img src="${userData.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${userData.username} avatar"/>
+          <div class="friend-info">
+            <span>${userData.username}</span>
+            <span class="last-message-timestamp">${lastMessageTimeAgo}</span>
+          </div>
+          <button class="friend-item-btn message">Message</button>
+        `;
+        friendItem.querySelector(".friend-item-btn").addEventListener("click", (e) => {
+          e.stopPropagation();
+          console.log(`Navigating to chat with user: ${friendUid}`);
+          location.href = `chat.html?uid=${friendUid}`;
+        });
+        friendItem.addEventListener("click", (e) => {
+          if (e.target.classList.contains("friend-item-btn")) return;
+          console.log("Navigating to profile:", friendUid);
+          location.href = `profile.html?uid=${friendUid}`;
+          pauseAllMedia();
+        });
+        friendsContainer.appendChild(friendItem);
       }
-    } catch (error) {
-      console.error("Error loading friends:", error.code, error.message);
-      friendsContainer.innerHTML = `<p class="error">Failed to load friends: ${error.message}</p>`;
-    } finally {
-      hideLoading();
     }
-  }, { onlyOnce: false });
+  } catch (error) {
+    console.error("Error loading friends:", error.code, error.message);
+    friendsContainer.innerHTML = `<p class="error">Failed to load friends: ${error.message}</p>`;
+  } finally {
+    hideLoading();
+  }
+}, { onlyOnce: false });
 
   // Followers Tab
   const followersRef = ref(db, `users/${currentUserUid}/followers`);
