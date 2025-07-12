@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+  <title>BanterBox - Notifications</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root {
+      --primary-red: #ed4956;
+      --background: #fafafa;
+      --border: #dbdbdb;
+      --text-dark: #262626;
+      --text-light: #8e8e8e;
+      --white: #ffffff;
+      --gradient: linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888);
+    }
+
+    * {
+      user-select: none;
+      -webkit-user-select: none;
+      -moz-user-select: none;
+      -ms-user-select: none;
+      touch-action: manipulation;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      background: var(--background);
+      min-height: 100vh;
+      margin: 0;
+      overflow-x: hidden;
+    }
+
+    .container {
+      max-width: 614px;
+      margin: 0 auto;
+      padding: 0 1rem;
+    }
+
+    /* Header */
+    .notifications-header {
+      position: sticky;
+      top: 0;
+      background: var(--white);
+      border-bottom: 1px solid var(--border);
+      padding: 0.75rem 1rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      z-index: 10;
+    }
+
+    .notifications-header h1 {
+      font-size: clamp(1rem, 4vw, 1.1rem);
+      color: var(--text-dark);
+      font-weight: 600;
+    }
+
+    .back-btn {
+      background: none;
+      border: none;
+      color: var(--text-dark);
+      cursor: pointer;
+      padding: 0.5rem;
+      transition: transform 0.2s ease, color 0.2s ease;
+    }
+
+    .back-btn:hover {
+      transform: scale(1.1);
+      color: var(--primary-red);
+    }
+
+    .back-btn svg {
+      width: 24px;
+      height: 24px;
+    }
+
+    /* Notification Item */
+    .notification-item {
+      display: flex;
+      align-items: center;
+      padding: 0.75rem;
+      border-bottom: 1px solid var(--border);
+      cursor: pointer;
+      transition: background 0.2s ease;
+    }
+
+    .notification-item:hover {
+      background: rgba(237, 73, 86, 0.1);
+    }
+
+    .notification-item.unread {
+      background: rgba(237, 73, 86, 0.05);
+    }
+
+    .notification-item img {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      object-fit: cover;
+      margin-right: 1rem;
+    }
+
+    .notification-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .notification-text {
+      font-size: clamp(0.85rem, 3vw, 0.9rem);
+      color: var(--text-dark);
+    }
+
+    .notification-text strong {
+      font-weight: 600;
+    }
+
+    .notification-time {
+      font-size: clamp(0.7rem, 2.5vw, 0.75rem);
+      color: var(--text-light);
+      margin-top: 0.2rem;
+    }
+
+    .notification-action-btn {
+      padding: 0.5rem 1rem;
+      border-radius: 9999px;
+      font-size: clamp(0.7rem, 2.5vw, 0.75rem);
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s ease, transform 0.2s ease, color 0.2s ease;
+      border: 1px solid var(--border);
+      background: var(--white);
+      color: var(--text-dark);
+      margin-left: 0.5rem;
+    }
+
+    .notification-action-btn.follow {
+      background: var(--primary-red);
+      color: var(--white);
+      border: none;
+    }
+
+    .notification-action-btn.follow:hover {
+      background: #d43f4e;
+      transform: scale(1.05);
+    }
+
+    .notification-action-btn.following {
+      background: var(--white);
+      color: var(--primary-red);
+    }
+
+    .notification-action-btn.following:hover {
+      background: rgba(237, 73, 86, 0.1);
+      transform: scale(1.05);
+    }
+
+    /* Loading and Error States */
+    .loading {
+      text-align: center;
+      padding: 2rem;
+      color: var(--text-dark);
+      font-size: 1rem;
+    }
+
+    .placeholder {
+      padding: 2rem;
+      text-align: center;
+      color: var(--text-light);
+      font-size: 1rem;
+    }
+
+    .error {
+      text-align: center;
+      padding: 2rem;
+      color: var(--primary-red);
+      font-size: 1rem;
+    }
+
+    /* Loading Overlay */
+    .loading-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.6);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+
+    .loading-overlay:not(.hidden) {
+      opacity: 1;
+    }
+
+    .spinner {
+      width: 60px;
+      height: 60px;
+      border: 6px solid rgba(255, 255, 255, 0.2);
+      border-top-color: var(--primary-red);
+      border-radius: 50%;
+      animation: spin 1s ease-in-out infinite, pulse 2s ease-in-out infinite;
+      position: relative;
+    }
+
+    .spinner::before {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 12px;
+      height: 12px;
+      background: var(--primary-red);
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      animation: pulseDot 2s ease-in-out infinite;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    @keyframes pulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(237, 73, 86, 0.4); }
+      50% { box-shadow: 0 0 0 20px rgba(237, 73, 86, 0); }
+    }
+
+    @keyframes pulseDot {
+      0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.8; }
+      50% { transform: translate(-50%, -50%) scale(1.5); opacity: 1; }
+    }
+
+    /* Responsive Design */
+    @media (max-width: 414px) {
+      .container {
+        padding: 0 0.5rem;
+      }
+
+      .notifications-header h1 {
+        font-size: clamp(0.9rem, 3.5vw, 1rem);
+      }
+
+      .back-btn svg {
+        width: 20px;
+        height: 20px;
+      }
+
+      .notification-item img {
+        width: 36px;
+        height: 36px;
+      }
+
+      .notification-text {
+        font-size: clamp(0.8rem, 2.5vw, 0.85rem);
+      }
+
+      .notification-time {
+        font-size: clamp(0.65rem, 2vw, 0.7rem);
+      }
+
+      .notification-action-btn {
+        padding: 0.4rem 0.8rem;
+        font-size: clamp(0.65rem, 2vw, 0.7rem);
+      }
+
+      .spinner {
+        width: 48px;
+        height: 48px;
+        border-width: 4px;
+      }
+
+      .spinner::before {
+        width: 10px;
+        height: 10px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="notifications-header">
+    <button class="back-btn" aria-label="Back to home">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M15 18l-6-6 6-6"/>
+      </svg>
+    </button>
+    <h1>Notifications</h1>
+    <div style="width: 24px;"></div> <!-- Spacer -->
+  </div>
+  <div class="container">
+    <div id="notifications-container" class="loading" aria-live="polite">Loading notifications...</div>
+  </div>
+  <div id="loading-overlay" class="loading-overlay hidden">
+    <div class="spinner"></div>
+  </div>
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
+    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
+    import { getDatabase, ref, onValue, update } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
+      authDomain: "fire-b-a8878.firebaseapp.com",
+      databaseURL: "https://fire-b-a8878.firebaseio.com",
+      projectId: "fire-b-a8878",
+      storageBucket: "fire-b-a8878.appspot.com",
+      messagingSenderId: "658673187627",
+      appId: "1:658673187627:web:6e4c29af661785f0afa36e"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth();
+    const db = getDatabase();
+
+    let currentUserUid = null;
+    const loadingOverlay = document.getElementById("loading-overlay");
+
+    function showLoading() { loadingOverlay.classList.remove("hidden"); }
+    function hideLoading() { loadingOverlay.classList.add("hidden"); }
+
+    function timeAgo(timestamp) {
+      if (!timestamp) return "";
+      const now = Date.now();
+      const diff = now - timestamp;
+      if (diff < 60000) return "just now";
+      if (diff < 3600000) return Math.floor(diff / 60000) + "m ago";
+      if (diff < 86400000) return Math.floor(diff / 3600000) + "h ago";
+      return Math.floor(diff / 86400000) + "d ago";
+    }
+
+    onAuthStateChanged(auth, (user) => {
+      if (!user) {
+        location.href = "index.html";
+      } else {
+        currentUserUid = user.uid;
+        loadNotifications();
+      }
+    });
+
+    async function loadNotifications() {
+      const notificationsContainer = document.getElementById("notifications-container");
+      const notificationsRef = ref(db, `notifications/${currentUserUid}`);
+      showLoading();
+      try {
+        onValue(notificationsRef, async (snapshot) => {
+          notificationsContainer.innerHTML = '<div class="loading">Loading notifications...</div>';
+          const notificationsData = snapshot.val() || {};
+          const notifications = [];
+          const usersSnap = await Promise.race([
+            get(ref(db, "users")),
+            new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout loading users")), 10000))
+          ]);
+          const users = usersSnap.val() || {};
+          // Collect all notifications
+          for (const postId in notificationsData) {
+            for (const type in notificationsData[postId]) {
+              for (const notifId in notificationsData[postId][type]) {
+                const notif = notificationsData[postId][type][notifId];
+                notifications.push({ postId, type, notifId, ...notif });
+              }
+            }
+          }
+          notifications.sort((a, b) => b.timestamp - a.timestamp); // Sort by timestamp descending
+          notificationsContainer.innerHTML = "";
+          if (notifications.length === 0) {
+            notificationsContainer.innerHTML = '<div class="placeholder">No notifications yet.</div>';
+            hideLoading();
+            return;
+          }
+          for (const notif of notifications) {
+            const userData = users[notif.userId] || { username: "Unknown", photoURL: null };
+            const isFollowing = await get(ref(db, `users/${currentUserUid}/following/${notif.userId}`)).then(snap => snap.exists());
+            const notifItem = document.createElement("div");
+            notifItem.className = `notification-item ${notif.read ? '' : 'unread'}`;
+            let message = '';
+            let actionButton = '';
+            if (notif.type === 'like') {
+              message = `<strong>${userData.username}</strong> liked your post.`;
+              notifItem.addEventListener("click", () => {
+                console.log("Navigating to post:", notif.postId);
+                location.href = `post.html?id=${notif.postId}`;
+              });
+            } else if (notif.type === 'comment') {
+              message = `<strong>${userData.username}</strong> commented on your post.`;
+              notifItem.addEventListener("click", () => {
+                console.log("Navigating to post:", notif.postId);
+                location.href = `post.html?id=${notif.postId}`;
+              });
+            } else if (notif.type === 'follow') {
+              message = `<strong>${userData.username}</strong> followed you.`;
+              actionButton = `<button class="notification-action-btn ${isFollowing ? 'following' : 'follow'}" data-user-id="${notif.userId}">${isFollowing ? 'Following' : 'Follow'}</button>`;
+              notifItem.addEventListener("click", (e) => {
+                if (e.target.classList.contains("notification-action-btn")) return;
+                console.log("Navigating to profile:", notif.userId);
+                location.href = `profile.html?uid=${notif.userId}`;
+              });
+            } else if (notif.type === 'verified') {
+              message = `Congratulations! Your account has been <strong>verified</strong> for reaching 10 posts.`;
+            }
+            notifItem.innerHTML = `
+              <img src="${userData.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${userData.username} avatar"/>
+              <div class="notification-content">
+                <p class="notification-text">${message}</p>
+                <p class="notification-time">${timeAgo(notif.timestamp)}</p>
+              </div>
+              ${actionButton}
+            `;
+            if (actionButton) {
+              const followBtn = notifItem.querySelector(".notification-action-btn");
+              followBtn.addEventListener("click", (e) => {
+                e.stopPropagation();
+                toggleFollow(notif.userId, followBtn, 'notifications-container');
+              });
+            }
+            // Mark as read on display
+            if (!notif.read) {
+              update(ref(db, `notifications/${currentUserUid}/${notif.postId}/${notif.type}/${notif.notifId}`), { read: true });
+            }
+            notificationsContainer.appendChild(notifItem);
+          }
+          hideLoading();
+        }, { onlyOnce: false });
+      } catch (error) {
+        console.error("Error loading notifications:", error.message);
+        notificationsContainer.innerHTML = `<p class="error">Failed to load notifications: ${error.message}</p>`;
+        hideLoading();
+      }
+    }
+
+    async function toggleFollow(targetUid, button, containerId) {
+      if (targetUid === currentUserUid) return;
+      showLoading();
+      try {
+        const followingRef = ref(db, `users/${currentUserUid}/following/${targetUid}`);
+        const followerRef = ref(db, `users/${targetUid}/followers/${currentUserUid}`);
+        const followingSnap = await get(followingRef);
+        const isFollowing = followingSnap.exists();
+
+        if (isFollowing) {
+          await set(followingRef, null);
+          await set(followerRef, null);
+          const isMutual = await get(ref(db, `users/${currentUserUid}/followers/${targetUid}`));
+          if (isMutual.exists()) {
+            await set(ref(db, `users/${currentUserUid}/friends/${targetUid}`), null);
+            await set(ref(db, `users/${targetUid}/friends/${currentUserUid}`), null);
+          }
+          button.textContent = "Follow";
+          button.classList.remove("following");
+          button.classList.add("follow");
+        } else {
+          await set(followingRef, true);
+          await set(followerRef, true);
+          const isMutual = await get(ref(db, `users/${currentUserUid}/followers/${targetUid}`));
+          if (isMutual.exists()) {
+            await set(ref(db, `users/${currentUserUid}/friends/${targetUid}`), true);
+            await set(ref(db, `users/${targetUid}/friends/${currentUserUid}`), true);
+          }
+          const notifRef = push(ref(db, `notifications/${targetUid}/system/follows`));
+          await set(notifRef, { type: 'follow', userId: currentUserUid, timestamp: Date.now(), read: false });
+          button.textContent = "Following";
+          button.classList.remove("follow");
+          button.classList.add("following");
+        }
+
+        if (containerId === 'notifications-container') {
+          await loadNotifications();
+        }
+      } catch (error) {
+        console.error("Error toggling follow:", error.message);
+        if (containerId === 'notifications-container') {
+          document.getElementById(containerId).innerHTML = `<p class="error">Failed to load notifications: ${error.message}</p>`;
+        }
+      } finally {
+        hideLoading();
+      }
+    }
+
+    document.querySelector(".back-btn").addEventListener("click", () => {
+      location.href = "home.html";
+    });
+  </script>
+</body>
+</html>
