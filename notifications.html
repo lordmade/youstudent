@@ -152,8 +152,14 @@
     const notificationsContainer = document.getElementById("notifications-container");
     const loadingOverlay = document.getElementById("loading-overlay");
 
-    function showLoading() { loadingOverlay.classList.remove("hidden"); }
-    function hideLoading() { loadingOverlay.classList.add("hidden"); }
+    function showLoading() {
+      console.log("Showing loading overlay");
+      loadingOverlay.classList.remove("hidden");
+    }
+    function hideLoading() {
+      console.log("Hiding loading overlay");
+      loadingOverlay.classList.add("hidden");
+    }
 
     function timeAgo(timestamp) {
       if (!timestamp) return "just now";
@@ -167,11 +173,13 @@
 
     async function loadNotifications() {
       if (!currentUserUid) {
+        console.error("No user UID available");
         notificationsContainer.innerHTML = '<p class="error">User not authenticated.</p>';
         hideLoading();
         return;
       }
 
+      console.log(`Fetching notifications for user: ${currentUserUid}`);
       const notificationsRef = ref(db, `notifications/${currentUserUid}`);
       showLoading();
       try {
@@ -180,9 +188,11 @@
           new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout loading notifications")), 10000))
         ]);
         const notificationsData = snapshot.val();
-        notificationsContainer.innerHTML = "";
+        console.log("Notifications data:", notificationsData);
 
+        notificationsContainer.innerHTML = "";
         if (!notificationsData) {
+          console.log("No notifications found");
           notificationsContainer.innerHTML = '<div class="placeholder">No notifications yet.</div>';
           hideLoading();
           return;
@@ -193,15 +203,17 @@
           new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout loading users")), 10000))
         ]);
         const users = usersSnap.val() || {};
+        console.log("Users data:", users);
 
         const notifications = [];
-        Object.entries(notificationsData).forEach(([postId, postNotifications]) => {
+        Object.entries(notificationsData).forEach(([key, postNotifications]) => {
+          console.log(`Processing key: ${key}`);
           Object.entries(postNotifications).forEach(([type, typeNotifications]) => {
+            console.log(`Processing type: ${type}`);
             Object.entries(typeNotifications).forEach(([notificationId, notification]) => {
-              // Only include specified notification types
               if (["like", "comment", "follow", "verified"].includes(notification.type)) {
                 notifications.push({
-                  postId: notification.type !== "verified" ? postId : null,
+                  postId: notification.type !== "verified" && key !== "system" ? key : null,
                   type,
                   notificationId,
                   ...notification
@@ -210,11 +222,13 @@
             });
           });
         });
+        console.log("Processed notifications:", notifications);
 
         // Sort by timestamp, newest first
         notifications.sort((a, b) => b.timestamp - a.timestamp);
 
         if (notifications.length === 0) {
+          console.log("No valid notifications after filtering");
           notificationsContainer.innerHTML = '<div class="placeholder">No notifications yet.</div>';
           hideLoading();
           return;
@@ -236,10 +250,11 @@
               break;
             case "verified":
               text = "Congratulations! You've been verified for posting 10 times!";
-              isClickable = false; // Verified notifications don't navigate
+              isClickable = false;
               break;
             default:
-              continue; // Skip unexpected types
+              console.warn(`Skipping unknown notification type: ${notif.type}`);
+              continue;
           }
 
           const notificationItem = document.createElement("div");
@@ -259,13 +274,17 @@
               } else if (notif.postId) {
                 console.log(`Navigating to post: ${notif.postId}`);
                 window.location.href = `post.html?id=${notif.postId}`;
+              } else {
+                console.warn(`No valid postId for ${notif.type} notification`);
               }
             });
           }
 
           // Mark as read if unread
           if (!notif.read) {
-            const notifRef = ref(db, `notifications/${currentUserUid}/${notif.postId || "system"}/${notif.type}/${notif.notificationId}`);
+            const notifPath = `notifications/${currentUserUid}/${notif.postId || "system"}/${notif.type}/${notif.notificationId}`;
+            console.log(`Marking notification as read: ${notifPath}`);
+            const notifRef = ref(db, notifPath);
             await update(notifRef, { read: true }).catch(error => {
               console.error(`Error marking ${notif.type} notification as read:`, error.message);
             });
@@ -273,9 +292,16 @@
 
           notificationsContainer.appendChild(notificationItem);
         }
+        console.log(`Rendered ${notifications.length} notifications`);
       } catch (error) {
         console.error("Error loading notifications:", error.code, error.message);
-        notificationsContainer.innerHTML = `<p class="error">Failed to load notifications: ${error.message}</p>`;
+        let errorMessage = "Failed to load notifications. Please try again.";
+        if (error.code === "PERMISSION_DENIED") {
+          errorMessage = "Permission denied. Check Firebase rules.";
+        } else if (error.message.includes("Timeout")) {
+          errorMessage = "Request timed out. Check your network connection.";
+        }
+        notificationsContainer.innerHTML = `<p class="error">${errorMessage}</p>`;
       } finally {
         hideLoading();
       }
@@ -283,9 +309,11 @@
 
     onAuthStateChanged(auth, (user) => {
       if (!user) {
+        console.error("User not authenticated, redirecting to index.html");
         window.location.href = "index.html";
       } else {
         currentUserUid = user.uid;
+        console.log(`User authenticated: ${currentUserUid}`);
         loadNotifications();
       }
     });
