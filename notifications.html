@@ -35,6 +35,11 @@
       overflow-x: hidden;
     }
 
+    body.dark {
+      background: #0a1c22;
+      color: #e5e7eb;
+    }
+
     .container {
       max-width: 614px;
       margin: 0 auto;
@@ -51,6 +56,11 @@
       top: 0;
       background: var(--white);
       z-index: 10;
+    }
+
+    .header.dark {
+      background: #0d252a;
+      border-bottom: 1px solid #1f2a30;
     }
 
     .header h1 {
@@ -71,6 +81,14 @@
     .nav-btn:hover {
       color: var(--primary-red);
       transform: scale(1.1);
+    }
+
+    .nav-btn.dark {
+      color: #e5e7eb;
+    }
+
+    .nav-btn.dark:hover {
+      color: #dc2626;
     }
 
     .nav-btn svg {
@@ -128,10 +146,18 @@
       color: var(--text-dark);
     }
 
+    .notification-text.dark {
+      color: #e5e7eb;
+    }
+
     .notification-time {
       font-size: clamp(0.7rem, 2.5vw, 0.75rem);
       color: var(--text-light);
       margin-top: 0.2rem;
+    }
+
+    .notification-time.dark {
+      color: #9ca3af;
     }
 
     .placeholder {
@@ -141,11 +167,19 @@
       font-size: clamp(0.85rem, 3.5vw, 0.9rem);
     }
 
+    .placeholder.dark {
+      color: #9ca3af;
+    }
+
     .error {
       text-align: center;
       color: var(--primary-red);
       padding: 2rem;
       font-size: clamp(0.85rem, 3.5vw, 0.9rem);
+    }
+
+    .error.dark {
+      color: #dc2626;
     }
 
     .loading-overlay {
@@ -176,6 +210,10 @@
       position: relative;
     }
 
+    .spinner.dark {
+      border-top-color: #dc2626;
+    }
+
     .spinner::before {
       content: '';
       position: absolute;
@@ -187,6 +225,10 @@
       border-radius: 50%;
       transform: translate(-50%, -50%);
       animation: pulseDot 2s ease-in-out infinite;
+    }
+
+    .spinner.dark::before {
+      background: #dc2626;
     }
 
     @keyframes spin {
@@ -251,12 +293,12 @@
 </head>
 <body>
   <div id="loading-overlay" class="loading-overlay hidden">
-    <div class="spinner"></div>
+    <div class="spinner dark:spinner"></div>
   </div>
   <div class="container">
-    <div class="header">
+    <div class="header dark:header">
       <h1>Notifications</h1>
-      <button class="nav-btn" aria-label="Back to home" id="home-btn">
+      <button class="nav-btn dark:nav-btn" aria-label="Back to home" id="home-btn">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/>
           <path d="M9 22V12h6v10"/>
@@ -269,7 +311,7 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
     import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
-    import { getDatabase, ref, onValue, update, get } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
+    import { getDatabase, ref, onValue, update, get, query, orderByChild, limitToLast } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
@@ -322,17 +364,41 @@
       };
     }
 
+    async function applyTheme(themeValue) {
+      const isDark = themeValue === 'dark';
+      document.body.classList.toggle('dark', isDark);
+      document.querySelector('.header').classList.toggle('dark', isDark);
+      document.querySelector('.nav-btn').classList.toggle('dark', isDark);
+      document.querySelectorAll('.notification-item').forEach(el => el.classList.toggle('dark', isDark));
+      document.querySelectorAll('.notification-text').forEach(el => el.classList.toggle('dark', isDark));
+      document.querySelectorAll('.notification-time').forEach(el => el.classList.toggle('dark', isDark));
+      document.querySelectorAll('.placeholder').forEach(el => el.classList.toggle('dark', isDark));
+      document.querySelectorAll('.error').forEach(el => el.classList.toggle('dark', isDark));
+      document.querySelector('.spinner').classList.toggle('dark', isDark);
+    }
+
     async function getLatestPostId(userId) {
       try {
-        const postsRef = ref(db, `posts/${userId}`);
-        const snapshot = await get(postsRef);
-        if (!snapshot.exists()) return null;
-        const posts = snapshot.val();
-        const latestPost = Object.entries(posts)
-          .sort((a, b) => (b[1].timestamp || 0) - (a[1].timestamp || 0))[0];
-        return latestPost ? latestPost[0] : null;
+        // Query posts for the user, sorted by timestamp, get the latest
+        const postsQuery = query(ref(db, 'posts'), orderByChild('userId'), limitToLast(1));
+        const postsSnapshot = await get(postsQuery);
+        if (postsSnapshot.exists()) {
+          for (const [postId, post] of Object.entries(postsSnapshot.val())) {
+            if (post.userId === userId) return postId;
+          }
+        }
+        // Check reels if no posts found
+        const reelsQuery = query(ref(db, 'reels'), orderByChild('userId'), limitToLast(1));
+        const reelsSnapshot = await get(reelsQuery);
+        if (reelsSnapshot.exists()) {
+          for (const [reelId, reel] of Object.entries(reelsSnapshot.val())) {
+            if (reel.userId === userId) return reelId;
+          }
+        }
+        console.log(`No posts or reels found for user ${userId}`);
+        return null;
       } catch (error) {
-        console.error(`Error fetching posts for user ${userId}:`, error.message);
+        console.error(`Error fetching latest post for user ${userId}:`, error.message);
         return null;
       }
     }
@@ -340,7 +406,7 @@
     async function loadNotifications() {
       if (!currentUserUid) {
         console.error("No user UID available");
-        notificationsContainer.innerHTML = '<p class="error">User not authenticated.</p>';
+        notificationsContainer.innerHTML = '<p class="error dark:error">User not authenticated.</p>';
         hideLoading();
         return;
       }
@@ -359,7 +425,7 @@
         notificationsContainer.innerHTML = "";
         if (!notificationsData) {
           console.log("No notifications found");
-          notificationsContainer.innerHTML = '<div class="placeholder">No notifications yet.</div>';
+          notificationsContainer.innerHTML = '<div class="placeholder dark:placeholder">No notifications yet.</div>';
           hideLoading();
           return;
         }
@@ -396,7 +462,7 @@
 
         if (notifications.length === 0) {
           console.log("No valid notifications after filtering");
-          notificationsContainer.innerHTML = '<div class="placeholder">No notifications yet.</div>';
+          notificationsContainer.innerHTML = '<div class="placeholder dark:placeholder">No notifications yet.</div>';
           hideLoading();
           return;
         }
@@ -411,7 +477,7 @@
           if (notif.type === "follow") {
             postId = await getLatestPostId(notif.userId);
           } else if (notif.type === "verified") {
-            isClickable = false; // Keep verified notifications non-clickable
+            isClickable = false;
           }
 
           switch (notif.type) {
@@ -444,8 +510,8 @@
           notificationItem.innerHTML = `
             <img src="${userData.photoURL}" alt="${userData.username} avatar"/>
             <div class="notification-content">
-              <p class="notification-text">${text}</p>
-              <p class="notification-time">${timeAgo(notif.timestamp)}</p>
+              <p class="notification-text dark:notification-text">${text}</p>
+              <p class="notification-time dark:notification-time">${timeAgo(notif.timestamp)}</p>
             </div>
           `;
 
@@ -460,6 +526,13 @@
               e.preventDefault();
               console.log(`Touchend triggered for ${redirectUrl}`);
               handleRedirect();
+            });
+            notificationItem.addEventListener("keydown", (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                console.log(`Keydown triggered for ${redirectUrl}`);
+                handleRedirect();
+              }
             });
           }
 
@@ -485,7 +558,7 @@
         } else if (error.message.includes("Timeout")) {
           errorMessage = "Request timed out. Check your network connection.";
         }
-        notificationsContainer.innerHTML = `<p class="error">${errorMessage}</p>`;
+        notificationsContainer.innerHTML = `<p class="error dark:error">${errorMessage}</p>`;
       } finally {
         hideLoading();
       }
@@ -502,15 +575,30 @@
       console.log("Home button touchend triggered");
       handleHomeClick();
     });
+    homeBtn.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        console.log("Home button keydown triggered");
+        handleHomeClick();
+      }
+    });
 
-    onAuthStateChanged(auth, (user) => {
+    onAuthStateChanged(auth, async (user) => {
       if (!user) {
         console.error("User not authenticated, redirecting to index.html");
         window.location.href = "index.html";
       } else {
         currentUserUid = user.uid;
         console.log(`User authenticated: ${currentUserUid}`);
-        loadNotifications();
+        try {
+          const snap = await get(ref(db, `users/${user.uid}/settings`));
+          const settings = snap.val() || {};
+          applyTheme(settings.theme || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
+        } catch (error) {
+          console.error('Error loading theme:', error.message);
+          notificationsContainer.innerHTML = `<p class="error dark:error">Error loading settings.</p>`;
+        }
+        await loadNotifications();
       }
     });
   </script>
