@@ -1435,10 +1435,7 @@ body {
   </div>
 </div>
 
-  
-                
-      
-    <script type="module">
+ <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
   import { getAuth, onAuthStateChanged, updateProfile } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
   import { getDatabase, ref, onValue, query, orderByChild, limitToLast, set, get, push, update } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
@@ -1514,7 +1511,6 @@ body {
     const newBio = editBio.value.trim();
     const newPhoto = editPhoto.files[0];
 
-    // Validate inputs
     if (!newUsername) {
       showError(editProfileError, "Username cannot be empty.");
       editUsername.focus();
@@ -1529,12 +1525,10 @@ body {
         return;
       }
 
-      // Prepare updates for Firebase Authentication
       const profileUpdates = {
         displayName: newUsername,
       };
 
-      // Handle photo upload to Cloudinary if provided
       let photoURL = user.photoURL;
       if (newPhoto) {
         const maxFileSize = 5 * 1024 * 1024; // 5MB
@@ -1560,10 +1554,8 @@ body {
         }
       }
 
-      // Update Firebase Authentication profile
       await updateProfile(user, profileUpdates);
 
-      // Update Firestore user document
       await updateDoc(doc(firestore, "users", user.uid), {
         username: newUsername,
         bio: newBio || "",
@@ -1571,12 +1563,10 @@ body {
         updatedAt: serverTimestamp(),
       });
 
-      // Close modal
       editProfileModal.classList.remove("open");
       editProfileModal.classList.add("hidden");
       hideError(editProfileError);
 
-      // Refresh profile display
       loadProfile();
     } catch (error) {
       console.error("Error updating profile:", error.code, error.message);
@@ -1592,14 +1582,12 @@ body {
     }
   });
 
-  // Close button event listener
   editProfileCloseBtn.addEventListener("click", () => {
     editProfileModal.classList.remove("open");
     editProfileModal.classList.add("hidden");
     hideError(editProfileError);
   });
 
-  // Existing toggleLike function (unchanged)
   function toggleLike(postId, button) {
     const userId = currentUserUid;
     const postRef = ref(db, `posts/${postId}`);
@@ -1643,7 +1631,6 @@ body {
     });
   }
 
-  // Existing toggleFollow function (unchanged)
   async function toggleFollow(targetUid, button, containerId) {
     if (targetUid === currentUserUid) return;
     showLoading();
@@ -1755,7 +1742,7 @@ body {
   const tabs = document.querySelectorAll(".tab-content");
 
   tabBtns.forEach(btn => {
-    btn.addEventListener("click", async () => {
+    btn.addEventListener("click", () => {
       tabBtns.forEach(b => {
         b.classList.remove("active");
         b.setAttribute("aria-selected", "false");
@@ -1766,36 +1753,8 @@ body {
 
       const tabId = btn.dataset.tab;
       if (tabId === "reels") {
-        showLoading();
-        try {
-          const reelsRef = ref(db, "reels");
-          const snapshot = await Promise.race([
-            get(reelsRef),
-            new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout fetching reels")), 10000))
-          ]);
-          const reelsData = snapshot.val() || {};
-          const reelIds = Object.keys(reelsData).filter(id => reelsData[id].videoUrl);
-
-          if (reelIds.length === 0) {
-            console.log("No reels available for randomization");
-            location.href = "post.html";
-            return;
-          }
-
-          for (let i = reelIds.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [reelIds[i], reelIds[j]] = [reelIds[j], reelIds[i]];
-          }
-
-          const randomReelId = reelIds[0];
-          console.log("Navigating to random reel:", randomReelId);
-          location.href = `post.html?reelId=${randomReelId}`;
-        } catch (error) {
-          console.error("Error selecting random reel:", error.message);
-          location.href = "post.html";
-        } finally {
-          hideLoading();
-        }
+        console.log("Navigating to reels.html");
+        location.href = "reels.html";
       } else {
         document.getElementById(tabId).classList.add("active");
       }
@@ -1929,14 +1888,6 @@ body {
       const users = usersSnap.val() || {};
       const followingData = followingSnap.val() || {};
 
-      // Count posts per user
-      const userPostCounts = {};
-      Object.values(postsData).forEach(post => {
-        if (post.userId) {
-          userPostCounts[post.userId] = (userPostCounts[post.userId] || 0) + 1;
-        }
-      });
-
       postsContainer.innerHTML = "";
       const posts = Object.entries(postsData)
         .map(([id, post]) => ({ id, ...post }))
@@ -1948,19 +1899,14 @@ body {
         return;
       }
 
-      // Sort posts by timestamp (descending) to get the most recent post
       posts.sort((a, b) => b.timestamp - a.timestamp);
+      const mostRecentPost = posts.shift();
 
-      // Extract the most recent post
-      const mostRecentPost = posts.shift(); // Remove and store the first (most recent) post
-
-      // Randomize the remaining posts using Fisher-Yates shuffle
       for (let i = posts.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
-        [posts[i], posts[j]] = [posts[j], posts[i]]; // Swap elements
+        [posts[i], posts[j]] = [posts[j], posts[i]];
       }
 
-      // Combine most recent post with randomized posts
       const finalPosts = mostRecentPost ? [mostRecentPost, ...posts] : posts;
 
       console.log(`Fetched ${finalPosts.length} posts and ${Object.keys(users).length} users`);
@@ -1969,7 +1915,8 @@ body {
         const isFollowing = !!followingData[post.userId];
         const showFollowButton = post.userId !== currentUserUid;
         const imageUrls = Array.isArray(post.imageUrls) ? post.imageUrls : [post.imageUrl].filter(Boolean);
-        const isVerified = userPostCounts[post.userId] >= 10; // Verified if user has 10+ posts
+        const isVerified = users[post.userId]?.verified || false; // Use verified field from users/{uid}
+
         const postElement = document.createElement("div");
         postElement.className = "post";
         postElement.id = `post-${post.id}`;
@@ -2187,7 +2134,6 @@ body {
       });
     });
 
-    // Friends Tab
     const friendsRef = ref(db, `users/${currentUserUid}/friends`);
     showLoading();
     onValue(friendsRef, async (snapshot) => {
@@ -2280,7 +2226,6 @@ body {
       }
     }, { onlyOnce: false });
 
-    // Followers Tab
     const followersRef = ref(db, `users/${currentUserUid}/followers`);
     showLoading();
     onValue(followersRef, async (snapshot) => {
@@ -2331,7 +2276,6 @@ body {
       }
     }, { onlyOnce: false });
 
-    // Following Tab
     const followingRef = ref(db, `users/${currentUserUid}/following`);
     showLoading();
     onValue(followingRef, async (snapshot) => {
@@ -2486,7 +2430,7 @@ body {
     });
   }
 
-  function loadProfile() {
+  async function loadProfile() {
     const profileContainer = document.getElementById("profile-container");
     const deletePostModal = document.getElementById("delete-post-modal");
     const deletePostClose = document.getElementById("delete-post-close");
@@ -2510,11 +2454,11 @@ body {
         new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout loading notifications")), 10000))
       ])
     ]).then(([userSnap, postsSnap, notificationsSnap]) => {
-      const user = userSnap.val() || { username: "Anonymous", photoURL: null, bio: "" };
+      const user = userSnap.val() || { username: "Anonymous", photoURL: null, bio: "", verified: false };
       const userPostCount = postsSnap.val()
         ? Object.values(postsSnap.val()).filter(post => post.userId === currentUserUid).length
         : 0;
-      const isVerified = userPostCount >= 10;
+      const isVerified = user.verified || false; // Use verified field from users/{uid}
       let unreadCount = 0;
       const notificationsData = notificationsSnap.val() || {};
       Object.values(notificationsData).forEach(postNotifications => {
@@ -2603,7 +2547,6 @@ body {
         profileContent.appendChild(postElement);
       }
       hideLoading();
-      // Add Edit Profile button event listener
       document.getElementById("edit-profile-btn").addEventListener("click", () => {
         editUsername.value = user.username;
         editBio.value = user.bio || "";
@@ -2614,7 +2557,6 @@ body {
         editUsername.focus();
       });
 
-      // Delete modal event listeners
       const closeModal = () => {
         deletePostModal.classList.remove("open");
         setTimeout(() => deletePostModal.classList.add("hidden"), 300);
@@ -2650,6 +2592,7 @@ body {
       hideLoading();
     });
   }
-</script>
+</script>      
+        
 </body>
 </html> 
