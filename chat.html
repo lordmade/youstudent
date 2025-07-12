@@ -11,6 +11,7 @@
       --white: #FFFFFF;
       --text-dark: #333333;
       --border: #E5E7EB;
+      --gradient: linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888);
     }
 
     * {
@@ -56,7 +57,17 @@
       width: 40px;
       height: 40px;
       border-radius: 50%;
-      margin-right: 0.75rem;
+      object-fit: cover;
+      cursor: pointer;
+      border: 2px solid var(--white);
+      background: var(--gradient);
+      padding: 2px;
+    }
+
+    .chat-header .user-info {
+      display: flex;
+      flex-direction: column;
+      cursor: pointer;
     }
 
     .chat-header span {
@@ -407,6 +418,45 @@
       display: block;
     }
 
+    .verified-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 16px;
+      height: 16px;
+      background: #0095f6;
+      border-radius: 50%;
+      margin-left: 0.3rem;
+      vertical-align: middle;
+      position: relative;
+      animation: verifiedBounce 0.6s ease-out forwards;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .verified-icon:hover {
+      transform: scale(1.15);
+      box-shadow: 0 0 8px rgba(0, 149, 246, 0.5);
+    }
+
+    .verified-icon svg {
+      width: 12px;
+      height: 12px;
+      fill: var(--white);
+      animation: checkmarkFade 0.6s ease-out 0.2s forwards;
+      opacity: 0;
+    }
+
+    @keyframes verifiedBounce {
+      0% { opacity: 0; transform: scale(0.5); }
+      60% { opacity: 1; transform: scale(1.2); }
+      100% { opacity: 1; transform: scale(1); }
+    }
+
+    @keyframes checkmarkFade {
+      0% { opacity: 0; transform: scale(0.8); }
+      100% { opacity: 1; transform: scale(1); }
+    }
+
     @media (max-width: 414px) {
       .chat-header img {
         width: 32px;
@@ -509,7 +559,7 @@
         </svg>
       </button>
       <img id="recipient-photo" src="https://www.gravatar.com/avatar?d=mp" alt="Recipient avatar">
-      <div>
+      <div class="user-info">
         <span id="recipient-username">Loading...</span>
         <div id="recipient-status" class="status">Offline</div>
       </div>
@@ -726,7 +776,7 @@
           return;
         }
 
-        const currentUserData = await get(ref(db, `users/${currentUserUid}`)).then(snap => snap.val() || { photoURL: 'https://www.gravatar.com/avatar?d=mp' });
+        const currentUserData = await get(ref(db, `users/${currentUserUid}`)).then(snap => snap.val() || { username: 'Unknown', photoURL: 'https://www.gravatar.com/avatar?d=mp' });
         userCache[currentUserUid] = currentUserData;
 
         await loadChat(user.uid, otherUserUid);
@@ -740,12 +790,37 @@
     async function loadChat(currentUid, otherUid) {
       try {
         chatId = currentUid < otherUid ? `${currentUid}_${otherUid}` : `${otherUid}_${currentUid}`;
-        const userData = await get(ref(db, `users/${otherUid}`)).then(snap => snap.val() || { name: 'Unknown', photoURL: null });
+        const userData = await get(ref(db, `users/${otherUid}`)).then(snap => snap.val() || { username: 'Unknown', photoURL: null });
         userCache[otherUid] = userData;
 
+        // Check if user is verified (10+ posts)
+        const postsSnap = await get(ref(db, 'posts'));
+        const posts = postsSnap.val() || {};
+        const userPostCount = Object.values(posts).filter(p => p.userId === otherUid).length;
+        const isVerified = userPostCount >= 10;
+
         recipientPhoto.src = userData.photoURL || 'https://www.gravatar.com/avatar?d=mp';
-        recipientUsername.textContent = userData.name || 'Unknown';
+        recipientUsername.innerHTML = `${userData.username || 'Unknown'}${
+          isVerified
+            ? `<span class="verified-icon" aria-label="Verified user" title="Verified user"><svg viewBox="0 0 24 24"><path d="M9 16.2l-3.5-3.5L4 14.1 9 19 20 8l-1.4-1.4z"/></svg></span>`
+            : ''
+        }`;
         recipientStatus.textContent = userData.presence === 'online' ? 'Online' : `Last seen ${timeAgo(userData.lastSeen)}`;
+
+        // Add profile navigation
+        const userElements = [recipientPhoto, recipientUsername];
+        userElements.forEach(el => {
+          el.addEventListener('click', (e) => {
+            e.stopPropagation();
+            console.log("Navigating to profile:", otherUid);
+            window.location.href = `profile.html?uid=${otherUid}`;
+          });
+          el.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            console.log("Navigating to profile on touch:", otherUid);
+            window.location.href = `profile.html?uid=${otherUid}`;
+          });
+        });
 
         const updateStatus = debounceStatusUpdate((data) => {
           recipientStatus.textContent = data.presence === 'online' ? 'Online' : `Last seen ${timeAgo(data.lastSeen)}`;
@@ -820,7 +895,7 @@
 
           for (const uid of usersToFetch) {
             if (!userCache[uid]) {
-              const userData = await get(ref(db, `users/${uid}`)).then(snap => snap.val() || { photoURL: 'https://www.gravatar.com/avatar?d=mp' });
+              const userData = await get(ref(db, `users/${uid}`)).then(snap => snap.val() || { username: 'Unknown', photoURL: 'https://www.gravatar.com/avatar?d=mp' });
               userCache[uid] = userData;
             }
           }
