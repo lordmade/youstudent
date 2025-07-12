@@ -63,6 +63,7 @@
       padding: 0.5rem;
       color: var(--text-dark);
       transition: transform 0.2s ease, color 0.2s ease;
+      pointer-events: auto;
     }
 
     .nav-btn:hover {
@@ -93,6 +94,7 @@
       box-shadow: 0 2px 4px rgba(0,0,0,0.05);
       cursor: pointer;
       transition: transform 0.2s ease;
+      pointer-events: auto;
     }
 
     .notification-item:hover {
@@ -101,6 +103,11 @@
 
     .notification-item.unread {
       background: rgba(237, 73, 86, 0.1);
+    }
+
+    .notification-item.non-clickable {
+      cursor: default;
+      pointer-events: none;
     }
 
     .notification-item img {
@@ -149,10 +156,12 @@
       z-index: 100;
       opacity: 0;
       transition: opacity 0.3s ease;
+      pointer-events: none;
     }
 
     .loading-overlay:not(.hidden) {
       opacity: 1;
+      pointer-events: auto;
     }
 
     .spinner {
@@ -245,7 +254,7 @@
   <div class="container">
     <div class="header">
       <h1>Notifications</h1>
-      <button class="nav-btn" aria-label="Back to home" onclick="window.location.href='home.html'">
+      <button class="nav-btn" aria-label="Back to home" id="home-btn">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/>
           <path d="M9 22V12h6v10"/>
@@ -277,11 +286,13 @@
 
     const notificationsContainer = document.getElementById("notifications-container");
     const loadingOverlay = document.getElementById("loading-overlay");
+    const homeBtn = document.getElementById("home-btn");
 
     function showLoading() {
       console.log("Showing loading overlay");
       loadingOverlay.classList.remove("hidden");
     }
+
     function hideLoading() {
       console.log("Hiding loading overlay");
       loadingOverlay.classList.add("hidden");
@@ -295,6 +306,19 @@
       if (diff < 3600000) return Math.floor(diff / 60000) + "m ago";
       if (diff < 86400000) return Math.floor(diff / 3600000) + "h ago";
       return Math.floor(diff / 86400000) + "d ago";
+    }
+
+    // Debounce function to prevent rapid clicks
+    function debounce(func, wait) {
+      let timeout;
+      return function executedFunction(...args) {
+        const later = () => {
+          clearTimeout(timeout);
+          func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+      };
     }
 
     async function loadNotifications() {
@@ -405,7 +429,7 @@
           }
 
           const notificationItem = document.createElement("div");
-          notificationItem.className = `notification-item ${notif.read ? "" : "unread"}`;
+          notificationItem.className = `notification-item ${notif.read ? "" : "unread"} ${isClickable ? "" : "non-clickable"}`;
           notificationItem.innerHTML = `
             <img src="${userData.photoURL}" alt="${userData.username} avatar"/>
             <div class="notification-content">
@@ -413,16 +437,19 @@
               <p class="notification-time">${timeAgo(notif.timestamp)}</p>
             </div>
           `;
+
           if (isClickable && redirectUrl) {
-            notificationItem.addEventListener("click", () => {
+            const handleRedirect = debounce(() => {
               console.log(`Redirecting to ${redirectUrl}`);
               window.location.href = redirectUrl;
+            }, 200);
+
+            notificationItem.addEventListener("click", handleRedirect);
+            notificationItem.addEventListener("touchend", (e) => {
+              e.preventDefault(); // Prevent default touch behavior
+              console.log(`Touchend triggered for ${redirectUrl}`);
+              handleRedirect();
             });
-          } else if (isClickable) {
-            console.error(`No valid redirect URL for ${notif.type} notification: ${notif.notificationId}`);
-            notificationItem.style.cursor = "default";
-          } else {
-            notificationItem.style.cursor = "default";
           }
 
           if (!notif.read) {
@@ -452,6 +479,19 @@
         hideLoading();
       }
     }
+
+    // Handle home button click
+    const handleHomeClick = debounce(() => {
+      console.log("Home button clicked, redirecting to home.html");
+      window.location.href = "home.html";
+    }, 200);
+
+    homeBtn.addEventListener("click", handleHomeClick);
+    homeBtn.addEventListener("touchend", (e) => {
+      e.preventDefault(); // Prevent default touch behavior
+      console.log("Home button touchend triggered");
+      handleHomeClick();
+    });
 
     onAuthStateChanged(auth, (user) => {
       if (!user) {
