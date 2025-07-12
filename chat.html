@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>BanterBox - Chat</title>
+  <title>BanterBox - Chat with Video Call</title>
   <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
   <style>
     :root {
@@ -80,7 +80,7 @@
       color: #6b7280;
     }
 
-    .back-btn, .kebab-btn, .chat-input button {
+    .back-btn, .kebab-btn, .chat-input button, .video-call-btn, .end-call-btn {
       background: none;
       border: none;
       cursor: pointer;
@@ -93,15 +93,15 @@
       margin-right: 0.75rem;
     }
 
-    .kebab-btn {
-      margin-left: auto;
+    .kebab-btn, .video-call-btn, .end-call-btn {
+      margin-left: 0.5rem;
     }
 
-    .back-btn:hover svg, .kebab-btn:hover svg {
+    .back-btn:hover svg, .kebab-btn:hover svg, .video-call-btn:hover svg, .end-call-btn:hover svg {
       fill: var(--primary-red);
     }
 
-    .back-btn svg, .kebab-btn svg, .chat-input button svg {
+    .back-btn svg, .kebab-btn svg, .chat-input button svg, .video-call-btn svg, .end-call-btn svg {
       width: 24px;
       height: 24px;
       fill: var(--text-dark);
@@ -457,6 +457,50 @@
       100% { opacity: 1; transform: scale(1); }
     }
 
+    .video-call-container {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.9);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 200;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+      pointer-events: none;
+    }
+
+    .video-call-container.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .video-call-container video {
+      max-width: 45%;
+      max-height: 45%;
+      object-fit: cover;
+      border-radius: 8px;
+      margin: 0.5rem;
+      border: 2px solid var(--white);
+    }
+
+    .video-call-controls {
+      display: flex;
+      gap: 1rem;
+      margin-top: 1rem;
+    }
+
+    .call-status {
+      position: absolute;
+      top: 1rem;
+      left: 50%;
+      transform: translateX(-50%);
+      color: var(--white);
+      font-size: 1rem;
+      font-weight: 600;
+    }
+
     @media (max-width: 414px) {
       .chat-header img {
         width: 32px;
@@ -471,7 +515,7 @@
         font-size: clamp(0.7rem, 2vw, 0.75rem);
       }
 
-      .back-btn svg, .kebab-btn svg, .chat-input button svg {
+      .back-btn svg, .kebab-btn svg, .chat-input button svg, .video-call-btn svg, .end-call-btn svg {
         width: 20px;
         height: 20px;
       }
@@ -535,6 +579,11 @@
         width: 10px;
         height: 10px;
       }
+
+      .video-call-container video {
+        max-width: 90%;
+        max-height: 40%;
+      }
     }
   </style>
 </head>
@@ -550,6 +599,18 @@
       </svg>
     </button>
   </div>
+  <div class="video-call-container hidden" id="video-call-container" role="dialog" aria-label="Video call interface">
+    <div class="call-status" id="call-status">Connecting...</div>
+    <video id="local-video" autoplay muted playsinline></video>
+    <video id="remote-video" autoplay playsinline></video>
+    <div class="video-call-controls">
+      <button class="end-call-btn" id="end-call-btn" aria-label="End video call">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+        </svg>
+      </button>
+    </div>
+  </div>
   <div class="upload-progress" id="upload-progress">Uploading: 0%</div>
   <div class="container">
     <div class="chat-header">
@@ -563,6 +624,11 @@
         <span id="recipient-username">Loading...</span>
         <div id="recipient-status" class="status">Offline</div>
       </div>
+      <button class="video-call-btn" id="video-call-btn" aria-label="Start video call">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.5-4.5L21 7V5a2 2 0 00-2-2H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-2l-1.5 1.5L15 14"/>
+        </svg>
+      </button>
       <button class="kebab-btn" aria-label="Chat options" id="kebab-btn">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v.01M12 12v.01M12 18v.01"/>
@@ -614,6 +680,12 @@
     const imageViewer = document.getElementById("image-viewer");
     const fullImage = document.getElementById("full-image");
     const closeImageBtn = document.getElementById("close-image-btn");
+    const videoCallContainer = document.getElementById("video-call-container");
+    const localVideo = document.getElementById("local-video");
+    const remoteVideo = document.getElementById("remote-video");
+    const callStatus = document.getElementById("call-status");
+    const videoCallBtn = document.getElementById("video-call-btn");
+    const endCallBtn = document.getElementById("end-call-btn");
     const backBtn = document.getElementById("back-btn");
     const kebabBtn = document.getElementById("kebab-btn");
     const kebabMenu = document.getElementById("kebab-menu");
@@ -635,10 +707,20 @@
     let chatId = null;
     let lastMessageCount = 0;
     let userCache = {};
+    let peerConnection = null;
+    let localStream = null;
+    let callActive = false;
 
-    const cloudinaryCloudName = 'YOUR_CLOUDINARY_CLOUD_NAME';
-    const cloudinaryUploadPreset = 'YOUR_UPLOAD_PRESET';
+    const cloudinaryCloudName = 'dqkujefxj';
+    const cloudinaryUploadPreset = 'banter_box';
     const cloudinaryApiUrl = `https://api.cloudinary.com/v1_1/${cloudinaryCloudName}/image/upload`;
+
+    const iceConfiguration = {
+      iceServers: [
+        { urls: "stun:stun.l.google.com:19302" },
+        { urls: "stun:stun1.l.google.com:19302" }
+      ]
+    };
 
     function showLoading() {
       console.log("Showing loading overlay");
@@ -669,6 +751,29 @@
 
     function hideUploadProgress() {
       uploadProgress.classList.remove("active");
+    }
+
+    function showVideoCall(statusText) {
+      console.log("Showing video call interface:", statusText);
+      callStatus.textContent = statusText;
+      videoCallContainer.classList.add("active");
+    }
+
+    function hideVideoCall() {
+      console.log("Hiding video call interface");
+      videoCallContainer.classList.remove("active");
+      callStatus.textContent = "Connecting...";
+      if (localStream) {
+        localStream.getTracks().forEach(track => track.stop());
+        localStream = null;
+      }
+      if (peerConnection) {
+        peerConnection.close();
+        peerConnection = null;
+      }
+      localVideo.srcObject = null;
+      remoteVideo.srcObject = null;
+      callActive = false;
     }
 
     function timeAgo(timestamp) {
@@ -772,6 +877,7 @@
           sendBtn.disabled = true;
           fileInput.disabled = true;
           wallpaperInput.disabled = true;
+          videoCallBtn.disabled = true;
           hideLoading();
           return;
         }
@@ -780,6 +886,7 @@
         userCache[currentUserUid] = currentUserData;
 
         await loadChat(user.uid, otherUserUid);
+        setupCallListeners();
       } catch (error) {
         console.error('Error initializing chat:', error.message);
         chatArea.innerHTML = `<p class="error">Error initializing chat: ${error.message}</p>`;
@@ -793,7 +900,6 @@
         const userData = await get(ref(db, `users/${otherUid}`)).then(snap => snap.val() || { username: 'Unknown', photoURL: null });
         userCache[otherUid] = userData;
 
-        // Check if user is verified (10+ posts)
         const postsSnap = await get(ref(db, 'posts'));
         const posts = postsSnap.val() || {};
         const userPostCount = Object.values(posts).filter(p => p.userId === otherUid).length;
@@ -807,7 +913,6 @@
         }`;
         recipientStatus.textContent = userData.presence === 'online' ? 'Online' : `Last seen ${timeAgo(userData.lastSeen)}`;
 
-        // Add profile navigation
         const userElements = [recipientPhoto, recipientUsername];
         userElements.forEach(el => {
           el.addEventListener('click', (e) => {
@@ -903,7 +1008,6 @@
           chatArea.innerHTML = '';
           chatArea.appendChild(fragment);
 
-          // Add click/touch listeners to images after appending to DOM
           const images = chatArea.querySelectorAll('.message-media');
           images.forEach(img => {
             const openImage = debounce(() => {
@@ -969,6 +1073,168 @@
       `;
       return div;
     }
+
+    async function setupCallListeners() {
+      const callRef = ref(db, `calls/${chatId}`);
+      onValue(callRef, async (snap) => {
+        if (!snap.exists() || callActive) return;
+        const callData = snap.val();
+        if (callData.status === 'offering' && callData.caller !== currentUserUid) {
+          showVideoCall("Incoming call...");
+          const accept = confirm(`${userCache[otherUserUid]?.username || 'User'} is calling. Accept?`);
+          if (accept) {
+            await answerCall(callData.offer);
+            await update(callRef, { status: 'answered' });
+          } else {
+            await set(callRef, { status: 'declined', timestamp: Date.now() });
+            hideVideoCall();
+          }
+        } else if (callData.status === 'answered' && callData.caller === currentUserUid) {
+          await setLocalAndSendAnswer(callData.answer);
+          showVideoCall("Connected");
+          callActive = true;
+        } else if (callData.status === 'declined' && callData.caller === currentUserUid) {
+          chatArea.innerHTML += `<p class="error">Call declined by ${userCache[otherUserUid]?.username || 'user'}.</p>`;
+          hideVideoCall();
+        } else if (callData.status === 'ended') {
+          chatArea.innerHTML += `<p class="placeholder">Call ended.</p>`;
+          hideVideoCall();
+        }
+      });
+
+      onValue(ref(db, `calls/${chatId}/candidates/${currentUserUid}`), (snap) => {
+        if (snap.exists() && peerConnection) {
+          snap.val() && Object.values(snap.val()).forEach(candidate => {
+            peerConnection.addIceCandidate(new RTCIceCandidate(candidate)).catch(e => console.error('Error adding ICE candidate:', e));
+          });
+        }
+      });
+    }
+
+    async function startCall() {
+      if (callActive) return;
+      showLoading();
+      try {
+        localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        localVideo.srcObject = localStream;
+        peerConnection = new RTCPeerConnection(iceConfiguration);
+
+        localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+
+        peerConnection.ontrack = ({ streams: [stream] }) => {
+          remoteVideo.srcObject = stream;
+          callStatus.textContent = "Connected";
+          callActive = true;
+        };
+
+        peerConnection.onicecandidate = ({ candidate }) => {
+          if (candidate) {
+            set(ref(db, `calls/${chatId}/candidates/${otherUserUid}/${candidate.candidate}`), candidate);
+          }
+        };
+
+        peerConnection.oniceconnectionstatechange = () => {
+          if (peerConnection.iceConnectionState === 'disconnected' || peerConnection.iceConnectionState === 'closed') {
+            set(ref(db, `calls/${chatId}`), { status: 'ended', timestamp: Date.now() });
+            hideVideoCall();
+          }
+        };
+
+        const offer = await peerConnection.createOffer();
+        await peerConnection.setLocalDescription(offer);
+        await set(ref(db, `calls/${chatId}`), {
+          status: 'offering',
+          caller: currentUserUid,
+          offer: offer,
+          timestamp: Date.now()
+        });
+        showVideoCall("Calling...");
+        hideLoading();
+      } catch (error) {
+        console.error('Error starting call:', error.message);
+        chatArea.innerHTML += `<p class="error">Failed to start call: ${error.message}</p>`;
+        hideVideoCall();
+        hideLoading();
+      }
+    }
+
+    async function answerCall(offer) {
+      try {
+        localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        localVideo.srcObject = localStream;
+        peerConnection = new RTCPeerConnection(iceConfiguration);
+
+        localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+
+        peerConnection.ontrack = ({ streams: [stream] }) => {
+          remoteVideo.srcObject = stream;
+          callStatus.textContent = "Connected";
+          callActive = true;
+        };
+
+        peerConnection.onicecandidate = ({ candidate }) => {
+          if (candidate) {
+            set(ref(db, `calls/${chatId}/candidates/${otherUserUid}/${candidate.candidate}`), candidate);
+          }
+        };
+
+        peerConnection.oniceconnectionstatechange = () => {
+          if (peerConnection.iceConnectionState === 'disconnected' || peerConnection.iceConnectionState === 'closed') {
+            set(ref(db, `calls/${chatId}`), { status: 'ended', timestamp: Date.now() });
+            hideVideoCall();
+          }
+        };
+
+        await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+        const answer = await peerConnection.createAnswer();
+        await peerConnection.setLocalDescription(answer);
+        await update(ref(db, `calls/${chatId}`), { answer: answer });
+      } catch (error) {
+        console.error('Error answering call:', error.message);
+        chatArea.innerHTML += `<p class="error">Failed to answer call: ${error.message}</p>`;
+        hideVideoCall();
+      }
+    }
+
+    async function setLocalAndSendAnswer(answer) {
+      try {
+        await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+      } catch (error) {
+        console.error('Error setting remote description:', error.message);
+        chatArea.innerHTML += `<p class="error">Failed to connect call: ${error.message}</p>`;
+        hideVideoCall();
+      }
+    }
+
+    async function endCall() {
+      console.log("Ending call");
+      await set(ref(db, `calls/${chatId}`), { status: 'ended', timestamp: Date.now() });
+      hideVideoCall();
+    }
+
+    const startCallTrigger = debounce(() => {
+      console.log("Video call button clicked");
+      startCall();
+    }, 200);
+
+    videoCallBtn.addEventListener('click', startCallTrigger);
+    videoCallBtn.addEventListener('touchend', (e) => {
+      e.preventDefault();
+      console.log("Video call button touchend triggered");
+      startCallTrigger();
+    });
+
+    const endCallTrigger = debounce(() => {
+      console.log("End call button clicked");
+      endCall();
+    }, 200);
+
+    endCallBtn.addEventListener('click', endCallTrigger);
+    endCallBtn.addEventListener('touchend', (e) => {
+      e.preventDefault();
+      console.log("End call button touchend triggered");
+      endCallTrigger();
+    });
 
     const sendMessage = debounce(async () => {
       if (!messageInput.value.trim() || !chatId) return;
@@ -1120,6 +1386,7 @@
         showLoading();
         await remove(ref(db, `messages/${chatId}`));
         await remove(ref(db, `chats/${chatId}`));
+        await remove(ref(db, `calls/${chatId}`));
         window.location.href = 'index.html';
       } catch (error) {
         console.error('Error deleting chat:', error.message);
