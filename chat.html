@@ -97,7 +97,7 @@
       margin-left: 0.5rem;
     }
 
-    .end-call-btn {
+    .end-call-btn, .send-message-btn.recording {
       background: var(--primary-red);
       border-radius: 50%;
       width: 48px;
@@ -107,11 +107,11 @@
       justify-content: center;
     }
 
-    .back-btn:hover svg, .kebab-btn:hover svg, .video-call-btn:hover svg, .end-call-btn:hover svg {
+    .back-btn:hover svg, .kebab-btn:hover svg, .video-call-btn:hover svg, .end-call-btn:hover svg, .send-message-btn:hover svg {
       fill: var(--primary-red);
     }
 
-    .back-btn svg, .kebab-btn svg, .chat-input button svg, .video-call-btn svg, .end-call-btn svg {
+    .back-btn svg, .kebab-btn svg, .chat-input button svg, .video-call-btn svg, .end-call-btn svg, .send-message-btn svg {
       width: 24px;
       height: 24px;
       fill: var(--text-dark);
@@ -122,13 +122,22 @@
       fill: var(--white);
     }
 
-    .end-call-btn:hover {
+    .end-call-btn:hover, .send-message-btn.recording:hover {
       background: #d43f4e;
       transform: scale(1.1);
     }
 
-    .end-call-btn svg {
+    .end-call-btn svg, .send-message-btn.recording svg {
       fill: var(--white);
+    }
+
+    .send-message-btn.recording svg {
+      animation: pulseMic 1s ease-in-out infinite;
+    }
+
+    @keyframes pulseMic {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.2); }
     }
 
     .kebab-menu {
@@ -235,13 +244,19 @@
       pointer-events: auto;
     }
 
+    .message-audio {
+      width: 100%;
+      max-width: 200px;
+      margin-top: 0.25rem;
+    }
+
     .message-time {
       font-size: 0.65rem;
       color: #6b7280;
       text-align: right;
     }
 
-    .message.sent .message-time {
+    .message.sent .message-time, .message.sent .message-status {
       color: rgba(255, 255, 255, 0.7);
     }
 
@@ -249,10 +264,6 @@
       font-size: 0.65rem;
       color: #6b7280;
       text-align: right;
-    }
-
-    .message.sent .message-status {
-      color: rgba(255, 255, 255, 0.7);
     }
 
     .chat-input {
@@ -556,7 +567,7 @@
         font-size: clamp(0.7rem, 2vw, 0.75rem);
       }
 
-      .back-btn svg, .kebab-btn svg, .chat-input button svg, .video-call-btn svg, .end-call-btn svg {
+      .back-btn svg, .kebab-btn svg, .chat-input button svg, .video-call-btn svg, .end-call-btn svg, .send-message-btn svg {
         width: 20px;
         height: 20px;
       }
@@ -581,8 +592,9 @@
         height: 24px;
       }
 
-      .message-media {
+      .message-media, .message-audio {
         max-height: 150px;
+        max-width: 180px;
       }
 
       .image-viewer img {
@@ -628,12 +640,12 @@
         right: 0.5rem;
       }
 
-      .end-call-btn {
+      .end-call-btn, .send-message-btn.recording {
         width: 40px;
         height: 40px;
       }
 
-      .end-call-btn svg {
+      .end-call-btn svg, .send-message-btn.recording svg {
         width: 18px;
         height: 18px;
       }
@@ -707,9 +719,12 @@
         </svg>
       </button>
       <input id="message-input" type="text" placeholder="Type a message..." aria-label="Message input">
-      <button id="send-message-btn" aria-label="Send message">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+      <button id="send-message-btn" class="send-message-btn" aria-label="Send message or record voice note">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="send-icon">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
+        </svg>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="mic-icon hidden">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 14c1.657 0 3-1.343 3-3V5c0-1.657-1.343-3-3-3S9 3.343 9 5v6c0 1.657 1.343 3 3 3zm-7 2v2a7 7 0 0014 0v-2"/>
         </svg>
       </button>
     </div>
@@ -769,10 +784,13 @@
     let localStream = null;
     let callActive = false;
     let isCaller = false;
+    let mediaRecorder = null;
+    let audioChunks = [];
+    let isRecording = false;
 
     const cloudinaryCloudName = 'dqkujefxj';
     const cloudinaryUploadPreset = 'banter_box';
-    const cloudinaryApiUrl = `https://api.cloudinary.com/v1_1/${cloudinaryCloudName}/image/upload`;
+    const cloudinaryApiUrl = `https://api.cloudinary.com/v1_1/${cloudinaryCloudName}/raw/upload`;
 
     const iceConfiguration = {
       iceServers: [
@@ -815,7 +833,6 @@
     function showVideoCall(statusText) {
       console.log("Showing video call interface:", statusText);
       callStatus.textContent = statusText;
-      // Set video classes based on call role
       if (isCaller) {
         localVideo.classList.add("main-video");
         localVideo.classList.remove("overlay-video");
@@ -1133,6 +1150,8 @@
       if (message.mediaUrl && message.mediaType) {
         if (message.mediaType === 'image') {
           mediaContent = `<img src="${message.mediaUrl}" alt="Uploaded image" class="message-media" />`;
+        } else if (message.mediaType === 'audio') {
+          mediaContent = `<audio src="${message.mediaUrl}" controls class="message-audio" aria-label="Voice note"></audio>`;
         }
       }
 
@@ -1254,7 +1273,7 @@
         };
 
         peerConnection.oniceconnectionstatechange = () => {
-          if (peerConnection.iceConnectionState === 'disconnected' || peerConnection.iceConnectionState === 'closed') {
+          if (peerConnection.iceConnectionState === 'disconnected' || peerConnection.iceConnectionstate === 'closed') {
             set(ref(db, `calls/${chatId}`), { status: 'ended', timestamp: Date.now() });
             hideVideoCall();
           }
@@ -1311,6 +1330,116 @@
       endCallTrigger();
     });
 
+    async function startRecording() {
+      if (isRecording || callActive) return;
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaRecorder = new MediaRecorder(stream);
+        audioChunks = [];
+
+        mediaRecorder.ondataavailable = (event) => {
+          if (event.data.size > 0) {
+            audioChunks.push(event.data);
+          }
+        };
+
+        mediaRecorder.onstop = async () => {
+          const audioBlob = new Blob(audioChunks, { type: 'audio/mp3' });
+          stream.getTracks().forEach(track => track.stop());
+          await uploadVoiceNote(audioBlob);
+          sendBtn.classList.remove('recording');
+          sendBtn.querySelector('.send-icon').classList.remove('hidden');
+          sendBtn.querySelector('.mic-icon').classList.add('hidden');
+          isRecording = false;
+        };
+
+        mediaRecorder.start();
+        isRecording = true;
+        sendBtn.classList.add('recording');
+        sendBtn.querySelector('.send-icon').classList.add('hidden');
+        sendBtn.querySelector('.mic-icon').classList.remove('hidden');
+        console.log("Started recording voice note");
+      } catch (error) {
+        console.error('Error starting recording:', error.message);
+        chatArea.innerHTML += `<p class="error">Failed to start recording: ${error.message}</p>`;
+        sendBtn.classList.remove('recording');
+        sendBtn.querySelector('.send-icon').classList.remove('hidden');
+        sendBtn.querySelector('.mic-icon').classList.add('hidden');
+        isRecording = false;
+      }
+    }
+
+    async function stopRecording() {
+      if (mediaRecorder && isRecording) {
+        mediaRecorder.stop();
+        console.log("Stopped recording voice note");
+      }
+    }
+
+    async function uploadVoiceNote(audioBlob) {
+      if (audioBlob.size > 10000000) {
+        chatArea.innerHTML += `<p class="error">Voice note too large (max 10MB).</p>`;
+        return;
+      }
+
+      try {
+        showUploadProgress(0);
+        const formData = new FormData();
+        formData.append('file', audioBlob, 'voice_note.mp3');
+        formData.append('upload_preset', cloudinaryUploadPreset);
+
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', cloudinaryApiUrl, true);
+
+        xhr.upload.onprogress = (event) => {
+          if (event.lengthComputable) {
+            const percent = Math.round((event.loaded / event.total) * 100);
+            showUploadProgress(percent);
+          }
+        };
+
+        xhr.onload = async () => {
+          if (xhr.status === 200) {
+            const response = JSON.parse(xhr.responseText);
+            const mediaUrl = response.secure_url;
+            try {
+              const messageRef = push(ref(db, `messages/${chatId}`));
+              await set(messageRef, {
+                sender: currentUserUid,
+                text: '',
+                mediaUrl: mediaUrl,
+                mediaType: 'audio',
+                timestamp: Date.now(),
+                read: false
+              });
+              const chatSnap = await get(ref(db, `chats/${chatId}/participants/${otherUserUid}`));
+              const currentUnread = chatSnap.val()?.unreadCount || 0;
+              await update(ref(db, `chats/${chatId}/participants/${otherUserUid}`), { unreadCount: currentUnread + 1 });
+            } catch (error) {
+              console.error('Error saving voice note:', error.message);
+              chatArea.innerHTML += `<p class="error">Failed to save voice note.</p>`;
+            }
+          } else {
+            console.error('Cloudinary upload error:', xhr.statusText);
+            chatArea.innerHTML += `<p class="error">Failed to upload voice note.</p>`;
+          }
+          hideUploadProgress();
+        };
+
+        xhr.onerror = () => {
+          console.error('Cloudinary upload error:', xhr.statusText);
+          chatArea.innerHTML += `<p class="error">Failed to upload voice note.</p>`;
+          hideUploadProgress();
+        };
+
+        xhr.send(formData);
+      } catch (error) {
+        console.error('Error uploading voice note:', error.message);
+        chatArea.innerHTML += `<p class="error">Failed to upload voice note: ${error.message}</p>`;
+        hideUploadProgress();
+      }
+    }
+
     const sendMessage = debounce(async () => {
       if (!messageInput.value.trim() || !chatId) return;
       console.log("Sending message");
@@ -1332,11 +1461,47 @@
       }
     }, 200);
 
-    sendBtn.addEventListener('click', sendMessage);
+    sendBtn.addEventListener('mousedown', (e) => {
+      if (!messageInput.value.trim()) {
+        e.preventDefault();
+        startRecording();
+      }
+    });
+
+    sendBtn.addEventListener('mouseup', (e) => {
+      if (isRecording) {
+        e.preventDefault();
+        stopRecording();
+      }
+    });
+
+    sendBtn.addEventListener('touchstart', (e) => {
+      if (!messageInput.value.trim()) {
+        e.preventDefault();
+        startRecording();
+      }
+    });
+
     sendBtn.addEventListener('touchend', (e) => {
-      e.preventDefault();
-      console.log("Send button touchend triggered");
-      sendMessage();
+      if (isRecording) {
+        e.preventDefault();
+        stopRecording();
+      }
+    });
+
+    sendBtn.addEventListener('click', (e) => {
+      if (messageInput.value.trim() && !isRecording) {
+        e.preventDefault();
+        sendMessage();
+      }
+    });
+
+    sendBtn.addEventListener('touchend', (e) => {
+      if (messageInput.value.trim() && !isRecording) {
+        e.preventDefault();
+        console.log("Send button touchend triggered for text message");
+        sendMessage();
+      }
     });
 
     messageInput.addEventListener('keypress', async (e) => {
@@ -1364,7 +1529,7 @@
         formData.append('upload_preset', cloudinaryUploadPreset);
 
         const xhr = new XMLHttpRequest();
-        xhr.open('POST', cloudinaryApiUrl, true);
+        xhr.open('POST', `https://api.cloudinary.com/v1_1/${cloudinaryCloudName}/image/upload`, true);
 
         xhr.upload.onprogress = (event) => {
           if (event.lengthComputable) {
