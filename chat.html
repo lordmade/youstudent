@@ -153,13 +153,15 @@
 
     .message {
       max-width: 70%;
-      padding: 0.5rem 1rem;
+      padding: 0.5rem;
       border-radius: 1rem;
       font-size: clamp(0.85rem, 2.5vw, 0.9rem);
       line-height: 1.4;
-      position: relative;
       background: var(--white);
       border: 1px solid var(--border);
+      display: flex;
+      align-items: flex-start;
+      gap: 0.5rem;
     }
 
     .message.sent {
@@ -168,6 +170,7 @@
       align-self: flex-end;
       border-bottom-right-radius: 0.25rem;
       border: none;
+      flex-direction: row-reverse;
     }
 
     .message.received {
@@ -175,6 +178,21 @@
       color: var(--text-dark);
       align-self: flex-start;
       border-bottom-left-radius: 0.25rem;
+    }
+
+    .message img.profile-pic {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      object-fit: cover;
+      flex-shrink: 0;
+    }
+
+    .message-content {
+      display: flex;
+      flex-direction: column;
+      gap: 0.2rem;
+      flex: 1;
     }
 
     .message-media {
@@ -188,13 +206,21 @@
     .message-time {
       font-size: 0.65rem;
       color: #6b7280;
-      position: absolute;
-      bottom: -1rem;
-      right: 0.5rem;
+      text-align: right;
     }
 
-    .message.received .message-time {
-      left: 0.5rem;
+    .message.sent .message-time {
+      color: rgba(255, 255, 255, 0.7);
+    }
+
+    .message-status {
+      font-size: 0.65rem;
+      color: #6b7280;
+      text-align: right;
+    }
+
+    .message.sent .message-status {
+      color: rgba(255, 255, 255, 0.7);
     }
 
     .chat-input {
@@ -360,6 +386,11 @@
         font-size: clamp(0.75rem, 2vw, 0.8rem);
       }
 
+      .message img.profile-pic {
+        width: 24px;
+        height: 24px;
+      }
+
       .kebab-menu {
         top: 2.5rem;
         right: 0.5rem;
@@ -468,6 +499,7 @@
     let otherUserUid = null;
     let chatId = null;
     let lastMessageCount = 0;
+    let userCache = {};
 
     const cloudinaryCloudName = 'YOUR_CLOUDINARY_CLOUD_NAME';
     const cloudinaryUploadPreset = 'YOUR_UPLOAD_PRESET';
@@ -502,7 +534,6 @@
       return `${Math.floor(diff / 86400000)}d ago`;
     }
 
-    // Debounce function for click/touch events
     function debounce(func, wait) {
       let timeout;
       return function executedFunction(...args) {
@@ -515,7 +546,6 @@
       };
     }
 
-    // Debounce status updates
     function debounceStatusUpdate(func, wait) {
       let timeout;
       return function executedFunction(...args) {
@@ -574,6 +604,10 @@
           return;
         }
 
+        // Cache current user's data
+        const currentUserData = await get(ref(db, `users/${currentUid}`)).then(snap => snap.val() || { photoURL: 'https://www.gravatar.com/avatar?d=mp' });
+        userCache[currentUid] = currentUserData;
+
         await loadChat(user.uid, otherUserUid);
       } catch (error) {
         console.error('Error initializing chat:', error.message);
@@ -586,6 +620,7 @@
       try {
         chatId = currentUid < otherUid ? `${currentUid}_${otherUid}` : `${otherUid}_${currentUid}`;
         const userData = await get(ref(db, `users/${otherUid}`)).then(snap => snap.val() || { name: 'Unknown', photoURL: null });
+        userCache[otherUid] = userData;
 
         recipientPhoto.src = userData.photoURL || 'https://www.gravatar.com/avatar?d=mp';
         recipientUsername.textContent = userData.name || 'Unknown';
@@ -597,6 +632,7 @@
 
         onValue(ref(db, `users/${otherUid}`), (snap) => {
           if (snap.exists()) {
+            userCache[otherUid] = snap.val();
             updateStatus(snap.val());
           }
         });
@@ -642,18 +678,30 @@
           const sortedMessages = Object.entries(messages).sort((a, b) => (a[1].timestamp || 0) - (b[1].timestamp || 0));
           const messageCount = sortedMessages.length;
 
-          if (messageCount === lastMessageCount) return; // Skip if no new messages
+          if (messageCount === lastMessageCount) return;
           lastMessageCount = messageCount;
 
           const fragment = document.createDocumentFragment();
           const messagesToUpdate = [];
+          const usersToFetch = new Set();
 
           for (const [mid, message] of sortedMessages) {
+            if (!userCache[message.sender]) {
+              usersToFetch.add(message.sender);
+            }
             const messageElement = renderMessage(mid, message, currentUid);
             fragment.appendChild(messageElement);
 
             if (message.sender !== currentUid && !message.read) {
               messagesToUpdate.push({ mid, path: `messages/${chatId}/${mid}` });
+            }
+          }
+
+          // Fetch missing user data
+          for (const uid of usersToFetch) {
+            if (!userCache[uid]) {
+              const userData = await get(ref(db, `users/${uid}`)).then(snap => snap.val() || { photoURL: 'https://www.gravatar.com/avatar?d=mp' });
+              userCache[uid] = userData;
             }
           }
 
@@ -692,6 +740,7 @@
       div.className = `message ${isSent ? 'sent' : 'received'}`;
       div.dataset.mid = mid;
 
+      const userData = userCache[message.sender] || { photoURL: 'https://www.gravatar.com/avatar?d=mp' };
       let mediaContent = '';
       if (message.mediaUrl && message.mediaType) {
         if (message.mediaType === 'image') {
@@ -700,9 +749,13 @@
       }
 
       div.innerHTML = `
-        ${mediaContent}
-        ${message.text ? `<p>${message.text}</p>` : ''}
-        <span class="message-time">${timeAgo(message.timestamp)}</span>
+        <img src="${userData.photoURL}" alt="${isSent ? 'Your' : 'Sender'} avatar" class="profile-pic" />
+        <div class="message-content">
+          ${mediaContent}
+          ${message.text ? `<p>${message.text}</p>` : ''}
+          <span class="message-time">${timeAgo(message.timestamp)}</span>
+          ${isSent ? `<span class="message-status">${message.read ? 'Delivered' : 'Sent'}</span>` : ''}
+        </div>
       `;
       return div;
     }
