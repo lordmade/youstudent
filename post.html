@@ -6,7 +6,6 @@
   <title>BanterBox - Post</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    /* Reuse the same CSS variables and global styles from index.html */
     :root {
       --primary-red: #ed4956;
       --background: #fafafa;
@@ -86,22 +85,9 @@
       cursor: pointer;
     }
 
-    .post-image {
-      width: 100%;
-      aspect-ratio: 1;
-      object-fit: cover;
-      border-radius: 8px;
-      transition: transform 0.3s ease;
-    }
-
-    .post-image:hover {
-      transform: scale(1.02);
-    }
-
     .post-image-carousel {
       position: relative;
       width: 100%;
-      aspect-ratio: 1;
       overflow: hidden;
       border-radius: 8px;
     }
@@ -116,9 +102,10 @@
 
     .post-image-container img {
       width: 100%;
-      height: 100%;
-      object-fit: cover;
+      height: auto; /* Maintain original aspect ratio */
+      object-fit: contain; /* Ensure full image is visible */
       flex-shrink: 0;
+      background: #000; /* Black background for images with transparency or non-square dimensions */
     }
 
     .carousel-indicators {
@@ -264,64 +251,19 @@
       transform: scale(1.05);
     }
 
-    /* Comment Sheet */
-    .comment-sheet {
-      position: fixed;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      background: var(--white);
-      border-top-left-radius: 16px;
-      border-top-right-radius: 16px;
-      box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.2);
-      max-height: 80vh;
-      display: flex;
-      flex-direction: column;
-      z-index: 50;
-      transition: transform 0.3s ease;
-    }
-
-    .comment-sheet.open {
-      transform: translateY(0);
-    }
-
-    .comment-sheet.hidden {
-      transform: translateY(100%);
-    }
-
-    .comment-sheet-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
+    /* Comments Section */
+    .comments-section {
       padding: 1rem;
-      border-bottom: 1px solid var(--border);
-    }
-
-    .comment-sheet-close {
-      background: none;
-      border: none;
-      color: var(--text-light);
-      cursor: pointer;
-    }
-
-    .comment-sheet-close svg {
-      width: 24px;
-      height: 24px;
-    }
-
-    .comments-list {
-      flex: 1;
+      border-top: 1px solid var(--border);
+      max-height: 40vh;
       overflow-y: auto;
-      padding: 1rem;
-      display: flex;
-      flex-direction: column;
-      gap: 1rem;
     }
 
     .comment-item {
       display: flex;
       gap: 0.5rem;
       align-items: flex-start;
+      margin-bottom: 1rem;
     }
 
     .comment-avatar {
@@ -533,6 +475,10 @@
       .carousel-arrow {
         padding: 0.4rem;
       }
+
+      .comments-section {
+        max-height: 30vh;
+      }
     }
   </style>
 </head>
@@ -540,22 +486,6 @@
   <div class="container">
     <div id="post-container" class="post">
       <div class="loading">Loading post...</div>
-    </div>
-  </div>
-
-  <div id="comment-sheet" class="comment-sheet hidden">
-    <div class="comment-sheet-header">
-      <h3 class="text-base font-semibold">Comments</h3>
-      <button id="comment-sheet-close" class="comment-sheet-close">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
-        </svg>
-      </button>
-    </div>
-    <div id="comments-list" class="comments-list" aria-live="polite" aria-relevant="additions"></div>
-    <div class="comment-input-container">
-      <input id="comment-input" type="text" class="comment-input" placeholder="Add a comment..."/>
-      <button id="comment-submit" class="comment-submit">Post</button>
     </div>
   </div>
 
@@ -583,13 +513,7 @@
     const db = getDatabase();
 
     let currentUserUid = null;
-    let currentPostId = null;
     const postContainer = document.getElementById("post-container");
-    const commentSheet = document.getElementById("comment-sheet");
-    const commentSheetClose = document.getElementById("comment-sheet-close");
-    const commentsList = document.getElementById("comments-list");
-    const commentInput = document.getElementById("comment-input");
-    const commentSubmit = document.getElementById("comment-submit");
     const loadingOverlay = document.getElementById("loading-overlay");
 
     function showLoading() { loadingOverlay.classList.remove("hidden"); }
@@ -694,12 +618,9 @@
       }
     }
 
-    async function showCommentSheet(postId) {
-      currentPostId = postId;
-      commentSheet.classList.remove("hidden");
-      commentSheet.classList.add("open");
+    async function loadComments(postId) {
+      const commentsList = postContainer.querySelector(".comments-section");
       commentsList.innerHTML = '<div class="loading">Loading comments...</div>';
-      showLoading();
       try {
         const postSnap = await get(ref(db, `posts/${postId}`));
         const post = postSnap.val();
@@ -725,54 +646,11 @@
         if (Object.keys(comments).length === 0) {
           commentsList.innerHTML = `<p class="text-center text-gray-500">No comments yet.</p>`;
         }
-        commentInput.value = "";
-        commentInput.focus();
       } catch (error) {
         console.error("Error loading comments:", error.message);
         commentsList.innerHTML = `<p class="error">Failed to load comments: ${error.message}</p>`;
-      } finally {
-        hideLoading();
       }
     }
-
-    commentSheetClose.addEventListener("click", () => {
-      commentSheet.classList.remove("open");
-      setTimeout(() => commentSheet.classList.add("hidden"), 300);
-      currentPostId = null;
-    });
-
-    commentSubmit.addEventListener("click", async () => {
-      if (!currentPostId || !commentInput.value.trim()) return;
-      showLoading();
-      try {
-        const commentRef = push(ref(db, `posts/${currentPostId}/comments`));
-        const postSnap = await get(ref(db, `posts/${currentPostId}`));
-        const post = postSnap.val();
-        await set(commentRef, {
-          userId: currentUserUid,
-          text: commentInput.value.trim(),
-          timestamp: Date.now(),
-        });
-        if (post.userId !== currentUserUid) {
-          const notifRef = push(ref(db, `notifications/${post.userId}/${currentPostId}/comments`));
-          await set(notifRef, { type: 'comment', userId: currentUserUid, timestamp: Date.now(), read: false });
-        }
-        commentInput.value = "";
-        await showCommentSheet(currentPostId);
-      } catch (error) {
-        console.error("Error adding comment:", error.message);
-        commentsList.innerHTML = `<p class="error">Failed to add comment: ${error.message}</p>`;
-      } finally {
-        hideLoading();
-      }
-    });
-
-    commentInput.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        commentSubmit.click();
-      }
-    });
 
     async function loadPost() {
       const urlParams = new URLSearchParams(window.location.search);
@@ -876,6 +754,13 @@
               </button>
             </div>
           ` : ''}
+          <div class="comments-section" aria-live="polite" aria-relevant="additions">
+            <div class="loading">Loading comments...</div>
+          </div>
+          <div class="comment-input-container">
+            <input id="comment-input" type="text" class="comment-input" placeholder="Add a comment..."/>
+            <button id="comment-submit" class="comment-submit">Post</button>
+          </div>
         `;
 
         const likeBtn = postContainer.querySelector(".like-btn");
@@ -887,7 +772,8 @@
         const commentBtn = postContainer.querySelector(".comment-btn");
         commentBtn.addEventListener("click", (e) => {
           e.stopPropagation();
-          showCommentSheet(postId);
+          const commentInput = postContainer.querySelector("#comment-input");
+          commentInput.focus();
         });
 
         if (post.song) {
@@ -981,6 +867,48 @@
             isDragging = false;
           });
         }
+
+        // Load comments after rendering the post
+        await loadComments(postId);
+
+        const commentSubmit = postContainer.querySelector("#comment-submit");
+        const commentInput = postContainer.querySelector("#comment-input");
+        commentSubmit.addEventListener("click", async () => {
+          if (!postId || !commentInput.value.trim()) return;
+          showLoading();
+          try {
+            const commentRef = push(ref(db, `posts/${postId}/comments`));
+            const postSnap = await get(ref(db, `posts/${postId}`));
+            const post = postSnap.val();
+            await set(commentRef, {
+              userId: currentUserUid,
+              text: commentInput.value.trim(),
+              timestamp: Date.now(),
+            });
+            if (post.userId !== currentUserUid) {
+              const notifRef = push(ref(db, `notifications/${post.userId}/${postId}/comments`));
+              await set(notifRef, { type: 'comment', userId: currentUserUid, timestamp: Date.now(), read: false });
+            }
+            commentInput.value = "";
+            await loadComments(postId);
+            // Update comment count
+            const commentCountSpan = postContainer.querySelector(".comment-count");
+            commentCountSpan.textContent = parseInt(commentCountSpan.textContent) + 1;
+          } catch (error) {
+            console.error("Error adding comment:", error.message);
+            const commentsList = postContainer.querySelector(".comments-section");
+            commentsList.innerHTML = `<p class="error">Failed to add comment: ${error.message}</p>`;
+          } finally {
+            hideLoading();
+          }
+        });
+
+        commentInput.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            commentSubmit.click();
+          }
+        });
       } catch (error) {
         console.error("Error loading post:", error.message);
         showError(`Failed to load post: ${error.message}`);
