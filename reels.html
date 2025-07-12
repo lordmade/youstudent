@@ -139,6 +139,18 @@
       align-items: center;
       gap: 0.25rem;
     }
+    .reel-actions .post-follow-btn {
+      background: var(--primary-red);
+      padding: 0.5rem 1rem;
+      border-radius: 4px;
+      font-size: clamp(0.75rem, 3vw, 0.8rem);
+      font-weight: 600;
+    }
+    .reel-actions .post-follow-btn.following {
+      background: none;
+      border: 1px solid var(--white);
+      color: var(--white);
+    }
     .reel-actions svg {
       width: 24px;
       height: 24px;
@@ -240,6 +252,10 @@
       .reel-actions span {
         font-size: clamp(0.7rem, 2.5vw, 0.75rem);
       }
+      .reel-actions .post-follow-btn {
+        padding: 0.4rem 0.8rem;
+        font-size: clamp(0.7rem, 2.5vw, 0.75rem);
+      }
       .carousel-arrow {
         width: 36px;
         height: 36px;
@@ -322,7 +338,7 @@
       return !!userData.verified;
     }
 
-    async function toggleLike(reelId, likeBtn) {
+    async function toggleLike(reelId, likeBtn, video) {
       try {
         const reelRef = ref(db, `reels/${reelId}`);
         const reelSnap = await get(reelRef);
@@ -352,6 +368,48 @@
       }
     }
 
+    async function toggleFollow(targetUid, button) {
+      if (targetUid === currentUserUid) return;
+      showLoading();
+      try {
+        const followingRef = ref(db, `users/${currentUserUid}/following/${targetUid}`);
+        const followerRef = ref(db, `users/${targetUid}/followers/${currentUserUid}`);
+        const followingSnap = await get(followingRef);
+        const isFollowing = followingSnap.exists();
+
+        if (isFollowing) {
+          await set(followingRef, null);
+          await set(followerRef, null);
+          const isMutual = await get(ref(db, `users/${currentUserUid}/followers/${targetUid}`));
+          if (isMutual.exists()) {
+            await set(ref(db, `users/${currentUserUid}/friends/${targetUid}`), null);
+            await set(ref(db, `users/${targetUid}/friends/${currentUserUid}`), null);
+          }
+          button.textContent = "Follow";
+          button.classList.remove("following");
+          button.classList.add("follow");
+        } else {
+          await set(followingRef, true);
+          await set(followerRef, true);
+          const isMutual = await get(ref(db, `users/${currentUserUid}/followers/${targetUid}`));
+          if (isMutual.exists()) {
+            await set(ref(db, `users/${currentUserUid}/friends/${targetUid}`), true);
+            await set(ref(db, `users/${targetUid}/friends/${currentUserUid}`), true);
+          }
+          const notifRef = push(ref(db, `notifications/${targetUid}/system/follows`));
+          await set(notifRef, { type: 'follow', userId: currentUserUid, timestamp: Date.now(), read: false });
+          button.textContent = "Following";
+          button.classList.remove("follow");
+          button.classList.add("following");
+        }
+      } catch (error) {
+        console.error("Error toggling follow:", error.message);
+        showError("Failed to update follow status: " + error.message);
+      } finally {
+        hideLoading();
+      }
+    }
+
     function pauseAllVideos() {
       document.querySelectorAll(".reel video").forEach(video => {
         video.pause();
@@ -374,11 +432,6 @@
       });
     }
 
-    function showCommentSheet(reelId) {
-      console.log("Navigating to comment sheet for reel:", reelId);
-      location.href = `comments.html?reelId=${reelId}`;
-    }
-
     async function loadReels() {
       const reelsRef = query(ref(db, "reels"), orderByChild("timestamp"), limitToLast(20));
       showLoading();
@@ -386,21 +439,32 @@
         try {
           const reelsData = reelsSnap.val() || {};
           const usersSnap = await get(ref(db, "users"));
+          const followingSnap = await get(ref(db, `users/${currentUserUid}/following`));
           const users = usersSnap.val() || {};
+          const followingData = followingSnap.val() || {};
 
           reelsContainer.innerHTML = "";
           reels = Object.entries(reelsData)
             .map(([id, reel]) => ({ id, ...reel }))
-            .filter(reel => reel.userId && reel.videoUrl && reel.timestamp)
-            .sort((a, b) => b.timestamp - a.timestamp);
+            .filter(reel => reel.userId && reel.videoUrl && reel.timestamp);
 
           if (reels.length === 0) {
             showError("No reels available.");
             return;
           }
 
+          // Randomize reels (optionally keep most recent first)
+          reels.sort((a, b) => b.timestamp - a.timestamp);
+          const mostRecentReel = reels.shift();
+          for (let i = reels.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [reels[i], reels[j]] = [reels[j], reels[i]];
+          }
+          reels = mostRecentReel ? [mostRecentReel, ...reels] : reels;
+
           reels.forEach((reel, index) => {
-            const isVerified = isUserVerified(reel.userId);
+            const isFollowing = !!followingData[reel.userId];
+            const showFollowButton = reel.userId !== currentUserUid && !isFollowing;
             const reelElement = document.createElement("div");
             reelElement.className = `reel ${index === currentReelIndex ? "active" : ""}`;
             reelElement.id = `reel-${reel.id}`;
@@ -408,12 +472,12 @@
               <div class="progress-bar">
                 <div class="progress-bar-fill"></div>
               </div>
-              <video src="${reel.videoUrl}" playsinline ${index === currentReelIndex ? "autoplay" : ""} loop muted></video>
+              <video src="${reel.videoUrl}" playsinline ${index === currentReelIndex ? "autoplay" : ""} loop></video>
               <div class="reel-overlay">
                 <div class="reel-header">
                   <img src="${users[reel.userId]?.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${users[reel.userId]?.username || 'User'} avatar">
                   <span>${users[reel.userId]?.username || 'Unknown'}${
-                    isVerified ? `<span class="verified-icon" aria-label="Verified user" title="Verified user"><svg viewBox="0 0 24 24"><path d="M9 16.2l-3.5-3.5L4 14.1 9 19 20 8l-1.4-1.4z"/></svg></span>` : ''
+                    isUserVerified(reel.userId) ? `<span class="verified-icon" aria-label="Verified user" title="Verified user"><svg viewBox="0 0 24 24"><path d="M9 16.2l-3.5-3.5L4 14.1 9 19 20 8l-1.4-1.4z"/></svg></span>` : ''
                   }</span>
                 </div>
                 ${reel.caption ? `<div class="reel-caption">${reel.caption}</div>` : ''}
@@ -431,12 +495,11 @@
                   </svg>
                   <span class="like-count">${reel.likes || 0}</span>
                 </button>
-                <button class="comment-btn" data-reel-id="${reel.id}">
-                  <svg viewBox="0 0 24 24">
-                    <path d="M21 11.5a8.5 8.5 0 01-11.4 7.9l-4.6 1.5 1.5-4.6A8.5 8.5 0 1121 11.5z"/>
-                  </svg>
-                  <span class="comment-count">${Object.keys(reel.comments || {}).length}</span>
-                </button>
+                ${showFollowButton ? `
+                  <button class="post-follow-btn follow" data-user-id="${reel.userId}">
+                    Follow
+                  </button>
+                ` : ''}
               </div>
             `;
             reelsContainer.appendChild(reelElement);
@@ -459,18 +522,19 @@
           // Event listeners
           reelsContainer.querySelectorAll(".reel").forEach((reel, index) => {
             const likeBtn = reel.querySelector(".like-btn");
+            const video = reel.querySelector("video");
             likeBtn.addEventListener("click", (e) => {
               e.stopPropagation();
-              toggleLike(reel.id.replace("reel-", ""), likeBtn);
-              pauseAllVideos();
-              document.querySelector(`#${reel.id} video`).play();
+              toggleLike(reel.id.replace("reel-", ""), likeBtn, video);
             });
 
-            const commentBtn = reel.querySelector(".comment-btn");
-            commentBtn.addEventListener("click", (e) => {
-              e.stopPropagation();
-              showCommentSheet(reel.id.replace("reel-", ""));
-            });
+            const followBtn = reel.querySelector(".post-follow-btn");
+            if (followBtn) {
+              followBtn.addEventListener("click", (e) => {
+                e.stopPropagation();
+                toggleFollow(reel.dataset.userId, followBtn);
+              });
+            }
 
             reel.querySelectorAll(".reel-header img, .reel-header span").forEach(el => {
               el.addEventListener("click", (e) => {
