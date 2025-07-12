@@ -248,6 +248,71 @@
       width: 100%;
       max-width: 200px;
       margin-top: 0.25rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .play-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .play-btn svg {
+      width: 20px;
+      height: 20px;
+      fill: var(--text-dark);
+    }
+
+    .message.sent .play-btn svg {
+      fill: var(--white);
+    }
+
+    .play-btn.playing svg.play-icon {
+      display: none;
+    }
+
+    .play-btn:not(.playing) svg.pause-icon {
+      display: none;
+    }
+
+    .waveform {
+      flex: 1;
+      height: 24px;
+      background: repeating-linear-gradient(
+        90deg,
+        var(--text-dark) 0px,
+        var(--text-dark) 2px,
+        transparent 2px,
+        transparent 4px
+      );
+      background-size: 200% 100%;
+      animation: waveAnimation 2s linear infinite;
+    }
+
+    .message.sent .waveform {
+      background: repeating-linear-gradient(
+        90deg,
+        var(--white) 0px,
+        var(--white) 2px,
+        transparent 2px,
+        transparent 4px
+      );
+    }
+
+    .message.paused .waveform {
+      animation-play-state: paused;
+    }
+
+    @keyframes waveAnimation {
+      0% { background-position: 0% 0; }
+      100% { background-position: 200% 0; }
     }
 
     .message-time {
@@ -430,7 +495,7 @@
       fill: var(--white);
     }
 
-    .upload-progress {
+    .upload-progress, .recording-indicator {
       position: fixed;
       bottom: 80px;
       left: 50%;
@@ -444,8 +509,21 @@
       display: none;
     }
 
-    .upload-progress.active {
+    .upload-progress.active, .recording-indicator.active {
       display: block;
+    }
+
+    .recording-indicator {
+      bottom: auto;
+      top: 4.5rem;
+      background: var(--primary-red);
+      font-weight: 600;
+      animation: pulseRecording 1s ease-in-out infinite;
+    }
+
+    @keyframes pulseRecording {
+      0%, 100% { transform: translateX(-50%) scale(1); }
+      50% { transform: translateX(-50%) scale(1.05); }
     }
 
     .verified-icon {
@@ -597,6 +675,15 @@
         max-width: 180px;
       }
 
+      .play-btn svg {
+        width: 18px;
+        height: 18px;
+      }
+
+      .waveform {
+        height: 20px;
+      }
+
       .image-viewer img {
         max-width: 95%;
         max-height: 95%;
@@ -650,7 +737,7 @@
         height: 18px;
       }
 
-      .call-status {
+      .call-status, .recording-indicator {
         font-size: 0.9rem;
         padding: 0.4rem 0.8rem;
       }
@@ -682,6 +769,7 @@
     </div>
   </div>
   <div class="upload-progress" id="upload-progress">Uploading: 0%</div>
+  <div class="recording-indicator" id="recording-indicator">Recording...</div>
   <div class="container">
     <div class="chat-header">
       <button class="back-btn" aria-label="Back to main page" id="back-btn">
@@ -720,10 +808,10 @@
       </button>
       <input id="message-input" type="text" placeholder="Type a message..." aria-label="Message input">
       <button id="send-message-btn" class="send-message-btn" aria-label="Send message or record voice note">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="send-icon">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="send-icon hidden">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
         </svg>
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="mic-icon hidden">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="mic-icon">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 14c1.657 0 3-1.343 3-3V5c0-1.657-1.343-3-3-3S9 3.343 9 5v6c0 1.657 1.343 3 3 3zm-7 2v2a7 7 0 0014 0v-2"/>
         </svg>
       </button>
@@ -774,6 +862,7 @@
     const fileInput = document.getElementById("file-input");
     const wallpaperInput = document.getElementById("wallpaper-input");
     const uploadProgress = document.getElementById("upload-progress");
+    const recordingIndicator = document.getElementById("recording-indicator");
 
     let currentUserUid = null;
     let otherUserUid = null;
@@ -828,6 +917,16 @@
 
     function hideUploadProgress() {
       uploadProgress.classList.remove("active");
+    }
+
+    function showRecordingIndicator() {
+      console.log("Showing recording indicator");
+      recordingIndicator.classList.add("active");
+    }
+
+    function hideRecordingIndicator() {
+      console.log("Hiding recording indicator");
+      recordingIndicator.classList.remove("active");
     }
 
     function showVideoCall(statusText) {
@@ -937,6 +1036,29 @@
       if (e.target === imageViewer) {
         console.log("Clicked outside image, closing viewer");
         hideImageViewer();
+      }
+    });
+
+    // Toggle send/mic icon based on input focus
+    messageInput.addEventListener('focus', () => {
+      sendBtn.querySelector('.send-icon').classList.remove('hidden');
+      sendBtn.querySelector('.mic-icon').classList.add('hidden');
+    });
+
+    messageInput.addEventListener('blur', () => {
+      if (!messageInput.value.trim()) {
+        sendBtn.querySelector('.send-icon').classList.add('hidden');
+        sendBtn.querySelector('.mic-icon').classList.remove('hidden');
+      }
+    });
+
+    messageInput.addEventListener('input', () => {
+      if (messageInput.value.trim()) {
+        sendBtn.querySelector('.send-icon').classList.remove('hidden');
+        sendBtn.querySelector('.mic-icon').classList.add('hidden');
+      } else {
+        sendBtn.querySelector('.send-icon').classList.add('hidden');
+        sendBtn.querySelector('.mic-icon').classList.remove('hidden');
       }
     });
 
@@ -1113,6 +1235,44 @@
             });
           });
 
+          const audioPlayers = chatArea.querySelectorAll('.message-audio audio');
+          audioPlayers.forEach(audio => {
+            const playBtn = audio.closest('.message-audio').querySelector('.play-btn');
+            audio.addEventListener('play', () => {
+              playBtn.classList.add('playing');
+              audio.closest('.message').classList.remove('paused');
+            });
+            audio.addEventListener('pause', () => {
+              playBtn.classList.remove('playing');
+              audio.closest('.message').classList.add('paused');
+            });
+            audio.addEventListener('ended', () => {
+              playBtn.classList.remove('playing');
+              audio.closest('.message').classList.add('paused');
+            });
+          });
+
+          const playButtons = chatArea.querySelectorAll('.play-btn');
+          playButtons.forEach(btn => {
+            btn.addEventListener('click', () => {
+              const audio = btn.closest('.message-audio').querySelector('audio');
+              if (btn.classList.contains('playing')) {
+                audio.pause();
+              } else {
+                audio.play();
+              }
+            });
+            btn.addEventListener('touchend', (e) => {
+              e.preventDefault();
+              const audio = btn.closest('.message-audio').querySelector('audio');
+              if (btn.classList.contains('playing')) {
+                audio.pause();
+              } else {
+                audio.play();
+              }
+            });
+          });
+
           for (const { mid, path } of messagesToUpdate) {
             await update(ref(db, path), { read: true });
             const chatSnap = await get(ref(db, `chats/${chatId}/participants/${currentUid}`));
@@ -1142,7 +1302,7 @@
     function renderMessage(mid, message, currentUid) {
       const div = document.createElement('div');
       const isSent = message.sender === currentUid;
-      div.className = `message ${isSent ? 'sent' : 'received'}`;
+      div.className = `message ${isSent ? 'sent' : 'received'} paused`;
       div.dataset.mid = mid;
 
       const userData = userCache[message.sender] || { photoURL: 'https://www.gravatar.com/avatar?d=mp' };
@@ -1151,7 +1311,20 @@
         if (message.mediaType === 'image') {
           mediaContent = `<img src="${message.mediaUrl}" alt="Uploaded image" class="message-media" />`;
         } else if (message.mediaType === 'audio') {
-          mediaContent = `<audio src="${message.mediaUrl}" controls class="message-audio" aria-label="Voice note"></audio>`;
+          mediaContent = `
+            <div class="message-audio">
+              <audio src="${message.mediaUrl}" preload="metadata" aria-label="Voice note"></audio>
+              <button class="play-btn" aria-label="Play or pause voice note">
+                <svg class="play-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3l14 9-14 9V3z"/>
+                </svg>
+                <svg class="pause-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 4h4v16H6zM14 4h4v16h-4z"/>
+                </svg>
+              </button>
+              <div class="waveform"></div>
+            </div>
+          `;
         }
       }
 
@@ -1273,7 +1446,7 @@
         };
 
         peerConnection.oniceconnectionstatechange = () => {
-          if (peerConnection.iceConnectionState === 'disconnected' || peerConnection.iceConnectionstate === 'closed') {
+          if (peerConnection.iceConnectionState === 'disconnected' || peerConnection.iceConnectionState === 'closed') {
             set(ref(db, `calls/${chatId}`), { status: 'ended', timestamp: Date.now() });
             hideVideoCall();
           }
@@ -1348,8 +1521,9 @@
           stream.getTracks().forEach(track => track.stop());
           await uploadVoiceNote(audioBlob);
           sendBtn.classList.remove('recording');
-          sendBtn.querySelector('.send-icon').classList.remove('hidden');
-          sendBtn.querySelector('.mic-icon').classList.add('hidden');
+          sendBtn.querySelector('.send-icon').classList.add('hidden');
+          sendBtn.querySelector('.mic-icon').classList.remove('hidden');
+          hideRecordingIndicator();
           isRecording = false;
         };
 
@@ -1358,13 +1532,15 @@
         sendBtn.classList.add('recording');
         sendBtn.querySelector('.send-icon').classList.add('hidden');
         sendBtn.querySelector('.mic-icon').classList.remove('hidden');
+        showRecordingIndicator();
         console.log("Started recording voice note");
       } catch (error) {
         console.error('Error starting recording:', error.message);
         chatArea.innerHTML += `<p class="error">Failed to start recording: ${error.message}</p>`;
         sendBtn.classList.remove('recording');
-        sendBtn.querySelector('.send-icon').classList.remove('hidden');
-        sendBtn.querySelector('.mic-icon').classList.add('hidden');
+        sendBtn.querySelector('.send-icon').classList.add('hidden');
+        sendBtn.querySelector('.mic-icon').classList.remove('hidden');
+        hideRecordingIndicator();
         isRecording = false;
       }
     }
@@ -1455,6 +1631,8 @@
         const currentUnread = chatSnap.val()?.unreadCount || 0;
         await update(ref(db, `chats/${chatId}/participants/${otherUserUid}`), { unreadCount: currentUnread + 1 });
         messageInput.value = '';
+        sendBtn.querySelector('.send-icon').classList.add('hidden');
+        sendBtn.querySelector('.mic-icon').classList.remove('hidden');
       } catch (error) {
         console.error('Error sending message:', error.message);
         chatArea.innerHTML += `<p class="error">Failed to send message: ${error.message}</p>`;
