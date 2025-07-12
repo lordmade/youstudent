@@ -8,7 +8,7 @@
   <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
   <style>
     :root {
-      --primary-red: #ef4444;
+      --primary-red: #ed4956;
       --white: #ffffff;
       --text-dark: #111827;
       --border: #d1d5db;
@@ -538,7 +538,7 @@
     const errorMessage = document.getElementById("error-message");
 
     let currentUserUid = null;
-    let statusId = null;
+    let postId = null;
     let userCache = {};
 
     function showLoading() {
@@ -609,7 +609,7 @@
       document.querySelectorAll('.comment-input input').forEach(el => el.classList.toggle('dark', isDark));
       document.querySelectorAll('.reaction-btn').forEach(el => el.classList.toggle('dark', isDark));
       document.querySelectorAll('.comment-input button').forEach(el => el.classList.toggle('dark', isDark));
-      document.querySelector('.spinner').classList.toggle('dark', isDark);
+      document.querySelector('.spinner').forEach(el => el.classList.toggle('dark', isDark));
       document.querySelector('.error').classList.toggle('dark', isDark);
       document.querySelector('.image-viewer .close-btn').classList.toggle('dark', isDark);
     }
@@ -649,39 +649,52 @@
       window.location.href = 'notifications.html';
     });
 
-    async function loadPost(statusId, currentUid) {
+    async function loadPost(postId, currentUid) {
       showLoading();
       hideError();
       postArea.innerHTML = '';
 
       try {
-        const statusRef = ref(db, `statuses/${statusId}`);
-        const statusSnap = await get(statusRef);
-        if (!statusSnap.exists()) {
-          showError("Post not found.");
+        // Try posts first
+        let postRef = ref(db, `posts/${postId}`);
+        let postSnap = await get(postRef);
+        let post = postSnap.val();
+        let isReel = false;
+
+        // If not found in posts, try reels
+        if (!post) {
+          postRef = ref(db, `reels/${postId}`);
+          postSnap = await get(postRef);
+          post = postSnap.val();
+          isReel = true;
+        }
+
+        if (!postSnap.exists()) {
+          showError("Post or reel not found.");
           return;
         }
 
-        const status = statusSnap.val();
-        const userData = await get(ref(db, `users/${status.userId}`)).then(snap => snap.val() || { name: 'Unknown', photoURL: 'https://www.gravatar.com/avatar?d=mp' });
-        userCache[status.userId] = userData;
+        const userData = await get(ref(db, `users/${post.userId}`)).then(snap => snap.val() || { username: 'Unknown', photoURL: 'https://www.gravatar.com/avatar?d=mp' });
+        userCache[post.userId] = userData;
 
         const postCard = document.createElement('div');
         postCard.className = 'post-card dark:post-card';
         let mediaContent = '';
-        if (status.mediaUrl && status.mediaType === 'image') {
-          mediaContent = `<img src="${status.mediaUrl}" alt="Post image" class="post-media" />`;
+        if (post.mediaUrl && post.postType === 'image') {
+          mediaContent = `<img src="${post.mediaUrl}" alt="Post image" class="post-media" />`;
+        } else if (post.mediaUrl && post.postType === 'video') {
+          mediaContent = `<video src="${post.mediaUrl}" class="post-media" controls></video>`;
         }
 
         postCard.innerHTML = `
           <div class="post-header">
-            <img src="${userData.photoURL}" alt="${userData.name} avatar" class="post-avatar dark:post-avatar" />
+            <img src="${userData.photoURL}" alt="${userData.username} avatar" class="post-avatar dark:post-avatar" />
             <div class="post-info">
-              <p class="post-username">${userData.name}</p>
-              <p class="post-time dark:post-time">${timeAgo(status.timestamp)}</p>
+              <p class="post-username">${userData.username}</p>
+              <p class="post-time dark:post-time">${timeAgo(post.timestamp)}</p>
             </div>
           </div>
-          <div class="post-content">${status.text || ''}</div>
+          <div class="post-content">${post.text || ''}</div>
           ${mediaContent}
           <div class="reactions dark:reactions">
             <div class="reaction-list" id="reaction-list"></div>
@@ -709,7 +722,7 @@
         const commentBtn = postCard.querySelector('#comment-btn');
         const postMedia = postCard.querySelector('.post-media');
 
-        if (postMedia) {
+        if (postMedia && post.postType === 'image') {
           const openImage = debounce(() => {
             console.log("Post image clicked:", postMedia.src);
             showImageViewer(postMedia.src);
@@ -722,7 +735,7 @@
           });
         }
 
-        onValue(ref(db, `reactions/${statusId}`), async (snap) => {
+        onValue(ref(db, `reactions/${postId}`), async (snap) => {
           reactionList.innerHTML = '';
           if (!snap.exists()) return;
 
@@ -730,7 +743,7 @@
           const usersToFetch = new Set(Object.keys(reactions));
           for (const uid of usersToFetch) {
             if (!userCache[uid]) {
-              userCache[uid] = await get(ref(db, `users/${uid}`)).then(s => s.val() || { name: 'Unknown', photoURL: 'https://www.gravatar.com/avatar?d=mp' });
+              userCache[uid] = await get(ref(db, `users/${uid}`)).then(s => s.val() || { username: 'Unknown', photoURL: 'https://www.gravatar.com/avatar?d=mp' });
             }
           }
 
@@ -740,8 +753,8 @@
             const reactionItem = document.createElement('div');
             reactionItem.className = 'reaction-item';
             reactionItem.innerHTML = `
-              <img src="${user.photoURL}" alt="${user.name} avatar" />
-              <span class="dark:reaction-item">${user.name} reacted with ${reaction.type}</span>
+              <img src="${user.photoURL}" alt="${user.username} avatar" />
+              <span class="dark:reaction-item">${user.username} reacted with ${reaction.type}</span>
             `;
             fragment.appendChild(reactionItem);
           }
@@ -750,7 +763,7 @@
           likeBtn.classList.toggle('active', reactions[currentUid]?.type === 'like');
         });
 
-        onValue(ref(db, `comments/${statusId}`), async (snap) => {
+        onValue(ref(db, `comments/${postId}`), async (snap) => {
           commentList.innerHTML = '';
           if (!snap.exists()) return;
 
@@ -758,7 +771,7 @@
           const usersToFetch = new Set(Object.values(comments).map(c => c.userId));
           for (const uid of usersToFetch) {
             if (!userCache[uid]) {
-              userCache[uid] = await get(ref(db, `users/${uid}`)).then(s => s.val() || { name: 'Unknown', photoURL: 'https://www.gravatar.com/avatar?d=mp' });
+              userCache[uid] = await get(ref(db, `users/${uid}`)).then(s => s.val() || { username: 'Unknown', photoURL: 'https://www.gravatar.com/avatar?d=mp' });
             }
           }
 
@@ -769,8 +782,8 @@
             commentItem.className = 'comment-item';
             commentItem.dataset.cid = cid;
             commentItem.innerHTML = `
-              <img src="${user.photoURL}" alt="${user.name} avatar" />
-              <span class="dark:comment-item"><strong>${user.name}</strong>: ${comment.text}</span>
+              <img src="${user.photoURL}" alt="${user.username} avatar" />
+              <span class="dark:comment-item"><strong>${user.username}</strong>: ${comment.text}</span>
             `;
             fragment.appendChild(commentItem);
           }
@@ -780,12 +793,22 @@
         likeBtn.addEventListener('click', debounce(async () => {
           console.log("Like button clicked");
           try {
-            const reactionRef = ref(db, `reactions/${statusId}/${currentUid}`);
+            const reactionRef = ref(db, `reactions/${postId}/${currentUid}`);
             const snap = await get(reactionRef);
             if (snap.exists() && snap.val().type === 'like') {
               await set(reactionRef, null);
             } else {
               await set(reactionRef, { type: 'like', timestamp: Date.now() });
+              // Notify post owner
+              if (post.userId !== currentUid) {
+                const notifRef = push(ref(db, `notifications/${post.userId}/${postId}/like`));
+                await set(notifRef, {
+                  userId: currentUid,
+                  type: 'like',
+                  read: false,
+                  timestamp: Date.now()
+                });
+              }
             }
             navigator.vibrate?.([50]);
           } catch (error) {
@@ -804,12 +827,22 @@
           if (!commentInput.value.trim()) return;
           console.log("Comment button clicked");
           try {
-            const commentRef = push(ref(db, `comments/${statusId}`));
+            const commentRef = push(ref(db, `comments/${postId}`));
             await set(commentRef, {
               userId: currentUid,
               text: commentInput.value.trim(),
               timestamp: Date.now()
             });
+            // Notify post owner
+            if (post.userId !== currentUid) {
+              const notifRef = push(ref(db, `notifications/${post.userId}/${postId}/comment`));
+              await set(notifRef, {
+                userId: currentUid,
+                type: 'comment',
+                read: false,
+                timestamp: Date.now()
+              });
+            }
             commentInput.value = '';
             navigator.vibrate?.([50]);
           } catch (error) {
@@ -849,8 +882,8 @@
 
       try {
         const urlParams = new URLSearchParams(window.location.search);
-        statusId = urlParams.get('sid');
-        if (!statusId) {
+        postId = urlParams.get('id');
+        if (!postId) {
           showError("No post ID provided.");
           return;
         }
@@ -859,7 +892,7 @@
         const settings = snap.val() || {};
         applyTheme(settings.theme || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
 
-        await loadPost(statusId, user.uid);
+        await loadPost(postId, user.uid);
       } catch (error) {
         console.error("Error initializing post:", error.message);
         showError("Error initializing post: " + error.message);
