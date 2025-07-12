@@ -1307,7 +1307,79 @@
     height: 10px;
   }
 }
-  
+
+/* Profile Action Buttons */
+.profile-action-btn {
+  position: absolute;
+  top: 1rem;
+  background: none;
+  border: none;
+  color: var(--text-dark);
+  cursor: pointer;
+  padding: 0.5rem;
+  transition: transform 0.2s ease, color 0.2s ease;
+}
+
+.profile-action-btn:hover {
+  transform: scale(1.1);
+  color: var(--primary-red);
+}
+
+#notification-btn {
+  right: 4rem; /* Position to the left of settings */
+}
+
+#settings-btn {
+  right: 1rem;
+}
+
+.profile-action-btn svg {
+  width: 24px;
+  height: 24px;
+}
+
+/* Unread Notification Badge */
+.profile-action-btn .unread-badge {
+  position: absolute;
+  top: 0;
+  right: 0;
+  background: var(--primary-red);
+  color: var(--white);
+  font-size: clamp(0.65rem, 2vw, 0.7rem);
+  font-weight: 600;
+  border-radius: 9999px;
+  padding: 0.2rem 0.5rem;
+  min-width: 1.2rem;
+  text-align: center;
+  line-height: 1;
+}
+
+/* Responsive Design */
+@media (max-width: 414px) {
+  .profile-action-btn {
+    padding: 0.4rem;
+  }
+
+  .profile-action-btn svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  #notification-btn {
+    right: 3.5rem;
+  }
+
+  #settings-btn {
+    right: 0.5rem;
+  }
+
+  .profile-action-btn .unread-badge {
+    font-size: clamp(0.6rem, 1.8vw, 0.65rem);
+    padding: 0.15rem 0.4rem;
+    min-width: 1rem;
+  }
+}
+    
   </style>
 </head>
 <body>
@@ -2267,8 +2339,7 @@ onValue(friendsRef, async (snapshot) => {
       });
     }
 
-    
-        function loadProfile() {
+    function loadProfile() {
   const profileContainer = document.getElementById("profile-container");
   const deletePostModal = document.getElementById("delete-post-modal");
   const deletePostClose = document.getElementById("delete-post-close");
@@ -2286,15 +2357,46 @@ onValue(friendsRef, async (snapshot) => {
     Promise.race([
       new Promise(resolve => onValue(query(ref(db, "posts"), orderByChild("userId"), limitToLast(20)), resolve, { onlyOnce: true })),
       new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout loading posts")), 10000))
+    ]),
+    Promise.race([
+      get(ref(db, `notifications/${currentUserUid}`)),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout loading notifications")), 10000))
     ])
-  ]).then(([userSnap, postsSnap]) => {
+  ]).then(([userSnap, postsSnap, notificationsSnap]) => {
     const user = userSnap.val() || { username: "Anonymous", photoURL: null, bio: "" };
+    // Count posts for the current user
+    const userPostCount = postsSnap.val()
+      ? Object.values(postsSnap.val()).filter(post => post.userId === currentUserUid).length
+      : 0;
+    const isVerified = userPostCount >= 10;
+    // Count unread notifications
+    let unreadCount = 0;
+    const notificationsData = notificationsSnap.val() || {};
+    Object.values(notificationsData).forEach(postNotifications => {
+      Object.values(postNotifications).forEach(typeNotifications => {
+        Object.values(typeNotifications).forEach(notification => {
+          if (notification.read === false) unreadCount++;
+        });
+      });
+    });
     profileContainer.innerHTML = `
       <div class="profile-header">
         <img src="${user.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="Profile"/>
-        <h2>${user.username}</h2>
+        <h2>${user.username}${isVerified ? `<span class="verified-icon" aria-label="Verified user" title="Verified user"><svg viewBox="0 0 24 24"><path d="M9 16.2l-3.5-3.5L4 14.1 9 19 20 8l-1.4-1.4z"/></svg></span>` : ''}</h2>
         <p>${user.bio || "No bio available."}</p>
         <button id="edit-profile-btn" class="edit-profile-btn">Edit Profile</button>
+        <a href="notifications.html" id="notification-btn" class="profile-action-btn" aria-label="Notifications${unreadCount > 0 ? `, ${unreadCount} unread` : ''}">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
+          </svg>
+          ${unreadCount > 0 ? `<span class="unread-badge">${unreadCount}</span>` : ''}
+        </a>
+        <a href="settings.html" id="settings-btn" class="profile-action-btn" aria-label="Settings">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 15a3 3 0 100-6 3 3 0 000 6z"/>
+            <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/>
+          </svg>
+        </a>
       </div>
       <div class="profile-content" id="profile-posts"></div>
     `;
@@ -2304,6 +2406,20 @@ onValue(friendsRef, async (snapshot) => {
       const post = child.val();
       if (post.userId === currentUserUid) posts.push({ id: child.key, ...post });
     });
+    // Check for verification notification if user has exactly 10 posts
+    if (userPostCount === 10 && !Object.values(notificationsData).some(postNotifs => 
+      Object.values(postNotifs).some(typeNotifs => 
+        Object.values(typeNotifs).some(notif => notif.type === 'verified')
+      )
+    )) {
+      const notifRef = push(ref(db, `notifications/${currentUserUid}/system/verified`));
+      set(notifRef, {
+        type: 'verified',
+        userId: currentUserUid,
+        timestamp: Date.now(),
+        read: false
+      });
+    }
     posts.sort((a, b) => b.timestamp - a.timestamp);
     if (posts.length === 0) {
       profileContent.innerHTML = '<div class="placeholder">No posts yet.</div>';
@@ -2324,10 +2440,15 @@ onValue(friendsRef, async (snapshot) => {
       const postElement = document.createElement("div");
       postElement.className = "post";
       postElement.id = postId;
-      // Handle single image (backward compatibility) or multiple images
       const imageUrl = Array.isArray(post.imageUrls) && post.imageUrls.length > 0 ? post.imageUrls[0] : post.imageUrl;
       postElement.innerHTML = `
         <img class="post-image" src="${imageUrl || 'https://via.placeholder.com/150?text=Image+Not+Found'}" alt="Post">
+        <div class="post-header" style="display: none;">
+          <img src="${user.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${user.username} avatar">
+          <div class="user-info">
+            <span>${user.username}${isVerified ? `<span class="verified-icon" aria-label="Verified user" title="Verified user"><svg viewBox="0 0 24 24"><path d="M9 16.2l-3.5-3.5L4 14.1 9 19 20 8l-1.4-1.4z"/></svg></span>` : ''}</span>
+          </div>
+        </div>
       `;
       postElement.addEventListener("click", (e) => {
         e.stopPropagation();
@@ -2391,6 +2512,7 @@ onValue(friendsRef, async (snapshot) => {
     hideLoading();
   });
 }
+        
   </script>
 </body>
 </html>
