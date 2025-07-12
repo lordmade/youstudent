@@ -201,6 +201,8 @@
       object-fit: contain;
       border-radius: 8px;
       margin-top: 0.25rem;
+      cursor: pointer;
+      pointer-events: auto;
     }
 
     .message-time {
@@ -334,6 +336,59 @@
       50% { transform: translate(-50%, -50%) scale(1.5); opacity: 1; }
     }
 
+    .image-viewer {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.9);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 200;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+      pointer-events: none;
+    }
+
+    .image-viewer.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .image-viewer img {
+      max-width: 90%;
+      max-height: 90%;
+      object-fit: contain;
+      border-radius: 8px;
+    }
+
+    .image-viewer .close-btn {
+      position: absolute;
+      top: 1rem;
+      right: 1rem;
+      background: var(--primary-red);
+      border: none;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: background 0.2s ease, transform 0.2s ease;
+      pointer-events: auto;
+    }
+
+    .image-viewer .close-btn:hover {
+      background: #d43f4e;
+      transform: scale(1.1);
+    }
+
+    .image-viewer .close-btn svg {
+      width: 24px;
+      height: 24px;
+      fill: var(--white);
+    }
+
     .upload-progress {
       position: fixed;
       bottom: 80px;
@@ -391,6 +446,25 @@
         height: 24px;
       }
 
+      .message-media {
+        max-height: 150px;
+      }
+
+      .image-viewer img {
+        max-width: 95%;
+        max-height: 95%;
+      }
+
+      .image-viewer .close-btn {
+        width: 36px;
+        height: 36px;
+      }
+
+      .image-viewer .close-btn svg {
+        width: 20px;
+        height: 20px;
+      }
+
       .kebab-menu {
         top: 2.5rem;
         right: 0.5rem;
@@ -417,6 +491,14 @@
 <body>
   <div class="loading-overlay hidden" id="loading-overlay">
     <div class="spinner"></div>
+  </div>
+  <div class="image-viewer hidden" id="image-viewer" role="dialog" aria-label="Full-screen image viewer">
+    <img id="full-image" src="" alt="Full-screen image">
+    <button class="close-btn" id="close-image-btn" aria-label="Close image viewer">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+      </svg>
+    </button>
   </div>
   <div class="upload-progress" id="upload-progress">Uploading: 0%</div>
   <div class="container">
@@ -479,6 +561,9 @@
     const db = getDatabase();
 
     const loadingOverlay = document.getElementById("loading-overlay");
+    const imageViewer = document.getElementById("image-viewer");
+    const fullImage = document.getElementById("full-image");
+    const closeImageBtn = document.getElementById("close-image-btn");
     const backBtn = document.getElementById("back-btn");
     const kebabBtn = document.getElementById("kebab-btn");
     const kebabMenu = document.getElementById("kebab-menu");
@@ -513,6 +598,18 @@
     function hideLoading() {
       console.log("Hiding loading overlay");
       loadingOverlay.classList.add("hidden");
+    }
+
+    function showImageViewer(src) {
+      console.log("Opening image viewer:", src);
+      fullImage.src = src;
+      imageViewer.classList.add("active");
+    }
+
+    function hideImageViewer() {
+      console.log("Closing image viewer");
+      imageViewer.classList.remove("active");
+      fullImage.src = "";
     }
 
     function showUploadProgress(percent) {
@@ -572,6 +669,31 @@
       }
     });
 
+    const closeImageViewer = debounce(() => {
+      hideImageViewer();
+    }, 200);
+
+    closeImageBtn.addEventListener('click', closeImageViewer);
+    closeImageBtn.addEventListener('touchend', (e) => {
+      e.preventDefault();
+      console.log("Close image button touchend triggered");
+      closeImageViewer();
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && imageViewer.classList.contains('active')) {
+        console.log("Escape key pressed, closing image viewer");
+        hideImageViewer();
+      }
+    });
+
+    imageViewer.addEventListener('click', (e) => {
+      if (e.target === imageViewer) {
+        console.log("Clicked outside image, closing viewer");
+        hideImageViewer();
+      }
+    });
+
     onAuthStateChanged(auth, async user => {
       if (!user) {
         console.error("User not authenticated, redirecting to signup.html");
@@ -604,9 +726,8 @@
           return;
         }
 
-        // Cache current user's data
-        const currentUserData = await get(ref(db, `users/${currentUid}`)).then(snap => snap.val() || { photoURL: 'https://www.gravatar.com/avatar?d=mp' });
-        userCache[currentUid] = currentUserData;
+        const currentUserData = await get(ref(db, `users/${currentUserUid}`)).then(snap => snap.val() || { photoURL: 'https://www.gravatar.com/avatar?d=mp' });
+        userCache[currentUserUid] = currentUserData;
 
         await loadChat(user.uid, otherUserUid);
       } catch (error) {
@@ -697,7 +818,6 @@
             }
           }
 
-          // Fetch missing user data
           for (const uid of usersToFetch) {
             if (!userCache[uid]) {
               const userData = await get(ref(db, `users/${uid}`)).then(snap => snap.val() || { photoURL: 'https://www.gravatar.com/avatar?d=mp' });
@@ -707,6 +827,21 @@
 
           chatArea.innerHTML = '';
           chatArea.appendChild(fragment);
+
+          // Add click/touch listeners to images after appending to DOM
+          const images = chatArea.querySelectorAll('.message-media');
+          images.forEach(img => {
+            const openImage = debounce(() => {
+              console.log("Image clicked:", img.src);
+              showImageViewer(img.src);
+            }, 200);
+            img.addEventListener('click', openImage);
+            img.addEventListener('touchend', (e) => {
+              e.preventDefault();
+              console.log("Image touchend triggered:", img.src);
+              openImage();
+            });
+          });
 
           for (const { mid, path } of messagesToUpdate) {
             await update(ref(db, path), { read: true });
