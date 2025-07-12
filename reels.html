@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+  <title>Instagram - Reels</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root {
+      --primary-red: #ed4956;
+      --error-red: #ed4956;
+      --success-green: #00a400;
+      --background: #fafafa;
+      --border: #dbdbdb;
+      --text-dark: #262626;
+      --text-light: #8e8e8e;
+      --white: #ffffff;
+    }
+    * {
+      user-select: none;
+      -webkit-user-select: none;
+      -moz-user-select: none;
+      -ms-user-select: none;
+      touch-action: manipulation;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      background: #000;
+      min-height: 100vh;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+    }
+    .reels-container {
+      position: relative;
+      width: 100%;
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    .reel {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      background: #000;
+      transform: translateY(100%);
+      transition: transform 0.3s ease;
+    }
+    .reel.active {
+      transform: translateY(0);
+    }
+    .reel video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .reel-overlay {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      padding: 1rem;
+      background: linear-gradient(to top, rgba(0, 0, 0, 0.7), transparent);
+      color: var(--white);
+    }
+    .reel-header {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-bottom: 0.5rem;
+    }
+    .reel-header img {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      border: 2px solid var(--white);
+      cursor: pointer;
+    }
+    .reel-header span {
+      font-size: clamp(0.9rem, 4vw, 1rem);
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .verified-icon {
+      display: inline-flex;
+      align-items: center;
+      margin-left: 0.25rem;
+    }
+    .verified-icon svg {
+      width: 14px;
+      height: 14px;
+      fill: #0095f6;
+    }
+    .reel-caption {
+      font-size: clamp(0.85rem, 3.5vw, 0.9rem);
+      margin-bottom: 0.5rem;
+      max-height: 60px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+    }
+    .reel-song {
+      font-size: clamp(0.8rem, 3.5vw, 0.85rem);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-bottom: 0.5rem;
+    }
+    .reel-song svg {
+      width: 16px;
+      height: 16px;
+      fill: var(--white);
+    }
+    .reel-actions {
+      position: absolute;
+      right: 1rem;
+      bottom: 5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      align-items: center;
+    }
+    .reel-actions button {
+      background: none;
+      border: none;
+      color: var(--white);
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.25rem;
+    }
+    .reel-actions svg {
+      width: 24px;
+      height: 24px;
+      stroke: var(--white);
+      stroke-width: 2;
+      fill: none;
+    }
+    .reel-actions .liked svg {
+      fill: var(--primary-red);
+      stroke: var(--primary-red);
+    }
+    .reel-actions span {
+      font-size: clamp(0.75rem, 3vw, 0.8rem);
+    }
+    .progress-bar {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 3px;
+      background: rgba(255, 255, 255, 0.3);
+    }
+    .progress-bar-fill {
+      height: 100%;
+      background: var(--white);
+      width: 0%;
+      transition: width linear;
+    }
+    .carousel-arrow {
+      position: absolute;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0, 0, 0, 0.5);
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      z-index: 10;
+    }
+    .carousel-arrow.top {
+      top: 1rem;
+    }
+    .carousel-arrow.bottom {
+      bottom: 1rem;
+    }
+    .carousel-arrow svg {
+      width: 24px;
+      height: 24px;
+      stroke: var(--white);
+      stroke-width: 2;
+    }
+    .loading-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 50;
+      transition: opacity 0.3s ease;
+    }
+    .loading-overlay.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+    .error {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      color: var(--error-red);
+      font-size: clamp(0.9rem, 4vw, 1rem);
+      text-align: center;
+      background: var(--white);
+      padding: 1rem;
+      border-radius: 8px;
+    }
+    @media (max-width: 414px) {
+      .reel-header img {
+        width: 36px;
+        height: 36px;
+      }
+      .reel-header span {
+        font-size: clamp(0.85rem, 3.5vw, 0.9rem);
+      }
+      .reel-caption {
+        font-size: clamp(0.8rem, 3vw, 0.85rem);
+      }
+      .reel-song {
+        font-size: clamp(0.75rem, 3vw, 0.8rem);
+      }
+      .reel-actions svg {
+        width: 22px;
+        height: 22px;
+      }
+      .reel-actions span {
+        font-size: clamp(0.7rem, 2.5vw, 0.75rem);
+      }
+      .carousel-arrow {
+        width: 36px;
+        height: 36px;
+      }
+      .carousel-arrow svg {
+        width: 22px;
+        height: 22px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="reels-container" id="reels-container">
+    <div id="loading-overlay" class="loading-overlay">
+      <svg class="animate-spin h-8 w-8 text-red-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4z"/>
+      </svg>
+    </div>
+    <p id="error-msg" class="error hidden"></p>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
+    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
+    import { getDatabase, ref, onValue, query, orderByChild, limitToLast, get, update, push, set } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
+      authDomain: "fire-b-a8878.firebaseapp.com",
+      databaseURL: "https://fire-b-a8878.firebaseio.com",
+      projectId: "fire-b-a8878",
+      storageBucket: "fire-b-a8878.appspot.com",
+      messagingSenderId: "658673187627",
+      appId: "1:658673187627:web:6e4c29af661785f0afa36e"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth();
+    const db = getDatabase();
+    const reelsContainer = document.getElementById("reels-container");
+    const loadingOverlay = document.getElementById("loading-overlay");
+    const errorMsg = document.getElementById("error-msg");
+
+    let currentUserUid = null;
+    let currentReelIndex = 0;
+    let reels = [];
+    let isDragging = false;
+    let startY = 0;
+
+    function showLoading() {
+      loadingOverlay.classList.remove("hidden");
+      errorMsg.classList.add("hidden");
+    }
+
+    function hideLoading() {
+      loadingOverlay.classList.add("hidden");
+    }
+
+    function showError(message) {
+      errorMsg.textContent = message;
+      errorMsg.classList.remove("hidden");
+      hideLoading();
+    }
+
+    function hideError() {
+      errorMsg.textContent = "";
+      errorMsg.classList.add("hidden");
+    }
+
+    function formatTime(seconds) {
+      const min = Math.floor(seconds / 60);
+      const sec = Math.floor(seconds % 60);
+      return `${min}:${sec < 10 ? '0' : ''}${sec}`;
+    }
+
+    async function isUserVerified(userId) {
+      const userSnap = await get(ref(db, `users/${userId}`));
+      const userData = userSnap.val() || {};
+      return !!userData.verified;
+    }
+
+    async function toggleLike(reelId, likeBtn) {
+      try {
+        const reelRef = ref(db, `reels/${reelId}`);
+        const reelSnap = await get(reelRef);
+        const reelData = reelSnap.val() || {};
+        const likedBy = reelData.likedBy || [];
+        const likes = reelData.likes || 0;
+        const isLiked = likedBy.includes(currentUserUid);
+        const updates = {
+          likes: isLiked ? likes - 1 : likes + 1,
+          likedBy: isLiked ? likedBy.filter(uid => uid !== currentUserUid) : [...likedBy, currentUserUid]
+        };
+        await update(reelRef, updates);
+        likeBtn.querySelector(".like-count").textContent = updates.likes;
+        likeBtn.classList.toggle("liked", !isLiked);
+        if (!isLiked && reelData.userId !== currentUserUid) {
+          const notifRef = push(ref(db, `notifications/${reelData.userId}/likes`));
+          await set(notifRef, {
+            type: "like",
+            fromUserId: currentUserUid,
+            reelId: reelId,
+            timestamp: Date.now(),
+            read: false
+          });
+        }
+      } catch (error) {
+        console.error("Error toggling like:", error.message);
+      }
+    }
+
+    function pauseAllVideos() {
+      document.querySelectorAll(".reel video").forEach(video => {
+        video.pause();
+        video.currentTime = 0;
+        const progressBar = video.parentElement.querySelector(".progress-bar-fill");
+        if (progressBar) progressBar.style.width = "0%";
+      });
+    }
+
+    function updateProgressBar(video) {
+      const progressBar = video.parentElement.querySelector(".progress-bar-fill");
+      if (!progressBar) return;
+      video.addEventListener("timeupdate", () => {
+        const percent = (video.currentTime / video.duration) * 100;
+        progressBar.style.width = `${percent}%`;
+        if (video.ended) {
+          video.currentTime = 0;
+          video.play();
+        }
+      });
+    }
+
+    function showCommentSheet(reelId) {
+      console.log("Navigating to comment sheet for reel:", reelId);
+      location.href = `comments.html?reelId=${reelId}`;
+    }
+
+    async function loadReels() {
+      const reelsRef = query(ref(db, "reels"), orderByChild("timestamp"), limitToLast(20));
+      showLoading();
+      onValue(reelsRef, async (reelsSnap) => {
+        try {
+          const reelsData = reelsSnap.val() || {};
+          const usersSnap = await get(ref(db, "users"));
+          const users = usersSnap.val() || {};
+
+          reelsContainer.innerHTML = "";
+          reels = Object.entries(reelsData)
+            .map(([id, reel]) => ({ id, ...reel }))
+            .filter(reel => reel.userId && reel.videoUrl && reel.timestamp)
+            .sort((a, b) => b.timestamp - a.timestamp);
+
+          if (reels.length === 0) {
+            showError("No reels available.");
+            return;
+          }
+
+          reels.forEach((reel, index) => {
+            const isVerified = isUserVerified(reel.userId);
+            const reelElement = document.createElement("div");
+            reelElement.className = `reel ${index === currentReelIndex ? "active" : ""}`;
+            reelElement.id = `reel-${reel.id}`;
+            reelElement.innerHTML = `
+              <div class="progress-bar">
+                <div class="progress-bar-fill"></div>
+              </div>
+              <video src="${reel.videoUrl}" playsinline ${index === currentReelIndex ? "autoplay" : ""} loop muted></video>
+              <div class="reel-overlay">
+                <div class="reel-header">
+                  <img src="${users[reel.userId]?.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${users[reel.userId]?.username || 'User'} avatar">
+                  <span>${users[reel.userId]?.username || 'Unknown'}${
+                    isVerified ? `<span class="verified-icon" aria-label="Verified user" title="Verified user"><svg viewBox="0 0 24 24"><path d="M9 16.2l-3.5-3.5L4 14.1 9 19 20 8l-1.4-1.4z"/></svg></span>` : ''
+                  }</span>
+                </div>
+                ${reel.caption ? `<div class="reel-caption">${reel.caption}</div>` : ''}
+                ${reel.song ? `
+                  <div class="reel-song">
+                    <svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>
+                    <span>${reel.song.title} - ${reel.song.artist}</span>
+                  </div>
+                ` : ''}
+              </div>
+              <div class="reel-actions">
+                <button class="like-btn ${reel.likedBy?.includes(currentUserUid) ? 'liked' : ''}" data-reel-id="${reel.id}">
+                  <svg viewBox="0 0 24 24">
+                    <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+                  </svg>
+                  <span class="like-count">${reel.likes || 0}</span>
+                </button>
+                <button class="comment-btn" data-reel-id="${reel.id}">
+                  <svg viewBox="0 0 24 24">
+                    <path d="M21 11.5a8.5 8.5 0 01-11.4 7.9l-4.6 1.5 1.5-4.6A8.5 8.5 0 1121 11.5z"/>
+                  </svg>
+                  <span class="comment-count">${Object.keys(reel.comments || {}).length}</span>
+                </button>
+              </div>
+            `;
+            reelsContainer.appendChild(reelElement);
+            const video = reelElement.querySelector("video");
+            updateProgressBar(video);
+            if (index === currentReelIndex) video.play();
+          });
+
+          // Add navigation arrows
+          const arrows = `
+            <button class="carousel-arrow top" aria-label="Previous reel" ${currentReelIndex === 0 ? 'style="display: none;"' : ''}>
+              <svg viewBox="0 0 24 24"><path d="M7 14l5-5 5 5"/></svg>
+            </button>
+            <button class="carousel-arrow bottom" aria-label="Next reel" ${currentReelIndex === reels.length - 1 ? 'style="display: none;"' : ''}>
+              <svg viewBox="0 0 24 24"><path d="M7 10l5 5 5-5"/></svg>
+            </button>
+          `;
+          reelsContainer.insertAdjacentHTML("beforeend", arrows);
+
+          // Event listeners
+          reelsContainer.querySelectorAll(".reel").forEach((reel, index) => {
+            const likeBtn = reel.querySelector(".like-btn");
+            likeBtn.addEventListener("click", (e) => {
+              e.stopPropagation();
+              toggleLike(reel.id.replace("reel-", ""), likeBtn);
+              pauseAllVideos();
+              document.querySelector(`#${reel.id} video`).play();
+            });
+
+            const commentBtn = reel.querySelector(".comment-btn");
+            commentBtn.addEventListener("click", (e) => {
+              e.stopPropagation();
+              showCommentSheet(reel.id.replace("reel-", ""));
+            });
+
+            reel.querySelectorAll(".reel-header img, .reel-header span").forEach(el => {
+              el.addEventListener("click", (e) => {
+                e.stopPropagation();
+                const userId = reels[index].userId;
+                console.log("Navigating to profile:", userId);
+                location.href = `profile.html?uid=${userId}`;
+                pauseAllVideos();
+              });
+            });
+          });
+
+          // Navigation
+          const updateCarousel = () => {
+            pauseAllVideos();
+            reelsContainer.querySelectorAll(".reel").forEach((reel, i) => {
+              reel.classList.toggle("active", i === currentReelIndex);
+              if (i === currentReelIndex) {
+                const video = reel.querySelector("video");
+                video.play();
+              }
+            });
+            const topArrow = reelsContainer.querySelector(".carousel-arrow.top");
+            const bottomArrow = reelsContainer.querySelector(".carousel-arrow.bottom");
+            topArrow.style.display = currentReelIndex === 0 ? "none" : "block";
+            bottomArrow.style.display = currentReelIndex === reels.length - 1 ? "none" : "block";
+          };
+
+          reelsContainer.querySelector(".carousel-arrow.top").addEventListener("click", (e) => {
+            e.stopPropagation();
+            if (currentReelIndex > 0) {
+              currentReelIndex--;
+              updateCarousel();
+            }
+          });
+
+          reelsContainer.querySelector(".carousel-arrow.bottom").addEventListener("click", (e) => {
+            e.stopPropagation();
+            if (currentReelIndex < reels.length - 1) {
+              currentReelIndex++;
+              updateCarousel();
+            }
+          });
+
+          reelsContainer.addEventListener("touchstart", (e) => {
+            startY = e.touches[0].clientY;
+            isDragging = true;
+          });
+
+          reelsContainer.addEventListener("touchmove", (e) => {
+            if (!isDragging) return;
+            const currentY = e.touches[0].clientY;
+            const diffY = startY - currentY;
+            if (Math.abs(diffY) > 50) {
+              if (diffY > 0 && currentReelIndex < reels.length - 1) {
+                currentReelIndex++;
+                updateCarousel();
+              } else if (diffY < 0 && currentReelIndex > 0) {
+                currentReelIndex--;
+                updateCarousel();
+              }
+              isDragging = false;
+            }
+          });
+
+          reelsContainer.addEventListener("touchend", () => {
+            isDragging = false;
+          });
+        } catch (error) {
+          console.error("Error loading reels:", error.message);
+          showError("Failed to load reels: " + error.message);
+        }
+        hideLoading();
+      }, { onlyOnce: false });
+    }
+
+    onAuthStateChanged(auth, (user) => {
+      if (!user) {
+        location.href = "index.html";
+      } else {
+        currentUserUid = user.uid;
+        loadReels();
+      }
+    });
+  </script>
+</body>
+</html>
