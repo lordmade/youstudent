@@ -1401,21 +1401,20 @@ body {
   </div>
 
   <div id="edit-profile-modal" class="edit-profile-modal hidden">
-    <div class="edit-profile-modal-content">
-      <button id="edit-profile-close" class="close-modal">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
-        </svg>
-      </button>
-      <h3>Edit Profile</h3>
-      <p id="edit-profile-error" class="error"></p>
-      <input id="edit-username" type="text" placeholder="Username"/>
-      <textarea id="edit-bio" placeholder="Bio"></textarea>
-      <input id="edit-photo" type="file" accept="image/*"/>
-      <button id="edit-profile-submit">Save</button>
-    </div>
+  <div class="edit-profile-modal-content">
+    <button class="close-modal" aria-label="Close edit profile modal">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M6 18L18 6M6 6l12 12"/>
+      </svg>
+    </button>
+    <h3>Edit Profile</h3>
+    <div class="error edit-profile-error" id="edit-profile-error"></div>
+    <input type="text" id="edit-username" placeholder="Username" aria-label="Edit username"/>
+    <textarea id="edit-bio" placeholder="Bio" aria-label="Edit bio"></textarea>
+    <input type="file" id="edit-photo" accept="image/*" aria-label="Upload profile photo"/>
+    <button id="edit-profile-save-btn">Save</button>
   </div>
-
+</div>
   <div id="loading-overlay" class="loading-overlay hidden">
   <div class="spinner"></div>
 </div>
@@ -2491,15 +2490,102 @@ onValue(friendsRef, async (snapshot) => {
     if (posts.length === 0) {
       profileContent.innerHTML = '<div class="placeholder">No posts yet.</div>';
       hideLoading();
-      document.getElementById("edit-profile-btn").addEventListener("click", () => {
-        editUsername.value = user.username;
-        editBio.value = user.bio || "";
-        editPhoto.value = "";
-        hideError(editProfileError);
-        editProfileModal.classList.remove("hidden");
-        editProfileModal.classList.add("open");
-        editUsername.focus();
-      });
+      // Existing code (around lines 1429–1435)
+document.getElementById("edit-profile-btn").addEventListener("click", () => {
+  editUsername.value = user.username;
+  editBio.value = user.bio || "";
+  editPhoto.value = "";
+  hideError(editProfileError);
+  editProfileModal.classList.remove("hidden");
+  editProfileModal.classList.add("open");
+  editUsername.focus();
+});
+
+// Add this code immediately after the above block (around line 1436)
+const editProfileModal = document.getElementById("edit-profile-modal");
+const editProfileSaveBtn = document.getElementById("edit-profile-save-btn");
+const editProfileCloseBtn = document.querySelector("#edit-profile-modal .close-modal");
+const editUsername = document.getElementById("edit-username");
+const editBio = document.getElementById("edit-bio");
+const editPhoto = document.getElementById("edit-photo");
+const editProfileError = document.getElementById("edit-profile-error");
+
+// Helper function to show error (add if not already defined)
+function showError(element, message) {
+  element.textContent = message;
+  element.style.display = "block";
+}
+
+// Save button event listener
+editProfileSaveBtn.addEventListener("click", async () => {
+  const newUsername = editUsername.value.trim();
+  const newBio = editBio.value.trim();
+  const newPhoto = editPhoto.files[0];
+
+  // Validate inputs
+  if (!newUsername) {
+    showError(editProfileError, "Username cannot be empty.");
+    editUsername.focus();
+    return;
+  }
+
+  try {
+    const user = firebase.auth().currentUser;
+    if (!user) {
+      showError(editProfileError, "User not authenticated.");
+      return;
+    }
+
+    // Prepare updates for Firebase Authentication
+    const profileUpdates = {
+      displayName: newUsername,
+    };
+
+    // Handle photo upload if provided
+    let photoURL = user.photoURL;
+    if (newPhoto) {
+      const maxFileSize = 5 * 1024 * 1024; // 5MB
+      if (newPhoto.size > maxFileSize) {
+        showError(editProfileError, "Photo must be under 5MB.");
+        return;
+      }
+
+      const storageRef = firebase.storage().ref(`profile_photos/${user.uid}/${newPhoto.name}`);
+      const uploadTask = await storageRef.put(newPhoto);
+      photoURL = await uploadTask.ref.getDownloadURL();
+      profileUpdates.photoURL = photoURL;
+    }
+
+    // Update Firebase Authentication profile
+    await firebase.auth().updateProfile(user, profileUpdates);
+
+    // Update Firestore user document
+    await firebase.firestore().collection("users").doc(user.uid).update({
+      username: newUsername,
+      bio: newBio || "",
+      photoURL: photoURL || user.photoURL || "https://www.gravatar.com/avatar?d=mp",
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+
+    // Close modal
+    editProfileModal.classList.remove("open");
+    editProfileModal.classList.add("hidden");
+    hideError(editProfileError);
+
+    // Refresh profile display
+    loadProfile();
+  } catch (error) {
+    console.error("Error updating profile:", error);
+    showError(editProfileError, "Failed to update profile. Please try again.");
+  }
+});
+
+// Close button event listener
+editProfileCloseBtn.addEventListener("click", () => {
+  editProfileModal.classList.remove("open");
+  editProfileModal.classList.add("hidden");
+  hideError(editProfileError);
+});
       return;
     }
     for (const post of posts) {
