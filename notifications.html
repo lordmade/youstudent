@@ -344,6 +344,8 @@
                   notificationId,
                   ...notification
                 });
+              } else {
+                console.warn(`Skipping unknown notification type: ${notification.type}`);
               }
             });
           });
@@ -362,16 +364,36 @@
         for (const notif of notifications) {
           const userData = users[notif.userId] || { username: "Unknown", photoURL: "https://www.gravatar.com/avatar?d=mp" };
           let text = "";
+          let redirectUrl = "";
           let isClickable = true;
+
           switch (notif.type) {
             case "like":
               text = `${userData.username} liked your post.`;
+              if (notif.postId) {
+                redirectUrl = `post.html?id=${notif.postId}`;
+              } else {
+                console.warn(`Missing postId for like notification: ${notif.notificationId}`);
+                isClickable = false;
+              }
               break;
             case "comment":
               text = `${userData.username} commented on your post.`;
+              if (notif.postId) {
+                redirectUrl = `post.html?id=${notif.postId}`;
+              } else {
+                console.warn(`Missing postId for comment notification: ${notif.notificationId}`);
+                isClickable = false;
+              }
               break;
             case "follow":
               text = `${userData.username} followed you.`;
+              if (notif.userId) {
+                redirectUrl = `profile.html?uid=${notif.userId}`;
+              } else {
+                console.warn(`Missing userId for follow notification: ${notif.notificationId}`);
+                isClickable = false;
+              }
               break;
             case "verified":
               text = "Congratulations! You've been verified for posting 10 times!";
@@ -391,27 +413,27 @@
               <p class="notification-time">${timeAgo(notif.timestamp)}</p>
             </div>
           `;
-          if (isClickable) {
+          if (isClickable && redirectUrl) {
             notificationItem.addEventListener("click", () => {
-              if (notif.type === "follow") {
-                console.log(`Navigating to profile: ${notif.userId}`);
-                window.location.href = `profile.html?uid=${notif.userId}`;
-              } else if (notif.postId) {
-                console.log(`Navigating to post: ${notif.postId}`);
-                window.location.href = `post.html?id=${notif.postId}`;
-              } else {
-                console.warn(`No valid postId for ${notif.type} notification`);
-              }
+              console.log(`Redirecting to ${redirectUrl}`);
+              window.location.href = redirectUrl;
             });
+          } else if (isClickable) {
+            console.error(`No valid redirect URL for ${notif.type} notification: ${notif.notificationId}`);
+            notificationItem.style.cursor = "default";
+          } else {
+            notificationItem.style.cursor = "default";
           }
 
           if (!notif.read) {
             const notifPath = `notifications/${currentUserUid}/${notif.postId || "system"}/${notif.type}/${notif.notificationId}`;
             console.log(`Marking notification as read: ${notifPath}`);
-            const notifRef = ref(db, notifPath);
-            await update(notifRef, { read: true }).catch(error => {
+            try {
+              const notifRef = ref(db, notifPath);
+              await update(notifRef, { read: true });
+            } catch (error) {
               console.error(`Error marking ${notif.type} notification as read:`, error.message);
-            });
+            }
           }
 
           notificationsContainer.appendChild(notificationItem);
