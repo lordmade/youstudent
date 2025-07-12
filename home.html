@@ -1185,6 +1185,7 @@
   margin-top: 0.2rem;
 }
 
+/* Friend Item Layout */
 .friend-item {
   display: flex;
   align-items: center;
@@ -1200,6 +1201,39 @@
   flex-direction: column;
   flex: 1;
   margin-left: 1rem;
+  position: relative; /* For positioning the badge */
+}
+
+.friend-item .last-message-timestamp {
+  font-size: clamp(0.7rem, 2.5vw, 0.75rem);
+  color: var(--text-light);
+  margin-top: 0.2rem;
+}
+
+/* Unread Message Badge */
+.friend-item .unread-badge {
+  position: absolute;
+  top: 0;
+  left: -1.5rem; /* Position to the left of username */
+  background: var(--primary-red);
+  color: var(--white);
+  font-size: clamp(0.65rem, 2vw, 0.7rem);
+  font-weight: 600;
+  border-radius: 9999px;
+  padding: 0.2rem 0.5rem;
+  min-width: 1.2rem;
+  text-align: center;
+  line-height: 1;
+}
+
+/* Responsive Design */
+@media (max-width: 414px) {
+  .friend-item .unread-badge {
+    font-size: clamp(0.6rem, 1.8vw, 0.65rem);
+    padding: 0.15rem 0.4rem;
+    min-width: 1rem;
+    left: -1.2rem;
+  }
 }
   
   </style>
@@ -1976,6 +2010,7 @@ async function loadPosts() {
 
   // Friends Tab
   // Friends Tab
+// Friends Tab
 const friendsRef = ref(db, `users/${currentUserUid}/friends`);
 showLoading();
 onValue(friendsRef, async (snapshot) => {
@@ -1990,16 +2025,17 @@ onValue(friendsRef, async (snapshot) => {
       const users = usersSnap.val() || {};
       for (const friendUid in friendsData) {
         const userData = users[friendUid] || { username: "Unknown", photoURL: null };
-        // Fetch the most recent message for this friend
+        // Fetch the most recent message and unread count for this friend
         let lastMessageTimestamp = null;
         let lastMessageTimeAgo = "No messages yet";
+        let unreadCount = 0;
         try {
-          // Create composite keys for both directions (user1_user2 and user2_user1)
+          // Create composite keys for both directions
           const chatKey1 = `${currentUserUid}_${friendUid}`;
           const chatKey2 = `${friendUid}_${currentUserUid}`;
           // Query messages for both directions
           const messagesRef1 = query(ref(db, `messages/${chatKey1}`), orderByChild("timestamp"), limitToLast(1));
-          const messagesRef2 = query(ref(db, `messages/${chatKey2}`), orderByChild("timestamp"), limitToLast(1));
+          const messagesRef2 = query(ref(db, `messages/${chatKey2}`), orderByChild("timestamp"));
           const [snap1, snap2] = await Promise.all([
             Promise.race([
               get(messagesRef1),
@@ -2010,7 +2046,7 @@ onValue(friendsRef, async (snapshot) => {
               new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout fetching messages")), 5000))
             ]).catch(() => null)
           ]);
-          // Find the most recent message from either direction
+          // Find the most recent message
           let latestMessage = null;
           if (snap1 && snap1.exists()) {
             snap1.forEach(child => {
@@ -2020,19 +2056,24 @@ onValue(friendsRef, async (snapshot) => {
           if (snap2 && snap2.exists()) {
             let tempMessage;
             snap2.forEach(child => {
-              tempMessage = { id: child.key, ...child.val() };
+              const msg = { id: child.key, ...child.val() };
+              if (!latestMessage || (msg.timestamp > latestMessage.timestamp)) {
+                latestMessage = msg;
+              }
+              // Count unread messages (sent by friend, not read by current user)
+              if (msg.senderId === friendUid && msg.receiverId === currentUserUid && msg.read === false) {
+                unreadCount++;
+              }
             });
-            if (!latestMessage || (tempMessage && tempMessage.timestamp > latestMessage.timestamp)) {
-              latestMessage = tempMessage;
-            }
           }
           if (latestMessage) {
             lastMessageTimestamp = latestMessage.timestamp;
             lastMessageTimeAgo = timeAgo(lastMessageTimestamp);
           }
         } catch (error) {
-          console.warn(`Error fetching last message for friend ${friendUid}:`, error.message);
+          console.warn(`Error fetching messages for friend ${friendUid}:`, error.message);
           lastMessageTimeAgo = "No messages yet";
+          unreadCount = 0;
         }
         const friendItem = document.createElement("div");
         friendItem.className = "friend-item";
@@ -2040,6 +2081,7 @@ onValue(friendsRef, async (snapshot) => {
           <img src="${userData.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${userData.username} avatar"/>
           <div class="friend-info">
             <span>${userData.username}</span>
+            ${unreadCount > 0 ? `<span class="unread-badge">${unreadCount}</span>` : ''}
             <span class="last-message-timestamp">${lastMessageTimeAgo}</span>
           </div>
           <button class="friend-item-btn message">Message</button>
