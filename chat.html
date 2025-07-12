@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>BanterBox - Chat</title>
   <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
   <style>
@@ -11,6 +11,17 @@
       --white: #FFFFFF;
       --text-dark: #333333;
       --border: #E5E7EB;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      user-select: none;
+      -webkit-user-select: none;
+      -moz-user-select: none;
+      -ms-user-select: none;
+      touch-action: manipulation;
     }
 
     body {
@@ -58,12 +69,13 @@
       color: #6b7280;
     }
 
-    .back-btn, .kebab-btn {
+    .back-btn, .kebab-btn, .chat-input button {
       background: none;
       border: none;
       cursor: pointer;
       padding: 0.5rem;
       transition: transform 0.2s ease;
+      pointer-events: auto;
     }
 
     .back-btn {
@@ -78,11 +90,15 @@
       fill: var(--primary-red);
     }
 
-    .back-btn svg, .kebab-btn svg {
+    .back-btn svg, .kebab-btn svg, .chat-input button svg {
       width: 24px;
       height: 24px;
       fill: var(--text-dark);
       transition: fill 0.2s ease;
+    }
+
+    .chat-input button:hover svg {
+      fill: var(--white);
     }
 
     .kebab-menu {
@@ -112,6 +128,7 @@
       color: var(--text-dark);
       cursor: pointer;
       transition: background 0.2s ease;
+      pointer-events: auto;
     }
 
     .kebab-menu button:hover {
@@ -207,28 +224,18 @@
     }
 
     .chat-input button {
-      padding: 0.5rem;
       border-radius: 9999px;
       background: var(--primary-red);
-      border: none;
       display: flex;
       align-items: center;
       justify-content: center;
       width: 40px;
       height: 40px;
-      cursor: pointer;
-      transition: background 0.2s ease, transform 0.2s ease;
     }
 
     .chat-input button:hover {
       background: #d43f4e;
       transform: scale(1.05);
-    }
-
-    .chat-input button svg {
-      width: 24px;
-      height: 24px;
-      fill: var(--white);
     }
 
     .error, .loading, .placeholder {
@@ -248,11 +255,57 @@
     .loading-overlay {
       position: fixed;
       inset: 0;
-      background: rgba(0, 0, 0, 0.5);
+      background: rgba(0, 0, 0, 0.6);
       display: flex;
       align-items: center;
       justify-content: center;
-      z-index: 50;
+      z-index: 100;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+      pointer-events: none;
+    }
+
+    .loading-overlay:not(.hidden) {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .spinner {
+      width: 60px;
+      height: 60px;
+      border: 6px solid rgba(255, 255, 255, 0.2);
+      border-top-color: var(--primary-red);
+      border-radius: 50%;
+      animation: spin 1s ease-in-out infinite, pulse 2s ease-in-out infinite;
+      position: relative;
+    }
+
+    .spinner::before {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 12px;
+      height: 12px;
+      background: var(--primary-red);
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      animation: pulseDot 2s ease-in-out infinite;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    @keyframes pulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(237, 73, 86, 0.4); }
+      50% { box-shadow: 0 0 0 20px rgba(237, 73, 86, 0); }
+    }
+
+    @keyframes pulseDot {
+      0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.8; }
+      50% { transform: translate(-50%, -50%) scale(1.5); opacity: 1; }
     }
 
     .upload-progress {
@@ -287,7 +340,7 @@
         font-size: clamp(0.7rem, 2vw, 0.75rem);
       }
 
-      .back-btn svg, .kebab-btn svg {
+      .back-btn svg, .kebab-btn svg, .chat-input button svg {
         width: 20px;
         height: 20px;
       }
@@ -303,11 +356,6 @@
         padding: 0.4rem;
       }
 
-      .chat-input button svg {
-        width: 20px;
-        height: 20px;
-      }
-
       .message {
         font-size: clamp(0.75rem, 2vw, 0.8rem);
       }
@@ -321,20 +369,28 @@
         font-size: clamp(0.75rem, 2vw, 0.8rem);
         padding: 0.4rem 0.8rem;
       }
+
+      .spinner {
+        width: 48px;
+        height: 48px;
+        border-width: 4px;
+      }
+
+      .spinner::before {
+        width: 10px;
+        height: 10px;
+      }
     }
   </style>
 </head>
 <body>
   <div class="loading-overlay hidden" id="loading-overlay">
-    <svg class="animate-spin h-8 w-8 text-red-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4z"/>
-    </svg>
+    <div class="spinner"></div>
   </div>
   <div class="upload-progress" id="upload-progress">Uploading: 0%</div>
   <div class="container">
     <div class="chat-header">
-      <button class="back-btn" aria-label="Back to main page">
+      <button class="back-btn" aria-label="Back to main page" id="back-btn">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
         </svg>
@@ -344,7 +400,7 @@
         <span id="recipient-username">Loading...</span>
         <div id="recipient-status" class="status">Offline</div>
       </div>
-      <button class="kebab-btn" aria-label="Chat options">
+      <button class="kebab-btn" aria-label="Chat options" id="kebab-btn">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v.01M12 12v.01M12 18v.01"/>
         </svg>
@@ -373,9 +429,9 @@
   </div>
 
   <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
-    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
-    import { getDatabase, ref, onValue, set, push, get, update, remove, onDisconnect } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-database.js";
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
+    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
+    import { getDatabase, ref, onValue, set, push, get, update, remove, onDisconnect } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
@@ -392,8 +448,8 @@
     const db = getDatabase();
 
     const loadingOverlay = document.getElementById("loading-overlay");
-    const backBtn = document.querySelector(".back-btn");
-    const kebabBtn = document.querySelector(".kebab-btn");
+    const backBtn = document.getElementById("back-btn");
+    const kebabBtn = document.getElementById("kebab-btn");
     const kebabMenu = document.getElementById("kebab-menu");
     const deleteChatBtn = document.getElementById("delete-chat-btn");
     const changeWallpaperBtn = document.getElementById("change-wallpaper-btn");
@@ -411,18 +467,30 @@
     let currentUserUid = null;
     let otherUserUid = null;
     let chatId = null;
+    let lastMessageCount = 0;
 
     const cloudinaryCloudName = 'YOUR_CLOUDINARY_CLOUD_NAME';
     const cloudinaryUploadPreset = 'YOUR_UPLOAD_PRESET';
     const cloudinaryApiUrl = `https://api.cloudinary.com/v1_1/${cloudinaryCloudName}/image/upload`;
 
-    function showLoading() { loadingOverlay.classList.remove("hidden"); }
-    function hideLoading() { loadingOverlay.classList.add("hidden"); }
+    function showLoading() {
+      console.log("Showing loading overlay");
+      loadingOverlay.classList.remove("hidden");
+    }
+
+    function hideLoading() {
+      console.log("Hiding loading overlay");
+      loadingOverlay.classList.add("hidden");
+    }
+
     function showUploadProgress(percent) {
       uploadProgress.textContent = `Uploading: ${percent}%`;
       uploadProgress.classList.add("active");
     }
-    function hideUploadProgress() { uploadProgress.classList.remove("active"); }
+
+    function hideUploadProgress() {
+      uploadProgress.classList.remove("active");
+    }
 
     function timeAgo(timestamp) {
       if (!timestamp) return "Offline";
@@ -434,11 +502,39 @@
       return `${Math.floor(diff / 86400000)}d ago`;
     }
 
-    function toggleKebabMenu() {
-      kebabMenu.classList.toggle("active");
+    // Debounce function for click/touch events
+    function debounce(func, wait) {
+      let timeout;
+      return function executedFunction(...args) {
+        const later = () => {
+          clearTimeout(timeout);
+          func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+      };
     }
 
+    // Debounce status updates
+    function debounceStatusUpdate(func, wait) {
+      let timeout;
+      return function executedFunction(...args) {
+        clearTimeout(timeout);
+        timeout = setTimeout(() => func(...args), wait);
+      };
+    }
+
+    const toggleKebabMenu = debounce(() => {
+      console.log("Toggling kebab menu");
+      kebabMenu.classList.toggle("active");
+    }, 200);
+
     kebabBtn.addEventListener('click', toggleKebabMenu);
+    kebabBtn.addEventListener('touchend', (e) => {
+      e.preventDefault();
+      console.log("Kebab button touchend triggered");
+      toggleKebabMenu();
+    });
 
     document.addEventListener('click', (e) => {
       if (!kebabBtn.contains(e.target) && !kebabMenu.contains(e.target)) {
@@ -448,7 +544,8 @@
 
     onAuthStateChanged(auth, async user => {
       if (!user) {
-        location.href = "signup.html";
+        console.error("User not authenticated, redirecting to signup.html");
+        window.location.href = "signup.html";
         return;
       }
       currentUserUid = user.uid;
@@ -479,7 +576,7 @@
 
         await loadChat(user.uid, otherUserUid);
       } catch (error) {
-        console.error('Error initializing chat:', error);
+        console.error('Error initializing chat:', error.message);
         chatArea.innerHTML = `<p class="error">Error initializing chat: ${error.message}</p>`;
         hideLoading();
       }
@@ -494,15 +591,19 @@
         recipientUsername.textContent = userData.name || 'Unknown';
         recipientStatus.textContent = userData.presence === 'online' ? 'Online' : `Last seen ${timeAgo(userData.lastSeen)}`;
 
+        const updateStatus = debounceStatusUpdate((data) => {
+          recipientStatus.textContent = data.presence === 'online' ? 'Online' : `Last seen ${timeAgo(data.lastSeen)}`;
+        }, 500);
+
         onValue(ref(db, `users/${otherUid}`), (snap) => {
           if (snap.exists()) {
-            const data = snap.val();
-            recipientStatus.textContent = data.presence === 'online' ? 'Online' : `Last seen ${timeAgo(data.lastSeen)}`;
+            updateStatus(snap.val());
           }
         });
 
         const chatRef = ref(db, `chats/${chatId}`);
         const chatSnap = await get(chatRef);
+        let wallpaperCache = null;
         if (!chatSnap.exists()) {
           await set(chatRef, {
             participants: {
@@ -516,18 +617,21 @@
           await update(ref(db, `chats/${chatId}/participants/${currentUid}`), { unreadCount: 0 });
           const chatData = chatSnap.val();
           if (chatData.wallpaper) {
-            chatArea.style.backgroundImage = `url(${chatData.wallpaper})`;
+            wallpaperCache = chatData.wallpaper;
+            chatArea.style.backgroundImage = `url(${wallpaperCache})`;
           }
         }
 
         onValue(ref(db, `chats/${chatId}/wallpaper`), (snap) => {
           const wallpaperUrl = snap.val();
-          chatArea.style.backgroundImage = wallpaperUrl ? `url(${wallpaperUrl})` : 'none';
+          if (wallpaperUrl !== wallpaperCache) {
+            wallpaperCache = wallpaperUrl;
+            chatArea.style.backgroundImage = wallpaperUrl ? `url(${wallpaperUrl})` : 'none';
+          }
         });
 
         const messagesRef = ref(db, `messages/${chatId}`);
         onValue(messagesRef, async (messagesSnap) => {
-          chatArea.innerHTML = '<div class="loading">Loading messages...</div>';
           if (!messagesSnap.exists()) {
             chatArea.innerHTML = '<div class="placeholder">No messages yet.</div>';
             hideLoading();
@@ -536,31 +640,47 @@
 
           const messages = messagesSnap.val();
           const sortedMessages = Object.entries(messages).sort((a, b) => (a[1].timestamp || 0) - (b[1].timestamp || 0));
-          chatArea.innerHTML = '';
+          const messageCount = sortedMessages.length;
+
+          if (messageCount === lastMessageCount) return; // Skip if no new messages
+          lastMessageCount = messageCount;
+
+          const fragment = document.createDocumentFragment();
+          const messagesToUpdate = [];
 
           for (const [mid, message] of sortedMessages) {
             const messageElement = renderMessage(mid, message, currentUid);
-            chatArea.appendChild(messageElement);
+            fragment.appendChild(messageElement);
 
             if (message.sender !== currentUid && !message.read) {
-              await update(ref(db, `messages/${chatId}/${mid}`), { read: true });
-              const chatSnap = await get(ref(db, `chats/${chatId}/participants/${currentUid}`));
-              const currentUnread = chatSnap.val()?.unreadCount || 0;
-              if (currentUnread > 0) {
-                await update(ref(db, `chats/${chatId}/participants/${currentUid}`), { unreadCount: currentUnread - 1 });
-              }
+              messagesToUpdate.push({ mid, path: `messages/${chatId}/${mid}` });
             }
           }
 
-          chatArea.scrollTop = chatArea.scrollHeight;
+          chatArea.innerHTML = '';
+          chatArea.appendChild(fragment);
+
+          for (const { mid, path } of messagesToUpdate) {
+            await update(ref(db, path), { read: true });
+            const chatSnap = await get(ref(db, `chats/${chatId}/participants/${currentUid}`));
+            const currentUnread = chatSnap.val()?.unreadCount || 0;
+            if (currentUnread > 0) {
+              await update(ref(db, `chats/${chatId}/participants/${currentUid}`), { unreadCount: currentUnread - 1 });
+            }
+          }
+
+          requestAnimationFrame(() => {
+            chatArea.scrollTop = chatArea.scrollHeight;
+          });
+
           hideLoading();
         }, (error) => {
-          console.error('Error loading messages:', error);
+          console.error('Error loading messages:', error.message);
           chatArea.innerHTML = `<p class="error">Failed to load messages: ${error.message}</p>`;
           hideLoading();
         });
       } catch (error) {
-        console.error('Error loading chat:', error);
+        console.error('Error loading chat:', error.message);
         chatArea.innerHTML = `<p class="error">Failed to load chat: ${error.message}</p>`;
         hideLoading();
       }
@@ -587,8 +707,9 @@
       return div;
     }
 
-    sendBtn.addEventListener('click', async () => {
+    const sendMessage = debounce(async () => {
       if (!messageInput.value.trim() || !chatId) return;
+      console.log("Sending message");
       try {
         const messageRef = push(ref(db, `messages/${chatId}`));
         await set(messageRef, {
@@ -601,17 +722,23 @@
         const currentUnread = chatSnap.val()?.unreadCount || 0;
         await update(ref(db, `chats/${chatId}/participants/${otherUserUid}`), { unreadCount: currentUnread + 1 });
         messageInput.value = '';
-        chatArea.scrollTop = chatArea.scrollHeight;
       } catch (error) {
-        console.error('Error sending message:', error);
+        console.error('Error sending message:', error.message);
         chatArea.innerHTML += `<p class="error">Failed to send message: ${error.message}</p>`;
       }
+    }, 200);
+
+    sendBtn.addEventListener('click', sendMessage);
+    sendBtn.addEventListener('touchend', (e) => {
+      e.preventDefault();
+      console.log("Send button touchend triggered");
+      sendMessage();
     });
 
     messageInput.addEventListener('keypress', async (e) => {
       if (e.key === 'Enter' && messageInput.value.trim() && chatId) {
         e.preventDefault();
-        sendBtn.click();
+        sendMessage();
       }
     });
 
@@ -649,7 +776,6 @@
             try {
               if (isWallpaper) {
                 await set(ref(db, `chats/${chatId}/wallpaper`), mediaUrl);
-                chatArea.style.backgroundImage = `url(${mediaUrl})`;
               } else {
                 const messageRef = push(ref(db, `messages/${chatId}`));
                 await set(messageRef, {
@@ -663,10 +789,9 @@
                 const chatSnap = await get(ref(db, `chats/${chatId}/participants/${otherUserUid}`));
                 const currentUnread = chatSnap.val()?.unreadCount || 0;
                 await update(ref(db, `chats/${chatId}/participants/${otherUserUid}`), { unreadCount: currentUnread + 1 });
-                chatArea.scrollTop = chatArea.scrollHeight;
               }
             } catch (error) {
-              console.error(`Error saving ${isWallpaper ? 'wallpaper' : 'image message'}:`, error);
+              console.error(`Error saving ${isWallpaper ? 'wallpaper' : 'image message'}:`, error.message);
               chatArea.innerHTML += `<p class="error">Failed to save ${isWallpaper ? 'wallpaper' : 'image message'}.</p>`;
             }
           } else {
@@ -684,14 +809,22 @@
 
         xhr.send(formData);
       } catch (error) {
-        console.error('Error uploading image:', error);
+        console.error('Error uploading image:', error.message);
         chatArea.innerHTML += `<p class="error">Failed to upload image: ${error.message}</p>`;
         hideUploadProgress();
       }
     }
 
-    uploadBtn.addEventListener('click', () => {
+    const uploadImageTrigger = debounce(() => {
+      console.log("Upload button clicked");
       fileInput.click();
+    }, 200);
+
+    uploadBtn.addEventListener('click', uploadImageTrigger);
+    uploadBtn.addEventListener('touchend', (e) => {
+      e.preventDefault();
+      console.log("Upload button touchend triggered");
+      uploadImageTrigger();
     });
 
     fileInput.addEventListener('change', () => {
@@ -699,9 +832,17 @@
       fileInput.value = '';
     });
 
-    changeWallpaperBtn.addEventListener('click', () => {
+    const changeWallpaperTrigger = debounce(() => {
+      console.log("Change wallpaper button clicked");
       wallpaperInput.click();
       kebabMenu.classList.remove("active");
+    }, 200);
+
+    changeWallpaperBtn.addEventListener('click', changeWallpaperTrigger);
+    changeWallpaperBtn.addEventListener('touchend', (e) => {
+      e.preventDefault();
+      console.log("Change wallpaper button touchend triggered");
+      changeWallpaperTrigger();
     });
 
     wallpaperInput.addEventListener('change', () => {
@@ -709,23 +850,39 @@
       wallpaperInput.value = '';
     });
 
-    deleteChatBtn.addEventListener('click', async () => {
+    const deleteChat = debounce(async () => {
       if (!confirm('Are you sure you want to delete this chat? This action cannot be undone.')) return;
+      console.log("Deleting chat");
       try {
         showLoading();
         await remove(ref(db, `messages/${chatId}`));
         await remove(ref(db, `chats/${chatId}`));
         window.location.href = 'index.html';
       } catch (error) {
-        console.error('Error deleting chat:', error);
+        console.error('Error deleting chat:', error.message);
         chatArea.innerHTML += `<p class="error">Failed to delete chat: ${error.message}</p>`;
         hideLoading();
       }
       kebabMenu.classList.remove("active");
+    }, 200);
+
+    deleteChatBtn.addEventListener('click', deleteChat);
+    deleteChatBtn.addEventListener('touchend', (e) => {
+      e.preventDefault();
+      console.log("Delete chat button touchend triggered");
+      deleteChat();
     });
 
-    backBtn.addEventListener('click', () => {
+    const goBack = debounce(() => {
+      console.log("Back button clicked, redirecting to index.html");
       window.location.href = 'index.html';
+    }, 200);
+
+    backBtn.addEventListener('click', goBack);
+    backBtn.addEventListener('touchend', (e) => {
+      e.preventDefault();
+      console.log("Back button touchend triggered");
+      goBack();
     });
   </script>
 </body>
