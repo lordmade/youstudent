@@ -311,7 +311,7 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
     import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
-    import { getDatabase, ref, onValue, update, get, query, orderByChild, limitToLast } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
+    import { getDatabase, ref, onValue, update, get, query, orderByChild, limitToLast, equalTo } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
@@ -377,23 +377,54 @@
       document.querySelector('.spinner').classList.toggle('dark', isDark);
     }
 
+    async function validatePostId(postId, collection = 'posts') {
+      try {
+        const postRef = ref(db, `${collection}/${postId}`);
+        const snapshot = await get(postRef);
+        if (snapshot.exists()) {
+          console.log(`Validated ${collection} ID: ${postId}`);
+          return postId;
+        }
+        console.warn(`Invalid ${collection} ID: ${postId}`);
+        return null;
+      } catch (error) {
+        console.error(`Error validating ${collection} ID ${postId}:`, error.message);
+        return null;
+      }
+    }
+
     async function getLatestPostId(userId) {
       try {
         // Query posts for the user, sorted by timestamp, get the latest
-        const postsQuery = query(ref(db, 'posts'), orderByChild('userId'), limitToLast(1));
+        const postsQuery = query(ref(db, 'posts'), orderByChild('userId'), equalTo(userId), limitToLast(1));
         const postsSnapshot = await get(postsQuery);
+        let latestPostId = null;
+        let latestTimestamp = 0;
+
         if (postsSnapshot.exists()) {
           for (const [postId, post] of Object.entries(postsSnapshot.val())) {
-            if (post.userId === userId) return postId;
+            if (post.userId === userId && post.timestamp > latestTimestamp) {
+              latestPostId = postId;
+              latestTimestamp = post.timestamp;
+            }
           }
         }
-        // Check reels if no posts found
-        const reelsQuery = query(ref(db, 'reels'), orderByChild('userId'), limitToLast(1));
+
+        // Check reels
+        const reelsQuery = query(ref(db, 'reels'), orderByChild('userId'), equalTo(userId), limitToLast(1));
         const reelsSnapshot = await get(reelsQuery);
         if (reelsSnapshot.exists()) {
           for (const [reelId, reel] of Object.entries(reelsSnapshot.val())) {
-            if (reel.userId === userId) return reelId;
+            if (reel.userId === userId && reel.timestamp > latestTimestamp) {
+              latestPostId = reelId;
+              latestTimestamp = reel.timestamp;
+            }
           }
+        }
+
+        if (latestPostId) {
+          console.log(`Found latest post/reel ID: ${latestPostId} for user ${userId}`);
+          return latestPostId;
         }
         console.log(`No posts or reels found for user ${userId}`);
         return null;
@@ -439,7 +470,7 @@
 
         const notifications = [];
         for (const [key, postNotifications] of Object.entries(notificationsData)) {
-          console.log(`Processing key: ${key}`);
+          console.log(`Processing notification key: ${key}`);
           for (const [type, typeNotifications] of Object.entries(postNotifications)) {
             console.log(`Processing type: ${type}`);
             for (const [notificationId, notification] of Object.entries(typeNotifications)) {
@@ -472,12 +503,15 @@
           let text = "";
           let redirectUrl = "";
           let isClickable = true;
-
           let postId = notif.postId;
+
           if (notif.type === "follow") {
             postId = await getLatestPostId(notif.userId);
           } else if (notif.type === "verified") {
             isClickable = false;
+          } else if (postId) {
+            // Validate postId for like/comment
+            postId = await validatePostId(postId, 'posts') || await validatePostId(postId, 'reels');
           }
 
           switch (notif.type) {
@@ -500,13 +534,15 @@
 
           if (postId && notif.type !== "verified") {
             redirectUrl = `media.html?id=${postId}`;
+            console.log(`Setting redirect for ${notif.type} notification ${notif.notificationId} to ${redirectUrl}`);
           } else if (notif.type !== "verified") {
-            console.warn(`Missing postId for ${notif.type} notification: ${notif.notificationId}`);
+            console.warn(`No valid postId for ${notif.type} notification ${notif.notificationId} (postId: ${postId})`);
             isClickable = false;
           }
 
           const notificationItem = document.createElement("div");
           notificationItem.className = `notification-item ${notif.read ? "" : "unread"} ${isClickable ? "" : "non-clickable"}`;
+          notificationItem.setAttribute("tabindex", isClickable ? "0" : "-1");
           notificationItem.innerHTML = `
             <img src="${userData.photoURL}" alt="${userData.username} avatar"/>
             <div class="notification-content">
