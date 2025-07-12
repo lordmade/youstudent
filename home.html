@@ -299,7 +299,7 @@
 }
 
 
-/* Post Image/Video Carousel */
+/* Post Image Carousel */
 .post-image-carousel {
   position: relative;
   width: 100%;
@@ -314,64 +314,6 @@
   height: 100%;
   transition: transform 0.3s ease;
   touch-action: pan-y; /* Allow vertical scrolling, prevent default horizontal */
-}
-
-.post-image-container img,
-.post-image-container video {
-  width: 100%;
-  height: 100%;
-  object-fit: cover; /* Ensure videos cover the area like images */
-  flex-shrink: 0;
-  background: var(--background); /* Fallback background */
-}
-
-.post-image-container video {
-  border-radius: 8px; /* Match image border-radius */
-}
-
-/* Play Button Overlay for Videos */
-.video-play-overlay {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  background: rgba(0, 0, 0, 0.5);
-  border-radius: 50%;
-  width: 48px;
-  height: 48px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  z-index: 5;
-  transition: opacity 0.2s ease;
-}
-
-.video-play-overlay:hover {
-  opacity: 0.8;
-}
-
-.video-play-overlay svg {
-  width: 24px;
-  height: 24px;
-  fill: var(--white);
-}
-
-.post-image-container video.playing + .video-play-overlay {
-  display: none; /* Hide play button when video is playing */
-}
-
-/* Responsive Design */
-@media (max-width: 414px) {
-  .video-play-overlay {
-    width: 40px;
-    height: 40px;
-  }
-
-  .video-play-overlay svg {
-    width: 20px;
-    height: 20px;
-  }
 }
 
 .post-image-container img {
@@ -1153,8 +1095,7 @@
   }
 }
 
-
-/* Loading Overlay */
+    /* Loading Overlay */
 .loading-overlay {
   position: fixed;
   inset: 0;
@@ -1237,60 +1178,7 @@
     height: 10px;
   }
 }
-
-
-/* Friend Item Layout */
-.friend-item {
-  display: flex;
-  align-items: center;
-  padding: 0.75rem;
-  border-bottom: 1px solid var(--border);
-  cursor: pointer;
-  transition: background 0.2s ease;
-  justify-content: space-between;
-}
-
-.friend-item .friend-info {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  margin-left: 1rem;
-  position: relative; /* For positioning the badge */
-}
-
-.friend-item .last-message-timestamp {
-  font-size: clamp(0.7rem, 2.5vw, 0.75rem);
-  color: var(--text-light);
-  margin-top: 0.2rem;
-}
-
-/* Unread Message Badge */
-.friend-item .unread-badge {
-  position: absolute;
-  top: 0;
-  left: -1.5rem; /* Position to the left of username */
-  background: var(--primary-red);
-  color: var(--white);
-  font-size: clamp(0.65rem, 2vw, 0.7rem);
-  font-weight: 600;
-  border-radius: 9999px;
-  padding: 0.2rem 0.5rem;
-  min-width: 1.2rem;
-  text-align: center;
-  line-height: 1;
-}
-
-/* Responsive Design */
-@media (max-width: 414px) {
-  .friend-item .unread-badge {
-    font-size: clamp(0.6rem, 1.8vw, 0.65rem);
-    padding: 0.15rem 0.4rem;
-    min-width: 1rem;
-    left: -1.2rem;
-  }
-}
-
-  
+    
   </style>
 </head>
 <body>
@@ -1657,7 +1545,9 @@ tabBtns.forEach(btn => {
     });
 
 
-    async function loadPosts() {
+    
+    
+async function loadPosts() {
   const postsContainer = document.getElementById("posts-container");
   const postsRef = query(ref(db, "posts"), orderByChild("timestamp"), limitToLast(20));
 
@@ -1686,7 +1576,7 @@ tabBtns.forEach(btn => {
     postsContainer.innerHTML = "";
     const posts = Object.entries(postsData)
       .map(([id, post]) => ({ id, ...post }))
-      .filter(post => post.userId && post.imageUrls?.length > 0 && post.timestamp);
+      .filter(post => post.userId && (post.imageUrls?.length > 0 || post.imageUrl) && post.timestamp);
 
     if (posts.length === 0) {
       postsContainer.innerHTML = '<div class="placeholder">No posts available.</div>';
@@ -1714,6 +1604,7 @@ tabBtns.forEach(btn => {
     finalPosts.forEach(post => {
       const isFollowing = !!followingData[post.userId];
       const showFollowButton = post.userId !== currentUserUid;
+      // Handle single image (backward compatibility) or multiple images
       const imageUrls = Array.isArray(post.imageUrls) ? post.imageUrls : [post.imageUrl].filter(Boolean);
       const postElement = document.createElement("div");
       postElement.className = "post";
@@ -1758,11 +1649,11 @@ tabBtns.forEach(btn => {
             <span class="like-count">${post.likes || 0}</span>
           </button>
           <button class="comment-btn" aria-label="Comment on post">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M21 11.5a8.5 8.5 0 01-11.4 7.9l-4.6 1.5 1.5-4.6A8.5 8.5 0 1121 11.5z"/>
-            </svg>
-            <span class="comment-count">${Object.keys(post.comments || {}).length}</span>
-          </button>
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <path d="M21 11.5a8.5 8.5 0 01-11.4 7.9l-4.6 1.5 1.5-4.6A8.5 8.5 0 1121 11.5z"/>
+  </svg>
+  <span class="comment-count">${Object.keys(post.comments || {}).length}</span>
+</button>
           ${post.song ? `
             <button class="play-song-btn" aria-label="Toggle song playback" disabled>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1907,9 +1798,7 @@ tabBtns.forEach(btn => {
     hideLoading();
   }
 }
-            
       
-
 
     function toggleLike(postId, button) {
       const userId = currentUserUid;
@@ -2062,103 +1951,49 @@ tabBtns.forEach(btn => {
     });
   });
 
-// Friends Tab
-const friendsRef = ref(db, `users/${currentUserUid}/friends`);
-showLoading();
-onValue(friendsRef, async (snapshot) => {
-  friendsContainer.innerHTML = '<div class="loading">Loading friends...</div>';
-  try {
-    const friendsData = snapshot.val() || {};
-    friendsContainer.innerHTML = "";
-    if (Object.keys(friendsData).length === 0) {
-      friendsContainer.innerHTML = '<div class="placeholder">No friends found.</div>';
-    } else {
-      const usersSnap = await get(ref(db, "users"));
-      const users = usersSnap.val() || {};
-      for (const friendUid in friendsData) {
-        const userData = users[friendUid] || { username: "Unknown", photoURL: null };
-        // Fetch the most recent message and unread count for this friend
-        let lastMessageTimestamp = null;
-        let lastMessageTimeAgo = "No messages yet";
-        let unreadCount = 0;
-        try {
-          // Create composite keys for both directions
-          const chatKey1 = `${currentUserUid}_${friendUid}`;
-          const chatKey2 = `${friendUid}_${currentUserUid}`;
-          // Query messages for both directions
-          const messagesRef1 = query(ref(db, `messages/${chatKey1}`), orderByChild("timestamp"), limitToLast(1));
-          const messagesRef2 = query(ref(db, `messages/${chatKey2}`), orderByChild("timestamp"));
-          const [snap1, snap2] = await Promise.all([
-            Promise.race([
-              get(messagesRef1),
-              new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout fetching messages")), 5000))
-            ]).catch(() => null),
-            Promise.race([
-              get(messagesRef2),
-              new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout fetching messages")), 5000))
-            ]).catch(() => null)
-          ]);
-          // Find the most recent message
-          let latestMessage = null;
-          if (snap1 && snap1.exists()) {
-            snap1.forEach(child => {
-              latestMessage = { id: child.key, ...child.val() };
-            });
-          }
-          if (snap2 && snap2.exists()) {
-            let tempMessage;
-            snap2.forEach(child => {
-              const msg = { id: child.key, ...child.val() };
-              if (!latestMessage || (msg.timestamp > latestMessage.timestamp)) {
-                latestMessage = msg;
-              }
-              // Count unread messages (sent by friend, not read by current user)
-              if (msg.senderId === friendUid && msg.receiverId === currentUserUid && msg.read === false) {
-                unreadCount++;
-              }
-            });
-          }
-          if (latestMessage) {
-            lastMessageTimestamp = latestMessage.timestamp;
-            lastMessageTimeAgo = timeAgo(lastMessageTimestamp);
-          }
-        } catch (error) {
-          console.warn(`Error fetching messages for friend ${friendUid}:`, error.message);
-          lastMessageTimeAgo = "No messages yet";
-          unreadCount = 0;
-        }
-        const friendItem = document.createElement("div");
-        friendItem.className = "friend-item";
-        friendItem.innerHTML = `
-          <img src="${userData.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${userData.username} avatar"/>
-          <div class="friend-info">
+  // Friends Tab
+  const friendsRef = ref(db, `users/${currentUserUid}/friends`);
+  showLoading();
+  onValue(friendsRef, async (snapshot) => {
+    friendsContainer.innerHTML = '<div class="loading">Loading friends...</div>';
+    try {
+      const friendsData = snapshot.val() || {};
+      friendsContainer.innerHTML = "";
+      if (Object.keys(friendsData).length === 0) {
+        friendsContainer.innerHTML = '<div class="placeholder">No friends found.</div>';
+      } else {
+        const usersSnap = await get(ref(db, "users"));
+        const users = usersSnap.val() || {};
+        for (const friendUid in friendsData) {
+          const userData = users[friendUid] || { username: "Unknown", photoURL: null };
+          const friendItem = document.createElement("div");
+          friendItem.className = "friend-item";
+          friendItem.innerHTML = `
+            <img src="${userData.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${userData.username} avatar"/>
             <span>${userData.username}</span>
-            ${unreadCount > 0 ? `<span class="unread-badge">${unreadCount}</span>` : ''}
-            <span class="last-message-timestamp">${lastMessageTimeAgo}</span>
-          </div>
-          <button class="friend-item-btn message">Message</button>
-        `;
-        friendItem.querySelector(".friend-item-btn").addEventListener("click", (e) => {
-          e.stopPropagation();
-          console.log(`Navigating to chat with user: ${friendUid}`);
-          location.href = `chat.html?uid=${friendUid}`;
-        });
-        friendItem.addEventListener("click", (e) => {
-          if (e.target.classList.contains("friend-item-btn")) return;
-          console.log("Navigating to profile:", friendUid);
-          location.href = `profile.html?uid=${friendUid}`;
-          pauseAllMedia();
-        });
-        friendsContainer.appendChild(friendItem);
+            <button class="friend-item-btn message">Message</button>
+          `;
+          friendItem.querySelector(".friend-item-btn").addEventListener("click", (e) => {
+            e.stopPropagation();
+            console.log(`Navigating to chat with user: ${friendUid}`);
+            location.href = `chat.html?uid=${friendUid}`;
+          });
+          friendItem.addEventListener("click", (e) => {
+            if (e.target.classList.contains("friend-item-btn")) return;
+            console.log("Navigating to profile:", friendUid);
+            location.href = `profile.html?uid=${friendUid}`;
+            pauseAllMedia();
+          });
+          friendsContainer.appendChild(friendItem);
+        }
       }
+    } catch (error) {
+      console.error("Error loading friends:", error.code, error.message);
+      friendsContainer.innerHTML = `<p class="error">Failed to load friends: ${error.message}</p>`;
+    } finally {
+      hideLoading();
     }
-  } catch (error) {
-    console.error("Error loading friends:", error.code, error.message);
-    friendsContainer.innerHTML = `<p class="error">Failed to load friends: ${error.message}</p>`;
-  } finally {
-    hideLoading();
-  }
-}, { onlyOnce: false });
+  }, { onlyOnce: false });
 
   // Followers Tab
   const followersRef = ref(db, `users/${currentUserUid}/followers`);
@@ -2255,7 +2090,8 @@ onValue(friendsRef, async (snapshot) => {
     }
   }, { onlyOnce: false });
 }
-            
+
+      
 
     function loadSearch() {
       const searchInput = document.getElementById("search-input");
@@ -2494,4 +2330,4 @@ onValue(friendsRef, async (snapshot) => {
 }
   </script>
 </body>
-</html>
+</html>fix error on followers tab as it fails to load followers "get exists is not function"
