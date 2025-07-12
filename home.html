@@ -1657,13 +1657,7 @@ tabBtns.forEach(btn => {
     });
 
 
-    
-    
-
-    
-          
-
-      async function loadPosts() {
+    async function loadPosts() {
   const postsContainer = document.getElementById("posts-container");
   const postsRef = query(ref(db, "posts"), orderByChild("timestamp"), limitToLast(20));
 
@@ -1692,7 +1686,7 @@ tabBtns.forEach(btn => {
     postsContainer.innerHTML = "";
     const posts = Object.entries(postsData)
       .map(([id, post]) => ({ id, ...post }))
-      .filter(post => post.userId && (post.imageUrls?.length > 0 || post.videoUrls?.length > 0) && post.timestamp);
+      .filter(post => post.userId && post.imageUrls?.length > 0 && post.timestamp);
 
     if (posts.length === 0) {
       postsContainer.innerHTML = '<div class="placeholder">No posts available.</div>';
@@ -1720,11 +1714,7 @@ tabBtns.forEach(btn => {
     finalPosts.forEach(post => {
       const isFollowing = !!followingData[post.userId];
       const showFollowButton = post.userId !== currentUserUid;
-      // Combine imageUrls and videoUrls, maintaining order
-      const mediaUrls = [
-        ...(Array.isArray(post.imageUrls) ? post.imageUrls : [post.imageUrl].filter(Boolean)),
-        ...(Array.isArray(post.videoUrls) ? post.videoUrls : [post.videoUrl].filter(Boolean))
-      ];
+      const imageUrls = Array.isArray(post.imageUrls) ? post.imageUrls : [post.imageUrl].filter(Boolean);
       const postElement = document.createElement("div");
       postElement.className = "post";
       postElement.id = `post-${post.id}`;
@@ -1738,33 +1728,23 @@ tabBtns.forEach(btn => {
         </div>
         <div class="post-image-carousel" data-post-id="${post.id}">
           <div class="post-image-container">
-            ${mediaUrls.map(url => {
-              const isVideo = url.match(/\.(mp4|webm|ogg)$/i);
-              return isVideo ? `
-                <video src="${url}" muted playsinline preload="metadata" alt="Post video" onerror="this.poster='https://via.placeholder.com/150?text=Video+Not+Found';">
-                <div class="video-play-overlay">
-                  <svg viewBox="0 0 24 24">
-                    <path d="M8 5v14l11-7z"/>
-                  </svg>
-                </div>
-              ` : `
-                <img src="${url}" alt="Post image" onerror="this.src='https://via.placeholder.com/150?text=Image+Not+Found';">
-              `;
-            }).join('')}
+            ${imageUrls.map(url => `
+              <img src="${url}" alt="Post image" onerror="this.src='https://via.placeholder.com/150?text=Image+Not+Found';">
+            `).join('')}
           </div>
-          ${mediaUrls.length > 1 ? `
-            <button class="carousel-arrow left" aria-label="Previous media">
+          ${imageUrls.length > 1 ? `
+            <button class="carousel-arrow left" aria-label="Previous image">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M15 18l-6-6 6-6"/>
               </svg>
             </button>
-            <button class="carousel-arrow right" aria-label="Next media">
+            <button class="carousel-arrow right" aria-label="Next image">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M9 18l6-6-6-6"/>
               </svg>
             </button>
             <div class="carousel-indicators">
-              ${mediaUrls.map((_, index) => `
+              ${imageUrls.map((_, index) => `
                 <span class="carousel-indicator ${index === 0 ? 'active' : ''}"></span>
               `).join('')}
             </div>
@@ -1848,7 +1828,7 @@ tabBtns.forEach(btn => {
       }
 
       // Carousel swipe functionality
-      if (mediaUrls.length > 1) {
+      if (imageUrls.length > 1) {
         const carousel = postElement.querySelector(".post-image-carousel");
         const imageContainer = carousel.querySelector(".post-image-container");
         const indicators = carousel.querySelectorAll(".carousel-indicator");
@@ -1864,7 +1844,7 @@ tabBtns.forEach(btn => {
             indicator.classList.toggle("active", index === currentIndex);
           });
           leftArrow.style.display = currentIndex === 0 ? "none" : "block";
-          rightArrow.style.display = currentIndex === mediaUrls.length - 1 ? "none" : "block";
+          rightArrow.style.display = currentIndex === imageUrls.length - 1 ? "none" : "block";
         };
 
         leftArrow.addEventListener("click", (e) => {
@@ -1877,7 +1857,7 @@ tabBtns.forEach(btn => {
 
         rightArrow.addEventListener("click", (e) => {
           e.stopPropagation();
-          if (currentIndex < mediaUrls.length - 1) {
+          if (currentIndex < imageUrls.length - 1) {
             currentIndex++;
             updateCarousel();
           }
@@ -1895,7 +1875,7 @@ tabBtns.forEach(btn => {
           const currentX = e.touches[0].clientX;
           const diffX = startX - currentX;
           if (Math.abs(diffX) > 50) { // Swipe threshold
-            if (diffX > 0 && currentIndex < mediaUrls.length - 1) {
+            if (diffX > 0 && currentIndex < imageUrls.length - 1) {
               currentIndex++;
             } else if (diffX < 0 && currentIndex > 0) {
               currentIndex--;
@@ -1911,43 +1891,8 @@ tabBtns.forEach(btn => {
         });
       }
 
-      // Video play button functionality
-      const videos = postElement.querySelectorAll(".post-image-container video");
-      videos.forEach(video => {
-        const playOverlay = video.nextElementSibling;
-        if (playOverlay && playOverlay.classList.contains("video-play-overlay")) {
-          playOverlay.addEventListener("click", (e) => {
-            e.stopPropagation();
-            if (video.paused) {
-              pauseAllMedia(); // Pause any other playing media
-              video.play();
-              video.classList.add("playing");
-              video.controls = true; // Show controls when playing
-            } else {
-              video.pause();
-              video.classList.remove("playing");
-              video.controls = false;
-            }
-          });
-        }
-        video.addEventListener("click", (e) => {
-          e.stopPropagation();
-          // Allow video to toggle play/pause on direct click
-          if (video.paused) {
-            pauseAllMedia();
-            video.play();
-            video.classList.add("playing");
-            video.controls = true;
-          } else {
-            video.pause();
-            video.classList.remove("playing");
-            video.controls = false;
-          }
-        });
-      });
-
       postElement.addEventListener("click", (e) => {
-        if (e.target.closest('.post-actions button, .song-display, .post-header img, .post-header .user-info span:first-child, .post-follow-btn, .carousel-arrow, .video-play-overlay, video')) return;
+        if (e.target.closest('.post-actions button, .song-display, .post-header img, .post-header .user-info span:first-child, .post-follow-btn, .carousel-arrow')) return;
         console.log("Navigating to post:", post.id);
         location.href = `post.html?id=${post.id}`;
         pauseAllMedia();
@@ -1962,7 +1907,9 @@ tabBtns.forEach(btn => {
     hideLoading();
   }
 }
+            
       
+
 
     function toggleLike(postId, button) {
       const userId = currentUserUid;
