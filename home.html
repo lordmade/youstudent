@@ -299,7 +299,7 @@
 }
 
 
-/* Post Image Carousel */
+/* Post Image/Video Carousel */
 .post-image-carousel {
   position: relative;
   width: 100%;
@@ -314,6 +314,64 @@
   height: 100%;
   transition: transform 0.3s ease;
   touch-action: pan-y; /* Allow vertical scrolling, prevent default horizontal */
+}
+
+.post-image-container img,
+.post-image-container video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover; /* Ensure videos cover the area like images */
+  flex-shrink: 0;
+  background: var(--background); /* Fallback background */
+}
+
+.post-image-container video {
+  border-radius: 8px; /* Match image border-radius */
+}
+
+/* Play Button Overlay for Videos */
+.video-play-overlay {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(0, 0, 0, 0.5);
+  border-radius: 50%;
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 5;
+  transition: opacity 0.2s ease;
+}
+
+.video-play-overlay:hover {
+  opacity: 0.8;
+}
+
+.video-play-overlay svg {
+  width: 24px;
+  height: 24px;
+  fill: var(--white);
+}
+
+.post-image-container video.playing + .video-play-overlay {
+  display: none; /* Hide play button when video is playing */
+}
+
+/* Responsive Design */
+@media (max-width: 414px) {
+  .video-play-overlay {
+    width: 40px;
+    height: 40px;
+  }
+
+  .video-play-overlay svg {
+    width: 20px;
+    height: 20px;
+  }
 }
 
 .post-image-container img {
@@ -1601,7 +1659,11 @@ tabBtns.forEach(btn => {
 
     
     
-async function loadPosts() {
+
+    
+          
+
+      async function loadPosts() {
   const postsContainer = document.getElementById("posts-container");
   const postsRef = query(ref(db, "posts"), orderByChild("timestamp"), limitToLast(20));
 
@@ -1630,7 +1692,7 @@ async function loadPosts() {
     postsContainer.innerHTML = "";
     const posts = Object.entries(postsData)
       .map(([id, post]) => ({ id, ...post }))
-      .filter(post => post.userId && (post.imageUrls?.length > 0 || post.imageUrl) && post.timestamp);
+      .filter(post => post.userId && (post.imageUrls?.length > 0 || post.videoUrls?.length > 0) && post.timestamp);
 
     if (posts.length === 0) {
       postsContainer.innerHTML = '<div class="placeholder">No posts available.</div>';
@@ -1658,8 +1720,11 @@ async function loadPosts() {
     finalPosts.forEach(post => {
       const isFollowing = !!followingData[post.userId];
       const showFollowButton = post.userId !== currentUserUid;
-      // Handle single image (backward compatibility) or multiple images
-      const imageUrls = Array.isArray(post.imageUrls) ? post.imageUrls : [post.imageUrl].filter(Boolean);
+      // Combine imageUrls and videoUrls, maintaining order
+      const mediaUrls = [
+        ...(Array.isArray(post.imageUrls) ? post.imageUrls : [post.imageUrl].filter(Boolean)),
+        ...(Array.isArray(post.videoUrls) ? post.videoUrls : [post.videoUrl].filter(Boolean))
+      ];
       const postElement = document.createElement("div");
       postElement.className = "post";
       postElement.id = `post-${post.id}`;
@@ -1673,23 +1738,33 @@ async function loadPosts() {
         </div>
         <div class="post-image-carousel" data-post-id="${post.id}">
           <div class="post-image-container">
-            ${imageUrls.map(url => `
-              <img src="${url}" alt="Post image" onerror="this.src='https://via.placeholder.com/150?text=Image+Not+Found';">
-            `).join('')}
+            ${mediaUrls.map(url => {
+              const isVideo = url.match(/\.(mp4|webm|ogg)$/i);
+              return isVideo ? `
+                <video src="${url}" muted playsinline preload="metadata" alt="Post video" onerror="this.poster='https://via.placeholder.com/150?text=Video+Not+Found';">
+                <div class="video-play-overlay">
+                  <svg viewBox="0 0 24 24">
+                    <path d="M8 5v14l11-7z"/>
+                  </svg>
+                </div>
+              ` : `
+                <img src="${url}" alt="Post image" onerror="this.src='https://via.placeholder.com/150?text=Image+Not+Found';">
+              `;
+            }).join('')}
           </div>
-          ${imageUrls.length > 1 ? `
-            <button class="carousel-arrow left" aria-label="Previous image">
+          ${mediaUrls.length > 1 ? `
+            <button class="carousel-arrow left" aria-label="Previous media">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M15 18l-6-6 6-6"/>
               </svg>
             </button>
-            <button class="carousel-arrow right" aria-label="Next image">
+            <button class="carousel-arrow right" aria-label="Next media">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M9 18l6-6-6-6"/>
               </svg>
             </button>
             <div class="carousel-indicators">
-              ${imageUrls.map((_, index) => `
+              ${mediaUrls.map((_, index) => `
                 <span class="carousel-indicator ${index === 0 ? 'active' : ''}"></span>
               `).join('')}
             </div>
@@ -1703,11 +1778,11 @@ async function loadPosts() {
             <span class="like-count">${post.likes || 0}</span>
           </button>
           <button class="comment-btn" aria-label="Comment on post">
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-    <path d="M21 11.5a8.5 8.5 0 01-11.4 7.9l-4.6 1.5 1.5-4.6A8.5 8.5 0 1121 11.5z"/>
-  </svg>
-  <span class="comment-count">${Object.keys(post.comments || {}).length}</span>
-</button>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 11.5a8.5 8.5 0 01-11.4 7.9l-4.6 1.5 1.5-4.6A8.5 8.5 0 1121 11.5z"/>
+            </svg>
+            <span class="comment-count">${Object.keys(post.comments || {}).length}</span>
+          </button>
           ${post.song ? `
             <button class="play-song-btn" aria-label="Toggle song playback" disabled>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1773,7 +1848,7 @@ async function loadPosts() {
       }
 
       // Carousel swipe functionality
-      if (imageUrls.length > 1) {
+      if (mediaUrls.length > 1) {
         const carousel = postElement.querySelector(".post-image-carousel");
         const imageContainer = carousel.querySelector(".post-image-container");
         const indicators = carousel.querySelectorAll(".carousel-indicator");
@@ -1789,7 +1864,7 @@ async function loadPosts() {
             indicator.classList.toggle("active", index === currentIndex);
           });
           leftArrow.style.display = currentIndex === 0 ? "none" : "block";
-          rightArrow.style.display = currentIndex === imageUrls.length - 1 ? "none" : "block";
+          rightArrow.style.display = currentIndex === mediaUrls.length - 1 ? "none" : "block";
         };
 
         leftArrow.addEventListener("click", (e) => {
@@ -1802,7 +1877,7 @@ async function loadPosts() {
 
         rightArrow.addEventListener("click", (e) => {
           e.stopPropagation();
-          if (currentIndex < imageUrls.length - 1) {
+          if (currentIndex < mediaUrls.length - 1) {
             currentIndex++;
             updateCarousel();
           }
@@ -1820,7 +1895,7 @@ async function loadPosts() {
           const currentX = e.touches[0].clientX;
           const diffX = startX - currentX;
           if (Math.abs(diffX) > 50) { // Swipe threshold
-            if (diffX > 0 && currentIndex < imageUrls.length - 1) {
+            if (diffX > 0 && currentIndex < mediaUrls.length - 1) {
               currentIndex++;
             } else if (diffX < 0 && currentIndex > 0) {
               currentIndex--;
@@ -1836,8 +1911,43 @@ async function loadPosts() {
         });
       }
 
+      // Video play button functionality
+      const videos = postElement.querySelectorAll(".post-image-container video");
+      videos.forEach(video => {
+        const playOverlay = video.nextElementSibling;
+        if (playOverlay && playOverlay.classList.contains("video-play-overlay")) {
+          playOverlay.addEventListener("click", (e) => {
+            e.stopPropagation();
+            if (video.paused) {
+              pauseAllMedia(); // Pause any other playing media
+              video.play();
+              video.classList.add("playing");
+              video.controls = true; // Show controls when playing
+            } else {
+              video.pause();
+              video.classList.remove("playing");
+              video.controls = false;
+            }
+          });
+        }
+        video.addEventListener("click", (e) => {
+          e.stopPropagation();
+          // Allow video to toggle play/pause on direct click
+          if (video.paused) {
+            pauseAllMedia();
+            video.play();
+            video.classList.add("playing");
+            video.controls = true;
+          } else {
+            video.pause();
+            video.classList.remove("playing");
+            video.controls = false;
+          }
+        });
+      });
+
       postElement.addEventListener("click", (e) => {
-        if (e.target.closest('.post-actions button, .song-display, .post-header img, .post-header .user-info span:first-child, .post-follow-btn, .carousel-arrow')) return;
+        if (e.target.closest('.post-actions button, .song-display, .post-header img, .post-header .user-info span:first-child, .post-follow-btn, .carousel-arrow, .video-play-overlay, video')) return;
         console.log("Navigating to post:", post.id);
         location.href = `post.html?id=${post.id}`;
         pauseAllMedia();
