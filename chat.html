@@ -93,8 +93,18 @@
       margin-right: 0.75rem;
     }
 
-    .kebab-btn, .video-call-btn, .end-call-btn {
+    .kebab-btn, .video-call-btn {
       margin-left: 0.5rem;
+    }
+
+    .end-call-btn {
+      background: var(--primary-red);
+      border-radius: 50%;
+      width: 48px;
+      height: 48px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
 
     .back-btn:hover svg, .kebab-btn:hover svg, .video-call-btn:hover svg, .end-call-btn:hover svg {
@@ -109,6 +119,15 @@
     }
 
     .chat-input button:hover svg {
+      fill: var(--white);
+    }
+
+    .end-call-btn:hover {
+      background: #d43f4e;
+      transform: scale(1.1);
+    }
+
+    .end-call-btn svg {
       fill: var(--white);
     }
 
@@ -476,19 +495,37 @@
       pointer-events: auto;
     }
 
-    .video-call-container video {
-      max-width: 45%;
-      max-height: 45%;
+    .main-video {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      border-radius: 0;
+      z-index: 1;
+    }
+
+    .overlay-video {
+      position: absolute;
+      top: 1rem;
+      right: 1rem;
+      width: 120px;
+      height: 120px;
       object-fit: cover;
       border-radius: 8px;
-      margin: 0.5rem;
       border: 2px solid var(--white);
+      z-index: 2;
     }
 
     .video-call-controls {
+      position: absolute;
+      bottom: 1rem;
+      left: 50%;
+      transform: translateX(-50%);
       display: flex;
       gap: 1rem;
-      margin-top: 1rem;
+      z-index: 3;
     }
 
     .call-status {
@@ -499,6 +536,10 @@
       color: var(--white);
       font-size: 1rem;
       font-weight: 600;
+      z-index: 3;
+      background: rgba(0, 0, 0, 0.5);
+      padding: 0.5rem 1rem;
+      border-radius: 8px;
     }
 
     @media (max-width: 414px) {
@@ -580,9 +621,26 @@
         height: 10px;
       }
 
-      .video-call-container video {
-        max-width: 90%;
-        max-height: 40%;
+      .overlay-video {
+        width: 80px;
+        height: 80px;
+        top: 0.5rem;
+        right: 0.5rem;
+      }
+
+      .end-call-btn {
+        width: 40px;
+        height: 40px;
+      }
+
+      .end-call-btn svg {
+        width: 18px;
+        height: 18px;
+      }
+
+      .call-status {
+        font-size: 0.9rem;
+        padding: 0.4rem 0.8rem;
       }
     }
   </style>
@@ -601,8 +659,8 @@
   </div>
   <div class="video-call-container hidden" id="video-call-container" role="dialog" aria-label="Video call interface">
     <div class="call-status" id="call-status">Connecting...</div>
-    <video id="local-video" autoplay muted playsinline></video>
-    <video id="remote-video" autoplay playsinline></video>
+    <video id="local-video" autoplay muted playsinline class="main-video"></video>
+    <video id="remote-video" autoplay playsinline class="overlay-video"></video>
     <div class="video-call-controls">
       <button class="end-call-btn" id="end-call-btn" aria-label="End video call">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
@@ -710,9 +768,10 @@
     let peerConnection = null;
     let localStream = null;
     let callActive = false;
+    let isCaller = false;
 
-    const cloudinaryCloudName = 'dqkujefxj';
-    const cloudinaryUploadPreset = 'banter_box';
+    const cloudinaryCloudName = 'YOUR_CLOUDINARY_CLOUD_NAME';
+    const cloudinaryUploadPreset = 'YOUR_UPLOAD_PRESET';
     const cloudinaryApiUrl = `https://api.cloudinary.com/v1_1/${cloudinaryCloudName}/image/upload`;
 
     const iceConfiguration = {
@@ -756,6 +815,18 @@
     function showVideoCall(statusText) {
       console.log("Showing video call interface:", statusText);
       callStatus.textContent = statusText;
+      // Set video classes based on call role
+      if (isCaller) {
+        localVideo.classList.add("main-video");
+        localVideo.classList.remove("overlay-video");
+        remoteVideo.classList.add("overlay-video");
+        remoteVideo.classList.remove("main-video");
+      } else {
+        localVideo.classList.add("overlay-video");
+        localVideo.classList.remove("main-video");
+        remoteVideo.classList.add("main-video");
+        remoteVideo.classList.remove("overlay-video");
+      }
       videoCallContainer.classList.add("active");
     }
 
@@ -773,7 +844,10 @@
       }
       localVideo.srcObject = null;
       remoteVideo.srcObject = null;
+      localVideo.classList.remove("main-video", "overlay-video");
+      remoteVideo.classList.remove("main-video", "overlay-video");
       callActive = false;
+      isCaller = false;
     }
 
     function timeAgo(timestamp) {
@@ -1113,6 +1187,7 @@
 
     async function startCall() {
       if (callActive) return;
+      isCaller = true;
       showLoading();
       try {
         localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
