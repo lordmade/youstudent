@@ -860,1020 +860,1026 @@
   </div>
 
   <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
-    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
-    import { getDatabase, ref, onValue, set, push, get, update, remove, onDisconnect } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
+          
+              
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
+import { getDatabase, ref, onValue, set, push, get, update, remove, onDisconnect } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
 
-    const firebaseConfig = {
-      apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
-      authDomain: "fire-b-a8878.firebaseapp.com",
-      databaseURL: "https://fire-b-a8878.firebaseio.com",
-      projectId: "fire-b-a8878",
-      storageBucket: "fire-b-a8878.appspot.com",
-      messagingSenderId: "658673187627",
-      appId: "1:658673187627:web:6e4c29af661785f0afa36e"
+const firebaseConfig = {
+  apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
+  authDomain: "fire-b-a8878.firebaseapp.com",
+  databaseURL: "https://fire-b-a8878.firebaseio.com",
+  projectId: "fire-b-a8878",
+  storageBucket: "fire-b-a8878.appspot.com",
+  messagingSenderId: "658673187627",
+  appId: "1:658673187627:web:6e4c29af661785f0afa36e"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth();
+const db = getDatabase();
+
+const loadingOverlay = document.getElementById("loading-overlay");
+const imageViewer = document.getElementById("image-viewer");
+const fullImage = document.getElementById("full-image");
+const closeImageBtn = document.getElementById("close-image-btn");
+const videoCallContainer = document.getElementById("video-call-container");
+const localVideo = document.getElementById("local-video");
+const remoteVideo = document.getElementById("remote-video");
+const callStatus = document.getElementById("call-status");
+const videoCallBtn = document.getElementById("video-call-btn");
+const endCallBtn = document.getElementById("end-call-btn");
+const backBtn = document.getElementById("back-btn");
+const kebabBtn = document.getElementById("kebab-btn");
+const kebabMenu = document.getElementById("kebab-menu");
+const deleteChatBtn = document.getElementById("delete-chat-btn");
+const changeWallpaperBtn = document.getElementById("change-wallpaper-btn");
+const recipientPhoto = document.getElementById("recipient-photo");
+const recipientUsername = document.getElementById("recipient-username");
+const recipientStatus = document.getElementById("recipient-status");
+const chatArea = document.getElementById("chat-area");
+const messageInput = document.getElementById("message-input");
+const sendBtn = document.getElementById("send-message-btn");
+const uploadBtn = document.getElementById("upload-btn");
+const fileInput = document.getElementById("file-input");
+const wallpaperInput = document.getElementById("wallpaper-input");
+const uploadProgress = document.getElementById("upload-progress");
+
+let currentUserUid = null;
+let otherUserUid = null;
+let chatId = null;
+let lastMessageCount = 0;
+let userCache = {};
+let peerConnection = null;
+let localStream = null;
+let callActive = false;
+let isCaller = false;
+let mediaRecorder = null;
+let audioChunks = [];
+let isRecording = false;
+
+const cloudinaryCloudName = 'dqkujefxj';
+const cloudinaryUploadPreset = 'banter_box';
+const cloudinaryApiUrl = `https://api.cloudinary.com/v1_1/${cloudinaryCloudName}/raw/upload`;
+
+const iceConfiguration = {
+  iceServers: [
+    { urls: "stun:stun.l.google.com:19302" },
+    { urls: "stun:stun1.l.google.com:19302" }
+  ]
+};
+
+function showLoading() {
+  console.log("Showing loading overlay");
+  loadingOverlay.classList.remove("hidden");
+}
+
+function hideLoading() {
+  console.log("Hiding loading overlay");
+  loadingOverlay.classList.add("hidden");
+}
+
+function showImageViewer(src) {
+  console.log("Opening image viewer:", src);
+  fullImage.src = src;
+  imageViewer.classList.add("active");
+}
+
+function hideImageViewer() {
+  console.log("Closing image viewer");
+  imageViewer.classList.remove("active");
+  fullImage.src = "";
+}
+
+function showUploadProgress(percent) {
+  uploadProgress.textContent = `Uploading: ${percent}%`;
+  uploadProgress.classList.add("active");
+}
+
+function hideUploadProgress() {
+  uploadProgress.classList.remove("active");
+}
+
+function showVideoCall(statusText) {
+  console.log("Showing video call interface:", statusText);
+  callStatus.textContent = statusText;
+  if (isCaller) {
+    localVideo.classList.add("main-video");
+    localVideo.classList.remove("overlay-video");
+    remoteVideo.classList.add("overlay-video");
+    remoteVideo.classList.remove("main-video");
+  } else {
+    localVideo.classList.add("overlay-video");
+    localVideo.classList.remove("main-video");
+    remoteVideo.classList.add("main-video");
+    remoteVideo.classList.remove("overlay-video");
+  }
+  videoCallContainer.classList.add("active");
+}
+
+function hideVideoCall() {
+  console.log("Hiding video call interface");
+  videoCallContainer.classList.remove("active");
+  callStatus.textContent = "Connecting...";
+  if (localStream) {
+    localStream.getTracks().forEach(track => track.stop());
+    localStream = null;
+  }
+  if (peerConnection) {
+    peerConnection.close();
+    peerConnection = null;
+  }
+  localVideo.srcObject = null;
+  remoteVideo.srcObject = null;
+  localVideo.classList.remove("main-video", "overlay-video");
+  remoteVideo.classList.remove("main-video", "overlay-video");
+  callActive = false;
+  isCaller = false;
+}
+
+function timeAgo(timestamp) {
+  if (!timestamp) return "Offline";
+  const now = Date.now();
+  const diff = now - timestamp;
+  if (diff < 60000) return "Online";
+  if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
+  if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
+  return `${Math.floor(diff / 86400000)}d ago`;
+}
+
+function debounce(func, wait) {
+  let timeout;
+  return function executedFunction(...args) {
+    const later = () => {
+      clearTimeout(timeout);
+      func(...args);
     };
+    clearTimeout(timeout);
+    timeout = setTimeout(later, wait);
+  };
+}
 
-    const app = initializeApp(firebaseConfig);
-    const auth = getAuth();
-    const db = getDatabase();
+function debounceStatusUpdate(func, wait) {
+  let timeout;
+  return function executedFunction(...args) {
+    clearTimeout(timeout);
+    timeout = setTimeout(() => func(...args), wait);
+  };
+}
 
-    const loadingOverlay = document.getElementById("loading-overlay");
-    const imageViewer = document.getElementById("image-viewer");
-    const fullImage = document.getElementById("full-image");
-    const closeImageBtn = document.getElementById("close-image-btn");
-    const videoCallContainer = document.getElementById("video-call-container");
-    const localVideo = document.getElementById("local-video");
-    const remoteVideo = document.getElementById("remote-video");
-    const callStatus = document.getElementById("call-status");
-    const videoCallBtn = document.getElementById("video-call-btn");
-    const endCallBtn = document.getElementById("end-call-btn");
-    const backBtn = document.getElementById("back-btn");
-    const kebabBtn = document.getElementById("kebab-btn");
-    const kebabMenu = document.getElementById("kebab-menu");
-    const deleteChatBtn = document.getElementById("delete-chat-btn");
-    const changeWallpaperBtn = document.getElementById("change-wallpaper-btn");
-    const recipientPhoto = document.getElementById("recipient-photo");
-    const recipientUsername = document.getElementById("recipient-username");
-    const recipientStatus = document.getElementById("recipient-status");
-    const chatArea = document.getElementById("chat-area");
-    const messageInput = document.getElementById("message-input");
-    const sendBtn = document.getElementById("send-message-btn");
-    const uploadBtn = document.getElementById("upload-btn");
-    const fileInput = document.getElementById("file-input");
-    const wallpaperInput = document.getElementById("wallpaper-input");
-    const uploadProgress = document.getElementById("upload-progress");
+const toggleKebabMenu = debounce(() => {
+  console.log("Toggling kebab menu");
+  kebabMenu.classList.toggle("active");
+}, 200);
 
-    let currentUserUid = null;
-    let otherUserUid = null;
-    let chatId = null;
-    let lastMessageCount = 0;
-    let userCache = {};
-    let peerConnection = null;
-    let localStream = null;
-    let callActive = false;
-    let isCaller = false;
-    let mediaRecorder = null;
-    let audioChunks = [];
-    let isRecording = false;
+kebabBtn.addEventListener('click', toggleKebabMenu);
+kebabBtn.addEventListener('touchend', (e) => {
+  e.preventDefault();
+  console.log("Kebab button touchend triggered");
+  toggleKebabMenu();
+});
 
-    const cloudinaryCloudName = 'dqkujefxj';
-    const cloudinaryUploadPreset = 'banter_box';
-    const cloudinaryApiUrl = `https://api.cloudinary.com/v1_1/${cloudinaryCloudName}/raw/upload`;
+document.addEventListener('click', (e) => {
+  if (!kebabBtn.contains(e.target) && !kebabMenu.contains(e.target)) {
+    kebabMenu.classList.remove("active");
+  }
+});
 
-    const iceConfiguration = {
-      iceServers: [
-        { urls: "stun:stun.l.google.com:19302" },
-        { urls: "stun:stun1.l.google.com:19302" }
-      ]
-    };
+const closeImageViewer = debounce(() => {
+  hideImageViewer();
+}, 200);
 
-    function showLoading() {
-      console.log("Showing loading overlay");
-      loadingOverlay.classList.remove("hidden");
-    }
+closeImageBtn.addEventListener('click', closeImageViewer);
+closeImageBtn.addEventListener('touchend', (e) => {
+  e.preventDefault();
+  console.log("Close image button touchend triggered");
+  closeImageViewer();
+});
 
-    function hideLoading() {
-      console.log("Hiding loading overlay");
-      loadingOverlay.classList.add("hidden");
-    }
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && imageViewer.classList.contains('active')) {
+    console.log("Escape key pressed, closing image viewer");
+    hideImageViewer();
+  }
+});
 
-    function showImageViewer(src) {
-      console.log("Opening image viewer:", src);
-      fullImage.src = src;
-      imageViewer.classList.add("active");
-    }
+imageViewer.addEventListener('click', (e) => {
+  if (e.target === imageViewer) {
+    console.log("Clicked outside image, closing viewer");
+    hideImageViewer();
+  }
+});
 
-    function hideImageViewer() {
-      console.log("Closing image viewer");
-      imageViewer.classList.remove("active");
-      fullImage.src = "";
-    }
+onAuthStateChanged(auth, async user => {
+  if (!user) {
+    console.error("User not authenticated, redirecting to signup.html");
+    window.location.href = "signup.html";
+    return;
+  }
+  currentUserUid = user.uid;
+  showLoading();
 
-    function showUploadProgress(percent) {
-      uploadProgress.textContent = `Uploading: ${percent}%`;
-      uploadProgress.classList.add("active");
-    }
-
-    function hideUploadProgress() {
-      uploadProgress.classList.remove("active");
-    }
-
-    function showVideoCall(statusText) {
-      console.log("Showing video call interface:", statusText);
-      callStatus.textContent = statusText;
-      if (isCaller) {
-        localVideo.classList.add("main-video");
-        localVideo.classList.remove("overlay-video");
-        remoteVideo.classList.add("overlay-video");
-        remoteVideo.classList.remove("main-video");
-      } else {
-        localVideo.classList.add("overlay-video");
-        localVideo.classList.remove("main-video");
-        remoteVideo.classList.add("main-video");
-        remoteVideo.classList.remove("overlay-video");
-      }
-      videoCallContainer.classList.add("active");
-    }
-
-    function hideVideoCall() {
-      console.log("Hiding video call interface");
-      videoCallContainer.classList.remove("active");
-      callStatus.textContent = "Connecting...";
-      if (localStream) {
-        localStream.getTracks().forEach(track => track.stop());
-        localStream = null;
-      }
-      if (peerConnection) {
-        peerConnection.close();
-        peerConnection = null;
-      }
-      localVideo.srcObject = null;
-      remoteVideo.srcObject = null;
-      localVideo.classList.remove("main-video", "overlay-video");
-      remoteVideo.classList.remove("main-video", "overlay-video");
-      callActive = false;
-      isCaller = false;
-    }
-
-    function timeAgo(timestamp) {
-      if (!timestamp) return "Offline";
-      const now = Date.now();
-      const diff = now - timestamp;
-      if (diff < 60000) return "Online";
-      if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
-      if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
-      return `${Math.floor(diff / 86400000)}d ago`;
-    }
-
-    function debounce(func, wait) {
-      let timeout;
-      return function executedFunction(...args) {
-        const later = () => {
-          clearTimeout(timeout);
-          func(...args);
-        };
-        clearTimeout(timeout);
-        timeout = setTimeout(later, wait);
-      };
-    }
-
-    function debounceStatusUpdate(func, wait) {
-      let timeout;
-      return function executedFunction(...args) {
-        clearTimeout(timeout);
-        timeout = setTimeout(() => func(...args), wait);
-      };
-    }
-
-    const toggleKebabMenu = debounce(() => {
-      console.log("Toggling kebab menu");
-      kebabMenu.classList.toggle("active");
-    }, 200);
-
-    kebabBtn.addEventListener('click', toggleKebabMenu);
-    kebabBtn.addEventListener('touchend', (e) => {
-      e.preventDefault();
-      console.log("Kebab button touchend triggered");
-      toggleKebabMenu();
+  try {
+    const userRef = ref(db, `users/${user.uid}`);
+    await onDisconnect(userRef).update({
+      presence: 'offline',
+      lastSeen: Date.now()
+    });
+    await update(userRef, {
+      presence: 'online',
+      lastSeen: Date.now()
     });
 
-    document.addEventListener('click', (e) => {
-      if (!kebabBtn.contains(e.target) && !kebabMenu.contains(e.target)) {
-        kebabMenu.classList.remove("active");
-      }
-    });
+    const urlParams = new URLSearchParams(window.location.search);
+    otherUserUid = urlParams.get('uid');
+    if (!otherUserUid) {
+      chatArea.innerHTML = `<p class="error">No user selected for chat.</p>`;
+      messageInput.disabled = true;
+      sendBtn.disabled = true;
+      fileInput.disabled = true;
+      wallpaperInput.disabled = true;
+      videoCallBtn.disabled = true;
+      hideLoading();
+      return;
+    }
 
-    const closeImageViewer = debounce(() => {
-      hideImageViewer();
-    }, 200);
+    const currentUserData = await get(ref(db, `users/${currentUserUid}`)).then(snap => snap.val() || { username: 'Unknown', photoURL: 'https://www.gravatar.com/avatar?d=mp' });
+    userCache[currentUserUid] = currentUserData;
 
-    closeImageBtn.addEventListener('click', closeImageViewer);
-    closeImageBtn.addEventListener('touchend', (e) => {
-      e.preventDefault();
-      console.log("Close image button touchend triggered");
-      closeImageViewer();
-    });
+    await loadChat(user.uid, otherUserUid);
+    setupCallListeners();
+  } catch (error) {
+    console.error('Error initializing chat:', error.message);
+    chatArea.innerHTML = `<p class="error">Error initializing chat: ${error.message}</p>`;
+    hideLoading();
+  }
+});
 
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && imageViewer.classList.contains('active')) {
-        console.log("Escape key pressed, closing image viewer");
-        hideImageViewer();
-      }
-    });
+function renderMessage(mid, message, currentUid) {
+  const div = document.createElement('div');
+  const isSent = message.sender === currentUid;
+  div.className = `message ${isSent ? 'sent' : 'received'}`;
+  div.dataset.mid = mid;
 
-    imageViewer.addEventListener('click', (e) => {
-      if (e.target === imageViewer) {
-        console.log("Clicked outside image, closing viewer");
-        hideImageViewer();
-      }
-    });
-
-    onAuthStateChanged(auth, async user => {
-      if (!user) {
-        console.error("User not authenticated, redirecting to signup.html");
-        window.location.href = "signup.html";
-        return;
-      }
-      currentUserUid = user.uid;
-      showLoading();
-
-      try {
-        const userRef = ref(db, `users/${user.uid}`);
-        await onDisconnect(userRef).update({
-          presence: 'offline',
-          lastSeen: Date.now()
-        });
-        await update(userRef, {
-          presence: 'online',
-          lastSeen: Date.now()
-        });
-
-        const urlParams = new URLSearchParams(window.location.search);
-        otherUserUid = urlParams.get('uid');
-        if (!otherUserUid) {
-          chatArea.innerHTML = `<p class="error">No user selected for chat.</p>`;
-          messageInput.disabled = true;
-          sendBtn.disabled = true;
-          fileInput.disabled = true;
-          wallpaperInput.disabled = true;
-          videoCallBtn.disabled = true;
-          hideLoading();
-          return;
-        }
-
-        const currentUserData = await get(ref(db, `users/${currentUserUid}`)).then(snap => snap.val() || { username: 'Unknown', photoURL: 'https://www.gravatar.com/avatar?d=mp' });
-        userCache[currentUserUid] = currentUserData;
-
-        await loadChat(user.uid, otherUserUid);
-        setupCallListeners();
-      } catch (error) {
-        console.error('Error initializing chat:', error.message);
-        chatArea.innerHTML = `<p class="error">Error initializing chat: ${error.message}</p>`;
-        hideLoading();
-      }
-    });
-
-    function renderMessage(mid, message, currentUid) {
-      const div = document.createElement('div');
-      const isSent = message.sender === currentUid;
-      div.className = `message ${isSent ? 'sent' : 'received'}`;
-      div.dataset.mid = mid;
-
-      const userData = userCache[message.sender] || { photoURL: 'https://www.gravatar.com/avatar?d=mp' };
-      let mediaContent = '';
-      if (message.mediaUrl && message.mediaType) {
-        if (message.mediaType === 'image') {
-          mediaContent = `<img src="${message.mediaUrl}" alt="Uploaded image" class="message-media" />`;
-        } else if (message.mediaType === 'audio') {
-          mediaContent = `
-            <div class="voice-note" data-audio="${message.mediaUrl}">
-              <button class="play-pause-btn" aria-label="Play voice note">
-                <svg class="play-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3l14 9-14 9V3z"/>
-                </svg>
-                <svg class="pause-icon hidden" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/>
-                </svg>
-              </button>
-              <div class="waveform">
-                <span></span><span></span><span></span><span></span><span></span>
-              </div>
-            </div>
-          `;
-        }
-      }
-
-      div.innerHTML = `
-        <img src="${userData.photoURL}" alt="${isSent ? 'Your' : 'Sender'} avatar" class="profile-pic" />
-        <div class="message-content">
-          ${mediaContent}
-          ${message.text ? `<p>${message.text}</p>` : ''}
-          <span class="message-time">${timeAgo(message.timestamp)}</span>
-          ${isSent ? `<span class="message-status">${message.read ? 'Delivered' : 'Sent'}</span>` : ''}
+  const userData = userCache[message.sender] || { photoURL: 'https://www.gravatar.com/avatar?d=mp' };
+  let mediaContent = '';
+  if (message.mediaUrl && message.mediaType) {
+    if (message.mediaType === 'image') {
+      mediaContent = `<img src="${message.mediaUrl}" alt="Uploaded image" class="message-media" />`;
+    } else if (message.mediaType === 'audio') {
+      mediaContent = `
+        <div class="voice-note" data-audio="${message.mediaUrl}">
+          <button class="play-pause-btn" aria-label="Play voice note">
+            <svg class="play-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+              <path stroke="none" fill-rule="evenodd" clip-rule="evenodd" d="M5 3l14 9-14 9V3z"/>
+            </svg>
+            <svg class="pause-icon hidden" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+              <path stroke="none" fill-rule="evenodd" clip-rule="evenodd" d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/>
+            </svg>
+          </button>
+          <div class="waveform">
+            <span></span><span></span><span></span><span></span><span></span>
+          </div>
         </div>
       `;
-      return div;
+    }
+  }
+
+  div.innerHTML = `
+    <img src="${userData.photoURL}" alt="${isSent ? 'Your' : 'Sender'} avatar" class="profile-pic" />
+    <div class="message-content">
+      ${mediaContent}
+      ${message.text ? `<p>${message.text}</p>` : ''}
+      <span class="message-time">${timeAgo(message.timestamp)}</span>
+      ${isSent ? `<span class="message-status">${message.read ? 'Delivered' : 'Sent'}</span>` : ''}
+    </div>
+  `;
+  return div;
+}
+
+async function loadChat(currentUid, otherUid) {
+  try {
+    chatId = currentUid < otherUid ? `${currentUid}_${otherUid}` : `${otherUid}_${currentUid}`;
+    const userData = await get(ref(db, `users/${otherUid}`)).then(snap => snap.val() || { username: 'Unknown', photoURL: null });
+    userCache[otherUid] = userData;
+
+    const postsSnap = await get(ref(db, 'posts'));
+    const posts = postsSnap.val() || {};
+    const userPostCount = Object.values(posts).filter(p => p.userId === otherUid).length;
+    const isVerified = userPostCount >= 10;
+
+    recipientPhoto.src = userData.photoURL || 'https://www.gravatar.com/avatar?d=mp';
+    recipientUsername.innerHTML = `${userData.username || 'Unknown'}${
+      isVerified
+        ? `<span class="verified-icon" aria-label="Verified user" title="Verified user"><svg viewBox="0 0 24 24"><path d="M9 16.2l-3.5-3.5L4 14.1 9 19 20 8l-1.4-1.4z"/></svg></span>`
+        : ''
+    }`;
+    recipientStatus.textContent = userData.presence === 'online' ? 'Online' : `Last seen ${timeAgo(userData.lastSeen)}`;
+
+    const userElements = [recipientPhoto, recipientUsername];
+    userElements.forEach(el => {
+      el.addEventListener('click', (e) => {
+        e.stopPropagation();
+        console.log("Navigating to profile:", otherUid);
+        window.location.href = `profile.html?uid=${otherUid}`;
+      });
+      el.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        console.log("Navigating to profile on touch:", otherUid);
+        window.location.href = `profile.html?uid=${otherUid}`;
+      });
+    });
+
+    const updateStatus = debounceStatusUpdate((data) => {
+      recipientStatus.textContent = data.presence === 'online' ? 'Online' : `Last seen ${timeAgo(data.lastSeen)}`;
+    }, 500);
+
+    onValue(ref(db, `users/${otherUid}`), (snap) => {
+      if (snap.exists()) {
+        userCache[otherUid] = snap.val();
+        updateStatus(snap.val());
+      }
+    });
+
+    const chatRef = ref(db, `chats/${chatId}`);
+    const chatSnap = await get(chatRef);
+    let wallpaperCache = null;
+    if (!chatSnap.exists()) {
+      await set(chatRef, {
+        participants: {
+          [currentUid]: { unreadCount: 0 },
+          [otherUid]: { unreadCount: 0 }
+        },
+        createdAt: Date.now(),
+        wallpaper: null
+      });
+    } else {
+      await update(ref(db, `chats/${chatId}/participants/${currentUid}`), { unreadCount: 0 });
+      const chatData = chatSnap.val();
+      if (chatData.wallpaper) {
+        wallpaperCache = chatData.wallpaper;
+        chatArea.style.backgroundImage = `url(${wallpaperCache})`;
+      }
     }
 
-    async function loadChat(currentUid, otherUid) {
-      try {
-        chatId = currentUid < otherUid ? `${currentUid}_${otherUid}` : `${otherUid}_${currentUid}`;
-        const userData = await get(ref(db, `users/${otherUid}`)).then(snap => snap.val() || { username: 'Unknown', photoURL: null });
-        userCache[otherUid] = userData;
+    onValue(ref(db, `chats/${chatId}/wallpaper`), (snap) => {
+      const wallpaperUrl = snap.val();
+      if (wallpaperUrl !== wallpaperCache) {
+        wallpaperCache = wallpaperUrl;
+        chatArea.style.backgroundImage = wallpaperUrl ? `url(${wallpaperUrl})` : 'none';
+      }
+    });
 
-        const postsSnap = await get(ref(db, 'posts'));
-        const posts = postsSnap.val() || {};
-        const userPostCount = Object.values(posts).filter(p => p.userId === otherUid).length;
-        const isVerified = userPostCount >= 10;
+    const messagesRef = ref(db, `messages/${chatId}`);
+    onValue(messagesRef, async (messagesSnap) => {
+      if (!messagesSnap.exists()) {
+        chatArea.innerHTML = '<div class="placeholder">No messages yet.</div>';
+        hideLoading();
+        return;
+      }
 
-        recipientPhoto.src = userData.photoURL || 'https://www.gravatar.com/avatar?d=mp';
-        recipientUsername.innerHTML = `${userData.username || 'Unknown'}${
-          isVerified
-            ? `<span class="verified-icon" aria-label="Verified user" title="Verified user"><svg viewBox="0 0 24 24"><path d="M9 16.2l-3.5-3.5L4 14.1 9 19 20 8l-1.4-1.4z"/></svg></span>`
-            : ''
-        }`;
-        recipientStatus.textContent = userData.presence === 'online' ? 'Online' : `Last seen ${timeAgo(userData.lastSeen)}`;
+      const messages = messagesSnap.val();
+      const sortedMessages = Object.entries(messages).sort((a, b) => (a[1].timestamp || 0) - (b[1].timestamp || 0));
+      const messageCount = sortedMessages.length;
 
-        const userElements = [recipientPhoto, recipientUsername];
-        userElements.forEach(el => {
-          el.addEventListener('click', (e) => {
-            e.stopPropagation();
-            console.log("Navigating to profile:", otherUid);
-            window.location.href = `profile.html?uid=${otherUid}`;
-          });
-          el.addEventListener('touchend', (e) => {
-            e.preventDefault();
-            console.log("Navigating to profile on touch:", otherUid);
-            window.location.href = `profile.html?uid=${otherUid}`;
-          });
-        });
+      if (messageCount === lastMessageCount) return;
+      lastMessageCount = messageCount;
 
-        const updateStatus = debounceStatusUpdate((data) => {
-          recipientStatus.textContent = data.presence === 'online' ? 'Online' : `Last seen ${timeAgo(data.lastSeen)}`;
-        }, 500);
+      const fragment = document.createDocumentFragment();
+      const messagesToUpdate = [];
+      const usersToFetch = new Set();
 
-        onValue(ref(db, `users/${otherUid}`), (snap) => {
-          if (snap.exists()) {
-            userCache[otherUid] = snap.val();
-            updateStatus(snap.val());
-          }
-        });
-
-        const chatRef = ref(db, `chats/${chatId}`);
-        const chatSnap = await get(chatRef);
-        let wallpaperCache = null;
-        if (!chatSnap.exists()) {
-          await set(chatRef, {
-            participants: {
-              [currentUid]: { unreadCount: 0 },
-              [otherUid]: { unreadCount: 0 }
-            },
-            createdAt: Date.now(),
-            wallpaper: null
-          });
-        } else {
-          await update(ref(db, `chats/${chatId}/participants/${currentUid}`), { unreadCount: 0 });
-          const chatData = chatSnap.val();
-          if (chatData.wallpaper) {
-            wallpaperCache = chatData.wallpaper;
-            chatArea.style.backgroundImage = `url(${wallpaperCache})`;
-          }
+      for (const [mid, message] of sortedMessages) {
+        if (!userCache[message.sender]) {
+          usersToFetch.add(message.sender);
         }
+        const messageElement = renderMessage(mid, message, currentUid);
+        fragment.appendChild(messageElement);
 
-        onValue(ref(db, `chats/${chatId}/wallpaper`), (snap) => {
-          const wallpaperUrl = snap.val();
-          if (wallpaperUrl !== wallpaperCache) {
-            wallpaperCache = wallpaperUrl;
-            chatArea.style.backgroundImage = wallpaperUrl ? `url(${wallpaperUrl})` : 'none';
-          }
+        if (message.sender !== currentUid && !message.read) {
+          messagesToUpdate.push({ mid, path: `messages/${chatId}/${mid}` });
+        }
+      }
+
+      for (const uid of usersToFetch) {
+        if (!userCache[uid]) {
+          const userData = await get(ref(db, `users/${uid}`)).then(snap => snap.val() || { username: 'Unknown', photoURL: 'https://www.gravatar.com/avatar?d=mp' });
+          userCache[uid] = userData;
+        }
+      }
+
+      chatArea.innerHTML = '';
+      chatArea.appendChild(fragment);
+
+      const images = chatArea.querySelectorAll('.message-media');
+      images.forEach(img => {
+        const openImage = debounce(() => {
+          console.log("Image clicked:", img.src);
+          showImageViewer(img.src);
+        }, 200);
+        img.addEventListener('click', openImage);
+        img.addEventListener('touchend', (e) => {
+          e.preventDefault();
+          console.log("Image touchend triggered:", img.src);
+          openImage();
         });
+      });
 
-        const messagesRef = ref(db, `messages/${chatId}`);
-        onValue(messagesRef, async (messagesSnap) => {
-          if (!messagesSnap.exists()) {
-            chatArea.innerHTML = '<div class="placeholder">No messages yet.</div>';
-            hideLoading();
-            return;
-          }
+      const voiceNotes = chatArea.querySelectorAll('.voice-note');
+      voiceNotes.forEach(note => {
+        const audioUrl = note.dataset.audio;
+        console.log("Initializing voice note with URL:", audioUrl);
+        const audio = new Audio(audioUrl);
+        const playPauseBtn = note.querySelector('.play-pause-btn');
+        const waveform = note.querySelector('.waveform');
+        const playIcon = note.querySelector('.play-icon');
+        const pauseIcon = note.querySelector('.pause-icon');
 
-          const messages = messagesSnap.val();
-          const sortedMessages = Object.entries(messages).sort((a, b) => (a[1].timestamp || 0) - (b[1].timestamp || 0));
-          const messageCount = sortedMessages.length;
+        note.audio = audio;
 
-          if (messageCount === lastMessageCount) return;
-          lastMessageCount = messageCount;
-
-          const fragment = document.createDocumentFragment();
-          const messagesToUpdate = [];
-          const usersToFetch = new Set();
-
-          for (const [mid, message] of sortedMessages) {
-            if (!userCache[message.sender]) {
-              usersToFetch.add(message.sender);
-            }
-            const messageElement = renderMessage(mid, message, currentUid);
-            fragment.appendChild(messageElement);
-
-            if (message.sender !== currentUid && !message.read) {
-              messagesToUpdate.push({ mid, path: `messages/${chatId}/${mid}` });
-            }
-          }
-
-          for (const uid of usersToFetch) {
-            if (!userCache[uid]) {
-              const userData = await get(ref(db, `users/${uid}`)).then(snap => snap.val() || { username: 'Unknown', photoURL: 'https://www.gravatar.com/avatar?d=mp' });
-              userCache[uid] = userData;
-            }
-          }
-
-          chatArea.innerHTML = '';
-          chatArea.appendChild(fragment);
-
-          const images = chatArea.querySelectorAll('.message-media');
-          images.forEach(img => {
-            const openImage = debounce(() => {
-              console.log("Image clicked:", img.src);
-              showImageViewer(img.src);
-            }, 200);
-            img.addEventListener('click', openImage);
-            img.addEventListener('touchend', (e) => {
-              e.preventDefault();
-              console.log("Image touchend triggered:", img.src);
-              openImage();
-            });
-          });
-
-          const voiceNotes = chatArea.querySelectorAll('.voice-note');
-          voiceNotes.forEach(note => {
-            const audioUrl = note.dataset.audio;
-            console.log("Initializing voice note with URL:", audioUrl);
-            const audio = new Audio(audioUrl);
-            const playPauseBtn = note.querySelector('.play-pause-btn');
-            const waveform = note.querySelector('.waveform');
-            const playIcon = note.querySelector('.play-icon');
-            const pauseIcon = note.querySelector('.pause-icon');
-
-            // Store audio element in the DOM for easier access
-            note.audio = audio;
-
-            const togglePlayPause = async () => {
-              try {
-                // Pause all other audio elements
-                document.querySelectorAll('.voice-note').forEach(otherNote => {
-                  if (otherNote !== note && otherNote.audio && !otherNote.audio.paused) {
-                    otherNote.audio.pause();
-                    otherNote.audio.currentTime = 0;
-                    otherNote.querySelector('.waveform').classList.remove('playing');
-                    otherNote.querySelector('.play-icon').classList.remove('hidden');
-                    otherNote.querySelector('.pause-icon').classList.add('hidden');
-                  }
-                });
-
-                if (audio.paused) {
-                  console.log("Playing audio:", audioUrl);
-                  await audio.play();
-                  waveform.classList.add('playing');
-                  playIcon.classList.add('hidden');
-                  pauseIcon.classList.remove('hidden');
-                } else {
-                  console.log("Pausing audio:", audioUrl);
-                  audio.pause();
-                  audio.currentTime = 0;
-                  waveform.classList.remove('playing');
-                  playIcon.classList.remove('hidden');
-                  pauseIcon.classList.add('hidden');
-                }
-              } catch (error) {
-                console.error("Error playing/pausing audio:", error.message);
-                chatArea.innerHTML += `<p class="error">Failed to play voice note: ${error.message}</p>`;
-                waveform.classList.remove('playing');
-                playIcon.classList.remove('hidden');
-                pauseIcon.classList.add('hidden');
+        const togglePlayPause = async () => {
+          try {
+            document.querySelectorAll('.voice-note').forEach(otherNote => {
+              if (otherNote !== note && otherNote.audio && !otherNote.audio.paused) {
+                otherNote.audio.pause();
+                otherNote.audio.currentTime = 0;
+                otherNote.querySelector('.waveform').classList.remove('playing');
+                otherNote.querySelector('.play-icon').classList.remove('hidden');
+                otherNote.querySelector('.pause-icon').classList.add('hidden');
               }
-            };
-
-            // Remove any existing listeners to prevent duplicates
-            playPauseBtn.replaceWith(playPauseBtn.cloneNode(true));
-            const newPlayPauseBtn = note.querySelector('.play-pause-btn');
-
-            newPlayPauseBtn.addEventListener('click', togglePlayPause);
-            newPlayPauseBtn.addEventListener('touchend', (e) => {
-              e.preventDefault();
-              console.log("Play/pause button touchend triggered for:", audioUrl);
-              togglePlayPause();
             });
 
-            audio.addEventListener('ended', () => {
-              console.log("Audio ended:", audioUrl);
-              waveform.classList.remove('playing');
-              playIcon.classList.remove('hidden');
-              pauseIcon.classList.add('hidden');
+            if (audio.paused) {
+              console.log("Playing audio:", audioUrl);
+              await audio.play();
+              waveform.classList.add('playing');
+              playIcon.classList.add('hidden');
+              pauseIcon.classList.remove('hidden');
+            } else {
+              console.log("Pausing audio:", audioUrl);
+              audio.pause();
               audio.currentTime = 0;
-            });
-
-            audio.addEventListener('error', (e) => {
-              console.error("Audio error:", e.message, audioUrl);
-              chatArea.innerHTML += `<p class="error">Failed to load voice note.</p>`;
               waveform.classList.remove('playing');
               playIcon.classList.remove('hidden');
               pauseIcon.classList.add('hidden');
-            });
-          });
-
-          for (const { mid, path } of messagesToUpdate) {
-            await update(ref(db, path), { read: true });
-            const chatSnap = await get(ref(db, `chats/${chatId}/participants/${currentUid}`));
-            const currentUnread = chatSnap.val()?.unreadCount || 0;
-            if (currentUnread > 0) {
-              await update(ref(db, `chats/${chatId}/participants/${currentUid}`), { unreadCount: currentUnread - 1 });
             }
+          } catch (error) {
+            console.error("Error playing/pausing audio:", error.message);
+            chatArea.innerHTML += `<p class="error">Failed to play voice note: ${error.message}</p>`;
+            waveform.classList.remove('playing');
+            playIcon.classList.remove('hidden');
+            pauseIcon.classList.add('hidden');
           }
+        };
 
-          requestAnimationFrame(() => {
-            chatArea.scrollTop = chatArea.scrollHeight;
-          });
+        playPauseBtn.replaceWith(playPauseBtn.cloneNode(true));
+        const newPlayPauseBtn = note.querySelector('.play-pause-btn');
 
-          hideLoading();
-        }, (error) => {
-          console.error('Error loading messages:', error.message);
-          chatArea.innerHTML = `<p class="error">Failed to load messages: ${error.message}</p>`;
-          hideLoading();
+        newPlayPauseBtn.addEventListener('click', togglePlayPause);
+        newPlayPauseBtn.addEventListener('touchend', (e) => {
+          e.preventDefault();
+          console.log("Play/pause button touchend triggered for:", audioUrl);
+          togglePlayPause();
         });
-      } catch (error) {
-        console.error('Error loading chat:', error.message);
-        chatArea.innerHTML = `<p class="error">Failed to load chat: ${error.message}</p>`;
-        hideLoading();
-      }
-    }
 
-    async function setupCallListeners() {
-      const callRef = ref(db, `calls/${chatId}`);
-      onValue(callRef, async (snap) => {
-        if (!snap.exists() || callActive) return;
-        const callData = snap.val();
-        if (callData.status === 'offering' && callData.caller !== currentUserUid) {
-          showVideoCall("Incoming call...");
-          const accept = confirm(`${userCache[otherUserUid]?.username || 'User'} is calling. Accept?`);
-          if (accept) {
-            await answerCall(callData.offer);
-            await update(callRef, { status: 'answered' });
-          } else {
-            await set(callRef, { status: 'declined', timestamp: Date.now() });
-            hideVideoCall();
-          }
-        } else if (callData.status === 'answered' && callData.caller === currentUserUid) {
-          await setLocalAndSendAnswer(callData.answer);
-          showVideoCall("Connected");
-          callActive = true;
-        } else if (callData.status === 'declined' && callData.caller === currentUserUid) {
-          chatArea.innerHTML += `<p class="error">Call declined by ${userCache[otherUserUid]?.username || 'user'}.</p>`;
-          hideVideoCall();
-        } else if (callData.status === 'ended') {
-          chatArea.innerHTML += `<p class="placeholder">Call ended.</p>`;
-          hideVideoCall();
-        }
+        audio.addEventListener('ended', () => {
+          console.log("Audio ended:", audioUrl);
+          waveform.classList.remove('playing');
+          playIcon.classList.remove('hidden');
+          pauseIcon.classList.add('hidden');
+          audio.currentTime = 0;
+        });
+
+        audio.addEventListener('error', (e) => {
+          console.error("Audio error:", e.message, audioUrl);
+          chatArea.innerHTML += `<p class="error">Failed to load voice note.</p>`;
+          waveform.classList.remove('playing');
+          playIcon.classList.remove('hidden');
+          pauseIcon.classList.add('hidden');
+        });
       });
 
-      onValue(ref(db, `calls/${chatId}/candidates/${currentUserUid}`), (snap) => {
-        if (snap.exists() && peerConnection) {
-          snap.val() && Object.values(snap.val()).forEach(candidate => {
-            peerConnection.addIceCandidate(new RTCIceCandidate(candidate)).catch(e => console.error('Error adding ICE candidate:', e));
-          });
+      for (const { mid, path } of messagesToUpdate) {
+        await update(ref(db, path), { read: true });
+        const chatSnap = await get(ref(db, `chats/${chatId}/participants/${currentUid}`));
+        const currentUnread = chatSnap.val()?.unreadCount || 0;
+        if (currentUnread > 0) {
+          await update(ref(db, `chats/${chatId}/participants/${currentUid}`), { unreadCount: currentUnread - 1 });
         }
+      }
+
+      requestAnimationFrame(() => {
+        chatArea.scrollTop = chatArea.scrollHeight;
       });
-    }
 
-    async function startCall() {
-      if (callActive) return;
-      isCaller = true;
-      showLoading();
-      try {
-        localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-        localVideo.srcObject = localStream;
-        peerConnection = new RTCPeerConnection(iceConfiguration);
+      hideLoading();
+    }, (error) => {
+      console.error('Error loading messages:', error.message);
+      chatArea.innerHTML = `<p class="error">Failed to load messages: ${error.message}</p>`;
+      hideLoading();
+    });
+  } catch (error) {
+    console.error('Error loading chat:', error.message);
+    chatArea.innerHTML = `<p class="error">Failed to load chat: ${error.message}</p>`;
+    hideLoading();
+  }
+}
 
-        localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
-
-        peerConnection.ontrack = ({ streams: [stream] }) => {
-          remoteVideo.srcObject = stream;
-          callStatus.textContent = "Connected";
-          callActive = true;
-        };
-
-        peerConnection.onicecandidate = ({ candidate }) => {
-          if (candidate) {
-            set(ref(db, `calls/${chatId}/candidates/${otherUserUid}/${candidate.candidate}`), candidate);
-          }
-        };
-
-        peerConnection.oniceconnectionstatechange = () => {
-          if (peerConnection.iceConnectionState === 'disconnected' || peerConnection.iceConnectionState === 'closed') {
-            set(ref(db, `calls/${chatId}`), { status: 'ended', timestamp: Date.now() });
-            hideVideoCall();
-          }
-        };
-
-        const offer = await peerConnection.createOffer();
-        await peerConnection.setLocalDescription(offer);
-        await set(ref(db, `calls/${chatId}`), {
-          status: 'offering',
-          caller: currentUserUid,
-          offer: offer,
-          timestamp: Date.now()
-        });
-        showVideoCall("Calling...");
-        hideLoading();
-      } catch (error) {
-        console.error('Error starting call:', error.message);
-        chatArea.innerHTML += `<p class="error">Failed to start call: ${error.message}</p>`;
-        hideVideoCall();
-        hideLoading();
-      }
-    }
-
-    async function answerCall(offer) {
-      try {
-        localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-        localVideo.srcObject = localStream;
-        peerConnection = new RTCPeerConnection(iceConfiguration);
-
-        localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
-
-        peerConnection.ontrack = ({ streams: [stream] }) => {
-          remoteVideo.srcObject = stream;
-          callStatus.textContent = "Connected";
-          callActive = true;
-        };
-
-        peerConnection.onicecandidate = ({ candidate }) => {
-          if (candidate) {
-            set(ref(db, `calls/${chatId}/candidates/${otherUserUid}/${candidate.candidate}`), candidate);
-          }
-        };
-
-        peerConnection.oniceconnectionstatechange = () => {
-          if (peerConnection.iceConnectionState === 'disconnected' || peerConnection.iceConnectionstate === 'closed') {
-            set(ref(db, `calls/${chatId}`), { status: 'ended', timestamp: Date.now() });
-            hideVideoCall();
-          }
-        };
-
-        await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
-        const answer = await peerConnection.createAnswer();
-        await peerConnection.setLocalDescription(answer);
-        await update(ref(db, `calls/${chatId}`), { answer: answer });
-      } catch (error) {
-        console.error('Error answering call:', error.message);
-        chatArea.innerHTML += `<p class="error">Failed to answer call: ${error.message}</p>`;
+async function setupCallListeners() {
+  const callRef = ref(db, `calls/${chatId}`);
+  onValue(callRef, async (snap) => {
+    if (!snap.exists() || callActive) return;
+    const callData = snap.val();
+    if (callData.status === 'offering' && callData.caller !== currentUserUid) {
+      showVideoCall("Incoming call...");
+      const accept = confirm(`${userCache[otherUserUid]?.username || 'User'} is calling. Accept?`);
+      if (accept) {
+        await answerCall(callData.offer);
+        await update(callRef, { status: 'answered' });
+      } else {
+        await set(callRef, { status: 'declined', timestamp: Date.now() });
         hideVideoCall();
       }
-    }
-
-    async function setLocalAndSendAnswer(answer) {
-      try {
-        await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
-      } catch (error) {
-        console.error('Error setting remote description:', error.message);
-        chatArea.innerHTML += `<p class="error">Failed to connect call: ${error.message}</p>`;
-        hideVideoCall();
-      }
-    }
-
-    async function endCall() {
-      console.log("Ending call");
-      await set(ref(db, `calls/${chatId}`), { status: 'ended', timestamp: Date.now() });
+    } else if (callData.status === 'answered' && callData.caller === currentUserUid) {
+      await setLocalAndSendAnswer(callData.answer);
+      showVideoCall("Connected");
+      callActive = true;
+    } else if (callData.status === 'declined' && callData.caller === currentUserUid) {
+      chatArea.innerHTML += `<p class="error">Call declined by ${userCache[otherUserUid]?.username || 'user'}.</p>`;
+      hideVideoCall();
+    } else if (callData.status === 'ended') {
+      chatArea.innerHTML += `<p class="placeholder">Call ended.</p>`;
       hideVideoCall();
     }
+  });
 
-    const startCallTrigger = debounce(() => {
-      console.log("Video call button clicked");
-      startCall();
-    }, 200);
-
-    videoCallBtn.addEventListener('click', startCallTrigger);
-    videoCallBtn.addEventListener('touchend', (e) => {
-      e.preventDefault();
-      console.log("Video call button touchend triggered");
-      startCallTrigger();
-    });
-
-    const endCallTrigger = debounce(() => {
-      console.log("End call button clicked");
-      endCall();
-    }, 200);
-
-    endCallBtn.addEventListener('click', endCallTrigger);
-    endCallBtn.addEventListener('touchend', (e) => {
-      e.preventDefault();
-      console.log("End call button touchend triggered");
-      endCallTrigger();
-    });
-
-    async function startRecording() {
-      if (isRecording || callActive) return;
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        mediaRecorder = new MediaRecorder(stream);
-        audioChunks = [];
-
-        mediaRecorder.ondataavailable = (event) => {
-          if (event.data.size > 0) {
-            audioChunks.push(event.data);
-          }
-        };
-
-        mediaRecorder.onstop = async () => {
-          const audioBlob = new Blob(audioChunks, { type: 'audio/mp3' });
-          stream.getTracks().forEach(track => track.stop());
-          await uploadVoiceNote(audioBlob);
-          sendBtn.classList.remove('recording');
-          sendBtn.querySelector('.send-icon').classList.remove('hidden');
-          sendBtn.querySelector('.mic-icon').classList.add('hidden');
-          isRecording = false;
-        };
-
-        mediaRecorder.start();
-        isRecording = true;
-        sendBtn.classList.add('recording');
-        sendBtn.querySelector('.send-icon').classList.add('hidden');
-        sendBtn.querySelector('.mic-icon').classList.remove('hidden');
-        console.log("Started recording voice note");
-      } catch (error) {
-        console.error('Error starting recording:', error.message);
-        chatArea.innerHTML += `<p class="error">Failed to start recording: ${error.message}</p>`;
-        sendBtn.classList.remove('recording');
-        sendBtn.querySelector('.send-icon').classList.remove('hidden');
-        sendBtn.querySelector('.mic-icon').classList.add('hidden');
-        isRecording = false;
-      }
+  onValue(ref(db, `calls/${chatId}/candidates/${currentUserUid}`), (snap) => {
+    if (snap.exists() && peerConnection) {
+      snap.val() && Object.values(snap.val()).forEach(candidate => {
+        peerConnection.addIceCandidate(new RTCIceCandidate(candidate)).catch(e => console.error('Error adding ICE candidate:', e));
+      });
     }
+  });
+}
 
-    async function stopRecording() {
-      if (mediaRecorder && isRecording) {
-        mediaRecorder.stop();
-        console.log("Stopped recording voice note");
+async function startCall() {
+  if (callActive) return;
+  isCaller = true;
+  showLoading();
+  try {
+    localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    localVideo.srcObject = localStream;
+    peerConnection = new RTCPeerConnection(iceConfiguration);
+
+    localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+
+    peerConnection.ontrack = ({ streams: [stream] }) => {
+      remoteVideo.srcObject = stream;
+      callStatus.textContent = "Connected";
+      callActive = true;
+    };
+
+    peerConnection.onicecandidate = ({ candidate }) => {
+      if (candidate) {
+        set(ref(db, `calls/${chatId}/candidates/${otherUserUid}/${candidate.candidate}`), candidate);
       }
-    }
+    };
 
-    async function uploadVoiceNote(audioBlob) {
-      if (audioBlob.size > 10000000) {
-        chatArea.innerHTML += `<p class="error">Voice note too large (max 10MB).</p>`;
-        return;
+    peerConnection.oniceconnectionstatechange = () => {
+      if (peerConnection.iceConnectionState === 'disconnected' || peerConnection.iceConnectionState === 'closed') {
+        set(ref(db, `calls/${chatId}`), { status: 'ended', timestamp: Date.now() });
+        hideVideoCall();
       }
+    };
 
-      try {
-        showUploadProgress(0);
-        const formData = new FormData();
-        formData.append('file', audioBlob, 'voice_note.mp3');
-        formData.append('upload_preset', cloudinaryUploadPreset);
+    const offer = await peerConnection.createOffer();
+    await peerConnection.setLocalDescription(offer);
+    await set(ref(db, `calls/${chatId}`), {
+      status: 'offering',
+      caller: currentUserUid,
+      offer: offer,
+      timestamp: Date.now()
+    });
+    showVideoCall("Calling...");
+    hideLoading();
+  } catch (error) {
+    console.error('Error starting call:', error.message);
+    chatArea.innerHTML += `<p class="error">Failed to start call: ${error.message}</p>`;
+    hideVideoCall();
+    hideLoading();
+  }
+}
 
-        const xhr = new XMLHttpRequest();
-        xhr.open('POST', cloudinaryApiUrl, true);
+async function answerCall(offer) {
+  try {
+    localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    localVideo.srcObject = localStream;
+    peerConnection = new RTCPeerConnection(iceConfiguration);
 
-        xhr.upload.onprogress = (event) => {
-          if (event.lengthComputable) {
-            const percent = Math.round((event.loaded / event.total) * 100);
-            showUploadProgress(percent);
-          }
-        };
+    localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
 
-        xhr.onload = async () => {
-          if (xhr.status === 200) {
-            const response = JSON.parse(xhr.responseText);
-            const mediaUrl = response.secure_url;
-            try {
-              const messageRef = push(ref(db, `messages/${chatId}`));
-              await set(messageRef, {
-                sender: currentUserUid,
-                text: '',
-                mediaUrl: mediaUrl,
-                mediaType: 'audio',
-                timestamp: Date.now(),
-                read: false
-              });
-              const chatSnap = await get(ref(db, `chats/${chatId}/participants/${otherUserUid}`));
-              const currentUnread = chatSnap.val()?.unreadCount || 0;
-              await update(ref(db, `chats/${chatId}/participants/${otherUserUid}`), { unreadCount: currentUnread + 1 });
-            } catch (error) {
-              console.error('Error saving voice note:', error.message);
-              chatArea.innerHTML += `<p class="error">Failed to save voice note.</p>`;
-            }
+    peerConnection.ontrack = ({ streams: [stream] }) => {
+      remoteVideo.srcObject = stream;
+      callStatus.textContent = "Connected";
+      callActive = true;
+    };
+
+    peerConnection.onicecandidate = ({ candidate }) => {
+      if (candidate) {
+        set(ref(db, `calls/${chatId}/candidates/${otherUserUid}/${candidate.candidate}`), candidate);
+      }
+    };
+
+    peerConnection.oniceconnectionstatechange = () => {
+      if (peerConnection.iceConnectionState === 'disconnected' || peerConnection.iceConnectionstate === 'closed') {
+        set(ref(db, `calls/${chatId}`), { status: 'ended', timestamp: Date.now() });
+        hideVideoCall();
+      }
+    };
+
+    await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+    const answer = await peerConnection.createAnswer();
+    await peerConnection.setLocalDescription(answer);
+    await update(ref(db, `calls/${chatId}`), { answer: answer });
+  } catch (error) {
+    console.error('Error answering call:', error.message);
+    chatArea.innerHTML += `<p class="error">Failed to answer call: ${error.message}</p>`;
+    hideVideoCall();
+  }
+}
+
+async function setLocalAndSendAnswer(answer) {
+  try {
+    await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+  } catch (error) {
+    console.error('Error setting remote description:', error.message);
+    chatArea.innerHTML += `<p class="error">Failed to connect call: ${error.message}</p>`;
+    hideVideoCall();
+  }
+}
+
+async function endCall() {
+  console.log("Ending call");
+  await set(ref(db, `calls/${chatId}`), { status: 'ended', timestamp: Date.now() });
+  hideVideoCall();
+}
+
+const startCallTrigger = debounce(() => {
+  console.log("Video call button clicked");
+  startCall();
+}, 200);
+
+videoCallBtn.addEventListener('click', startCallTrigger);
+videoCallBtn.addEventListener('touchend', (e) => {
+  e.preventDefault();
+  console.log("Video call button touchend triggered");
+  startCallTrigger();
+});
+
+const endCallTrigger = debounce(() => {
+  console.log("End call button clicked");
+  endCall();
+}, 200);
+
+endCallBtn.addEventListener('click', endCallTrigger);
+endCallBtn.addEventListener('touchend', (e) => {
+  e.preventDefault();
+  console.log("End call button touchend triggered");
+  endCallTrigger();
+});
+
+async function startRecording() {
+  if (isRecording || callActive) return;
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    mediaRecorder = new MediaRecorder(stream);
+    audioChunks = [];
+
+    mediaRecorder.ondataavailable = (event) => {
+      if (event.data.size > 0) {
+        audioChunks.push(event.data);
+      }
+    };
+
+    mediaRecorder.onstop = async () => {
+      const audioBlob = new Blob(audioChunks, { type: 'audio/mp3' });
+      stream.getTracks().forEach(track => track.stop());
+      await uploadVoiceNote(audioBlob);
+      sendBtn.classList.remove('recording');
+      sendBtn.querySelector('.send-icon').classList.remove('hidden');
+      sendBtn.querySelector('.mic-icon').classList.add('hidden');
+      isRecording = false;
+    };
+
+    mediaRecorder.start();
+    isRecording = true;
+    sendBtn.classList.add('recording');
+    sendBtn.querySelector('.send-icon').classList.add('hidden');
+    sendBtn.querySelector('.mic-icon').classList.remove('hidden');
+    console.log("Started recording voice note");
+  } catch (error) {
+    console.error('Error starting recording:', error.message);
+    chatArea.innerHTML += `<p class="error">Failed to start recording: ${error.message}</p>`;
+    sendBtn.classList.remove('recording');
+    sendBtn.querySelector('.send-icon').classList.remove('hidden');
+    sendBtn.querySelector('.mic-icon').classList.add('hidden');
+    isRecording = false;
+  }
+}
+
+async function stopRecording() {
+  if (mediaRecorder && isRecording) {
+    mediaRecorder.stop();
+    console.log("Stopped recording voice note");
+  }
+}
+
+async function uploadVoiceNote(audioBlob) {
+  if (audioBlob.size > 10000000) {
+    chatArea.innerHTML += `<p class="error">Voice note too large (max 10MB).</p>`;
+    return;
+  }
+
+  try {
+    showUploadProgress(0);
+    const formData = new FormData();
+    formData.append('file', audioBlob, 'voice_note.mp3');
+    formData.append('upload_preset', cloudinaryUploadPreset);
+
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', cloudinaryApiUrl, true);
+
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable) {
+        const percent = Math.round((event.loaded / event.total) * 100);
+        showUploadProgress(percent);
+      }
+    };
+
+    xhr.onload = async () => {
+      if (xhr.status === 200) {
+        const response = JSON.parse(xhr.responseText);
+        const mediaUrl = response.secure_url;
+        try {
+          const messageRef = push(ref(db, `messages/${chatId}`));
+          await set(messageRef, {
+            sender: currentUserUid,
+            text: '',
+            mediaUrl: mediaUrl,
+            mediaType: 'audio',
+            timestamp: Date.now(),
+            read: false
+          });
+          const chatSnap = await get(ref(db, `chats/${chatId}/participants/${otherUserUid}`));
+          const currentUnread = chatSnap.val()?.unreadCount || 0;
+          await update(ref(db, `chats/${chatId}/participants/${otherUserUid}`), { unreadCount: currentUnread + 1 });
+        } catch (error) {
+          console.error('Error saving voice note:', error.message);
+          chatArea.innerHTML += `<p class="error">Failed to save voice note.</p>`;
+        }
+      } else {
+        console.error('Cloudinary upload error:', xhr.statusText);
+        chatArea.innerHTML += `<p class="error">Failed to upload voice note.</p>`;
+      }
+      hideUploadProgress();
+    };
+
+    xhr.onerror = () => {
+      console.error('Cloudinary upload error:', xhr.statusText);
+      chatArea.innerHTML += `<p class="error">Failed to upload voice note.</p>`;
+      hideUploadProgress();
+    };
+
+    xhr.send(formData);
+  } catch (error) {
+    console.error('Error uploading voice note:', error.message);
+    chatArea.innerHTML += `<p class="error">Failed to upload voice note: ${error.message}</p>`;
+    hideUploadProgress();
+  }
+}
+
+const sendMessage = async () => {
+  if (!messageInput.value.trim() || !chatId) return;
+  console.log("Sending message");
+  try {
+    const messageRef = push(ref(db, `messages/${chatId}`));
+    await set(messageRef, {
+      sender: currentUserUid,
+      text: messageInput.value.trim(),
+      timestamp: Date.now(),
+      read: false
+    });
+    const chatSnap = await get(ref(db, `chats/${chatId}/participants/${otherUserUid}`));
+    const currentUnread = chatSnap.val()?.unreadCount || 0;
+    await update(ref(db, `chats/${chatId}/participants/${otherUserUid}`), { unreadCount: currentUnread + 1 });
+    messageInput.value = '';
+  } catch (error) {
+    console.error('Error sending message:', error.message);
+    chatArea.innerHTML += `<p class="error">Failed to send message: ${error.message}</p>`;
+  }
+};
+
+// Remove existing listeners to prevent duplicates
+sendBtn.removeEventListener('click', sendBtn._clickHandler);
+sendBtn.removeEventListener('touchend', sendBtn._touchEndHandler);
+sendBtn.removeEventListener('mousedown', sendBtn._mouseDownHandler);
+sendBtn.removeEventListener('mouseup', sendBtn._mouseUpHandler);
+sendBtn.removeEventListener('touchstart', sendBtn._touchStartHandler);
+
+// Define consolidated handler for send/record
+const handleSendOrRecord = (e) => {
+  e.preventDefault();
+  console.log(`Event type: ${e.type}, isRecording: ${isRecording}, input: ${messageInput.value.trim()}`);
+  if (isRecording) {
+    console.log("Stopping recording on send button release");
+    stopRecording();
+  } else if (messageInput.value.trim()) {
+    console.log("Sending text message");
+    sendMessage();
+  } else {
+    console.log("Starting recording");
+    startRecording();
+  }
+};
+
+// Store handlers for removal
+sendBtn._clickHandler = handleSendOrRecord;
+sendBtn._touchEndHandler = handleSendOrRecord;
+
+sendBtn.addEventListener('click', handleSendOrRecord);
+sendBtn.addEventListener('touchend', handleSendOrRecord);
+
+// Handle mouse/touch start for immediate recording
+sendBtn._mouseDownHandler = (e) => {
+  if (!messageInput.value.trim() && !isRecording) {
+    e.preventDefault();
+    startRecording();
+  }
+};
+sendBtn._touchStartHandler = (e) => {
+  if (!messageInput.value.trim() && !isRecording) {
+    e.preventDefault();
+    startRecording();
+  }
+};
+
+sendBtn.addEventListener('mousedown', sendBtn._mouseDownHandler);
+sendBtn.addEventListener('touchstart', sendBtn._touchStartHandler);
+
+messageInput.addEventListener('keypress', (e) => {
+  if (e.key === 'Enter' && messageInput.value.trim() && !isRecording) {
+    e.preventDefault();
+    console.log("Enter key pressed, sending message");
+    sendMessage();
+  }
+});
+
+async function uploadImage(file, isWallpaper) {
+  if (!file) return;
+  if (file.size > 10000000) {
+    chatArea.innerHTML += `<p class="error">File too large (max 10MB).</p>`;
+    return;
+  }
+  if (!['image/jpeg', 'image/png', 'image/gif'].includes(file.type)) {
+    chatArea.innerHTML += `<p class="error">Only JPEG, PNG, or GIF images are allowed.</p>`;
+    return;
+  }
+
+  try {
+    showUploadProgress(0);
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('upload_preset', cloudinaryUploadPreset);
+
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `https://api.cloudinary.com/v1_1/${cloudinaryCloudName}/image/upload`, true);
+
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable) {
+        const percent = Math.round((event.loaded / event.total) * 100);
+        showUploadProgress(percent);
+      }
+    };
+
+    xhr.onload = async () => {
+      if (xhr.status === 200) {
+        const response = JSON.parse(xhr.responseText);
+        const mediaUrl = response.secure_url;
+        try {
+          if (isWallpaper) {
+            await set(ref(db, `chats/${chatId}/wallpaper`), mediaUrl);
           } else {
-            console.error('Cloudinary upload error:', xhr.statusText);
-            chatArea.innerHTML += `<p class="error">Failed to upload voice note.</p>`;
+            const messageRef = push(ref(db, `messages/${chatId}`));
+            await set(messageRef, {
+              sender: currentUserUid,
+              text: '',
+              mediaUrl: mediaUrl,
+              mediaType: 'image',
+              timestamp: Date.now(),
+              read: false
+            });
+            const chatSnap = await get(ref(db, `chats/${chatId}/participants/${otherUserUid}`));
+            const currentUnread = chatSnap.val()?.unreadCount || 0;
+            await update(ref(db, `chats/${chatId}/participants/${otherUserUid}`), { unreadCount: currentUnread + 1 });
           }
-          hideUploadProgress();
-        };
-
-        xhr.onerror = () => {
-          console.error('Cloudinary upload error:', xhr.statusText);
-          chatArea.innerHTML += `<p class="error">Failed to upload voice note.</p>`;
-          hideUploadProgress();
-        };
-
-        xhr.send(formData);
-      } catch (error) {
-        console.error('Error uploading voice note:', error.message);
-        chatArea.innerHTML += `<p class="error">Failed to upload voice note: ${error.message}</p>`;
-        hideUploadProgress();
+        } catch (error) {
+          console.error(`Error saving ${isWallpaper ? 'wallpaper' : 'image message'}:`, error.message);
+          chatArea.innerHTML += `<p class="error">Failed to save ${isWallpaper ? 'wallpaper' : 'image message'}.</p>`;
+        }
+      } else {
+        console.error('Cloudinary upload error:', xhr.statusText);
+        chatArea.innerHTML += `<p class="error">Failed to upload image.</p>`;
       }
-    }
+      hideUploadProgress();
+    };
 
-    const sendMessage = debounce(async () => {
-      if (!messageInput.value.trim() || !chatId) return;
-      console.log("Sending message");
-      try {
-        const messageRef = push(ref(db, `messages/${chatId}`));
-        await set(messageRef, {
-          sender: currentUserUid,
-          text: messageInput.value.trim(),
-          timestamp: Date.now(),
-          read: false
-        });
-        const chatSnap = await get(ref(db, `chats/${chatId}/participants/${otherUserUid}`));
-        const currentUnread = chatSnap.val()?.unreadCount || 0;
-        await update(ref(db, `chats/${chatId}/participants/${otherUserUid}`), { unreadCount: currentUnread + 1 });
-        messageInput.value = '';
-      } catch (error) {
-        console.error('Error sending message:', error.message);
-        chatArea.innerHTML += `<p class="error">Failed to send message: ${error.message}</p>`;
-      }
-    }, 200);
+    xhr.onerror = () => {
+      console.error('Cloudinary upload error:', xhr.statusText);
+      chatArea.innerHTML += `<p class="error">Failed to upload image.</p>`;
+      hideUploadProgress();
+    };
 
-    sendBtn.addEventListener('mousedown', (e) => {
-      if (!messageInput.value.trim()) {
-        e.preventDefault();
-        startRecording();
-      }
-    });
+    xhr.send(formData);
+  } catch (error) {
+    console.error('Error uploading image:', error.message);
+    chatArea.innerHTML += `<p class="error">Failed to upload image: ${error.message}</p>`;
+    hideUploadProgress();
+  }
+}
 
-    sendBtn.addEventListener('mouseup', (e) => {
-      if (isRecording) {
-        e.preventDefault();
-        stopRecording();
-      }
-    });
+const uploadImageTrigger = debounce(() => {
+  console.log("Upload button clicked");
+  fileInput.click();
+}, 200);
 
-    sendBtn.addEventListener('touchstart', (e) => {
-      if (!messageInput.value.trim()) {
-        e.preventDefault();
-        startRecording();
-      }
-    });
+uploadBtn.addEventListener('click', uploadImageTrigger);
+uploadBtn.addEventListener('touchend', (e) => {
+  e.preventDefault();
+  console.log("Upload button touchend triggered");
+  uploadImageTrigger();
+});
 
-    sendBtn.addEventListener('touchend', (e) => {
-      if (isRecording) {
-        e.preventDefault();
-        stopRecording();
-      }
-    });
+fileInput.addEventListener('change', () => {
+  uploadImage(fileInput.files[0], false);
+  fileInput.value = '';
+});
 
-    sendBtn.addEventListener('click', (e) => {
-      if (messageInput.value.trim() && !isRecording) {
-        e.preventDefault();
-        sendMessage();
-      }
-    });
+const changeWallpaperTrigger = debounce(() => {
+  console.log("Change wallpaper button clicked");
+  wallpaperInput.click();
+  kebabMenu.classList.remove("active");
+}, 200);
 
-    sendBtn.addEventListener('touchend', (e) => {
-      if (messageInput.value.trim() && !isRecording) {
-        e.preventDefault();
-        console.log("Send button touchend triggered for text message");
-        patasendMessage();
-      }
-    });
+changeWallpaperBtn.addEventListener('click', changeWallpaperTrigger);
+changeWallpaperBtn.addEventListener('touchend', (e) => {
+  e.preventDefault();
+  console.log("Change wallpaper button touchend triggered");
+  changeWallpaperTrigger();
+});
 
-    messageInput.addEventListener('keypress', async (e) => {
-      if (e.key === 'Enter' && messageInput.value.trim() && chatId) {
-        e.preventDefault();
-        sendMessage();
-      }
-    });
+wallpaperInput.addEventListener('change', () => {
+  uploadImage(wallpaperInput.files[0], true);
+  wallpaperInput.value = '';
+});
 
-    async function uploadImage(file, isWallpaper) {
-      if (!file) return;
-      if (file.size > 10000000) {
-        chatArea.innerHTML += `<p class="error">File too large (max 10MB).</p>`;
-        return;
-      }
-      if (!['image/jpeg', 'image/png', 'image/gif'].includes(file.type)) {
-        chatArea.innerHTML += `<p class="error">Only JPEG, PNG, or GIF images are allowed.</p>`;
-        return;
-      }
+const deleteChat = debounce(async () => {
+  if (!confirm('Are you sure you want to delete this chat? This action cannot be undone.')) return;
+  console.log("Deleting chat");
+  try {
+    showLoading();
+    await remove(ref(db, `messages/${chatId}`));
+    await remove(ref(db, `chats/${chatId}`));
+    await remove(ref(db, `calls/${chatId}`));
+    window.location.href = 'index.html';
+  } catch (error) {
+    console.error('Error deleting chat:', error.message);
+    chatArea.innerHTML += `<p class="error">Failed to delete chat: ${error.message}</p>`;
+    hideLoading();
+  }
+  kebabMenu.classList.remove("active");
+}, 200);
 
-      try {
-        showUploadProgress(0);
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('upload_preset', cloudinaryUploadPreset);
+deleteChatBtn.addEventListener('click', deleteChat);
+deleteChatBtn.addEventListener('touchend', (e) => {
+  e.preventDefault();
+  console.log("Delete chat button touchend triggered");
+  deleteChat();
+});
 
-        const xhr = new XMLHttpRequest();
-        xhr.open('POST', `https://api.cloudinary.com/v1_1/${cloudinaryCloudName}/image/upload`, true);
+const goBack = debounce(() => {
+  console.log("Back button clicked, redirecting to index.html");
+  window.location.href = 'index.html';
+}, 200);
 
-        xhr.upload.onprogress = (event) => {
-          if (event.lengthComputable) {
-            const percent = Math.round((event.loaded / event.total) * 100);
-            showUploadProgress(percent);
-          }
-        };
+backBtn.addEventListener('click', goBack);
+backBtn.addEventListener('touchend', (e) => {
+  e.preventDefault();
+  console.log("Back button touchend triggered");
+  goBack();
+});
 
-        xhr.onload = async () => {
-          if (xhr.status === 200) {
-            const response = JSON.parse(xhr.responseText);
-            const mediaUrl = response.secure_url;
-            try {
-              if (isWallpaper) {
-                await set(ref(db, `chats/${chatId}/wallpaper`), mediaUrl);
-              } else {
-                const messageRef = push(ref(db, `messages/${chatId}`));
-                await set(messageRef, {
-                  sender: currentUserUid,
-                  text: '',
-                  mediaUrl: mediaUrl,
-                  mediaType: 'image',
-                  timestamp: Date.now(),
-                  read: false
-                });
-                const chatSnap = await get(ref(db, `chats/${chatId}/participants/${otherUserUid}`));
-                const currentUnread = chatSnap.val()?.unreadCount || 0;
-                await update(ref(db, `chats/${chatId}/participants/${otherUserUid}`), { unreadCount: currentUnread + 1 });
-              }
-            } catch (error) {
-              console.error(`Error saving ${isWallpaper ? 'wallpaper' : 'image message'}:`, error.message);
-              chatArea.innerHTML += `<p class="error">Failed to save ${isWallpaper ? 'wallpaper' : 'image message'}.</p>`;
-            }
-          } else {
-            console.error('Cloudinary upload error:', xhr.statusText);
-            chatArea.innerHTML += `<p class="error">Failed to upload image.</p>`;
-          }
-          hideUploadProgress();
-        };
-
-        xhr.onerror = () => {
-          console.error('Cloudinary upload error:', xhr.statusText);
-          chatArea.innerHTML += `<p class="error">Failed to upload image.</p>`;
-          hideUploadProgress();
-        };
-
-        xhr.send(formData);
-      } catch (error) {
-        console.error('Error uploading image:', error.message);
-        chatArea.innerHTML += `<p class="error">Failed to upload image: ${error.message}</p>`;
-        hideUploadProgress();
-      }
-    }
-
-    const uploadImageTrigger = debounce(() => {
-      console.log("Upload button clicked");
-      fileInput.click();
-    }, 200);
-
-    uploadBtn.addEventListener('click', uploadImageTrigger);
-    uploadBtn.addEventListener('touchend', (e) => {
-      e.preventDefault();
-      console.log("Upload button touchend triggered");
-      uploadImageTrigger();
-    });
-
-    fileInput.addEventListener('change', () => {
-      uploadImage(fileInput.files[0], false);
-      fileInput.value = '';
-    });
-
-    const changeWallpaperTrigger = debounce(() => {
-      console.log("Change wallpaper button clicked");
-      wallpaperInput.click();
-      kebabMenu.classList.remove("active");
-    }, 200);
-
-    changeWallpaperBtn.addEventListener('click', changeWallpaperTrigger);
-    changeWallpaperBtn.addEventListener('touchend', (e) => {
-      e.preventDefault();
-      console.log("Change wallpaper button touchend triggered");
-      changeWallpaperTrigger();
-    });
-
-    wallpaperInput.addEventListener('change', () => {
-      uploadImage(wallpaperInput.files[0], true);
-      wallpaperInput.value = '';
-    });
-
-    const deleteChat = debounce(async () => {
-      if (!confirm('Are you sure you want to delete this chat? This action cannot be undone.')) return;
-      console.log("Deleting chat");
-      try {
-        showLoading();
-        await remove(ref(db, `messages/${chatId}`));
-        await remove(ref(db, `chats/${chatId}`));
-        await remove(ref(db, `calls/${chatId}`));
-        window.location.href = 'index.html';
-      } catch (error) {
-        console.error('Error deleting chat:', error.message);
-        chatArea.innerHTML += `<p class="error">Failed to delete chat: ${error.message}</p>`;
-        hideLoading();
-      }
-      kebabMenu.classList.remove("active");
-    }, 200);
-
-    deleteChatBtn.addEventListener('click', deleteChat);
-    deleteChatBtn.addEventListener('touchend', (e) => {
-      e.preventDefault();
-      console.log("Delete chat button touchend triggered");
-      deleteChat();
-    });
-
-    const goBack = debounce(() => {
-      console.log("Back button clicked, redirecting to index.html");
-      window.location.href = 'index.html';
-    }, 200);
-
-    backBtn.addEventListener('click', goBack);
-    backBtn.addEventListener('touchend', (e) => {
-      e.preventDefault();
-      console.log("Back button touchend triggered");
-      goBack();
-    });
-  </script>
-</body>
-</html>
+<script/>
+  <body/>
+<html/>
+            
