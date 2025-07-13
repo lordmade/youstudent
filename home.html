@@ -2208,8 +2208,7 @@ async function loadPosts() {
   }
 }
 
-
-    async function loadFriends() {
+async function loadFriends() {
   const friendsContainer = document.getElementById("friends-container");
   const followersContainer = document.getElementById("followers-container");
   const followingContainer = document.getElementById("following-container");
@@ -2253,47 +2252,40 @@ async function loadPosts() {
             let unreadCount = 0;
 
             try {
-              // Check both possible chat keys
-              const chatKey1 = `${currentUserUid}_${friendUid}`;
-              const chatKey2 = `${friendUid}_${currentUserUid}`;
-              const messagesRef1 = query(ref(db, `messages/${chatKey1}`), orderByChild("timestamp"), limitToLast(1));
-              const messagesRef2 = query(ref(db, `messages/${chatKey2}`), orderByChild("timestamp"), limitToLast(1));
+              // Deterministic chatId matching chat.html
+              const chatId = currentUserUid < friendUid ? `${currentUserUid}_${friendUid}` : `${friendUid}_${currentUserUid}`;
+              const messagesRef = query(ref(db, `messages/${chatId}`), orderByChild("timestamp"), limitToLast(1));
 
-              const [snap1, snap2] = await Promise.all([
-                Promise.race([
-                  get(messagesRef1),
-                  new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout fetching messages")), 5000)),
-                ]).catch(() => null),
-                Promise.race([
-                  get(messagesRef2),
-                  new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout fetching messages")), 5000)),
-                ]).catch(() => null),
-              ]);
+              console.log(`Fetching messages for chatId: ${chatId}`); // Debugging
 
-              let latestMessage = null;
-              if (snap1 && snap1.exists()) {
-                snap1.forEach((child) => {
-                  latestMessage = { id: child.key, ...child.val() };
-                });
-              }
-              if (snap2 && snap2.exists()) {
-                snap2.forEach((child) => {
+              const snap = await Promise.race([
+                get(messagesRef),
+                new Promise((_, reject) =>
+                  setTimeout(() => reject(new Error(`Timeout fetching messages for ${chatId}`)), 5000)
+                ),
+              ]).catch((error) => {
+                console.warn(`Error fetching messages for ${chatId}:`, error.message);
+                return null;
+              });
+
+              if (snap && snap.exists()) {
+                console.log(`Messages found for ${chatId}:`, snap.val()); // Debugging
+                snap.forEach((child) => {
                   const msg = { id: child.key, ...child.val() };
-                  if (!latestMessage || msg.timestamp > latestMessage.timestamp) {
-                    latestMessage = msg;
+                  if (msg.timestamp) {
+                    lastMessageTimestamp = msg.timestamp;
+                    lastMessageTimeAgo = timeAgo(lastMessageTimestamp);
                   }
-                  if (msg.senderId === friendUid && msg.receiverId === currentUserUid && msg.read === false) {
+                  if (msg.sender === friendUid && msg.read === false) {
                     unreadCount++;
                   }
                 });
-              }
-
-              if (latestMessage) {
-                lastMessageTimestamp = latestMessage.timestamp;
-                lastMessageTimeAgo = timeAgo(lastMessageTimestamp);
+                console.log(`Latest message for ${friendUid}:`, { timestamp: lastMessageTimestamp, timeAgo: lastMessageTimeAgo }); // Debugging
+              } else {
+                console.log(`No messages found for ${chatId}`); // Debugging
               }
             } catch (error) {
-              console.warn(`Error fetching messages for friend ${friendUid}:`, error.message);
+              console.error(`Error processing messages for friend ${friendUid}:`, error.message);
               lastMessageTimeAgo = "No messages yet";
               unreadCount = 0;
             }
@@ -2312,13 +2304,25 @@ async function loadPosts() {
             friendItem.querySelector(".friend-item-btn").addEventListener("click", (e) => {
               e.stopPropagation();
               console.log(`Navigating to chat with user: ${friendUid}`);
-              location.href = `chat.html?uid=${friendUid}`;
+              const navSpinner = document.getElementById("navigation-spinner");
+              if (navSpinner) {
+                navSpinner.classList.add("active");
+              }
+              setTimeout(() => {
+                location.href = `chat.html?uid=${friendUid}`;
+              }, 300);
             });
             friendItem.addEventListener("click", (e) => {
               if (e.target.classList.contains("friend-item-btn")) return;
               console.log("Navigating to profile:", friendUid);
-              location.href = `profile.html?uid=${friendUid}`;
-              pauseAllMedia();
+              const navSpinner = document.getElementById("navigation-spinner");
+              if (navSpinner) {
+                navSpinner.classList.add("active");
+              }
+              setTimeout(() => {
+                location.href = `profile.html?uid=${friendUid}`;
+                pauseAllMedia();
+              }, 300);
             });
             friendItems.push({ element: friendItem, timestamp: lastMessageTimestamp || 0 });
           }
@@ -2337,6 +2341,7 @@ async function loadPosts() {
     { onlyOnce: false }
   );
 
+  // Followers section
   const followersRef = ref(db, `users/${currentUserUid}/followers`);
   showLoading();
   onValue(
@@ -2377,8 +2382,14 @@ async function loadPosts() {
             followerItem.addEventListener("click", (e) => {
               if (e.target.classList.contains("friend-item-btn")) return;
               console.log("Navigating to profile:", followerUid);
-              location.href = `profile.html?uid=${followerUid}`;
-              pauseAllMedia();
+              const navSpinner = document.getElementById("navigation-spinner");
+              if (navSpinner) {
+                navSpinner.classList.add("active");
+              }
+              setTimeout(() => {
+                location.href = `profile.html?uid=${followerUid}`;
+                pauseAllMedia();
+              }, 300);
             });
             followersContainer.appendChild(followerItem);
           }
@@ -2393,6 +2404,7 @@ async function loadPosts() {
     { onlyOnce: false }
   );
 
+  // Following section
   const followingRef = ref(db, `users/${currentUserUid}/following`);
   showLoading();
   onValue(
@@ -2423,8 +2435,14 @@ async function loadPosts() {
             followingItem.addEventListener("click", (e) => {
               if (e.target.classList.contains("friend-item-btn")) return;
               console.log("Navigating to profile:", followingUid);
-              location.href = `profile.html?uid=${followingUid}`;
-              pauseAllMedia();
+              const navSpinner = document.getElementById("navigation-spinner");
+              if (navSpinner) {
+                navSpinner.classList.add("active");
+              }
+              setTimeout(() => {
+                location.href = `profile.html?uid=${followingUid}`;
+                pauseAllMedia();
+              }, 300);
             });
             followingContainer.appendChild(followingItem);
           }
