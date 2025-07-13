@@ -220,20 +220,6 @@
       stroke: var(--white);
       stroke-width: 2;
     }
-    .loading-overlay {
-      position: fixed;
-      inset: 0;
-      background: rgba(0, 0, 0, 0.5);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 50;
-      transition: opacity 0.3s ease;
-    }
-    .loading-overlay.hidden {
-      opacity: 0;
-      pointer-events: none;
-    }
     .error {
       position: absolute;
       top: 50%;
@@ -289,12 +275,6 @@
 <body>
   <div class="reels-container" id="reels-container">
     <img class="logo-icon" src="https://i.postimg.cc/ZYxkxQpY/White-Chatting-Letter-Initial-Logo-20250628-190525-0000-removebg-preview-1.png" alt="App Logo">
-    <div id="loading-overlay" class="loading-overlay">
-      <svg class="animate-spin h-8 w-8 text-red-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4z"/>
-      </svg>
-    </div>
     <p id="error-msg" class="error hidden"></p>
   </div>
 
@@ -317,7 +297,6 @@
     const auth = getAuth();
     const db = getDatabase();
     const reelsContainer = document.getElementById("reels-container");
-    const loadingOverlay = document.getElementById("loading-overlay");
     const errorMsg = document.getElementById("error-msg");
 
     let currentUserUid = null;
@@ -326,19 +305,9 @@
     let isDragging = false;
     let startY = 0;
 
-    function showLoading() {
-      loadingOverlay.classList.remove("hidden");
-      errorMsg.classList.add("hidden");
-    }
-
-    function hideLoading() {
-      loadingOverlay.classList.add("hidden");
-    }
-
     function showError(message) {
       errorMsg.textContent = message;
       errorMsg.classList.remove("hidden");
-      hideLoading();
     }
 
     function hideError() {
@@ -390,7 +359,6 @@
 
     async function toggleFollow(targetUid, button) {
       if (targetUid === currentUserUid) return;
-      showLoading();
       try {
         const followingRef = ref(db, `users/${currentUserUid}/following/${targetUid}`);
         const followerRef = ref(db, `users/${targetUid}/followers/${currentUserUid}`);
@@ -425,8 +393,6 @@
       } catch (error) {
         console.error("Error toggling follow:", error.message);
         showError("Failed to update follow status: " + error.message);
-      } finally {
-        hideLoading();
       }
     }
 
@@ -455,7 +421,6 @@
 
     async function loadReels() {
       const reelsRef = query(ref(db, "reels"), orderByChild("timestamp"), limitToLast(20));
-      showLoading();
       onValue(reelsRef, async (reelsSnap) => {
         try {
           const reelsData = reelsSnap.val() || {};
@@ -466,12 +431,6 @@
 
           reelsContainer.innerHTML = `
             <img class="logo-icon" src="https://i.postimg.cc/ZYxkxQpY/White-Chatting-Letter-Initial-Logo-20250628-190525-0000-removebg-preview-1.png" alt="App Logo">
-            <div id="loading-overlay" class="loading-overlay">
-              <svg class="animate-spin h-8 w-8 text-red-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4z"/>
-              </svg>
-            </div>
             <p id="error-msg" class="error hidden"></p>
           `;
           reels = Object.entries(reelsData)
@@ -659,7 +618,6 @@
           console.error("Error loading reels:", error.message);
           showError("Failed to load reels: " + error.message);
         }
-        hideLoading();
       }, { onlyOnce: false });
     }
 
