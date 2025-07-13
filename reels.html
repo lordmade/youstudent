@@ -73,6 +73,9 @@
     .reel video.played {
       display: block;
     }
+    .reel audio {
+      display: none;
+    }
     .reel-overlay {
       position: absolute;
       bottom: 0;
@@ -404,17 +407,31 @@
         if (progressBar) progressBar.style.width = "0%";
         video.classList.remove("played");
       });
+      document.querySelectorAll(".reel audio").forEach(audio => {
+        audio.pause();
+        audio.currentTime = 0;
+      });
     }
 
     function updateProgressBar(video) {
       const progressBar = video.parentElement.querySelector(".progress-bar-fill");
+      const audio = video.parentElement.querySelector("audio");
       if (!progressBar) return;
       video.addEventListener("timeupdate", () => {
         const percent = (video.currentTime / video.duration) * 100;
         progressBar.style.width = `${percent}%`;
+        if (audio) {
+          audio.currentTime = video.currentTime;
+        }
         if (video.ended) {
           video.currentTime = 0;
           video.play();
+          if (audio) {
+            audio.currentTime = 0;
+            audio.play().catch(() => {
+              console.error("Failed to play song audio.");
+            });
+          }
         }
       });
     }
@@ -463,7 +480,8 @@
               <div class="progress-bar">
                 <div class="progress-bar-fill"></div>
               </div>
-              <video src="${reel.videoUrl}" playsinline ${index === currentReelIndex ? "autoplay" : ""} loop></video>
+              <video src="${reel.videoUrl}" playsinline ${index === currentReelIndex ? "autoplay" : ""} ${reel.song ? "muted" : ""} loop></video>
+              ${reel.song ? `<audio src="${reel.song.audioUrl}" loop></audio>` : ''}
               <div class="reel-overlay">
                 <div class="reel-header">
                   <img src="${users[reel.userId]?.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${users[reel.userId]?.username || 'User'} avatar">
@@ -495,16 +513,38 @@
             `;
             reelsContainer.appendChild(reelElement);
             const video = reelElement.querySelector("video");
+            const audio = reelElement.querySelector("audio");
             if (index === currentReelIndex) {
               video.addEventListener("canplay", () => {
                 video.classList.add("played");
-                video.play().catch(() => {
+                video.play().then(() => {
+                  if (audio) {
+                    audio.play().catch(() => {
+                      console.error("Failed to play song audio.");
+                    });
+                  }
+                }).catch(() => {
                   showError("Failed to play video.");
                 });
               }, { once: true });
             }
             video.addEventListener("error", () => {
               showError("Failed to load video.");
+            });
+            if (audio) {
+              audio.addEventListener("error", () => {
+                console.error("Failed to load song audio.");
+              });
+            }
+            video.addEventListener("play", () => {
+              if (audio) {
+                audio.play().catch(() => {
+                  console.error("Failed to play song audio.");
+                });
+              }
+            });
+            video.addEventListener("pause", () => {
+              if (audio) audio.pause();
             });
             updateProgressBar(video);
           });
@@ -561,8 +601,14 @@
               reel.classList.toggle("active", i === currentReelIndex);
               if (i === currentReelIndex) {
                 const video = reel.querySelector("video");
+                const audio = reel.querySelector("audio");
                 video.play().then(() => {
                   video.classList.add("played");
+                  if (audio) {
+                    audio.play().catch(() => {
+                      console.error("Failed to play song audio.");
+                    });
+                  }
                 }).catch(() => {
                   showError("Failed to play video.");
                 });
