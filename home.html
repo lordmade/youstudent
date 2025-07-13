@@ -1592,298 +1592,106 @@ body {
     </div>
   </div>
 </div>
-
-<script type="module"> 
+<script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
-import { getAuth, onAuthStateChanged, updateProfile } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
-import { getDatabase, ref, onValue, query, orderByChild, limitToLast, set, get, push, update } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
-import { getFirestore, doc, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-firestore.js";
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
+import {
+  getDatabase,
+  ref,
+  onValue,
+  get,
+  set,
+  push,
+  remove,
+  update,
+} from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
-  authDomain: "fire-b-a8878.firebaseapp.com",
-  databaseURL: "https://fire-b-a8878.firebaseio.com",
-  projectId: "fire-b-a8878",
-  storageBucket: "fire-b-a8878.appspot.com",
-  messagingSenderId: "658673187627",
-  appId: "1:658673187627:web:6e4c29af661785f0afa36e"
+  apiKey: "AIzaSyDR6y1qJ8p7gZ3lX1a3iJ0r0u3M0v0v0v0",
+  authDomain: "banter-box.firebaseapp.com",
+  databaseURL: "https://banter-box-default-rtdb.firebaseio.com",
+  projectId: "banter-box",
+  storageBucket: "banter-box.appspot.com",
+  messagingSenderId: "123456789012",
+  appId: "1:123456789012:web:abcdef1234567890abcdef"
 };
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth();
 const db = getDatabase();
-const firestore = getFirestore();
-
 let currentUserUid = null;
-const commentSheet = document.getElementById("comment-sheet");
-const commentSheetClose = document.getElementById("comment-sheet-close");
-const commentsList = document.getElementById("comments-list");
-const commentInput = document.getElementById("comment-input");
-const commentSubmit = document.getElementById("comment-submit");
-const loadingOverlay = document.getElementById("loading-overlay");
+
+// Cloudinary configuration
+const CLOUDINARY_UPLOAD_PRESET = "banter_box";
+const CLOUDINARY_CLOUD_NAME = "dqkujefxj";
+const CLOUDINARY_UPLOAD_URL = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/auto/upload`;
+
+// DOM Elements
+const postsContainer = document.getElementById("posts-container");
+const friendsContainer = document.getElementById("friends-container");
+const searchInput = document.getElementById("search-input");
+const searchResults = document.getElementById("search-results");
+const profilePosts = document.getElementById("profile-posts");
+const profileReels = document.getElementById("profile-reels");
+const profileUsername = document.getElementById("profile-username");
+const profileBio = document.getElementById("profile-bio");
+const profilePhoto = document.getElementById("profile-photo");
+const notificationBtn = document.getElementById("notification-btn");
+const settingsBtn = document.getElementById("settings-btn");
+const editProfileBtn = document.getElementById("edit-profile-btn");
 const editProfileModal = document.getElementById("edit-profile-modal");
-const editProfileSaveBtn = document.getElementById("edit-profile-save-btn");
-const editProfileCloseBtn = document.querySelector("#edit-profile-modal .close-modal");
+const editProfileForm = document.getElementById("edit-profile-form");
 const editUsername = document.getElementById("edit-username");
 const editBio = document.getElementById("edit-bio");
 const editPhoto = document.getElementById("edit-photo");
 const editProfileError = document.getElementById("edit-profile-error");
+const closeEditModal = document.querySelector(".close-modal");
+const loadingOverlay = document.querySelector(".loading-overlay");
+const tabButtons = document.querySelectorAll(".tab-btn");
+const subTabButtons = document.querySelectorAll(".sub-tab-btn");
+const commentSheet = document.getElementById("comment-sheet");
+const commentsList = document.getElementById("comments-list");
+const commentInput = document.getElementById("comment-input");
+const commentSubmit = document.getElementById("comment-submit");
+const closeCommentSheet = document.getElementById("close-comment-sheet");
+const deletePostModal = document.getElementById("delete-post-modal");
+const deletePostBtn = document.getElementById("delete-post-btn");
+const cancelDeleteBtn = document.getElementById("cancel-delete-btn");
+const closeDeleteModal = document.querySelector(".delete-post-modal .close-modal");
 let currentPostId = null;
-let currentPlayingAudio = null;
 
-const CLOUDINARY_UPLOAD_PRESET = "banter_box";
-const CLOUDINARY_CLOUD_NAME = "dqkujefxj";
-const CLOUDINARY_UPLOAD_URL = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`;
-
-function showLoading() { loadingOverlay.classList.remove("hidden"); }
-function hideLoading() { loadingOverlay.classList.add("hidden"); }
-
-function showError(element, message) {
-  element.textContent = message;
-  element.style.display = "block";
+// Utility Functions
+function showLoading() {
+  loadingOverlay.classList.remove("hidden");
 }
 
-function hideError(element) {
-  element.textContent = "";
-  element.style.display = "none";
+function hideLoading() {
+  loadingOverlay.classList.add("hidden");
 }
 
-function pauseAllMedia(exceptAudioId = null) {
-  const allMedia = document.querySelectorAll('audio');
-  allMedia.forEach(media => {
-    if (media.id !== exceptAudioId && !media.paused) {
-      media.pause();
-      media.currentTime = 0;
-    }
-  });
-  if (exceptAudioId) {
-    currentPlayingAudio = document.getElementById(exceptAudioId);
-  } else {
-    currentPlayingAudio = null;
-  }
+function pauseAllMedia() {
+  document.querySelectorAll("audio, video").forEach((media) => media.pause());
 }
 
-// Save button event listener
-editProfileSaveBtn.addEventListener("click", async () => {
-  const newUsername = editUsername.value.trim();
-  const newBio = editBio.value.trim();
-  const newPhoto = editPhoto.files[0];
+function formatTimeAgo(timestamp) {
+  const now = Date.now();
+  const diff = now - timestamp;
+  const seconds = Math.floor(diff / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
 
-  if (!newUsername) {
-    showError(editProfileError, "Username cannot be empty.");
-    editUsername.focus();
-    return;
-  }
-
-  showLoading();
-  try {
-    const user = auth.currentUser;
-    if (!user) {
-      showError(editProfileError, "User not authenticated.");
-      return;
-    }
-
-    const profileUpdates = {
-      displayName: newUsername,
-    };
-
-    let photoURL = user.photoURL;
-    if (newPhoto) {
-      const maxFileSize = 5 * 1024 * 1024; // 5MB
-      if (newPhoto.size > maxFileSize) {
-        showError(editProfileError, "Photo must be under 5MB.");
-        return;
-      }
-
-      const formData = new FormData();
-      formData.append("file", newPhoto);
-      formData.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
-
-      const response = await fetch(CLOUDINARY_UPLOAD_URL, {
-        method: "POST",
-        body: formData,
-      });
-      const data = await response.json();
-      if (data.secure_url) {
-        photoURL = data.secure_url;
-        profileUpdates.photoURL = photoURL;
-      } else {
-        throw new Error("Failed to upload photo to Cloudinary.");
-      }
-    }
-
-    await updateProfile(user, profileUpdates);
-
-    await updateDoc(doc(firestore, "users", user.uid), {
-      username: newUsername,
-      bio: newBio || "",
-      photoURL: photoURL || user.photoURL || "https://www.gravatar.com/avatar?d=mp",
-      updatedAt: serverTimestamp(),
-    });
-
-    editProfileModal.classList.remove("open");
-    editProfileModal.classList.add("hidden");
-    hideError(editProfileError);
-
-    loadProfile();
-  } catch (error) {
-    console.error("Error updating profile:", error.code, error.message);
-    let errorMessage = "Failed to update profile. Please try again.";
-    if (error.code === "auth/requires-recent-login") {
-      errorMessage = "Please log in again to update your profile.";
-    } else if (error.message.includes("Cloudinary")) {
-      errorMessage = "Failed to upload photo. Please try again.";
-    }
-    showError(editProfileError, errorMessage);
-  } finally {
-    hideLoading();
-  }
-});
-
-editProfileCloseBtn.addEventListener("click", () => {
-  editProfileModal.classList.remove("open");
-  editProfileModal.classList.add("hidden");
-  hideError(editProfileError);
-});
-
-function toggleLike(postId, button) {
-  const userId = currentUserUid;
-  const postRef = ref(db, `posts/${postId}`);
-  const likeCountSpan = button.querySelector(".like-count");
-  const likeIcon = button.querySelector("svg");
-
-  showLoading();
-  get(postRef).then((snapshot) => {
-    const post = snapshot.val() || {};
-    const currentLikes = post.likes || 0;
-    const likedBy = post.likedBy || [];
-    const isLiked = likedBy.includes(userId);
-
-    if (isLiked) {
-      update(postRef, {
-        likes: currentLikes - 1,
-        likedBy: likedBy.filter(id => id !== userId)
-      }).then(() => {
-        likeCountSpan.textContent = currentLikes - 1;
-        likeIcon.classList.remove("text-red-500");
-        likeIcon.classList.add("text-gray-500");
-      });
-    } else {
-      update(postRef, {
-        likes: currentLikes + 1,
-        likedBy: [...likedBy, userId]
-      }).then(() => {
-        likeCountSpan.textContent = currentLikes + 1;
-        likeIcon.classList.remove("text-gray-500");
-        likeIcon.classList.add("text-red-500");
-        if (post.userId !== userId) {
-          const notifRef = push(ref(db, `notifications/${post.userId}/${postId}/likes`));
-          set(notifRef, { type: 'like', userId: currentUserUid, timestamp: Date.now(), read: false });
-        }
-      });
-    }
-  }).catch((error) => {
-    console.error("Error updating like:", error.message);
-  }).finally(() => {
-    hideLoading();
-  });
+  if (seconds < 60) return `${seconds}s ago`;
+  if (minutes < 60) return `${minutes}m ago`;
+  if (hours < 24) return `${hours}h ago`;
+  return `${days}d ago`;
 }
 
-async function toggleFollow(targetUid, button, containerId) {
-  if (targetUid === currentUserUid) return;
-  showLoading();
-  try {
-    const followingRef = ref(db, `users/${currentUserUid}/following/${targetUid}`);
-    const followerRef = ref(db, `users/${targetUid}/followers/${currentUserUid}`);
-    const followingSnap = await get(followingRef);
-    const isFollowing = followingSnap.exists();
-
-    if (isFollowing) {
-      await set(followingRef, null);
-      await set(followerRef, null);
-      const isMutual = await get(ref(db, `users/${currentUserUid}/followers/${targetUid}`));
-      if (isMutual.exists()) {
-        await set(ref(db, `users/${currentUserUid}/friends/${targetUid}`), null);
-        await set(ref(db, `users/${targetUid}/friends/${currentUserUid}`), null);
-      }
-      button.textContent = "Follow";
-      button.classList.remove("following");
-      button.classList.add("follow");
-    } else {
-      await set(followingRef, true);
-      await set(followerRef, true);
-      const isMutual = await get(ref(db, `users/${currentUserUid}/followers/${targetUid}`));
-      if (isMutual.exists()) {
-        await set(ref(db, `users/${currentUserUid}/friends/${targetUid}`), true);
-        await set(ref(db, `users/${targetUid}/friends/${currentUserUid}`), true);
-      }
-      const notifRef = push(ref(db, `notifications/${targetUid}/system/follows`));
-      await set(notifRef, { type: 'follow', userId: currentUserUid, timestamp: Date.now(), read: false });
-      button.textContent = "Following";
-      button.classList.remove("follow");
-      button.classList.add("following");
-    }
-
-    if (['friends-container', 'followers-container', 'following-container'].includes(containerId)) {
-      const containerRef = {
-        'friends-container': ref(db, `users/${currentUserUid}/friends`),
-        'followers-container': ref(db, `users/${currentUserUid}/followers`),
-        'following-container': ref(db, `users/${currentUserUid}/following`)
-      }[containerId];
-
-      const snapshot = await get(containerRef);
-      const data = snapshot.val() || {};
-      const container = document.getElementById(containerId);
-      container.innerHTML = "";
-      if (Object.keys(data).length === 0) {
-        container.innerHTML = `<div class="placeholder">No ${containerId.replace('-container', '')} found.</div>`;
-      } else {
-        const usersSnap = await get(ref(db, "users"));
-        const users = usersSnap.val() || {};
-        for (const uid in data) {
-          const userData = users[uid] || { username: "Unknown", photoURL: null };
-          const item = document.createElement("div");
-          item.className = "friend-item";
-          item.innerHTML = `
-            <img src="${userData.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${userData.username} avatar"/>
-            <span>${userData.username}</span>
-            <button class="friend-item-btn ${containerId === 'friends-container' ? 'message' : containerId === 'followers-container' ? (await get(ref(db, `users/${currentUserUid}/following/${uid}`)).exists() ? 'following' : 'follow') : 'following'}">
-              ${containerId === 'friends-container' ? 'Message' : containerId === 'followers-container' ? (await get(ref(db, `users/${currentUserUid}/following/${uid}`)).exists() ? 'Following' : 'Follow') : 'Following'}
-            </button>
-          `;
-          item.querySelector(".friend-item-btn").addEventListener("click", (e) => {
-            e.stopPropagation();
-            if (containerId === 'friends-container') {
-              console.log(`Initiate message to user: ${uid}`);
-              location.href = `chat.html?uid=${uid}`;
-            } else {
-              toggleFollow(uid, e.target, containerId);
-            }
-          });
-          item.addEventListener("click", (e) => {
-            if (e.target.classList.contains("friend-item-btn")) return;
-            console.log("Navigating to profile:", uid);
-            location.href = `profile.html?uid=${uid}`;
-            pauseAllMedia();
-          });
-          container.appendChild(item);
-        }
-      }
-    } else if (containerId === 'posts-container') {
-      await loadPosts();
-    }
-  } catch (error) {
-    console.error("Error toggling follow:", error.message);
-    if (['friends-container', 'followers-container', 'following-container'].includes(containerId)) {
-      document.getElementById(containerId).innerHTML = `<p class="error">Failed to load ${containerId.replace('-container', '')}: ${error.message}</p>`;
-    } else {
-      console.error("Error in posts-container follow action:", error.message);
-    }
-  } finally {
-    hideLoading();
-  }
+function showError(container, message) {
+  container.innerHTML = `<p class="error">${message}</p>`;
 }
 
+// Authentication Check
 onAuthStateChanged(auth, (user) => {
   if (!user) {
     location.href = "index.html";
@@ -1892,84 +1700,651 @@ onAuthStateChanged(auth, (user) => {
     loadPosts();
     loadFriends();
     loadSearch();
+    loadStories();
     loadProfile();
   }
 });
 
-const tabBtns = document.querySelectorAll(".tab-btn");
-const tabs = document.querySelectorAll(".tab-content");
-
-tabBtns.forEach(btn => {
-  btn.addEventListener("click", () => {
-    tabBtns.forEach(b => {
-      b.classList.remove("active");
-      b.setAttribute("aria-selected", "false");
-    });
-    tabs.forEach(t => t.classList.remove("active"));
-    btn.classList.add("active");
-    btn.setAttribute("aria-selected", "true");
-
-    const tabId = btn.dataset.tab;
-    if (tabId === "reels") {
-      console.log("Navigating to reels.html");
-      location.href = "reels.html";
-    } else {
-      document.getElementById(tabId).classList.add("active");
-    }
+// Tab Navigation
+tabButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    tabButtons.forEach((btn) => btn.classList.remove("active"));
+    document.querySelectorAll(".tab-content").forEach((content) => content.classList.remove("active"));
+    button.classList.add("active");
+    document.getElementById(button.dataset.tab).classList.add("active");
     pauseAllMedia();
   });
 });
 
-function timeAgo(timestamp) {
-  if (!timestamp) return "";
-  const now = Date.now();
-  const diff = now - timestamp;
-  if (diff < 60000) return "just now";
-  if (diff < 3600000) return Math.floor(diff / 60000) + "m ago";
-  if (diff < 86400000) return Math.floor(diff / 3600000) + "h ago";
-  return Math.floor(diff / 86400000) + "d ago";
+// Sub-Tab Navigation
+subTabButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    subTabButtons.forEach((btn) => btn.classList.remove("active"));
+    document.querySelectorAll(".sub-tab-content").forEach((content) => content.classList.remove("active"));
+    button.classList.add("active");
+    document.getElementById(button.dataset.subTab).classList.add("active");
+    pauseAllMedia();
+  });
+});
+
+// Load Posts
+async function loadPosts() {
+  postsContainer.innerHTML = '<div class="loading">Loading posts...</div>';
+  showLoading();
+
+  try {
+    const postsRef = ref(db, "posts");
+    onValue(postsRef, async (snapshot) => {
+      postsContainer.innerHTML = "";
+      const posts = snapshot.val() || {};
+      const usersSnap = await get(ref(db, "users"));
+      const users = usersSnap.val() || {};
+      const friendshipsSnap = await get(ref(db, `friendships/${currentUserUid}`));
+      const friendships = friendshipsSnap.val() || {};
+
+      const postArray = [];
+      for (const postId in posts) {
+        const post = posts[postId];
+        postArray.push({ id: postId, ...post });
+      }
+
+      postArray.sort((a, b) => b.timestamp - a.timestamp);
+
+      if (postArray.length === 0) {
+        postsContainer.innerHTML = '<div class="placeholder">No posts available.</div>';
+        return;
+      }
+
+      for (const post of postArray) {
+        const user = users[post.userId] || { username: "Anonymous", photoURL: "https://www.gravatar.com/avatar?d=mp" };
+        const isFriend = friendships[post.userId]?.status === "accepted";
+        const isOwnPost = post.userId === currentUserUid;
+        const postElement = document.createElement("div");
+        postElement.className = "post";
+        postElement.dataset.postId = post.id;
+
+        const images = Array.isArray(post.imageUrl) ? post.imageUrl : [post.imageUrl];
+        const carouselItems = images.map((url, index) => `
+          <img src="${url}" alt="Post image ${index + 1}" class="post-image"/>
+        `).join("");
+        const indicators = images.length > 1 ? images.map((_, index) => `
+          <span class="carousel-indicator ${index === 0 ? "active" : ""}"></span>
+        `).join("") : "";
+
+        postElement.innerHTML = `
+          <div class="post-header">
+            <img src="${user.photoURL}" alt="${user.username}" />
+            <div class="user-info">
+              <span>${user.username}${user.verified ? '<span class="verified-icon"><svg viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></span>' : ""}</span>
+              <span class="timestamp">${formatTimeAgo(post.timestamp)}</span>
+            </div>
+            ${isOwnPost ? `
+              <button class="post-action-btn delete-post-btn" aria-label="Delete post">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+              </button>
+            ` : ""}
+            ${!isOwnPost && !isFriend ? `
+              <button class="post-follow-btn follow" data-user-id="${post.userId}">Follow</button>
+            ` : !isOwnPost && isFriend ? `
+              <button class="post-follow-btn following" data-user-id="${post.userId}">Following</button>
+            ` : ""}
+          </div>
+          <div class="post-image-carousel">
+            <div class="post-image-container" style="transform: translateX(0%)">${carouselItems}</div>
+            ${images.length > 1 ? `
+              <button class="carousel-arrow left" aria-label="Previous image">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M15 18l-6-6 6-6"/>
+                </svg>
+              </button>
+              <button class="carousel-arrow right" aria-label="Next image">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M9 18l6-6-6-6"/>
+                </svg>
+              </button>
+              <div class="carousel-indicators">${indicators}</div>
+            ` : ""}
+          </div>
+          <div class="post-actions">
+            <button class="like-btn" data-liked="${post.likes && post.likes[currentUserUid] ? "true" : "false"}" data-post-id="${post.id}">
+              <svg viewBox="0 0 24 24" fill="${post.likes && post.likes[currentUserUid] ? "var(--primary-red)" : "none"}" stroke="currentColor" stroke-width="2">
+                <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+              </svg>
+              <span class="like-count">${post.likes ? Object.keys(post.likes).length : 0}</span>
+            </button>
+            <button class="comment-btn" data-post-id="${post.id}">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
+              </svg>
+              <span class="comment-count">${post.comments ? Object.keys(post.comments).length : 0}</span>
+            </button>
+          </div>
+          <div class="post-caption">
+            <strong>${user.username}</strong> ${post.caption || ""}
+            ${post.song ? `
+              <div class="song-display">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M9 18V5l12-2v13"></path>
+                  <circle cx="6" cy="18" r="3"></circle>
+                  <circle cx="18" cy="16" r="3"></circle>
+                </svg>
+                ${post.song}
+                <audio src="${post.songUrl}" preload="none"></audio>
+              </div>
+            ` : ""}
+          </div>
+          ${post.comments && Object.keys(post.comments).length > 0 ? `
+            <div class="post-footer">
+              <button class="comment-btn" data-post-id="${post.id}">View all ${Object.keys(post.comments).length} comments</button>
+            </div>
+          ` : ""}
+        `;
+
+        postsContainer.appendChild(postElement);
+
+        if (images.length > 1) {
+          let currentIndex = 0;
+          const container = postElement.querySelector(".post-image-container");
+          const indicators = postElement.querySelectorAll(".carousel-indicator");
+          const leftArrow = postElement.querySelector(".carousel-arrow.left");
+          const rightArrow = postElement.querySelector(".carousel-arrow.right");
+
+          function updateCarousel() {
+            container.style.transform = `translateX(-${currentIndex * 100}%)`;
+            indicators.forEach((ind, i) => ind.classList.toggle("active", i === currentIndex));
+            leftArrow.style.display = currentIndex === 0 ? "none" : "block";
+            rightArrow.style.display = currentIndex === images.length - 1 ? "none" : "block";
+          }
+
+          leftArrow.addEventListener("click", () => {
+            if (currentIndex > 0) {
+              currentIndex--;
+              updateCarousel();
+            }
+          });
+
+          rightArrow.addEventListener("click", () => {
+            if (currentIndex < images.length - 1) {
+              currentIndex++;
+              updateCarousel();
+            }
+          });
+
+          let startX = 0;
+          let isDragging = false;
+
+          container.addEventListener("touchstart", (e) => {
+            startX = e.touches[0].clientX;
+            isDragging = true;
+          });
+
+          container.addEventListener("touchmove", (e) => {
+            if (!isDragging) return;
+            const currentX = e.touches[0].clientX;
+            const diff = startX - currentX;
+            if (Math.abs(diff) > 50) {
+              if (diff > 0 && currentIndex < images.length - 1) {
+                currentIndex++;
+              } else if (diff < 0 && currentIndex > 0) {
+                currentIndex--;
+              }
+              updateCarousel();
+              isDragging = false;
+            }
+          });
+
+          container.addEventListener("touchend", () => {
+            isDragging = false;
+          });
+        }
+      }
+
+      // Follow/Unfollow buttons
+      document.querySelectorAll(".post-follow-btn").forEach((button) => {
+        button.addEventListener("click", async () => {
+          const userId = button.dataset.userId;
+          const isFollowing = button.classList.contains("following");
+          try {
+            if (isFollowing) {
+              await remove(ref(db, `friendships/${currentUserUid}/${userId}`));
+              await remove(ref(db, `friendships/${userId}/${currentUserUid}`));
+              button.classList.remove("following");
+              button.classList.add("follow");
+              button.textContent = "Follow";
+            } else {
+              await set(ref(db, `friendships/${currentUserUid}/${userId}`), { status: "pending" });
+              await set(ref(db, `friendships/${userId}/${currentUserUid}`), { status: "pending" });
+              button.classList.remove("follow");
+              button.classList.add("following");
+              button.textContent = "Following";
+            }
+          } catch (error) {
+            console.error("Error updating friendship:", error.message);
+            alert("Failed to update friendship: " + error.message);
+          }
+        });
+      });
+
+      // Like buttons
+      document.querySelectorAll(".like-btn").forEach((button) => {
+        button.addEventListener("click", async () => {
+          const postId = button.dataset.postId;
+          const liked = button.dataset.liked === "true";
+          try {
+            if (liked) {
+              await remove(ref(db, `posts/${postId}/likes/${currentUserUid}`));
+              button.dataset.liked = "false";
+              button.querySelector("svg").setAttribute("fill", "none");
+              const likeCount = button.querySelector(".like-count");
+              likeCount.textContent = parseInt(likeCount.textContent) - 1;
+            } else {
+              await set(ref(db, `posts/${postId}/likes/${currentUserUid}`), true);
+              button.dataset.liked = "true";
+              button.querySelector("svg").setAttribute("fill", "var(--primary-red)");
+              const likeCount = button.querySelector(".like-count");
+              likeCount.textContent = parseInt(likeCount.textContent) + 1;
+            }
+          } catch (error) {
+            console.error("Error updating like:", error.message);
+            alert("Failed to update like: " + error.message);
+          }
+        });
+      });
+
+      // Comment buttons
+      document.querySelectorAll(".comment-btn").forEach((button) => {
+        button.addEventListener("click", () => {
+          currentPostId = button.dataset.postId;
+          loadComments(currentPostId);
+          commentSheet.classList.add("open");
+          pauseAllMedia();
+        });
+      });
+
+      // Delete post buttons
+      document.querySelectorAll(".delete-post-btn").forEach((button) => {
+        button.addEventListener("click", () => {
+          currentPostId = button.closest(".post").dataset.postId;
+          deletePostModal.classList.add("open");
+          pauseAllMedia();
+        });
+      });
+    }, { onlyOnce: false });
+  } catch (error) {
+    console.error("Error loading posts:", error.code, error.message);
+    showError(postsContainer, `Failed to load posts: ${error.message}`);
+  } finally {
+    hideLoading();
+  }
 }
 
-async function showCommentSheet(postId) {
-  currentPostId = postId;
-  commentSheet.classList.remove("hidden");
-  commentSheet.classList.add("open");
-  commentsList.innerHTML = '<div class="loading">Loading comments...</div>';
+// Load Stories
+async function loadStories() {
+  const storiesContainer = document.querySelector("#stories-container .stories-scroll");
+  const storyFileInput = document.querySelector("#story-file-input");
+  storiesContainer.innerHTML = '<div class="loading">Loading stories...</div>';
   showLoading();
-  pauseAllMedia();
+
   try {
-    const postSnap = await Promise.race([
-      get(ref(db, `posts/${postId}`)),
-      new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout loading comments")), 10000))
+    // Fetch all stories
+    const storiesRef = ref(db, "stories");
+    const storiesSnap = await Promise.race([
+      get(storiesRef),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout fetching stories")), 10000))
     ]);
-    const post = postSnap.val();
-    const comments = post.comments || {};
+
     const usersSnap = await Promise.race([
       get(ref(db, "users")),
-      new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout loading users")), 10000))
+      new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout fetching users")), 10000))
     ]);
+
+    storiesContainer.innerHTML = "";
+    const storiesData = storiesSnap.val() || {};
     const users = usersSnap.val() || {};
+    const currentTime = Date.now();
+    const twentyFourHours = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+    const storyItems = [];
+
+    // Add user's own story button first
+    const user = users[currentUserUid] || { username: "Anonymous", photoURL: "https://www.gravatar.com/avatar?d=mp" };
+    const addStoryItem = document.createElement("div");
+    addStoryItem.className = "story-item story-add";
+    addStoryItem.innerHTML = `
+      <div class="story-add-btn" aria-label="Add a story">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 5v14m7-7H5"/>
+        </svg>
+      </div>
+      <span class="story-username">Your Story</span>
+    `;
+    addStoryItem.addEventListener("click", () => {
+      storyFileInput.click(); // Trigger file input
+      pauseAllMedia();
+    });
+    storiesContainer.appendChild(addStoryItem);
+
+    // Handle file selection and upload
+    storyFileInput.addEventListener("change", async (event) => {
+      const file = event.target.files[0];
+      if (!file) {
+        alert("No file selected.");
+        return;
+      }
+
+      // Validate file type
+      const validTypes = ["image/jpeg", "image/png", "image/gif", "video/mp4", "video/webm"];
+      if (!validTypes.includes(file.type)) {
+        alert("Please select a valid image (JPEG, PNG, GIF) or video (MP4, WebM).");
+        event.target.value = ""; // Clear input
+        return;
+      }
+
+      showLoading();
+      try {
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
+
+        const response = await fetch(CLOUDINARY_UPLOAD_URL, {
+          method: "POST",
+          body: formData,
+        });
+        const data = await response.json();
+        if (!data.secure_url) throw new Error("Failed to upload story.");
+
+        const storyRef = push(ref(db, `stories/${currentUserUid}`));
+        await set(storyRef, {
+          mediaUrl: data.secure_url,
+          mediaType: file.type.startsWith("image") ? "image" : "video",
+          timestamp: Date.now(),
+          userId: currentUserUid,
+          viewedBy: {},
+        });
+
+        // Reload stories to reflect the new story
+        await loadStories();
+      } catch (error) {
+        console.error("Error uploading story:", error.message);
+        alert(`Failed to upload story: ${error.message}`);
+      } finally {
+        hideLoading();
+        event.target.value = ""; // Clear input
+      }
+    });
+
+    // Process stories for other users
+    for (const userId in storiesData) {
+      const userStories = storiesData[userId];
+      const userData = users[userId] || { username: "Unknown", photoURL: "https://www.gravatar.com/avatar?d=mp" };
+      let latestStory = null;
+
+      // Find the latest unexpired story for the user
+      for (const storyId in userStories) {
+        const story = userStories[storyId];
+        if (currentTime - story.timestamp <= twentyFourHours) {
+          if (!latestStory || story.timestamp > latestStory.timestamp) {
+            latestStory = { id: storyId, ...story };
+          }
+        } else {
+          // Remove expired story
+          await remove(ref(db, `stories/${userId}/${storyId}`));
+        }
+      }
+
+      if (latestStory && userId !== currentUserUid) {
+        const isViewed = latestStory.viewedBy && latestStory.viewedBy[currentUserUid];
+        const storyItem = document.createElement("div");
+        storyItem.className = `story-item ${isViewed ? "viewed" : ""}`;
+        storyItem.dataset.userId = userId;
+        storyItem.dataset.storyId = latestStory.id;
+        storyItem.innerHTML = `
+          <img src="${userData.photoURL}" alt="${userData.username} story" class="story-avatar"/>
+          <span class="story-username">${userData.username}</span>
+        `;
+        storyItem.addEventListener("click", async () => {
+          if (!isViewed) {
+            // Mark story as viewed
+            await set(ref(db, `stories/${userId}/${latestStory.id}/viewedBy/${currentUserUid}`), true);
+          }
+          console.log(`Navigating to story viewer for user: ${userId}`);
+          location.href = `story-view.html?uid=${userId}`;
+          pauseAllMedia();
+        });
+        storyItems.push({ element: storyItem, timestamp: latestStory.timestamp });
+      }
+    }
+
+    // Sort stories by timestamp (newest first)
+    storyItems.sort((a, b) => b.timestamp - a.timestamp);
+    storyItems.forEach(item => storiesContainer.appendChild(item.element));
+
+    if (storyItems.length === 0 && storiesContainer.children.length === 1) {
+      storiesContainer.innerHTML = '<div class="placeholder">No stories available.</div>';
+      // Re-append the add story button
+      storiesContainer.appendChild(addStoryItem);
+    }
+  } catch (error) {
+    console.error("Error loading stories:", error.code, error.message);
+    storiesContainer.innerHTML = `<p class="error">Failed to load stories: ${error.message}</p>`;
+    // Re-append the add story button on error
+    storiesContainer.appendChild(addStoryItem);
+  } finally {
+    hideLoading();
+  }
+}
+
+// Load Friends
+async function loadFriends() {
+  friendsContainer.innerHTML = '<div class="loading">Loading friends...</div>';
+  showLoading();
+
+  try {
+    const friendshipsRef = ref(db, `friendships/${currentUserUid}`);
+    onValue(friendshipsRef, async (snapshot) => {
+      friendsContainer.innerHTML = "";
+      const friendships = snapshot.val() || {};
+      const usersSnap = await get(ref(db, "users"));
+      const users = usersSnap.val() || {};
+      const messagesSnap = await get(ref(db, `messages/${currentUserUid}`));
+      const messages = messagesSnap.val() || {};
+
+      const friendItems = [];
+      for (const friendId in friendships) {
+        if (friendships[friendId].status === "accepted") {
+          const user = users[friendId] || { username: "Unknown", photoURL: "https://www.gravatar.com/avatar?d=mp" };
+          const lastMessage = messages[friendId] ? Object.values(messages[friendId]).sort((a, b) => b.timestamp - a.timestamp)[0] : null;
+          const unreadCount = lastMessage && !lastMessage.readBy?.[currentUserUid] ? 1 : 0;
+
+          const friendItem = document.createElement("div");
+          friendItem.className = "friend-item";
+          friendItem.innerHTML = `
+            <img src="${user.photoURL}" alt="${user.username}" />
+            <div class="friend-info">
+              <span>${user.username}${user.verified ? '<span class="verified-icon"><svg viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></span>' : ""}</span>
+              ${lastMessage ? `
+                <span class="last-message-timestamp">${formatTimeAgo(lastMessage.timestamp)}</span>
+                ${unreadCount > 0 ? `<span class="unread-badge">${unreadCount}</span>` : ""}
+              ` : ""}
+            </div>
+            <button class="friend-item-btn message" data-user-id="${friendId}">Message</button>
+          `;
+          friendItem.addEventListener("click", () => {
+            console.log(`Navigating to chat with ${friendId}`);
+            pauseAllMedia();
+          });
+          friendItems.push(friendItem);
+        }
+      }
+
+      if (friendItems.length === 0) {
+        friendsContainer.innerHTML = '<div class="placeholder">No friends found.</div>';
+      } else {
+        friendItems.forEach((item) => friendsContainer.appendChild(item));
+      }
+    }, { onlyOnce: false });
+  } catch (error) {
+    console.error("Error loading friends:", error.code, error.message);
+    showError(friendsContainer, `Failed to load friends: ${error.message}`);
+  } finally {
+    hideLoading();
+  }
+}
+
+// Load Search
+async function loadSearch() {
+  searchInput.addEventListener("input", async () => {
+    const query = searchInput.value.trim().toLowerCase();
+    searchResults.innerHTML = '<div class="loading">Searching...</div>';
+    showLoading();
+
+    try {
+      const postsRef = ref(db, "posts");
+      const postsSnap = await get(postsRef);
+      const posts = postsSnap.val() || {};
+      const usersSnap = await get(ref(db, "users"));
+      const users = usersSnap.val() || {};
+
+      searchResults.innerHTML = "";
+      const postArray = [];
+      for (const postId in posts) {
+        const post = posts[postId];
+        const user = users[post.userId] || { username: "Anonymous" };
+        if (
+          user.username.toLowerCase().includes(query) ||
+          (post.caption && post.caption.toLowerCase().includes(query)) ||
+          (post.song && post.song.toLowerCase().includes(query))
+        ) {
+          postArray.push({ id: postId, ...post });
+        }
+      }
+
+      if (postArray.length === 0) {
+        searchResults.innerHTML = '<div class="placeholder">No results found.</div>';
+        hideLoading();
+        return;
+      }
+
+      postArray.sort((a, b) => b.timestamp - a.timestamp);
+
+      for (const post of postArray) {
+        const postElement = document.createElement("div");
+        postElement.className = "post";
+        postElement.dataset.postId = post.id;
+        const images = Array.isArray(post.imageUrl) ? post.imageUrl : [post.imageUrl];
+        postElement.innerHTML = `<img src="${images[0]}" alt="Post image" class="post-image"/>`;
+        postElement.addEventListener("click", () => {
+          currentPostId = post.id;
+          loadComments(currentPostId);
+          commentSheet.classList.add("open");
+          pauseAllMedia();
+        });
+        searchResults.appendChild(postElement);
+      }
+    } catch (error) {
+      console.error("Error searching posts:", error.code, error.message);
+      showError(searchResults, `Failed to search posts: ${error.message}`);
+    } finally {
+      hideLoading();
+    }
+  });
+}
+
+// Load Profile
+async function loadProfile() {
+  try {
+    const userRef = ref(db, `users/${currentUserUid}`);
+    const userSnap = await get(userRef);
+    const user = userSnap.val() || { username: "Anonymous", photoURL: "https://www.gravatar.com/avatar?d=mp", bio: "" };
+
+    profileUsername.innerHTML = `${user.username}${user.verified ? '<span class="verified-icon"><svg viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></span>' : ""}`;
+    profileBio.textContent = user.bio || "No bio yet.";
+    profilePhoto.src = user.photoURL;
+
+    const postsRef = ref(db, "posts");
+    onValue(postsRef, (snapshot) => {
+      profilePosts.innerHTML = "";
+      profileReels.innerHTML = "";
+      const posts = snapshot.val() || {};
+      const postArray = [];
+
+      for (const postId in posts) {
+        if (posts[postId].userId === currentUserUid) {
+          postArray.push({ id: postId, ...posts[postId] });
+        }
+      }
+
+      if (postArray.length === 0) {
+        profilePosts.innerHTML = '<div class="placeholder">No posts yet.</div>';
+        profileReels.innerHTML = '<div class="placeholder">No reels yet.</div>';
+        return;
+      }
+
+      postArray.sort((a, b) => b.timestamp - a.timestamp);
+
+      for (const post of postArray) {
+        const postElement = document.createElement("div");
+        postElement.className = "post";
+        postElement.dataset.postId = post.id;
+        const images = Array.isArray(post.imageUrl) ? post.imageUrl : [post.imageUrl];
+        postElement.innerHTML = `<img src="${images[0]}" alt="Post image" class="post-image"/>`;
+        postElement.addEventListener("click", () => {
+          currentPostId = post.id;
+          loadComments(currentPostId);
+          commentSheet.classList.add("open");
+          pauseAllMedia();
+        });
+        profilePosts.appendChild(postElement);
+        if (post.song) {
+          profileReels.appendChild(postElement.cloneNode(true));
+        }
+      }
+    }, { onlyOnce: false });
+  } catch (error) {
+    console.error("Error loading profile:", error.code, error.message);
+    profilePosts.innerHTML = `<p class="error">Failed to load profile: ${error.message}</p>`;
+  }
+}
+
+// Load Comments
+async function loadComments(postId) {
+  commentsList.innerHTML = '<div class="loading">Loading comments...</div>';
+  showLoading();
+
+  try {
+    const commentsRef = ref(db, `posts/${postId}/comments`);
+    const commentsSnap = await get(commentsRef);
+    const comments = commentsSnap.val() || {};
+    const usersSnap = await get(ref(db, "users"));
+    const users = usersSnap.val() || {};
+
     commentsList.innerHTML = "";
-    for (const cid in comments) {
-      const comment = comments[cid];
-      const userData = users[comment.userId] || { username: "Unknown", photoURL: null };
-      const commentItem = document.createElement("div");
-      commentItem.className = "comment-item";
-      commentItem.innerHTML = `
-        <img src="${userData.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${userData.username} avatar" class="comment-avatar"/>
-        <div class="comment-content">
-          <p class="comment-username">${userData.username}</p>
-          <p class="comment-text">${comment.text}</p>
-          <p class="comment-time">${timeAgo(comment.timestamp)}</p>
-        </div>
-      `;
-      commentsList.appendChild(commentItem);
+    const commentArray = [];
+    for (const commentId in comments) {
+      commentArray.push({ id: commentId, ...comments[commentId] });
     }
-    if (Object.keys(comments).length === 0) {
-      commentsList.innerHTML = `<p class="text-center text-gray-500">No comments yet.</p>`;
+
+    commentArray.sort((a, b) => b.timestamp - a.timestamp);
+
+    if (commentArray.length === 0) {
+      commentsList.innerHTML = '<div class="placeholder">No comments yet.</div>';
+    } else {
+      for (const comment of commentArray) {
+        const user = users[comment.userId] || { username: "Anonymous", photoURL: "https://www.gravatar.com/avatar?d=mp" };
+        const commentElement = document.createElement("div");
+        commentElement.className = "comment-item";
+        commentElement.innerHTML = `
+          <img src="${user.photoURL}" alt="${user.username}" class="comment-avatar"/>
+          <div class="comment-content">
+            <span class="comment-username">${user.username}${user.verified ? '<span class="verified-icon"><svg viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></span>' : ""}</span>
+            <p class="comment-text">${comment.text}</p>
+            <span class="comment-time">${formatTimeAgo(comment.timestamp)}</span>
+          </div>
+        `;
+        commentsList.appendChild(commentElement);
+      }
     }
-    commentInput.value = "";
-    commentInput.focus();
   } catch (error) {
     console.error("Error loading comments:", error.code, error.message);
     commentsList.innerHTML = `<p class="error">Failed to load comments: ${error.message}</p>`;
@@ -1978,832 +2353,149 @@ async function showCommentSheet(postId) {
   }
 }
 
-commentSheetClose.addEventListener("click", () => {
-  commentSheet.classList.remove("open");
-  setTimeout(() => commentSheet.classList.add("hidden"), 300);
-  currentPostId = null;
-});
-
+// Comment Submission
 commentSubmit.addEventListener("click", async () => {
-  if (!currentPostId || !commentInput.value.trim()) return;
+  const text = commentInput.value.trim();
+  if (!text || !currentPostId) return;
+
   showLoading();
   try {
     const commentRef = push(ref(db, `posts/${currentPostId}/comments`));
-    const postSnap = await Promise.race([
-      get(ref(db, `posts/${currentPostId}`)),
-      new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout fetching post")), 10000))
-    ]);
-    const post = postSnap.val();
     await set(commentRef, {
+      text,
       userId: currentUserUid,
-      text: commentInput.value.trim(),
       timestamp: Date.now(),
     });
-    if (post.userId !== currentUserUid) {
-      const notifRef = push(ref(db, `notifications/${post.userId}/${currentPostId}/comments`));
-      await set(notifRef, { type: 'comment', userId: currentUserUid, timestamp: Date.now(), read: false });
-    }
     commentInput.value = "";
-    await showCommentSheet(currentPostId);
+    loadComments(currentPostId);
   } catch (error) {
     console.error("Error adding comment:", error.code, error.message);
-    showError(commentsList, `Failed to add comment: ${error.message}`);
+    alert("Failed to add comment: " + error.message);
   } finally {
     hideLoading();
   }
 });
 
-commentInput.addEventListener("keydown", (e) => {
-  if (e.key === "Enter") {
-    e.preventDefault();
-    commentSubmit.click();
+closeCommentSheet.addEventListener("click", () => {
+  commentSheet.classList.remove("open");
+  pauseAllMedia();
+});
+
+// Edit Profile
+editProfileBtn.addEventListener("click", () => {
+  editProfileModal.classList.add("open");
+  pauseAllMedia();
+
+  const userRef = ref(db, `users/${currentUserUid}`);
+  get(userRef).then((snapshot) => {
+    const user = snapshot.val() || { username: "", bio: "" };
+    editUsername.value = user.username || "";
+    editBio.value = user.bio || "";
+  }).catch((error) => {
+    console.error("Error fetching user data:", error.message);
+    editProfileError.textContent = `Failed to fetch user data: ${error.message}`;
+    editProfileError.style.display = "block";
+  });
+});
+
+editProfileForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const username = editUsername.value.trim();
+  const bio = editBio.value.trim();
+  const file = editPhoto.files[0];
+
+  if (!username) {
+    editProfileError.textContent = "Username is required.";
+    editProfileError.style.display = "block";
+    return;
+  }
+
+  showLoading();
+  try {
+    let photoURL = profilePhoto.src;
+    if (file) {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
+
+      const response = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`, {
+        method: "POST",
+        body: formData,
+      });
+      const data = await response.json();
+      if (data.secure_url) {
+        photoURL = data.secure_url;
+      } else {
+        throw new Error("Failed to upload profile photo.");
+      }
+    }
+
+    await set(ref(db, `users/${currentUserUid}`), {
+      username,
+      bio,
+      photoURL,
+      verified: false,
+    });
+
+    editProfileModal.classList.remove("open");
+    loadProfile();
+  } catch (error) {
+    console.error("Error updating profile:", error.message);
+    editProfileError.textContent = `Failed to update profile: ${error.message}`;
+    editProfileError.style.display = "block";
+  } finally {
+    hideLoading();
   }
 });
 
+closeEditModal.addEventListener("click", () => {
+  editProfileModal.classList.remove("open");
+  editProfileError.style.display = "none";
+  pauseAllMedia();
+});
 
+// Delete Post
+deletePostBtn.addEventListener("click", async () => {
+  if (!currentPostId) return;
 
-            
-        
-
-
-
-async function loadPosts() {
-  const postsContainer = document.getElementById("posts-container");
   showLoading();
   try {
-    const postsRef = ref(db, "posts");
-    onValue(
-      postsRef,
-      (snapshot) => {
-        postsContainer.innerHTML = '<div class="loading">Loading posts...</div>';
-        try {
-          const postsData = snapshot.val() || {};
-          if (Object.keys(postsData).length === 0) {
-            postsContainer.innerHTML = '<div class="placeholder">No posts found.</div>';
-            hideLoading();
-            return;
-          }
-
-          // Convert posts to an array with timestamps
-          const postsArray = Object.entries(postsData).map(([postId, post]) => ({
-            postId,
-            ...post,
-            timestamp: post.timestamp || 0,
-          }));
-
-          // Sort by timestamp (newest first) to get the most recent post
-          postsArray.sort((a, b) => b.timestamp - a.timestamp);
-
-          // Separate the most recent post
-          const [mostRecentPost] = postsArray;
-          const remainingPosts = postsArray.slice(1);
-
-          // Fisher-Yates shuffle for remaining posts
-          for (let i = remainingPosts.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [remainingPosts[i], remainingPosts[j]] = [remainingPosts[j], remainingPosts[i]];
-          }
-
-          // Combine most recent post with shuffled remaining posts
-          const finalPosts = [mostRecentPost, ...remainingPosts];
-
-          postsContainer.innerHTML = "";
-          const fragment = document.createDocumentFragment();
-
-          // Fetch all users at once for efficiency
-          const userIds = [...new Set(finalPosts.map((post) => post.userId))];
-          const users = {};
-          const userPromises = userIds.map(async (uid) => {
-            const userSnap = await get(ref(db, `users/${uid}`));
-            users[uid] = userSnap.val() || { username: "Unknown", photoURL: "https://www.gravatar.com/avatar?d=mp" };
-          });
-          await Promise.all(userPromises);
-
-          finalPosts.forEach(async (post) => {
-            const user = users[post.userId] || { username: "Unknown", photoURL: "https://www.gravatar.com/avatar?d=mp" };
-            const postElement = document.createElement("div");
-            postElement.className = "post-item";
-            postElement.dataset.postId = post.postId;
-
-            let mediaContent = "";
-            if (post.mediaUrl) {
-              if (post.mediaType === "image") {
-                mediaContent = `<img src="${post.mediaUrl}" alt="Post image" class="post-media"/>`;
-              } else if (post.mediaType === "video") {
-                mediaContent = `
-                  <video class="post-media" muted>
-                    <source src="${post.mediaUrl}" type="video/mp4">
-                    Your browser does not support the video tag.
-                  </video>
-                  <button class="play-pause-btn" aria-label="Play or pause video">
-                    <svg class="play-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-                      <path stroke="none" fill-rule="evenodd" clip-rule="evenodd" d="M5 3l14 9-14 9V3z"/>
-                    </svg>
-                    <svg class="pause-icon hidden" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-                      <path stroke="none" fill-rule="evenodd" clip-rule="evenodd" d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/>
-                    </svg>
-                  </button>
-                `;
-              }
-            }
-
-            const postTime = timeAgo(post.timestamp);
-            postElement.innerHTML = `
-              <div class="post-header">
-                <img src="${user.photoURL}" alt="${user.username} avatar" class="post-user-img"/>
-                <div class="post-user-info">
-                  <span class="post-username">${user.username}</span>
-                  <span class="post-time">${postTime}</span>
-                </div>
-                <button class="post-options-btn" aria-label="Post options">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v.01M12 12v.01M12 18v.01"/>
-                  </svg>
-                </button>
-              </div>
-              <div class="post-content">
-                ${post.text ? `<p>${post.text}</p>` : ""}
-                ${mediaContent}
-              </div>
-              <div class="post-actions">
-                <button class="like-btn ${post.likedBy?.[currentUserUid] ? "liked" : ""}" aria-label="${
-              post.likedBy?.[currentUserUid] ? "Unlike" : "Like"
-            } post">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/>
-                  </svg>
-                  <span class="like-count">${Object.keys(post.likedBy || {}).length}</span>
-                </button>
-                <button class="comment-btn" aria-label="Comment on post">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/>
-                  </svg>
-                  <span class="comment-count">${Object.keys(post.comments || {}).length}</span>
-                </button>
-                <button class="message-btn" aria-label="Message user">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
-                  </svg>
-                </button>
-              </div>
-            `;
-
-            // Like button functionality
-            postElement.querySelector(".like-btn").addEventListener("click", async (e) => {
-              e.stopPropagation();
-              const likeBtn = e.currentTarget;
-              const isLiked = likeBtn.classList.contains("liked");
-              try {
-                const likeRef = ref(db, `posts/${post.postId}/likedBy/${currentUserUid}`);
-                if (isLiked) {
-                  await remove(likeRef);
-                  likeBtn.classList.remove("liked");
-                  likeBtn.setAttribute("aria-label", "Like post");
-                } else {
-                  await set(likeRef, true);
-                  likeBtn.classList.add("liked");
-                  likeBtn.setAttribute("aria-label", "Unlike post");
-                }
-                const updatedPost = await get(ref(db, `posts/${post.postId}`));
-                const likeCount = Object.keys(updatedPost.val()?.likedBy || {}).length;
-                likeBtn.querySelector(".like-count").textContent = likeCount;
-              } catch (error) {
-                console.error("Error toggling like:", error.message);
-                postsContainer.innerHTML += `<p class="error">Failed to update like: ${error.message}</p>`;
-              }
-            });
-
-            // Comment button functionality
-            postElement.querySelector(".comment-btn").addEventListener("click", (e) => {
-              e.stopPropagation();
-              console.log("Navigating to comments for post:", post.postId);
-              const navSpinner = document.getElementById("navigation-spinner");
-              if (navSpinner) {
-                navSpinner.classList.add("active");
-              }
-              setTimeout(() => {
-                location.href = `comments.html?postId=${post.postId}`;
-                pauseAllMedia();
-              }, 300);
-            });
-
-            // Message button functionality
-            postElement.querySelector(".message-btn").addEventListener("click", (e) => {
-              e.stopPropagation();
-              console.log("Navigating to chat with user:", post.userId);
-              const navSpinner = document.getElementById("navigation-spinner");
-              if (navSpinner) {
-                navSpinner.classList.add("active");
-              }
-              setTimeout(() => {
-                location.href = `chat.html?uid=${post.userId}`;
-              }, 300);
-            });
-
-            // Profile navigation on clicking user info
-            const userInfo = postElement.querySelector(".post-user-info");
-            userInfo.addEventListener("click", (e) => {
-              e.stopPropagation();
-              console.log("Navigating to profile:", post.userId);
-              const navSpinner = document.getElementById("navigation-spinner");
-              if (navSpinner) {
-                navSpinner.classList.add("active");
-              }
-              setTimeout(() => {
-                location.href = `profile.html?uid=${post.userId}`;
-                pauseAllMedia();
-              }, 300);
-            });
-
-            // Play/pause video functionality
-            if (post.mediaType === "video") {
-              const video = postElement.querySelector("video");
-              const playPauseBtn = postElement.querySelector(".play-pause-btn");
-              const playIcon = playPauseBtn.querySelector(".play-icon");
-              const pauseIcon = playPauseBtn.querySelector(".pause-icon");
-
-              const togglePlayPause = async () => {
-                try {
-                  pauseAllMedia();
-                  if (video.paused) {
-                    await video.play();
-                    playIcon.classList.add("hidden");
-                    pauseIcon.classList.remove("hidden");
-                  } else {
-                    video.pause();
-                    playIcon.classList.remove("hidden");
-                    pauseIcon.classList.add("hidden");
-                  }
-                } catch (error) {
-                  console.error("Error playing/pausing video:", error.message);
-                  postsContainer.innerHTML += `<p class="error">Failed to play video: ${error.message}</p>`;
-                }
-              };
-
-              playPauseBtn.addEventListener("click", togglePlayPause);
-              playPauseBtn.addEventListener("touchend", (e) => {
-                e.preventDefault();
-                togglePlayPause();
-              });
-
-              video.addEventListener("ended", () => {
-                playIcon.classList.remove("hidden");
-                pauseIcon.classList.add("hidden");
-                video.currentTime = 0;
-              });
-            }
-
-            fragment.appendChild(postElement);
-          });
-
-          postsContainer.appendChild(fragment);
-          hideLoading();
-        } catch (error) {
-          console.error("Error processing posts:", error.code, error.message);
-          postsContainer.innerHTML = `<p class="error">Failed to load posts: ${error.message}</p>`;
-          hideLoading();
-        }
-      },
-      (error) => {
-        console.error("Error loading posts:", error.code, error.message);
-        postsContainer.innerHTML = `<p class="error">Failed to load posts: ${error.message}</p>`;
-        hideLoading();
-      }
-    );
+    await remove(ref(db, `posts/${currentPostId}`));
+    deletePostModal.classList.remove("open");
+    loadPosts();
+    loadProfile();
   } catch (error) {
-    console.error("Error setting up posts listener:", error.code, error.message);
-    postsContainer.innerHTML = `<p class="error">Failed to load posts: ${error.message}</p>`;
+    console.error("Error deleting post:", error.code, error.message);
+    alert("Failed to delete post: " + error.message);
+  } finally {
     hideLoading();
   }
-}
+});
 
-async function loadFriends() {
-  const friendsContainer = document.getElementById("friends-container");
-  const followersContainer = document.getElementById("followers-container");
-  const followingContainer = document.getElementById("following-container");
-  const subTabBtns = document.querySelectorAll(".sub-tab-btn");
-  const subTabs = document.querySelectorAll(".sub-tab-content");
+cancelDeleteBtn.addEventListener("click", () => {
+  deletePostModal.classList.remove("open");
+  pauseAllMedia();
+});
 
-  subTabBtns.forEach((btn) => {
-    btn.addEventListener("click", () => {
-      subTabBtns.forEach((b) => {
-        b.classList.remove("active");
-        b.setAttribute("aria-selected", "false");
-      });
-      subTabs.forEach((t) => t.classList.remove("active"));
-      btn.classList.add("active");
-      btn.setAttribute("aria-selected", "true");
-      document.querySelector(`.sub-tab-content[data-sub-tab="${btn.dataset.subTab}"]`).classList.add("active");
-      pauseAllMedia();
-    });
-  });
+closeDeleteModal.addEventListener("click", () => {
+  deletePostModal.classList.remove("open");
+  pauseAllMedia();
+});
 
-  const friendsRef = ref(db, `users/${currentUserUid}/friends`);
-  showLoading();
-  onValue(
-    friendsRef,
-    async (snapshot) => {
-      friendsContainer.innerHTML = '<div class="loading">Loading friends...</div>';
-      try {
-        const friendsData = snapshot.val() || {};
-        friendsContainer.innerHTML = "";
-        if (Object.keys(friendsData).length === 0) {
-          friendsContainer.innerHTML = '<div class="placeholder">No friends found.</div>';
-        } else {
-          const usersSnap = await get(ref(db, "users"));
-          const users = usersSnap.val() || {};
-          const friendItems = [];
+// Notification and Settings
+notificationBtn.addEventListener("click", () => {
+  console.log("Navigating to notifications");
+  pauseAllMedia();
+});
 
-          for (const friendUid in friendsData) {
-            const userData = users[friendUid] || { username: "Unknown", photoURL: null };
-            let lastMessageTimestamp = null;
-            let lastMessageTimeAgo = "No messages yet";
-            let unreadCount = 0;
-
-            try {
-              // Deterministic chatId matching chat.html
-              const chatId = currentUserUid < friendUid ? `${currentUserUid}_${friendUid}` : `${friendUid}_${currentUserUid}`;
-              const messagesRef = query(ref(db, `messages/${chatId}`), orderByChild("timestamp"), limitToLast(1));
-
-              console.log(`Fetching messages for chatId: ${chatId}`); // Debugging
-
-              const snap = await Promise.race([
-                get(messagesRef),
-                new Promise((_, reject) =>
-                  setTimeout(() => reject(new Error(`Timeout fetching messages for ${chatId}`)), 5000)
-                ),
-              ]).catch((error) => {
-                console.warn(`Error fetching messages for ${chatId}:`, error.message);
-                return null;
-              });
-
-              if (snap && snap.exists()) {
-                console.log(`Messages found for ${chatId}:`, snap.val()); // Debugging
-                snap.forEach((child) => {
-                  const msg = { id: child.key, ...child.val() };
-                  if (msg.timestamp) {
-                    lastMessageTimestamp = msg.timestamp;
-                    lastMessageTimeAgo = timeAgo(lastMessageTimestamp);
-                  }
-                  if (msg.sender === friendUid && msg.read === false) {
-                    unreadCount++;
-                  }
-                });
-                console.log(`Latest message for ${friendUid}:`, { timestamp: lastMessageTimestamp, timeAgo: lastMessageTimeAgo }); // Debugging
-              } else {
-                console.log(`No messages found for ${chatId}`); // Debugging
-              }
-            } catch (error) {
-              console.error(`Error processing messages for friend ${friendUid}:`, error.message);
-              lastMessageTimeAgo = "No messages yet";
-              unreadCount = 0;
-            }
-
-            const friendItem = document.createElement("div");
-            friendItem.className = "friend-item";
-            friendItem.innerHTML = `
-              <img src="${userData.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${userData.username} avatar"/>
-              <div class="friend-info">
-                <span>${userData.username}</span>
-                ${unreadCount > 0 ? `<span class="unread-badge">${unreadCount}</span>` : ""}
-                <span class="last-message-timestamp">${lastMessageTimeAgo}</span>
-              </div>
-              <button class="friend-item-btn message">Message</button>
-            `;
-            friendItem.querySelector(".friend-item-btn").addEventListener("click", (e) => {
-              e.stopPropagation();
-              console.log(`Navigating to chat with user: ${friendUid}`);
-              const navSpinner = document.getElementById("navigation-spinner");
-              if (navSpinner) {
-                navSpinner.classList.add("active");
-              }
-              setTimeout(() => {
-                location.href = `chat.html?uid=${friendUid}`;
-              }, 300);
-            });
-            friendItem.addEventListener("click", (e) => {
-              if (e.target.classList.contains("friend-item-btn")) return;
-              console.log("Navigating to profile:", friendUid);
-              const navSpinner = document.getElementById("navigation-spinner");
-              if (navSpinner) {
-                navSpinner.classList.add("active");
-              }
-              setTimeout(() => {
-                location.href = `profile.html?uid=${friendUid}`;
-                pauseAllMedia();
-              }, 300);
-            });
-            friendItems.push({ element: friendItem, timestamp: lastMessageTimestamp || 0 });
-          }
-
-          // Sort friends by latest message timestamp (newest first)
-          friendItems.sort((a, b) => b.timestamp - a.timestamp);
-          friendItems.forEach((item) => friendsContainer.appendChild(item.element));
-        }
-      } catch (error) {
-        console.error("Error loading friends:", error.code, error.message);
-        friendsContainer.innerHTML = `<p class="error">Failed to load friends: ${error.message}</p>`;
-      } finally {
-        hideLoading();
-      }
-    },
-    { onlyOnce: false }
-  );
-
-  // Followers section
-  const followersRef = ref(db, `users/${currentUserUid}/followers`);
-  showLoading();
-  onValue(
-    followersRef,
-    async (snapshot) => {
-      followersContainer.innerHTML = '<div class="loading">Loading followers...</div>';
-      try {
-        const followersData = snapshot.val() || {};
-        followersContainer.innerHTML = "";
-        if (Object.keys(followersData).length === 0) {
-          followersContainer.innerHTML = '<div class="placeholder">No followers found.</div>';
-        } else {
-          const usersSnap = await get(ref(db, "users"));
-          const users = usersSnap.val() || {};
-          for (const followerUid in followersData) {
-            const userData = users[followerUid] || { username: "Unknown", photoURL: null };
-            let isFollowing = false;
-            try {
-              const followingSnap = await get(ref(db, `users/${currentUserUid}/following/${followerUid}`));
-              isFollowing = followingSnap.exists();
-            } catch (error) {
-              console.warn(`Error checking follow status for user ${followerUid}:`, error.message);
-              isFollowing = false;
-            }
-            const followerItem = document.createElement("div");
-            followerItem.className = "friend-item";
-            followerItem.innerHTML = `
-              <img src="${userData.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${userData.username} avatar"/>
-              <span>${userData.username}</span>
-              <button class="friend-item-btn ${isFollowing ? "following" : "follow"}">${
-              isFollowing ? "Following" : "Follow"
-            }</button>
-            `;
-            followerItem.querySelector(".friend-item-btn").addEventListener("click", (e) => {
-              e.stopPropagation();
-              toggleFollow(followerUid, e.target, "followers-container");
-            });
-            followerItem.addEventListener("click", (e) => {
-              if (e.target.classList.contains("friend-item-btn")) return;
-              console.log("Navigating to profile:", followerUid);
-              const navSpinner = document.getElementById("navigation-spinner");
-              if (navSpinner) {
-                navSpinner.classList.add("active");
-              }
-              setTimeout(() => {
-                location.href = `profile.html?uid=${followerUid}`;
-                pauseAllMedia();
-              }, 300);
-            });
-            followersContainer.appendChild(followerItem);
-          }
-        }
-      } catch (error) {
-        console.error("Error loading followers:", error.code, error.message);
-        followersContainer.innerHTML = `<p class="error">Failed to load followers: ${error.message}</p>`;
-      } finally {
-        hideLoading();
-      }
-    },
-    { onlyOnce: false }
-  );
-
-  // Following section
-  const followingRef = ref(db, `users/${currentUserUid}/following`);
-  showLoading();
-  onValue(
-    followingRef,
-    async (snapshot) => {
-      followingContainer.innerHTML = '<div class="loading">Loading following...</div>';
-      try {
-        const followingData = snapshot.val() || {};
-        followingContainer.innerHTML = "";
-        if (Object.keys(followingData).length === 0) {
-          followingContainer.innerHTML = '<div class="placeholder">Not following anyone.</div>';
-        } else {
-          const usersSnap = await get(ref(db, "users"));
-          const users = usersSnap.val() || {};
-          for (const followingUid in followingData) {
-            const userData = users[followingUid] || { username: "Unknown", photoURL: null };
-            const followingItem = document.createElement("div");
-            followingItem.className = "friend-item";
-            followingItem.innerHTML = `
-              <img src="${userData.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${userData.username} avatar"/>
-              <span>${userData.username}</span>
-              <button class="friend-item-btn following">Following</button>
-            `;
-            followingItem.querySelector(".friend-item-btn").addEventListener("click", (e) => {
-              e.stopPropagation();
-              toggleFollow(followingUid, e.target, "following-container");
-            });
-            followingItem.addEventListener("click", (e) => {
-              if (e.target.classList.contains("friend-item-btn")) return;
-              console.log("Navigating to profile:", followingUid);
-              const navSpinner = document.getElementById("navigation-spinner");
-              if (navSpinner) {
-                navSpinner.classList.add("active");
-              }
-              setTimeout(() => {
-                location.href = `profile.html?uid=${followingUid}`;
-                pauseAllMedia();
-              }, 300);
-            });
-            followingContainer.appendChild(followingItem);
-          }
-        }
-      } catch (error) {
-        console.error("Error loading following:", error.code, error.message);
-        followingContainer.innerHTML = `<p class="error">Failed to load following: ${error.message}</p>`;
-      } finally {
-        hideLoading();
-      }
-    },
-    { onlyOnce: false }
-  );
-}
-
-function loadSearch() {
-  const searchInput = document.getElementById("search-input");
-  const searchResults = document.getElementById("search-results");
-  let debounceTimeout;
-
-  const loadAllPosts = async (queryText = "") => {
-    searchResults.innerHTML = '<div class="loading">Loading posts...</div>';
-    showLoading();
-    try {
-      let postsSnap;
-      try {
-        postsSnap = await Promise.race([
-          get(query(ref(db, "posts"), orderByChild("timestamp"), limitToLast(100))),
-          new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout fetching posts")), 15000)),
-        ]);
-      } catch (indexError) {
-        console.warn("Index not defined, falling back to unordered fetch:", indexError.message);
-        postsSnap = await Promise.race([
-          get(ref(db, "posts")),
-          new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout fetching posts")), 15000)),
-        ]);
-      }
-
-      const usersSnap = await Promise.race([
-        get(ref(db, "users")),
-        new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout fetching users")), 15000)),
-      ]);
-
-      searchResults.innerHTML = "";
-      const posts = [];
-      if (postsSnap.exists()) {
-        postsSnap.forEach(child => {
-          const post = child.val();
-          if (post && post.userId && post.imageUrl && post.timestamp) {
-            posts.push({ id: child.key, ...post });
-          } else {
-            console.warn(`Skipping invalid post ${child.key}: Missing required fields`);
-          }
-        });
-      } else {
-        console.log("No posts found in database");
-        searchResults.innerHTML = '<div class="placeholder">No posts available.</div>';
-        hideLoading();
-        return;
-      }
-
-      const users = usersSnap.exists() ? usersSnap.val() : {};
-      console.log(`Fetched ${posts.length} posts and ${Object.keys(users).length} users`);
-
-      const filteredPosts = queryText
-        ? posts.filter(post => {
-            const username = users[post.userId]?.username?.toLowerCase() || "";
-            const caption = post.caption?.toLowerCase() || "";
-            const matches = username.includes(queryText) || caption.includes(queryText);
-            if (!matches) {
-              console.log(`Post ${post.id} filtered out: username=${username}, caption=${caption}, query=${queryText}`);
-            }
-            return matches;
-          })
-        : posts;
-
-      filteredPosts.sort((a, b) => b.timestamp - a.timestamp);
-
-      if (filteredPosts.length === 0) {
-        console.log("No posts match the search query or no valid posts found");
-        searchResults.innerHTML = '<div class="placeholder">No posts found.</div>';
-        hideLoading();
-        return;
-      }
-
-      console.log(`Displaying ${filteredPosts.length} posts`);
-      for (const post of filteredPosts) {
-        const postId = `search-post-${post.id}`;
-        const postElement = document.createElement("div");
-        postElement.className = "post";
-        postElement.id = postId;
-        postElement.innerHTML = `
-          <img class="post-image" src="${post.imageUrl}" alt="Post" onerror="this.src='https://via.placeholder.com/150?text=Image+Not+Found';">
-        `;
-        postElement.addEventListener("click", (e) => {
-          e.stopPropagation();
-          console.log("Navigating to post:", post.id);
-          location.href = `post.html?id=${post.id}`;
-          pauseAllMedia();
-        });
-        searchResults.appendChild(postElement);
-      }
-    } catch (error) {
-      console.error("Error in loadAllPosts:", {
-        message: error.message,
-        code: error.code || "No code",
-        stack: error.stack,
-      });
-      searchResults.innerHTML = `<p class="error">Failed to load posts: ${error.message || "Unknown error"}</p>`;
-    } finally {
-      hideLoading();
-    }
-  };
-
-  loadAllPosts();
-
-  searchInput.addEventListener("input", () => {
-    clearTimeout(debounceTimeout);
-    debounceTimeout = setTimeout(() => {
-      const queryText = searchInput.value.trim().toLowerCase();
-      console.log("Search query:", queryText);
-      loadAllPosts(queryText);
-    }, 500);
-  });
-}
-
-async function loadProfile() {
-  const profileContainer = document.getElementById("profile-container");
-  const deletePostModal = document.getElementById("delete-post-modal");
-  const deletePostClose = document.getElementById("delete-post-close");
-  const deletePostCancel = document.getElementById("delete-post-cancel");
-  const deletePostConfirm = document.getElementById("delete-post-confirm");
-  let currentDeletePostId = null;
-  let currentDeletePostElement = null;
-
-  showLoading();
-  Promise.all([
-    Promise.race([
-      get(ref(db, `users/${currentUserUid}`)),
-      new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout loading user")), 10000))
-    ]),
-    Promise.race([
-      new Promise(resolve => onValue(query(ref(db, "posts"), orderByChild("userId"), limitToLast(20)), resolve, { onlyOnce: true })),
-      new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout loading posts")), 10000))
-    ]),
-    Promise.race([
-      get(ref(db, `notifications/${currentUserUid}`)),
-      new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout loading notifications")), 10000))
-    ])
-  ]).then(([userSnap, postsSnap, notificationsSnap]) => {
-    const user = userSnap.val() || { username: "Anonymous", photoURL: null, bio: "", verified: false };
-    const userPostCount = postsSnap.val()
-      ? Object.values(postsSnap.val()).filter(post => post.userId === currentUserUid).length
-      : 0;
-    const isVerified = user.verified || false;
-    let unreadCount = 0;
-    const notificationsData = notificationsSnap.val() || {};
-    Object.values(notificationsData).forEach(postNotifications => {
-      Object.values(postNotifications).forEach(typeNotifications => {
-        Object.values(typeNotifications).forEach(notification => {
-          if (notification.read === false) unreadCount++;
-        });
-      });
-    });
-    profileContainer.innerHTML = `
-      <div class="profile-header">
-        <img src="${user.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="Profile"/>
-        <div class="profile-username-container">
-          <button id="edit-profile-btn" class="edit-profile-btn">Edit Profile</button>
-          <h2>${user.username}${isVerified ? `<span class="verified-icon" aria-label="Verified user" title="Verified user"><svg viewBox="0 0 24 24"><path d="M9 16.2l-3.5-3.5L4 14.1 9 19 20 8l-1.4-1.4z"/></svg></span>` : ''}</h2>
-        </div>
-        <p>${user.bio || "No bio available."}</p>
-        <a href="notifications.html" id="notification-btn" class="profile-action-btn" aria-label="Notifications${unreadCount > 0 ? `, ${unreadCount} unread` : ''}">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
-          </svg>
-          ${unreadCount > 0 ? `<span class="unread-badge">${unreadCount}</span>` : ''}
-        </a>
-        <a href="settings.html" id="settings-btn" class="profile-action-btn" aria-label="Settings">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M12 15a3 3 0 100-6 3 3 0 000 6z"/>
-            <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/>
-          </svg>
-        </a>
-      </div>
-      <div class="profile-content" id="profile-posts"></div>
-    `;
-    const profileContent = document.getElementById("profile-posts");
-    const posts = [];
-    postsSnap.forEach(child => {
-      const post = child.val();
-      if (post.userId === currentUserUid) posts.push({ id: child.key, ...post });
-    });
-    if (userPostCount === 10 && !Object.values(notificationsData).some(postNotifs => 
-      Object.values(postNotifs).some(typeNotifs => 
-        Object.values(typeNotifs).some(notif => notif.type === 'verified')
-      )
-    )) {
-      const notifRef = push(ref(db, `notifications/${currentUserUid}/system/verified`));
-      set(notifRef, {
-        type: 'verified',
-        userId: currentUserUid,
-        timestamp: Date.now(),
-        read: false
-      });
-    }
-    posts.sort((a, b) => b.timestamp - a.timestamp);
-    if (posts.length === 0) {
-      profileContent.innerHTML = '<div class="placeholder">No posts yet.</div>';
-      hideLoading();
-      return;
-    }
-    for (const post of posts) {
-      const postId = `profile-post-${post.id}`;
-      const postElement = document.createElement("div");
-      postElement.className = "post";
-      postElement.id = postId;
-      const imageUrl = Array.isArray(post.imageUrls) && post.imageUrls.length > 0 ? post.imageUrls[0] : post.imageUrl;
-      postElement.innerHTML = `
-        <img class="post-image" src="${imageUrl || 'https://via.placeholder.com/150?text=Image+Not+Found'}" alt="Post">
-        <div class="post-header" style="display: none;">
-          <img src="${user.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${user.username} avatar">
-          <div class="user-info">
-            <span>${user.username}${isVerified ? `<span class="verified-icon" aria-label="Verified user" title="Verified user"><svg viewBox="0 0 24 24"><path d="M9 16.2l-3.5-3.5L4 14.1 9 19 20 8l-1.4-1.4z"/></svg></span>` : ''}</span>
-          </div>
-        </div>
-      `;
-      postElement.addEventListener("click", (e) => {
-        e.stopPropagation();
-        if (post.userId === currentUserUid) {
-          currentDeletePostId = post.id;
-          currentDeletePostElement = postElement;
-          deletePostModal.classList.remove("hidden");
-          deletePostModal.classList.add("open");
-        } else {
-          console.log("Navigating to post:", post.id);
-          location.href = `post.html?id=${post.id}`;
-          pauseAllMedia();
-        }
-      });
-      profileContent.appendChild(postElement);
-    }
-    hideLoading();
-    document.getElementById("edit-profile-btn").addEventListener("click", () => {
-      editUsername.value = user.username;
-      editBio.value = user.bio || "";
-      editPhoto.value = "";
-      hideError(editProfileError);
-      editProfileModal.classList.remove("hidden");
-      editProfileModal.classList.add("open");
-      editUsername.focus();
-    });
-
-    const closeModal = () => {
-      deletePostModal.classList.remove("open");
-      setTimeout(() => deletePostModal.classList.add("hidden"), 300);
-      currentDeletePostId = null;
-      currentDeletePostElement = null;
-      pauseAllMedia();
-    };
-
-    deletePostClose.addEventListener("click", closeModal);
-    deletePostCancel.addEventListener("click", closeModal);
-
-    deletePostConfirm.addEventListener("click", async () => {
-      if (!currentDeletePostId || !currentDeletePostElement) return;
-      showLoading();
-      try {
-        const postRef = ref(db, `posts/${currentDeletePostId}`);
-        await set(postRef, null);
-        currentDeletePostElement.remove();
-        if (!profileContent.querySelector(".post")) {
-          profileContent.innerHTML = '<div class="placeholder">No posts yet.</div>';
-        }
-        closeModal();
-      } catch (error) {
-        console.error("Error deleting post:", error.message);
-        profileContent.innerHTML = `<p class="error">Failed to delete post: ${error.message}</p>`;
-      } finally {
-        hideLoading();
-      }
-    });
-  }).catch(error => {
-    console.error("Error loading profile:", error.code, error.message);
-    profileContainer.innerHTML = `<p class="error">Failed to load profile: ${error.message}</p>`;
-    hideLoading();
-  });
-}
+settingsBtn.addEventListener("click", () => {
+  console.log("Navigating to settings");
+  pauseAllMedia();
+});
 </script>             
 
         
           
         
 </body>
-</html> lets add Facebook stories like at top
+</html> 
