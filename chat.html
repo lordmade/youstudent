@@ -497,15 +497,15 @@
     }
 
     .image-viewer img {
-      max-width: 90%;
-      max-height: 90%;
+      width: 100%;
+      height: 100%;
       object-fit: contain;
-      border-radius: 0.5rem;
+      border-radius: 0;
       transition: transform 0.3s ease;
     }
 
     .image-viewer.active img {
-      transform: scale(1.02);
+      transform: scale(1);
     }
 
     .image-viewer .close-btn {
@@ -725,8 +725,10 @@
       }
 
       .image-viewer img {
-        max-width: 95%;
-        max-height: 95%;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        border-radius: 0;
       }
 
       .image-viewer .close-btn {
@@ -1285,42 +1287,74 @@
           const voiceNotes = chatArea.querySelectorAll('.voice-note');
           voiceNotes.forEach(note => {
             const audioUrl = note.dataset.audio;
+            console.log("Initializing voice note with URL:", audioUrl);
             const audio = new Audio(audioUrl);
             const playPauseBtn = note.querySelector('.play-pause-btn');
             const waveform = note.querySelector('.waveform');
             const playIcon = note.querySelector('.play-icon');
             const pauseIcon = note.querySelector('.pause-icon');
 
-            const togglePlayPause = () => {
-              if (audio.paused) {
-                document.querySelectorAll('audio').forEach(a => {
-                  a.pause();
-                  const otherNote = a.closest('.voice-note');
-                  if (otherNote) {
+            // Store audio element in the DOM for easier access
+            note.audio = audio;
+
+            const togglePlayPause = async () => {
+              try {
+                // Pause all other audio elements
+                document.querySelectorAll('.voice-note').forEach(otherNote => {
+                  if (otherNote !== note && otherNote.audio && !otherNote.audio.paused) {
+                    otherNote.audio.pause();
+                    otherNote.audio.currentTime = 0;
                     otherNote.querySelector('.waveform').classList.remove('playing');
                     otherNote.querySelector('.play-icon').classList.remove('hidden');
                     otherNote.querySelector('.pause-icon').classList.add('hidden');
                   }
                 });
-                audio.play();
-                waveform.classList.add('playing');
-                playIcon.classList.add('hidden');
-                pauseIcon.classList.remove('hidden');
-              } else {
-                audio.pause();
+
+                if (audio.paused) {
+                  console.log("Playing audio:", audioUrl);
+                  await audio.play();
+                  waveform.classList.add('playing');
+                  playIcon.classList.add('hidden');
+                  pauseIcon.classList.remove('hidden');
+                } else {
+                  console.log("Pausing audio:", audioUrl);
+                  audio.pause();
+                  audio.currentTime = 0;
+                  waveform.classList.remove('playing');
+                  playIcon.classList.remove('hidden');
+                  pauseIcon.classList.add('hidden');
+                }
+              } catch (error) {
+                console.error("Error playing/pausing audio:", error.message);
+                chatArea.innerHTML += `<p class="error">Failed to play voice note: ${error.message}</p>`;
                 waveform.classList.remove('playing');
                 playIcon.classList.remove('hidden');
                 pauseIcon.classList.add('hidden');
               }
             };
 
-            playPauseBtn.addEventListener('click', togglePlayPause);
-            playPauseBtn.addEventListener('touchend', (e) => {
+            // Remove any existing listeners to prevent duplicates
+            playPauseBtn.replaceWith(playPauseBtn.cloneNode(true));
+            const newPlayPauseBtn = note.querySelector('.play-pause-btn');
+
+            newPlayPauseBtn.addEventListener('click', togglePlayPause);
+            newPlayPauseBtn.addEventListener('touchend', (e) => {
               e.preventDefault();
+              console.log("Play/pause button touchend triggered for:", audioUrl);
               togglePlayPause();
             });
 
             audio.addEventListener('ended', () => {
+              console.log("Audio ended:", audioUrl);
+              waveform.classList.remove('playing');
+              playIcon.classList.remove('hidden');
+              pauseIcon.classList.add('hidden');
+              audio.currentTime = 0;
+            });
+
+            audio.addEventListener('error', (e) => {
+              console.error("Audio error:", e.message, audioUrl);
+              chatArea.innerHTML += `<p class="error">Failed to load voice note.</p>`;
               waveform.classList.remove('playing');
               playIcon.classList.remove('hidden');
               pauseIcon.classList.add('hidden');
@@ -1686,7 +1720,7 @@
       if (messageInput.value.trim() && !isRecording) {
         e.preventDefault();
         console.log("Send button touchend triggered for text message");
-        sendMessage();
+        patasendMessage();
       }
     });
 
