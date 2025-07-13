@@ -61,6 +61,57 @@
       0% { transform: rotate(0deg); }
       100% { transform: rotate(360deg); }
     }
+    .reader-modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 60;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease;
+    }
+    .reader-modal.open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .reader-modal-content {
+      background: var(--white);
+      border-radius: 16px;
+      padding: 1.5rem;
+      max-width: 90%;
+      width: 600px;
+      max-height: 80vh;
+      overflow-y: auto;
+      position: relative;
+    }
+    .reader-modal-content iframe {
+      width: 100%;
+      height: 500px;
+      border: none;
+      border-radius: 8px;
+    }
+    .reader-modal-content .close-modal {
+      position: absolute;
+      top: 0.5rem;
+      right: 0.5rem;
+      background: none;
+      border: none;
+      color: var(--text-light);
+      cursor: pointer;
+    }
+    .reader-modal-content .close-modal svg {
+      width: 24px;
+      height: 24px;
+    }
+    .reader-error {
+      color: var(--primary-red);
+      font-size: clamp(0.75rem, 3vw, 0.8rem);
+      text-align: center;
+      margin-bottom: 1rem;
+    }
     @media (max-width: 414px) {
       .container {
         padding: 0 0.5rem;
@@ -74,6 +125,13 @@
       }
       .book-card p {
         font-size: 0.75rem;
+      }
+      .reader-modal-content {
+        width: 90%;
+        padding: 1rem;
+      }
+      .reader-modal-content iframe {
+        height: 400px;
       }
     }
   </style>
@@ -108,12 +166,25 @@
     <div id="bookResults" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4"></div>
   </div>
 
+  <!-- Reader Modal -->
+  <div id="reader-modal" class="reader-modal hidden">
+    <div class="reader-modal-content">
+      <button class="close-modal" aria-label="Close reader modal">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+        </svg>
+      </button>
+      <div id="reader-error" class="reader-error hidden"></div>
+      <div id="reader-container"></div>
+    </div>
+  </div>
+
   <script type="module">
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js';
     import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js';
     import { getDatabase } from 'https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js';
 
-    // Firebase configuration (from index.html)
+    // Firebase configuration
     const firebaseConfig = {
       apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
       authDomain: "fire-b-a8878.firebaseapp.com",
@@ -142,8 +213,12 @@
     const bookSearchBtn = document.getElementById('bookSearchBtn');
     const bookResults = document.getElementById('bookResults');
     const loadingSpinner = document.getElementById('loadingSpinner');
+    const readerModal = document.getElementById('reader-modal');
+    const readerContainer = document.getElementById('reader-container');
+    const readerError = document.getElementById('reader-error');
+    const readerCloseBtn = document.querySelector('#reader-modal .close-modal');
 
-    // Google Books API key (replace with your own)
+    // Google Books API key
     const GOOGLE_BOOKS_API_KEY = 'AIzaSyCGRia5VZZrmFtmommSK5NZRve4wpef2T8';
 
     // Debounce function
@@ -153,6 +228,46 @@
         clearTimeout(timeout);
         timeout = setTimeout(() => func(...args), wait);
       };
+    }
+
+    // Show/hide error messages
+    function showError(element, message) {
+      element.textContent = message;
+      element.classList.remove('hidden');
+    }
+    function hideError(element) {
+      element.textContent = '';
+      element.classList.add('hidden');
+    }
+
+    // Open reader modal
+    function openReader(bookId, title) {
+      hideError(readerError);
+      readerContainer.innerHTML = '<div class="flex justify-center items-center h-[500px]"><div class="spinner"></div></div>';
+      readerModal.classList.remove('hidden');
+      readerModal.classList.add('open');
+
+      const iframe = document.createElement('iframe');
+      iframe.src = `https://www.google.com/books/edition/_/${bookId}?hl=en&gbpv=1`;
+      iframe.title = `Preview of ${title}`;
+      iframe.onload = () => {
+        readerContainer.innerHTML = '';
+        readerContainer.appendChild(iframe);
+      };
+      iframe.onerror = () => {
+        readerContainer.innerHTML = '';
+        showError(readerError, 'Failed to load book preview. Please try again.');
+      };
+    }
+
+    // Close reader modal
+    function closeReader() {
+      readerModal.classList.remove('open');
+      setTimeout(() => {
+        readerModal.classList.add('hidden');
+        readerContainer.innerHTML = '';
+        hideError(readerError);
+      }, 300);
     }
 
     // Search books
@@ -187,10 +302,12 @@
       bookResults.innerHTML = '';
       books.forEach(book => {
         const bookInfo = book.volumeInfo;
+        const bookId = book.id;
         const title = bookInfo.title || 'No title';
         const authors = bookInfo.authors ? bookInfo.authors.join(', ') : 'Unknown author';
         const thumbnail = bookInfo.imageLinks?.thumbnail?.replace('http://', 'https://') || 'https://via.placeholder.com/128x192?text=No+Cover';
         const description = bookInfo.description ? bookInfo.description.substring(0, 100) + '...' : 'No description available';
+        const viewability = book.accessInfo?.viewability || 'NONE';
         const bookCard = document.createElement('div');
         bookCard.className = 'book-card p-4 flex flex-col items-center';
         bookCard.innerHTML = `
@@ -198,9 +315,29 @@
           <h3 class="text-base font-semibold text-center text-[var(--text-dark)]">${title}</h3>
           <p class="text-sm text-[var(--text-light)] mb-2">${authors}</p>
           <p class="text-sm text-[var(--text-light)] text-center mb-3">${description}</p>
-          <a href="${bookInfo.infoLink}" target="_blank" class="text-[var(--primary-red)] hover:underline">View Details</a>
+          <div class="flex gap-2">
+            <a href="${bookInfo.infoLink}" target="_blank" class="text-[var(--primary-red)] hover:underline">View Details</a>
+            ${viewability === 'FULL' || viewability === 'PARTIAL' ? `
+              <button class="read-preview-btn text-[var(--primary-red)] hover:underline" data-book-id="${bookId}" data-title="${title}">Read Preview</button>
+            ` : ''}
+          </div>
         `;
         bookResults.appendChild(bookCard);
+      });
+
+      // Add event listeners for preview buttons
+      document.querySelectorAll('.read-preview-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const bookId = btn.dataset.bookId;
+          const title = btn.dataset.title;
+          openReader(bookId, title);
+        });
+        btn.addEventListener('touchend', (e) => {
+          e.preventDefault();
+          const bookId = btn.dataset.bookId;
+          const title = btn.dataset.title;
+          openReader(bookId, title);
+        });
       });
     }
 
@@ -212,6 +349,16 @@
     });
     bookSearchInput.addEventListener('keypress', (e) => {
       if (e.key === 'Enter') searchBooks(bookSearchInput.value.trim());
+    });
+    readerCloseBtn.addEventListener('click', closeReader);
+    readerCloseBtn.addEventListener('touchend', (e) => {
+      e.preventDefault();
+      closeReader();
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && readerModal.classList.contains('open')) {
+        closeReader();
+      }
     });
   </script>
 </body>
