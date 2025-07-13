@@ -3,8 +3,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
-  <title>Instagram - Upload</title>
+  <title>BanterBox - Upload</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js"></script>
   <style>
     :root {
       --primary-red: #ed4956;
@@ -15,6 +18,7 @@
       --text-dark: #262626;
       --text-light: #8e8e8e;
       --white: #ffffff;
+      --gradient: linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888);
     }
     * {
       user-select: none;
@@ -168,6 +172,18 @@
       opacity: 0;
       pointer-events: none;
     }
+    .spinner {
+      width: 48px;
+      height: 48px;
+      border: 4px solid rgba(0, 0, 0, 0.2);
+      border-top-color: var(--primary-red);
+      border-radius: 50%;
+      animation: spin 1s ease-in-out infinite;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
     .progress-bar {
       width: 200px;
       height: 8px;
@@ -204,9 +220,10 @@
       border-radius: 8px;
       background: var(--white);
       display: none;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
     }
     .song-result {
-      padding: 0.5rem;
+      padding: 0.75rem;
       cursor: pointer;
       font-size: clamp(0.8rem, 3.5vw, 0.85rem);
       color: var(--text-dark);
@@ -215,12 +232,23 @@
       min-height: 48px;
       display: flex;
       align-items: center;
+      gap: 0.5rem;
     }
     .song-result:hover {
       background: var(--background);
     }
     .song-result:last-child {
       border-bottom: none;
+    }
+    .song-result img {
+      width: 40px;
+      height: 40px;
+      object-fit: cover;
+      border-radius: 4px;
+    }
+    .song-result .song-info {
+      flex-grow: 1;
+      text-align: left;
     }
     .selected-song {
       font-size: clamp(0.85rem, 4vw, 0.9rem);
@@ -230,23 +258,55 @@
     }
     .media-player {
       display: none;
-      background: var(--background);
+      background: var(--white);
       border: 1px solid var(--border);
       border-radius: 12px;
       padding: 0.75rem;
       margin-top: 0.5rem;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
       align-items: center;
-      gap: 0.5rem;
+      gap: 0.75rem;
     }
     .media-player.active {
       display: flex;
+      flex-direction: column;
+    }
+    .media-player-header {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      width: 100%;
+    }
+    .media-player-header img {
+      width: 48px;
+      height: 48px;
+      object-fit: cover;
+      border-radius: 8px;
+    }
+    .media-player-info {
+      flex-grow: 1;
+      text-align: left;
+      font-size: clamp(0.8rem, 3.5vw, 0.85rem);
+      color: var(--text-dark);
+    }
+    .media-player-info .song-title {
+      font-weight: 600;
+    }
+    .media-player-info .song-artist {
+      color: var(--text-light);
+    }
+    .media-player-controls {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      width: 100%;
     }
     .play-pause-btn {
       background: var(--primary-red);
       color: var(--white);
       border-radius: 50%;
-      width: 40px;
-      height: 40px;
+      width: 48px;
+      height: 48px;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -259,8 +319,8 @@
       background: #d43f4e;
     }
     .play-pause-btn svg {
-      width: 20px;
-      height: 20px;
+      width: 24px;
+      height: 24px;
     }
     .seek-bar, .volume-bar {
       flex-grow: 1;
@@ -275,17 +335,19 @@
     .seek-bar::-webkit-slider-thumb, .volume-bar::-webkit-slider-thumb {
       -webkit-appearance: none;
       appearance: none;
-      width: 12px;
-      height: 12px;
+      width: 14px;
+      height: 14px;
       background: var(--primary-red);
       border-radius: 50%;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
       cursor: pointer;
     }
     .seek-bar::-moz-range-thumb, .volume-bar::-moz-range-thumb {
-      width: 12px;
-      height: 12px;
+      width: 14px;
+      height: 14px;
       background: var(--primary-red);
       border-radius: 50%;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
       cursor: pointer;
     }
     .time-display {
@@ -308,15 +370,15 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      width: 24px;
-      height: 24px;
+      width: 28px;
+      height: 28px;
     }
     .volume-btn:hover {
       color: var(--primary-red);
     }
     .volume-btn svg {
-      width: 20px;
-      height: 20px;
+      width: 24px;
+      height: 24px;
     }
     @media (max-width: 414px) {
       .upload-container {
@@ -346,9 +408,17 @@
       .media-player {
         padding: 0.5rem;
       }
+      .media-player-header img {
+        width: 40px;
+        height: 40px;
+      }
       .play-pause-btn {
-        width: 36px;
-        height: 36px;
+        width: 40px;
+        height: 40px;
+      }
+      .play-pause-btn svg {
+        width: 20px;
+        height: 20px;
       }
       .time-display {
         width: 70px;
@@ -356,6 +426,14 @@
       }
       .volume-container {
         width: 80px;
+      }
+      .volume-btn {
+        width: 24px;
+        height: 24px;
+      }
+      .volume-btn svg {
+        width: 20px;
+        height: 20px;
       }
       .progress-bar {
         width: 150px;
@@ -378,7 +456,7 @@
       </div>
       <div class="form-group">
         <input type="file" id="media-file" class="form-input" accept="image/*,video/*" required aria-label="Media file"/>
-        <p class="text-sm text-gray-500 mt-1" id="file-type-note">For posts: Upload an image or video.</p>
+        <p class="text-sm text-[var(--text-light)] mt-1" id="file-type-note">For posts: Upload an image or video.</p>
         <img id="preview-image" class="preview" alt="Media preview"/>
         <video id="preview-video" class="preview" muted></video>
       </div>
@@ -394,20 +472,29 @@
         <input type="hidden" id="selected-song" name="selected-song"/>
         <p id="selected-song-display" class="selected-song"></p>
         <div id="media-player" class="media-player">
-          <button type="button" id="play-pause-btn" class="play-pause-btn" aria-label="Play">
-            <svg viewBox="0 0 24 24" fill="currentColor">
-              <path d="M8 5v14l11-7z"/>
-            </svg>
-          </button>
-          <input type="range" id="seek-bar" class="seek-bar" min="0" max="100" value="0" aria-label="Seek audio"/>
-          <span id="time-display" class="time-display">0:00 / 0:00</span>
-          <div class="volume-container">
-            <button type="button" id="volume-btn" class="volume-btn" aria-label="Mute">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M11 5L6 9H2v6h4l5 4V5zM19.07 4.93a10 10 0 010 14.14M15.54 8.46a5 5 0 010 7.07"/>
+          <div class="media-player-header">
+            <img id="song-thumbnail" src="https://via.placeholder.com/48" alt="Song thumbnail"/>
+            <div class="media-player-info">
+              <p id="song-title" class="song-title">Song Title</p>
+              <p id="song-artist" class="song-artist">Artist</p>
+            </div>
+          </div>
+          <div class="media-player-controls">
+            <button type="button" id="play-pause-btn" class="play-pause-btn" aria-label="Play">
+              <svg viewBox="0 0 24 24" fill="currentColor">
+                <path d="M8 5v14l11-7z"/>
               </svg>
             </button>
-            <input type="range" id="volume-bar" class="volume-bar" min="0" max="1" step="0.01" value="1" aria-label="Volume"/>
+            <input type="range" id="seek-bar" class="seek-bar" min="0" max="100" value="0" aria-label="Seek audio"/>
+            <span id="time-display" class="time-display">0:00 / 0:00</span>
+            <div class="volume-container">
+              <button type="button" id="volume-btn" class="volume-btn" aria-label="Mute">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M11 5L6 9H2v6h4l5 4V5zM19.07 4.93a10 10 0 010 14.14M15.54 8.46a5 5 0 010 7.07"/>
+                </svg>
+              </button>
+              <input type="range" id="volume-bar" class="volume-bar" min="0" max="1" step="0.01" value="1" aria-label="Volume"/>
+            </div>
           </div>
         </div>
         <button type="button" id="clear-song-btn" class="clear-btn" style="display: none;">Clear Song</button>
@@ -420,10 +507,7 @@
     <p id="upload-msg" class="upload-msg" aria-live="polite"></p>
 
     <div id="loading-overlay" class="loading-overlay hidden">
-      <svg class="animate-spin h-8 w-8 text-red-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4z"/>
-      </svg>
+      <div class="spinner"></div>
       <div class="progress-bar">
         <div id="progress-bar-fill" class="progress-bar-fill"></div>
       </div>
@@ -475,10 +559,13 @@
     const volumeBtn = document.getElementById("volume-btn");
     const volumeBar = document.getElementById("volume-bar");
     const goLiveBtn = document.getElementById("go-live-btn");
+    const songThumbnail = document.getElementById("song-thumbnail");
+    const songTitle = document.getElementById("song-title");
+    const songArtist = document.getElementById("song-artist");
 
     const CLOUDINARY_CLOUD_NAME = "dqkujefxj";
     const CLOUDINARY_UPLOAD_PRESET = "banter_box";
-    const JAMENDO_CLIENT_ID = "bfe5d1ab"; // Replace with your Jamendo client ID
+    const YOUTUBE_API_KEY = "AIzaSyD4WgXHDkXjJWVMK69pyS6QIM-DMJzp8HQ"; // Replace with your YouTube Data API key
 
     let audio = null;
 
@@ -531,12 +618,15 @@
         seekBar.value = 0;
       });
       volumeBar.value = audio.volume;
+      songThumbnail.src = songData.thumbnail || "https://via.placeholder.com/48";
+      songTitle.textContent = songData.title;
+      songArtist.textContent = songData.artist;
     }
 
     playPauseBtn.addEventListener("click", () => {
       if (!audio) return;
       if (audio.paused) {
-        audio.play();
+        audio.play().catch(err => showError("Audio playback failed."));
         playPauseBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg>`;
         playPauseBtn.setAttribute("aria-label", "Pause");
       } else {
@@ -647,43 +737,54 @@
       }
       showLoading();
       try {
-        const response = await fetch(`https://api.jamendo.com/v3.0/tracks/?client_id=${JAMENDO_CLIENT_ID}&format=json&limit=10&search=${encodeURIComponent(query)}`);
-        if (!response.ok) throw new Error("Jamendo API request failed.");
+        const response = await fetch(
+          `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&videoCategoryId=10&q=${encodeURIComponent(query)}&maxResults=10&key=${YOUTUBE_API_KEY}`
+        );
+        if (!response.ok) throw new Error("YouTube API request failed.");
         const data = await response.json();
         songResults.innerHTML = "";
-        if (!data.results || data.results.length === 0) {
+        if (!data.items || data.items.length === 0) {
           showError("No songs found.");
           songResults.style.display = "none";
           hideLoading();
           return;
         }
-        data.results.forEach(track => {
-          if (track.audiodownload_allowed) {
-            const div = document.createElement("div");
-            div.className = "song-result";
-            div.textContent = `${track.name} by ${track.artist_name}`;
-            div.dataset.songData = JSON.stringify({
-              id: track.id,
-              title: track.name,
-              artist: track.artist_name,
-              audioUrl: track.audio
-            });
-            div.addEventListener("click", () => {
-              const songData = JSON.parse(div.dataset.songData);
-              selectedSongInput.value = JSON.stringify(songData);
-              selectedSongDisplay.textContent = `Selected: ${songData.title} by ${songData.artist}`;
-              clearSongBtn.style.display = "block";
-              songResults.style.display = "none";
-              mediaPlayer.classList.add("active");
-              initializeAudio(songData);
-              clearError();
-            });
-            songResults.appendChild(div);
-          }
+        data.items.forEach(item => {
+          const videoId = item.id.videoId;
+          const title = item.snippet.title;
+          const artist = item.snippet.channelTitle.replace(/ - Topic$/, "");
+          const thumbnail = item.snippet.thumbnails.default.url;
+          const div = document.createElement("div");
+          div.className = "song-result";
+          div.innerHTML = `
+            <img src="${thumbnail}" alt="${title} thumbnail"/>
+            <div class="song-info">
+              <p class="font-semibold">${title}</p>
+              <p class="text-[var(--text-light)]">${artist}</p>
+            </div>
+          `;
+          div.dataset.songData = JSON.stringify({
+            id: videoId,
+            title: title,
+            artist: artist,
+            audioUrl: `https://www.youtube.com/watch?v=${videoId}`,
+            thumbnail: thumbnail
+          });
+          div.addEventListener("click", () => {
+            const songData = JSON.parse(div.dataset.songData);
+            selectedSongInput.value = JSON.stringify(songData);
+            selectedSongDisplay.textContent = `Selected: ${songData.title} by ${songData.artist}`;
+            clearSongBtn.style.display = "block";
+            songResults.style.display = "none";
+            mediaPlayer.classList.add("active");
+            initializeAudio(songData);
+            clearError();
+          });
+          songResults.appendChild(div);
         });
-        songResults.style.display = data.results.length > 0 ? "block" : "none";
-        if (data.results.length === 0) {
-          showError("No downloadable songs found.");
+        songResults.style.display = data.items.length > 0 ? "block" : "none";
+        if (data.items.length === 0) {
+          showError("No songs found.");
         }
       } catch (err) {
         showError(err.message || "Failed to search songs.");
@@ -702,6 +803,9 @@
         audio.pause();
         audio = null;
       }
+      songThumbnail.src = "https://via.placeholder.com/48";
+      songTitle.textContent = "Song Title";
+      songArtist.textContent = "Artist";
       clearError();
     });
 
