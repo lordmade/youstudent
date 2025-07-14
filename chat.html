@@ -932,7 +932,11 @@
     async function requestNotificationPermission() {
       if (!("Notification" in window)) {
         console.warn("Notifications API not supported in this browser.");
-        return;
+        return "unsupported";
+      }
+      if (!window.isSecureContext) {
+        console.warn("Notifications API requires a secure context (HTTPS or localhost).");
+        return "insecure";
       }
       try {
         const permission = await Notification.requestPermission();
@@ -940,11 +944,16 @@
         return permission;
       } catch (error) {
         console.error("Error requesting notification permission:", error.message);
+        return "error";
       }
     }
 
     // Show a notification
     function showNotification(title, options) {
+      if (!("Notification" in window)) {
+        console.warn("Cannot show notification: Notifications API not supported.");
+        return;
+      }
       if (Notification.permission === "granted") {
         const notification = new Notification(title, {
           ...options,
@@ -953,7 +962,6 @@
           timestamp: Date.now(),
         });
         console.log("Notification displayed:", title);
-        // Close notification after 5 seconds
         setTimeout(() => {
           notification.close();
           console.log("Notification closed:", title);
@@ -1113,7 +1121,6 @@
       currentUserUid = user.uid;
       showLoading();
 
-      // Request notification permission when user is authenticated
       await requestNotificationPermission();
 
       try {
@@ -1166,7 +1173,7 @@
         } else if (message.mediaType === 'audio') {
           mediaContent = `
             <div class="voice-note" data-audio="${message.mediaUrl}">
-              <button class="play-pause-btn" aria-label="Play voice note">
+              <button class="play-pause-btn" aria-label="Play or pause voice note">
                 <svg class="play-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
                   <path stroke="none" fill-rule="evenodd" clip-rule="evenodd" d="M5 3l14 9-14 9V3z"/>
                 </svg>
@@ -1192,6 +1199,84 @@
         </div>
       `;
       return div;
+    }
+
+    async function setupVoiceNoteListeners() {
+      const voiceNotes = chatArea.querySelectorAll('.voice-note');
+      voiceNotes.forEach(note => {
+        const audioUrl = note.dataset.audio;
+        console.log("Initializing voice note with URL:", audioUrl);
+        const audio = new Audio(audioUrl);
+        const playPauseBtn = note.querySelector('.play-pause-btn');
+        const waveform = note.querySelector('.waveform');
+        const playIcon = note.querySelector('.play-icon');
+        const pauseIcon = note.querySelector('.pause-icon');
+
+        // Store audio element on the note for reference
+        note.audio = audio;
+
+        const togglePlayPause = async () => {
+          try {
+            // Pause other playing voice notes
+            document.querySelectorAll('.voice-note').forEach(otherNote => {
+              if (otherNote !== note && otherNote.audio && !otherNote.audio.paused) {
+                otherNote.audio.pause();
+                otherNote.audio.currentTime = 0;
+                otherNote.querySelector('.waveform').classList.remove('playing');
+                otherNote.querySelector('.play-icon').classList.remove('hidden');
+                otherNote.querySelector('.pause-icon').classList.add('hidden');
+              }
+            });
+
+            if (audio.paused) {
+              console.log("Playing audio:", audioUrl);
+              await audio.play();
+              waveform.classList.add('playing');
+              playIcon.classList.add('hidden');
+              pauseIcon.classList.remove('hidden');
+            } else {
+              console.log("Pausing audio:", audioUrl);
+              audio.pause();
+              waveform.classList.remove('playing');
+              playIcon.classList.remove('hidden');
+              pauseIcon.classList.add('hidden');
+            }
+          } catch (error) {
+            console.error("Error playing/pausing audio:", error.message);
+            chatArea.innerHTML += `<p class="error">Failed to play voice note: ${error.message}</p>`;
+            waveform.classList.remove('playing');
+            playIcon.classList.remove('hidden');
+            pauseIcon.classList.add('hidden');
+          }
+        };
+
+        // Remove existing listeners to prevent duplicates
+        const newPlayPauseBtn = playPauseBtn.cloneNode(true);
+        playPauseBtn.replaceWith(newPlayPauseBtn);
+
+        newPlayPauseBtn.addEventListener('click', togglePlayPause);
+        newPlayPauseBtn.addEventListener('touchend', (e) => {
+          e.preventDefault();
+          console.log("Play/pause button touchend triggered for:", audioUrl);
+          togglePlayPause();
+        });
+
+        audio.addEventListener('ended', () => {
+          console.log("Audio ended:", audioUrl);
+          waveform.classList.remove('playing');
+          playIcon.classList.remove('hidden');
+          pauseIcon.classList.add('hidden');
+          audio.currentTime = 0;
+        });
+
+        audio.addEventListener('error', (e) => {
+          console.error("Audio error:", e.message, audioUrl);
+          chatArea.innerHTML += `<p class="error">Failed to load voice note.</p>`;
+          waveform.classList.remove('playing');
+          playIcon.classList.remove('hidden');
+          pauseIcon.classList.add('hidden');
+        });
+      });
     }
 
     async function loadChat(currentUid, otherUid) {
@@ -1322,79 +1407,8 @@
             });
           });
 
-          const voiceNotes = chatArea.querySelectorAll('.voice-note');
-          voiceNotes.forEach(note => {
-            const audioUrl = note.dataset.audio;
-            console.log("Initializing voice note with URL:", audioUrl);
-            const audio = new Audio(audioUrl);
-            const playPauseBtn = note.querySelector('.play-pause-btn');
-            const waveform = note.querySelector('.waveform');
-            const playIcon = note.querySelector('.play-icon');
-            const pauseIcon = note.querySelector('.pause-icon');
-
-            note.audio = audio;
-
-            const togglePlayPause = async () => {
-              try {
-                document.querySelectorAll('.voice-note').forEach(otherNote => {
-                  if (otherNote !== note && otherNote.audio && !otherNote.audio.paused) {
-                    otherNote.audio.pause();
-                    otherNote.audio.currentTime = 0;
-                    otherNote.querySelector('.waveform').classList.remove('playing');
-                    otherNote.querySelector('.play-icon').classList.remove('hidden');
-                    otherNote.querySelector('.pause-icon').classList.add('hidden');
-                  }
-                });
-
-                if (audio.paused) {
-                  console.log("Playing audio:", audioUrl);
-                  await audio.play();
-                  waveform.classList.add('playing');
-                  playIcon.classList.add('hidden');
-                  pauseIcon.classList.remove('hidden');
-                } else {
-                  console.log("Pausing audio:", audioUrl);
-                  audio.pause();
-                  audio.currentTime = 0;
-                  waveform.classList.remove('playing');
-                  playIcon.classList.remove('hidden');
-                  pauseIcon.classList.add('hidden');
-                }
-              } catch (error) {
-                console.error("Error playing/pausing audio:", error.message);
-                chatArea.innerHTML += `<p class="error">Failed to play voice note: ${error.message}</p>`;
-                waveform.classList.remove('playing');
-                playIcon.classList.remove('hidden');
-                pauseIcon.classList.add('hidden');
-              }
-            };
-
-            playPauseBtn.replaceWith(playPauseBtn.cloneNode(true));
-            const newPlayPauseBtn = note.querySelector('.play-pause-btn');
-
-            newPlayPauseBtn.addEventListener('click', togglePlayPause);
-            newPlayPauseBtn.addEventListener('touchend', (e) => {
-              e.preventDefault();
-              console.log("Play/pause button touchend triggered for:", audioUrl);
-              togglePlayPause();
-            });
-
-            audio.addEventListener('ended', () => {
-              console.log("Audio ended:", audioUrl);
-              waveform.classList.remove('playing');
-              playIcon.classList.remove('hidden');
-              pauseIcon.classList.add('hidden');
-              audio.currentTime = 0;
-            });
-
-            audio.addEventListener('error', (e) => {
-              console.error("Audio error:", e.message, audioUrl);
-              chatArea.innerHTML += `<p class="error">Failed to load voice note.</p>`;
-              waveform.classList.remove('playing');
-              playIcon.classList.remove('hidden');
-              pauseIcon.classList.add('hidden');
-            });
-          });
+          // Set up voice note listeners after rendering messages
+          await setupVoiceNoteListeners();
 
           for (const { mid, path } of messagesToUpdate) {
             await update(ref(db, path), { read: true });
@@ -1528,7 +1542,7 @@
         };
 
         peerConnection.oniceconnectionstatechange = () => {
-          if (peerConnection.iceConnectionState === 'disconnected' || peerConnection.iceConnectionstate === 'closed') {
+          if (peerConnection.iceConnectionState === 'disconnected' || peerConnection.iceConnectionState === 'closed') {
             set(ref(db, `calls/${chatId}`), { status: 'ended', timestamp: Date.now() });
             hideVideoCall();
           }
@@ -1670,25 +1684,24 @@
               const chatSnap = await get(ref(db, `chats/${chatId}/participants/${otherUserUid}`));
               const currentUnread = chatSnap.val()?.unreadCount || 0;
               await update(ref(db, `chats/${chatId}/participants/${otherUserUid}`), { unreadCount: currentUnread + 1 });
-              // Show notification for voice note
               showNotification("Voice Note Sent", {
                 body: `You sent a voice note to ${userCache[otherUserUid]?.username || 'user'}.`,
                 tag: `voice-note-${Date.now()}`,
               });
             } catch (error) {
               console.error('Error saving voice note:', error.message);
-              chatArea.innerHTML += `<p class="error">Failed to save voice note.</p>`;
+              chatArea.innerHTML += `<p class="error">Failed to save voice note: ${error.message}</p>`;
             }
           } else {
             console.error('Cloudinary upload error:', xhr.statusText);
-            chatArea.innerHTML += `<p class="error">Failed to upload voice note.</p>`;
+            chatArea.innerHTML += `<p class="error">Failed to upload voice note: ${xhr.statusText}</p>`;
           }
           hideUploadProgress();
         };
 
         xhr.onerror = () => {
           console.error('Cloudinary upload error:', xhr.statusText);
-          chatArea.innerHTML += `<p class="error">Failed to upload voice note.</p>`;
+          chatArea.innerHTML += `<p class="error">Failed to upload voice note: ${xhr.statusText}</p>`;
           hideUploadProgress();
         };
 
@@ -1715,7 +1728,6 @@
         const chatSnap = await get(ref(db, `chats/${chatId}/participants/${otherUserUid}`));
         const currentUnread = chatSnap.val()?.unreadCount || 0;
         await update(ref(db, `chats/${chatId}/participants/${otherUserUid}`), { unreadCount: currentUnread + 1 });
-        // Show notification for text message
         showNotification("Message Sent", {
           body: `You: ${messageText.length > 50 ? messageText.substring(0, 50) + '...' : messageText}`,
           tag: `message-${Date.now()}`,
@@ -1727,13 +1739,11 @@
       }
     }
 
-    // Remove existing listeners to prevent duplicates
     sendBtn.removeEventListener('click', sendBtn._clickHandler);
     sendBtn.removeEventListener('touchend', sendBtn._touchEndHandler);
     sendBtn.removeEventListener('mousedown', sendBtn._mouseDownHandler);
     sendBtn.removeEventListener('touchstart', sendBtn._touchStartHandler);
 
-    // Define consolidated handler for send/record
     const handleSendOrRecord = (e) => {
       e.preventDefault();
       console.log(`Event type: ${e.type}, isRecording: ${isRecording}, input: ${messageInput.value.trim()}`);
@@ -1749,14 +1759,12 @@
       }
     };
 
-    // Store handlers for removal
     sendBtn._clickHandler = handleSendOrRecord;
     sendBtn._touchEndHandler = handleSendOrRecord;
 
     sendBtn.addEventListener('click', handleSendOrRecord);
     sendBtn.addEventListener('touchend', handleSendOrRecord);
 
-    // Handle mouse/touch start for immediate recording
     sendBtn._mouseDownHandler = (e) => {
       if (!messageInput.value.trim() && !isRecording) {
         e.preventDefault();
@@ -1828,7 +1836,6 @@
                 const chatSnap = await get(ref(db, `chats/${chatId}/participants/${otherUserUid}`));
                 const currentUnread = chatSnap.val()?.unreadCount || 0;
                 await update(ref(db, `chats/${chatId}/participants/${otherUserUid}`), { unreadCount: currentUnread + 1 });
-                // Show notification for image message
                 showNotification("Image Sent", {
                   body: `You sent an image to ${userCache[otherUserUid]?.username || 'user'}.`,
                   tag: `image-${Date.now()}`,
@@ -1836,18 +1843,18 @@
               }
             } catch (error) {
               console.error(`Error saving ${isWallpaper ? 'wallpaper' : 'image message'}:`, error.message);
-              chatArea.innerHTML += `<p class="error">Failed to save ${isWallpaper ? 'wallpaper' : 'image message'}.</p>`;
+              chatArea.innerHTML += `<p class="error">Failed to save ${isWallpaper ? 'wallpaper' : 'image message'}: ${error.message}</p>`;
             }
           } else {
             console.error('Cloudinary upload error:', xhr.statusText);
-            chatArea.innerHTML += `<p class="error">Failed to upload image.</p>`;
+            chatArea.innerHTML += `<p class="error">Failed to upload image: ${xhr.statusText}</p>`;
           }
           hideUploadProgress();
         };
 
         xhr.onerror = () => {
           console.error('Cloudinary upload error:', xhr.statusText);
-          chatArea.innerHTML += `<p class="error">Failed to upload image.</p>`;
+          chatArea.innerHTML += `<p class="error">Failed to upload image: ${xhr.statusText}</p>`;
           hideUploadProgress();
         };
 
