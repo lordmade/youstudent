@@ -1332,6 +1332,36 @@
       height: 100%;
       object-fit: contain;
     }
+    .story-card .story-count-badge {
+  position: absolute;
+  top: -0.5rem;
+  right: -0.5rem;
+  background: var(--primary-red);
+  color: var(--white);
+  font-size: clamp(0.65rem, 2vw, 0.7rem);
+  font-weight: 600;
+  border-radius: 9999px;
+  padding: 0.2rem 0.5rem;
+  min-width: 1.2rem;
+  text-align: center;
+  line-height: 1;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  transition: transform 0.2s ease;
+}
+
+.story-card:hover .story-count-badge {
+  transform: scale(1.1);
+}
+
+@media (max-width: 414px) {
+  .story-card .story-count-badge {
+    font-size: clamp(0.6rem, 1.8vw, 0.65rem);
+    padding: 0.15rem 0.4rem;
+    min-width: 1rem;
+    top: -0.4rem;
+    right: -0.4rem;
+  }
+}
   </style>
 </head>
 <body>
@@ -1945,15 +1975,27 @@ async function loadStories() {
 
     const storiesData = storiesSnap.val() || {};
     const users = usersSnap.val() || {};
-    const stories = Object.entries(storiesData)
-      .map(([id, story]) => ({
-        id,
-        ...story,
-        mediaUrl: story.imageUrl || story.videoUrl,
-        mediaType: story.videoUrl ? "video" : "image"
-      }))
-      .filter(story => story.userId && story.mediaUrl && story.timestamp && (!story.expiresAt || story.expiresAt > Date.now()))
-      .sort((a, b) => b.timestamp - a.timestamp);
+
+    // Group stories by userId
+    const storiesByUser = {};
+    Object.entries(storiesData).forEach(([id, story]) => {
+      if (story.userId && (story.imageUrl || story.videoUrl) && story.timestamp && (!story.expiresAt || story.expiresAt > Date.now())) {
+        if (!storiesByUser[story.userId]) {
+          storiesByUser[story.userId] = [];
+        }
+        storiesByUser[story.userId].push({
+          id,
+          ...story,
+          mediaUrl: story.imageUrl || story.videoUrl,
+          mediaType: story.videoUrl ? "video" : "image"
+        });
+      }
+    });
+
+    // Sort stories for each user by timestamp (newest first)
+    Object.values(storiesByUser).forEach(userStories => {
+      userStories.sort((a, b) => b.timestamp - a.timestamp);
+    });
 
     // Clear existing stories (except the "Add Story" card)
     storiesContainer.innerHTML = `
@@ -1968,27 +2010,32 @@ async function loadStories() {
       </a>
     `;
 
-    if (stories.length === 0) {
+    if (Object.keys(storiesByUser).length === 0) {
       storiesContainer.insertAdjacentHTML("beforeend", '<div class="placeholder flex-shrink-0 w-20 text-center text-gray-500">No stories available.</div>');
       hideLoading();
       return;
     }
 
-    stories.forEach(story => {
-      const userData = users[story.userId] || { username: "Unknown", photoURL: "https://www.gravatar.com/avatar?d=mp" };
-      const isViewed = story.viewedBy?.includes(currentUserUid) || false;
+    // Create one story card per user
+    for (const userId in storiesByUser) {
+      const userStories = storiesByUser[userId];
+      const userData = users[userId] || { username: "Unknown", photoURL: "https://www.gravatar.com/avatar?d=mp" };
+      // Use the most recent story's image as the thumbnail
+      const thumbnailStory = userStories[0];
+      const isAllViewed = userStories.every(story => story.viewedBy?.includes(currentUserUid));
       const storyCard = document.createElement("div");
-      storyCard.className = `story-card flex-shrink-0 w-20 text-center cursor-pointer ${isViewed ? "viewed" : "unviewed"}`;
-      storyCard.dataset.storyId = story.id;
+      storyCard.className = `story-card flex-shrink-0 w-20 text-center cursor-pointer ${isAllViewed ? "viewed" : "unviewed"}`;
+      storyCard.dataset.userId = userId;
       storyCard.innerHTML = `
         <div class="relative w-16 h-16 mx-auto rounded-full">
-          <img src="${userData.photoURL}" alt="${userData.username} story" class="w-full h-full rounded-full object-cover">
+          <img src="${thumbnailStory.mediaType === 'image' ? thumbnailStory.mediaUrl : userData.photoURL}" alt="${userData.username} story" class="w-full h-full rounded-full object-cover">
+          <span class="story-count-badge">${userStories.length}</span>
         </div>
         <p class="text-sm mt-1 truncate text-gray-800">${userData.username}</p>
       `;
-      storyCard.addEventListener("click", () => showStoryViewer(story, userData));
+      storyCard.addEventListener("click", () => showStoryViewer(userStories, userData));
       storiesContainer.appendChild(storyCard);
-    });
+    }
   } catch (error) {
     console.error("Error loading stories:", error.message);
     storiesContainer.insertAdjacentHTML("beforeend", `<div class="error flex-shrink-0 w-20 text-center text-red-500">Failed to load stories: ${error.message}</div>`);
@@ -1997,26 +2044,14 @@ async function loadStories() {
   }
 }
 
-async function showStoryViewer(story, userData) {
+async function showStoryViewer(userStories, userData) {
   const storyViewer = document.getElementById("story-viewer");
   const storyContent = document.getElementById("story-content");
   const storyClose = document.getElementById("story-close");
   const storyPrev = document.getElementById("story-prev");
   const storyNext = document.getElementById("story-next");
 
-  // Fetch all stories for the user to enable navigation
-  const userStoriesRef = query(ref(db, "stories"), orderByChild("userId"), equalTo(story.userId));
-  const userStoriesSnap = await get(userStoriesRef);
-  const userStories = Object.entries(userStoriesSnap.val() || {})
-    .map(([id, s]) => ({
-      id,
-      ...s,
-      mediaUrl: s.imageUrl || s.videoUrl,
-      mediaType: s.videoUrl ? "video" : "image"
-    }))
-    .filter(s => s.userId && s.mediaUrl && s.timestamp && (!s.expiresAt || s.expiresAt > Date.now()))
-    .sort((a, b) => b.timestamp - a.timestamp);
-  let currentIndex = userStories.findIndex(s => s.id === story.id);
+  let currentIndex = 0;
 
   const renderStory = () => {
     const currentStory = userStories[currentIndex];
@@ -2051,8 +2086,10 @@ async function showStoryViewer(story, userData) {
       update(ref(db, `stories/${currentStory.id}`), {
         viewedBy: [...(currentStory.viewedBy || []), currentUserUid]
       }).then(() => {
-        const storyCard = document.querySelector(`.story-card[data-story-id="${currentStory.id}"]`);
-        if (storyCard) {
+        // Check if all stories are viewed
+        const allViewed = userStories.every(story => story.viewedBy?.includes(currentUserUid) || story.id === currentStory.id);
+        const storyCard = document.querySelector(`.story-card[data-user-id="${userData.uid}"]`);
+        if (storyCard && allViewed) {
           storyCard.classList.remove("unviewed");
           storyCard.classList.add("viewed");
         }
