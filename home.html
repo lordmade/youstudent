@@ -1959,19 +1959,27 @@ commentInput.addEventListener("keydown", (e) => {
 });
 
 
-import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-storage.js";
-
-const storage = getStorage();
-
 async function loadStories() {
   const storiesContainer = document.getElementById("stories-container");
   const addStoryCard = document.getElementById("add-story-card");
   const addStoryImg = document.getElementById("add-story-img");
+  const storyFileInput = document.getElementById("story-file-input");
   showLoading();
   try {
     const userSnap = await get(ref(db, `users/${currentUserUid}`));
     const user = userSnap.val() || {};
     addStoryImg.src = user.photoURL || "https://www.gravatar.com/avatar?d=mp";
+
+    addStoryCard.addEventListener("click", () => {
+      storyFileInput.click();
+      pauseAllMedia();
+    });
+
+    storyFileInput.addEventListener("change", () => {
+      if (storyFileInput.files[0]) {
+        createStory(storyFileInput.files[0]);
+      }
+    });
 
     const followingSnap = await get(ref(db, `users/${currentUserUid}/following`));
     const following = followingSnap.val() || {};
@@ -2011,16 +2019,13 @@ async function loadStories() {
           <img src="${user.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${user.username} avatar" class="w-16 h-16 mx-auto rounded-full">
           <p class="text-sm mt-1 truncate">${user.username}</p>
         `;
-        storyCard.addEventListener("click", () => viewStory(userId, userStories[userId]));
+        storyCard.addEventListener("click", () => {
+          viewStory(userId, userStories[userId]);
+          pauseAllMedia();
+        });
         storiesContainer.appendChild(storyCard);
       }
     }
-
-    addStoryCard.addEventListener("click", () => {
-      document.getElementById("story-upload-modal").classList.remove("hidden");
-      document.getElementById("story-upload-modal").classList.add("open");
-      pauseAllMedia();
-    });
   } catch (error) {
     console.error("Error loading stories:", error.message);
     storiesContainer.innerHTML = `<p class="error">Failed to load stories: ${error.message}</p>`;
@@ -2102,61 +2107,54 @@ async function viewStory(userId, stories) {
   });
 }
 
-async function createStory() {
-  const storyFile = document.getElementById("story-file").files[0];
-  const storyUploadError = document.getElementById("story-upload-error");
-  if (!storyFile) {
-    showError(storyUploadError, "Please select a file.");
+async function createStory(file) {
+  if (!file) {
+    console.error("No file selected for story upload.");
     return;
   }
 
   const maxFileSize = 10 * 1024 * 1024; // 10MB
-  if (storyFile.size > maxFileSize) {
-    showError(storyUploadError, "File must be under 10MB.");
+  if (file.size > maxFileSize) {
+    console.error("File must be under 10MB.");
     return;
   }
 
   showLoading();
   try {
-    const fileType = storyFile.type.startsWith("video/") ? "video" : "image";
+    const fileType = file.type.startsWith("video/") ? "video" : "image";
     const duration = fileType === "image" ? 5000 : null;
-    const storagePath = `stories/${currentUserUid}/${Date.now()}_${storyFile.name}`;
-    const fileRef = storageRef(storage, storagePath);
-    await uploadBytes(fileRef, storyFile);
-    const contentUrl = await getDownloadURL(fileRef);
+
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
+
+    const response = await fetch(CLOUDINARY_UPLOAD_URL, {
+      method: "POST",
+      body: formData,
+    });
+    const data = await response.json();
+    if (!data.secure_url) {
+      throw new Error("Failed to upload to Cloudinary.");
+    }
 
     const storyRef = push(ref(db, "stories"));
     await set(storyRef, {
       userId: currentUserUid,
-      contentUrl,
+      contentUrl: data.secure_url,
       contentType: fileType,
       timestamp: Date.now(),
       duration,
       viewedBy: []
     });
 
-    document.getElementById("story-upload-modal").classList.remove("open");
-    document.getElementById("story-upload-modal").classList.add("hidden");
-    hideError(storyUploadError);
-    document.getElementById("story-file").value = "";
+    document.getElementById("story-file-input").value = "";
     await loadStories();
   } catch (error) {
     console.error("Error uploading story:", error.message);
-    showError(storyUploadError, "Failed to upload story. Please try again.");
   } finally {
     hideLoading();
   }
 }
-
-document.getElementById("story-upload-btn").addEventListener("click", createStory);
-document.getElementById("story-upload-close").addEventListener("click", () => {
-  document.getElementById("story-upload-modal").classList.remove("open");
-  document.getElementById("story-upload-modal").classList.add("hidden");
-  hideError(document.getElementById("story-upload-error"));
-  pauseAllMedia();
-});
-
-
   
 
 async function loadPosts() {
