@@ -1799,6 +1799,207 @@ async function toggleFollow(targetUid, button, containerId) {
   }
 }
 
+
+
+// Add Story Functionality
+const addStoryCard = document.getElementById("add-story-card");
+const storyFileInput = document.getElementById("story-file-input");
+const storiesContainer = document.getElementById("stories-container");
+
+addStoryCard.addEventListener("click", () => {
+  storyFileInput.click();
+});
+
+storyFileInput.addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  // Validate file type
+  const allowedTypes = ["image/jpeg", "image/png", "video/mp4"];
+  if (!allowedTypes.includes(file.type)) {
+    alert("Please select a valid image (JPEG/PNG) or video (MP4).");
+    storyFileInput.value = "";
+    return;
+  }
+
+  // Validate file size (e.g., max 10MB)
+  const maxFileSize = 10 * 1024 * 1024; // 10MB
+  if (file.size > maxFileSize) {
+    alert("File size must be under 10MB.");
+    storyFileInput.value = "";
+    return;
+  }
+
+  showLoading();
+  try {
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
+
+    // Adjust upload endpoint based on file type
+    const uploadUrl = file.type.startsWith("video/")
+      ? `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/video/upload`
+      : `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`;
+
+    const response = await fetch(uploadUrl, {
+      method: "POST",
+      body: formData,
+    });
+    const data = await response.json();
+
+    if (!data.secure_url) {
+      throw new Error("Failed to upload file to Cloudinary.");
+    }
+
+    // Store story in Firebase
+    const storyRef = push(ref(db, `stories/${currentUserUid}`));
+    await set(storyRef, {
+      userId: currentUserUid,
+      mediaUrl: data.secure_url,
+      mediaType: file.type.startsWith("video/") ? "video" : "image",
+      timestamp: Date.now(),
+      viewedBy: [], // Initialize empty array for tracking viewers
+    });
+
+    // Clear the file input
+    storyFileInput.value = "";
+
+    // Optionally, update the stories container
+    await loadStories();
+
+    alert("Story uploaded successfully!");
+  } catch (error) {
+    console.error("Error uploading story:", error.message);
+    alert(`Failed to upload story: ${error.message}`);
+  } finally {
+    hideLoading();
+  }
+});
+
+// Function to load and display stories
+async function loadStories() {
+  storiesContainer.innerHTML = `
+    <div id="add-story-card" class="story-card flex-shrink-0 w-20 text-center cursor-pointer">
+      <div class="relative w-16 h-16 mx-auto rounded-full border-2 border-gray-300 bg-gray-200 flex items-center justify-center">
+        <svg viewBox="0 0 24 24" class="w-8 h-8 text-gray-600" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 5v14m-7-7h14"/>
+        </svg>
+        <img id="add-story-img" src="https://www.gravatar.com/avatar?d=mp" alt="Your avatar" class="absolute inset-0 w-full h-full rounded-full object-cover opacity-50">
+      </div>
+      <p class="text-sm mt-1 truncate text-gray-800">Your Story</p>
+    </div>
+  `;
+  showLoading();
+  try {
+    const storiesRef = ref(db, "stories");
+    const snapshot = await get(storiesRef);
+    const storiesData = snapshot.val() || {};
+    const usersSnap = await get(ref(db, "users"));
+    const users = usersSnap.val() || {};
+
+    // Collect all stories from followed users and self
+    const followingSnap = await get(ref(db, `users/${currentUserUid}/following`));
+    const followingData = followingSnap.val() || {};
+    const validUserIds = [currentUserUid, ...Object.keys(followingData)];
+
+    const allStories = [];
+    for (const userId of validUserIds) {
+      if (storiesData[userId]) {
+        Object.entries(storiesData[userId]).forEach(([storyId, story]) => {
+          if (story.mediaUrl && story.timestamp) {
+            allStories.push({ userId, storyId, ...story });
+          }
+        });
+      }
+    }
+
+    // Filter stories within the last 24 hours
+    const now = Date.now();
+    const twentyFourHours = 24 * 60 * 60 * 1000;
+    const recentStories = allStories.filter(story => now - story.timestamp < twentyFourHours);
+
+    // Sort stories by timestamp (newest first)
+    recentStories.sort((a, b) => b.timestamp - a.timestamp);
+
+    if (recentStories.length === 0) {
+      // No additional stories to display
+      return;
+    }
+
+    // Display stories
+    recentStories.forEach(story => {
+      const userData = users[story.userId] || { username: "Unknown", photoURL: null };
+      const isOwnStory = story.userId === currentUserUid;
+      const hasViewed = story.viewedBy && story.viewedBy.includes(currentUserUid);
+      const storyCard = document.createElement("div");
+      storyCard.className = `story-card flex-shrink-0 w-20 text-center cursor-pointer ${hasViewed ? "viewed" : "unviewed"}`;
+      storyCard.dataset.storyId = story.storyId;
+      storyCard.dataset.userId = story.userId;
+      storyCard.innerHTML = `
+        <div class="relative w-16 h-16 mx-auto rounded-full">
+          <img src="${userData.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${userData.username} story" class="w-full h-full rounded-full object-cover">
+        </div>
+        <p class="text-sm mt-1 truncate text-gray-800">${isOwnStory ? "Your Story" : userData.username}</p>
+      `;
+      storyCard.addEventListener("click", () => showStoryViewer(story.userId, story.storyId, story.mediaUrl, story.mediaType));
+      storiesContainer.appendChild(storyCard);
+    });
+  } catch (error) {
+    console.error("Error loading stories:", error.message);
+    storiesContainer.innerHTML += `<p class="error">Failed to load stories: ${error.message}</p>`;
+  } finally {
+    hideLoading();
+  }
+}
+
+// Function to show story viewer
+async function showStoryViewer(userId, storyId, mediaUrl, mediaType) {
+  const storyViewer = document.getElementById("story-viewer");
+  const storyContent = document.getElementById("story-content");
+  const storyClose = document.getElementById("story-close");
+  const storyPrev = document.getElementById("story-prev");
+  const storyNext = document.getElementById("story-next");
+
+  // Mark story as viewed (if not own story)
+  if (userId !== currentUserUid) {
+    const storyRef = ref(db, `stories/${userId}/${storyId}`);
+    const snapshot = await get(storyRef);
+    const storyData = snapshot.val();
+    if (storyData && !storyData.viewedBy?.includes(currentUserUid)) {
+      await update(storyRef, {
+        viewedBy: [...(storyData.viewedBy || []), currentUserUid],
+      });
+      // Update UI to mark as viewed
+      const storyCard = document.querySelector(`.story-card[data-story-id="${storyId}"][data-user-id="${userId}"]`);
+      if (storyCard) {
+        storyCard.classList.remove("unviewed");
+        storyCard.classList.add("viewed");
+      }
+    }
+  }
+
+  // Display the story
+  storyContent.innerHTML = mediaType === "video"
+    ? `<video src="${mediaUrl}" class="story-content" autoplay loop muted></video>`
+    : `<img src="${mediaUrl}" alt="Story" class="story-content">`;
+  storyViewer.classList.remove("hidden");
+  pauseAllMedia();
+
+  // Handle navigation (simplified for single story; extend for multiple stories)
+  storyPrev.style.display = "none";
+  storyNext.style.display = "none";
+
+  storyClose.addEventListener("click", () => {
+    storyViewer.classList.add("hidden");
+    storyContent.innerHTML = "";
+    const video = storyContent.querySelector("video");
+    if (video) video.pause();
+  }, { once: true });
+}
+
+
+  
+
 onAuthStateChanged(auth, (user) => {
   if (!user) {
     location.href = "index.html";
@@ -1808,6 +2009,7 @@ onAuthStateChanged(auth, (user) => {
     loadFriends();
     loadSearch();
     loadProfile();
+     loadStories();
   }
 });
 
