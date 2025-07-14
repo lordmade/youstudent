@@ -1464,7 +1464,6 @@ body {
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
 import { getAuth, onAuthStateChanged, updateProfile } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
 import { getDatabase, ref, onValue, query, orderByChild, limitToLast, set, get, push, update } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
-import { getFirestore, doc, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
@@ -1479,7 +1478,6 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth();
 const db = getDatabase();
-const firestore = getFirestore();
 
 let currentUserUid = null;
 const commentSheet = document.getElementById("comment-sheet");
@@ -1579,13 +1577,16 @@ editProfileSaveBtn.addEventListener("click", async () => {
       }
     }
 
+    // Update Firebase Authentication profile
     await updateProfile(user, profileUpdates);
 
-    await updateDoc(doc(firestore, "users", user.uid), {
+    // Update user data in Realtime Database
+    const userRef = ref(db, `users/${user.uid}`);
+    await update(userRef, {
       username: newUsername,
       bio: newBio || "",
       photoURL: photoURL || user.photoURL || "https://www.gravatar.com/avatar?d=mp",
-      updatedAt: serverTimestamp(),
+      updatedAt: Date.now(),
     });
 
     editProfileModal.classList.remove("open");
@@ -2063,7 +2064,7 @@ async function loadPosts() {
         const playSongBtn = postElement.querySelector(".play-song-btn");
         const audioElement = postElement.querySelector(`#audio-${post.id}`);
         playSongBtn.removeAttribute("disabled"); // Enable the button
-        playSongBtn.addEventListener("click", (e) => {
+        playSongBtn.addEventListener('click', (e) => {
           e.stopPropagation();
           if (audioElement.paused) {
             pauseAllMedia(`audio-${post.id}`);
@@ -2655,10 +2656,6 @@ async function loadProfile() {
     hideLoading();
   });
 }
-</script>             
-
-        
-          
-        
+</script>
 </body>
-</html> don't limit posts on home tab , show all posts. Friends tab should match with chat.html to show timestamp 
+</html>
