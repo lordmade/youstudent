@@ -84,7 +84,7 @@
       margin-bottom: 1rem;
       background: var(--white);
       border-radius: 12px;
-      padding: 1rem;
+      padding: 0 1rem 1rem;
       border: 1px solid var(--border);
       box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
       animation: slideUp 0.6s ease-out forwards;
@@ -93,6 +93,21 @@
     @keyframes slideUp {
       0% { opacity: 0; transform: translateY(20px); }
       100% { opacity: 1; transform: translateY(0); }
+    }
+
+    .cover-photo {
+      width: 100%;
+      height: 150px;
+      object-fit: cover;
+      border-radius: 12px 12px 0 0;
+      margin-bottom: -40px;
+      background: var(--gradient);
+      z-index: 1;
+      position: relative;
+    }
+
+    .cover-photo:empty {
+      background: var(--gradient);
     }
 
     .profile-picture {
@@ -104,6 +119,14 @@
       border: 2px solid var(--white);
       background: var(--gradient);
       padding: 2px;
+      cursor: pointer;
+      transition: transform 0.2s ease;
+      z-index: 2;
+      position: relative;
+    }
+
+    .profile-picture:hover {
+      transform: scale(1.05);
     }
 
     .profile-username {
@@ -143,7 +166,7 @@
     .profile-follow-btn {
       display: block;
       margin: 0 auto 1rem;
-      padding: 0.5rem 1rem;
+      padding: 0.5rem; 1rem;
       border-radius: 9999px;
       font-size: clamp(0.7rem, 2.5vw, 0.75rem);
       font-weight: 600;
@@ -240,14 +263,63 @@
       font-size: clamp(0.8rem, 2.5vw, 0.9rem);
     }
 
+    .fullscreen-image-viewer {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.9);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      visibility: hidden;
+      opacity: 0;
+      transition: opacity 0.3s ease, visibility 0.3s ease;
+    }
+
+    .fullscreen-image-viewer.active {
+      visibility: visible;
+      opacity: 1;
+    }
+
+    .fullscreen-image {
+      max-width: 90%;
+      max-height: 90%;
+      object-fit: contain;
+    }
+
+    .close-fullscreen-btn {
+      position: absolute;
+      top: 1rem;
+      right: 1rem;
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 0.5rem;
+      color: var(--white);
+    }
+
+    .close-fullscreen-btn svg {
+      width: 24px;
+      height: 24px;
+      stroke: var(--white);
+    }
+
     @media (max-width: 414px) {
       .container {
         padding: 0 0.5rem;
       }
 
+      .cover-photo {
+        height: 100px;
+      }
+
       .profile-picture {
         width: 60px;
         height: 60px;
+        margin-top: -30px;
       }
 
       .profile-username {
@@ -285,6 +357,14 @@
       <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4z"/>
     </svg>
   </div>
+  <div class="fullscreen-image-viewer" id="fullscreen-image-viewer">
+    <button class="close-fullscreen-btn" id="close-fullscreen-btn" aria-label="Close full-screen image">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M18 6L6 18M6 6l12 12"/>
+      </svg>
+    </button>
+    <img class="fullscreen-image" id="fullscreen-image" src="" alt="Full-screen profile picture">
+  </div>
   <div class="container">
     <header>
       <button class="back-btn" aria-label="Back to home">
@@ -296,6 +376,7 @@
     </header>
     <div class="profile-container">
       <div class="profile-header">
+        <div class="cover-photo" id="cover-photo"></div>
         <img class="profile-picture" id="profile-picture" src="https://www.gravatar.com/avatar?d=mp" alt="Profile picture">
         <div class="profile-username" id="profile-username-header"></div>
         <div class="profile-bio" id="profile-bio"></div>
@@ -362,6 +443,18 @@
       if (hours < 24) return `${hours}h ago`;
       const days = Math.floor(hours / 24);
       return `${days}d ago`;
+    }
+
+    function showFullscreenImage(src) {
+      const viewer = document.getElementById("fullscreen-image-viewer");
+      const fullscreenImage = document.getElementById("fullscreen-image");
+      fullscreenImage.src = src;
+      viewer.classList.add("active");
+    }
+
+    function hideFullscreenImage() {
+      const viewer = document.getElementById("fullscreen-image-viewer");
+      viewer.classList.remove("active");
     }
 
     async function toggleFollow(targetUid, button) {
@@ -445,6 +538,15 @@
         const followerData = followerSnap.val() || {};
         const friendData = friendSnap.val() || {};
 
+        const coverPhoto = document.getElementById("cover-photo");
+        if (userData.coverPhotoURL) {
+          coverPhoto.style.backgroundImage = `url(${userData.coverPhotoURL})`;
+          coverPhoto.style.backgroundSize = 'cover';
+          coverPhoto.style.backgroundPosition = 'center';
+        } else {
+          coverPhoto.style.background = 'var(--gradient)';
+        }
+
         document.getElementById("profile-picture").src = userData.photoURL || 'https://www.gravatar.com/avatar?d=mp';
         document.getElementById("profile-username").textContent = userData.username || 'Unknown';
         document.getElementById("profile-username-header").textContent = userData.username || 'Unknown';
@@ -466,6 +568,11 @@
             toggleFollow(targetUid, followBtn);
           });
         }
+
+        const profilePicture = document.getElementById("profile-picture");
+        profilePicture.addEventListener("click", () => {
+          showFullscreenImage(profilePicture.src);
+        });
 
         const profilePosts = document.getElementById("profile-posts");
         profilePosts.innerHTML = "";
@@ -513,6 +620,16 @@
 
       document.querySelector(".back-btn").addEventListener("click", () => {
         location.href = "home.html";
+      });
+
+      document.getElementById("close-fullscreen-btn").addEventListener("click", () => {
+        hideFullscreenImage();
+      });
+
+      document.getElementById("fullscreen-image-viewer").addEventListener("click", (e) => {
+        if (e.target === e.currentTarget) {
+          hideFullscreenImage();
+        }
       });
     });
   </script>
