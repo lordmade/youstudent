@@ -1367,39 +1367,43 @@
   </div>
 
   <div class="container">
-    <div id="home" class="tab-content active">
-      <div id="stories-container" class="flex overflow-x-auto space-x-4 p-4 bg-gray-100 stories-container">
-        <div id="add-story-card" class="story-card flex-shrink-0 w-20 text-center cursor-pointer">
-          <div class="relative w-16 h-16 mx-auto rounded-full border-2 border-gray-300 bg-gray-200 flex items-center justify-center">
-            <svg viewBox="0 0 24 24" class="w-8 h-8 text-gray-600" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M12 5v14m-7-7h14"/>
-            </svg>
-            <img id="add-story-img" src="https://www.gravatar.com/avatar?d=mp" alt="Your avatar" class="absolute inset-0 w-full h-full rounded-full object-cover opacity-50">
-          </div>
-          <p class="text-sm mt-1 truncate text-gray-800">Your Story</p>
-        </div>
+   <div id="home" class="tab-content active">
+  <div id="stories-container" class="flex overflow-x-auto space-x-4 p-4 bg-gray-100 stories-container">
+    <a href="upload.html" id="add-story-card" class="story-card flex-shrink-0 w-20 text-center cursor-pointer" aria-label="Add new story">
+      <div class="relative w-16 h-16 mx-auto rounded-full border-2 border-gray-300 bg-gray-200 flex items-center justify-center">
+        <svg viewBox="0 0 24 24" class="w-8 h-8 text-gray-600" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 5v14m-7-7h14"/>
+        </svg>
+        <img id="add-story-img" src="https://www.gravatar.com/avatar?d=mp" alt="Your avatar" class="absolute inset-0 w-full h-full rounded-full object-cover opacity-50">
       </div>
-      <input type="file" id="story-file-input" accept="image/*,video/mp4" class="hidden">
-      <div id="story-viewer" class="hidden fixed inset-0 bg-black z-50 flex items-center justify-center">
-        <div class="relative w-full max-w-md">
-          <button id="story-close" class="absolute top-4 right-4 text-white">
-            <svg viewBox="0 0 24 24" class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M6 18L18 6M6 6l12 12"/>
-            </svg>
-          </button>
-          <div id="story-content" class="w-full h-screen max-h-[80vh] bg-black story-content"></div>
-          <button id="story-prev" class="absolute left-4 top-1/2 transform -translate-y-1/2 text-white">
-            <svg viewBox="0 0 24 24" class="w-8 h-8" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M15 18l-6-6 6-6"/>
-            </svg>
-          </button>
-          <button id="story-next" class="absolute right-4 top-1/2 transform -translate-y-1/2 text-white">
-            <svg viewBox="0 0 24 24" class="w-8 h-8" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M9 18l6-6-6-6"/>
-            </svg>
-          </button>
-        </div>
-      </div>
+      <p class="text-sm mt-1 truncate text-gray-800">Your Story</p>
+    </a>
+    <!-- Other story cards will be dynamically populated here -->
+  </div>
+  <div id="story-viewer" class="hidden fixed inset-0 bg-black z-50 flex items-center justify-center">
+    <div class="relative w-full max-w-md">
+      <button id="story-close" class="absolute top-4 right-4 text-white">
+        <svg viewBox="0 0 24 24" class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M6 18L18 6M6 6l12 12"/>
+        </svg>
+      </button>
+      <div id="story-content" class="w-full h-screen max-h-[80vh] bg-black story-content"></div>
+      <button id="story-prev" class="absolute left-4 top-1/2 transform -translate-y-1/2 text-white">
+        <svg viewBox="0 0 24 24" class="w-8 h-8" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M15 18l-6-6 6-6"/>
+        </svg>
+      </button>
+      <button id="story-next" class="absolute right-4 top-1/2 transform -translate-y-1/2 text-white">
+        <svg viewBox="0 0 24 24" class="w-8 h-8" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M9 18l6-6-6-6"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+  <div id="posts-container">
+    <div class="loading">Loading posts...</div>
+  </div>
+</div>
       <div id="posts-container">
         <div class="loading">Loading posts...</div>
       </div>
@@ -1799,17 +1803,7 @@ async function toggleFollow(targetUid, button, containerId) {
   }
 }
 
-onAuthStateChanged(auth, (user) => {
-  if (!user) {
-    location.href = "index.html";
-  } else {
-    currentUserUid = user.uid;
-    loadPosts();
-    loadFriends();
-    loadSearch();
-    loadProfile();
-  }
-});
+
 
 const tabBtns = document.querySelectorAll(".tab-btn");
 const tabs = document.querySelectorAll(".tab-content");
@@ -1934,6 +1928,135 @@ commentInput.addEventListener("keydown", (e) => {
     commentSubmit.click();
   }
 });
+
+async function loadStories() {
+  const storiesContainer = document.getElementById("stories-container");
+  const storiesRef = query(ref(db, "stories"), orderByChild("timestamp"), limitToLast(20));
+
+  showLoading();
+  try {
+    const [storiesSnap, usersSnap] = await Promise.all([
+      Promise.race([
+        new Promise(resolve => onValue(storiesRef, resolve, { onlyOnce: true })),
+        new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout loading stories")), 10000))
+      ]),
+      Promise.race([
+        get(ref(db, "users")),
+        new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout loading users")), 10000))
+      ])
+    ]);
+
+    const storiesData = storiesSnap.val() || {};
+    const users = usersSnap.val() || {};
+    const stories = Object.entries(storiesData)
+      .map(([id, story]) => ({ id, ...story }))
+      .filter(story => story.userId && story.mediaUrl && story.timestamp)
+      .sort((a, b) => b.timestamp - a.timestamp);
+
+    // Clear existing stories (except the "Add Story" card)
+    storiesContainer.innerHTML = `
+      <a href="upload.html" id="add-story-card" class="story-card flex-shrink-0 w-20 text-center cursor-pointer" aria-label="Add new story">
+        <div class="relative w-16 h-16 mx-auto rounded-full border-2 border-gray-300 bg-gray-200 flex items-center justify-center">
+          <svg viewBox="0 0 24 24" class="w-8 h-8 text-gray-600" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 5v14m-7-7h14"/>
+          </svg>
+          <img id="add-story-img" src="${users[currentUserUid]?.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="Your avatar" class="absolute inset-0 w-full h-full rounded-full object-cover opacity-50">
+        </div>
+        <p class="text-sm mt-1 truncate text-gray-800">Your Story</p>
+      </a>
+    `;
+
+    if (stories.length === 0) {
+      // Optionally, add a placeholder if no stories are available
+      storiesContainer.insertAdjacentHTML("beforeend", '<div class="placeholder flex-shrink-0 w-20 text-center text-gray-500">No stories available.</div>');
+      hideLoading();
+      return;
+    }
+
+    stories.forEach(story => {
+      const userData = users[story.userId] || { username: "Unknown", photoURL: "https://www.gravatar.com/avatar?d=mp" };
+      const isViewed = story.viewedBy?.includes(currentUserUid) || false;
+      const storyCard = document.createElement("div");
+      storyCard.className = `story-card flex-shrink-0 w-20 text-center cursor-pointer ${isViewed ? "viewed" : "unviewed"}`;
+      storyCard.dataset.storyId = story.id;
+      storyCard.innerHTML = `
+        <div class="relative w-16 h-16 mx-auto rounded-full">
+          <img src="${userData.photoURL}" alt="${userData.username} story" class="w-full h-full rounded-full object-cover">
+        </div>
+        <p class="text-sm mt-1 truncate text-gray-800">${userData.username}</p>
+      `;
+      storyCard.addEventListener("click", () => showStoryViewer(story, userData));
+      storiesContainer.appendChild(storyCard);
+    });
+  } catch (error) {
+    console.error("Error loading stories:", error.message);
+    storiesContainer.insertAdjacentHTML("beforeend", `<div class="error flex-shrink-0 w-20 text-center text-red-500">Failed to load stories: ${error.message}</div>`);
+  } finally {
+    hideLoading();
+  }
+}
+
+async function showStoryViewer(story, userData) {
+  const storyViewer = document.getElementById("story-viewer");
+  const storyContent = document.getElementById("story-content");
+  const storyClose = document.getElementById("story-close");
+  const storyPrev = document.getElementById("story-prev");
+  const storyNext = document.getElementById("story-next");
+
+  storyContent.innerHTML = story.mediaType === "video" 
+    ? `<video src="${story.mediaUrl}" autoplay loop class="story-content"></video>`
+    : `<img src="${story.mediaUrl}" alt="${userData.username} story" class="story-content">`;
+
+  storyViewer.classList.remove("hidden");
+
+  // Mark story as viewed
+  if (!story.viewedBy?.includes(currentUserUid)) {
+    try {
+      await update(ref(db, `stories/${story.id}`), {
+        viewedBy: [...(story.viewedBy || []), currentUserUid]
+      });
+      const storyCard = document.querySelector(`.story-card[data-story-id="${story.id}"]`);
+      if (storyCard) {
+        storyCard.classList.remove("unviewed");
+        storyCard.classList.add("viewed");
+      }
+    } catch (error) {
+      console.error("Error marking story as viewed:", error.message);
+    }
+  }
+
+  // Close story viewer
+  storyClose.addEventListener("click", () => {
+    storyViewer.classList.add("hidden");
+    storyContent.innerHTML = "";
+    pauseAllMedia();
+  });
+
+  // Navigation (simplified; you may want to fetch next/previous stories)
+  storyPrev.style.display = "none"; // Hide prev/next for simplicity
+  storyNext.style.display = "none";
+}
+
+// Call loadStories in onAuthStateChanged
+onAuthStateChanged(auth, (user) => {
+  if (!user) {
+    location.href = "index.html";
+  } else {
+    currentUserUid = user.uid;
+    loadStories(); // Add this to load stories
+    loadPosts();
+    loadFriends();
+    loadSearch();
+    loadProfile();
+  }
+});
+
+
+
+
+
+
+  
 
 async function loadPosts() {
   const postsContainer = document.getElementById("posts-container");
