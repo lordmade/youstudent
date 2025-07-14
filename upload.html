@@ -380,6 +380,10 @@
       width: 24px;
       height: 24px;
     }
+    #file-type-note.story {
+      color: var(--text-dark);
+      font-weight: 500;
+    }
     @media (max-width: 414px) {
       .upload-container {
         padding: 1rem;
@@ -452,6 +456,9 @@
         </label>
         <label class="radio-label">
           <input type="radio" name="media-type" value="reel"> Reel
+        </label>
+        <label class="radio-label">
+          <input type="radio" name="media-type" value="story"> Story
         </label>
       </div>
       <div class="form-group">
@@ -565,7 +572,7 @@
 
     const CLOUDINARY_CLOUD_NAME = "dqkujefxj";
     const CLOUDINARY_UPLOAD_PRESET = "banter_box";
-    const YOUTUBE_API_KEY = "AIzaSyD4WgXHDkXjJWVMK69pyS6QIM-DMJzp8HQ"; // Replace with your YouTube Data API key
+    const YOUTUBE_API_KEY = "YOUR_YOUTUBE_API_KEY"; // Replace with your actual YouTube Data API key
 
     let audio = null;
 
@@ -679,12 +686,23 @@
 
     mediaTypeInputs.forEach(input => {
       input.addEventListener("change", () => {
-        const isPost = input.value === "post";
-        mediaFileInput.accept = isPost ? "image/*,video/*" : "video/*";
-        captionGroup.style.display = isPost ? "block" : "none";
-        document.getElementById("file-type-note").textContent = isPost
-          ? "For posts: Upload an image or video."
-          : "For reels: Upload a video.";
+        const mediaType = input.value;
+        if (mediaType === "post") {
+          mediaFileInput.accept = "image/*,video/*";
+          captionGroup.style.display = "block";
+          document.getElementById("file-type-note").textContent = "For posts: Upload an image or video.";
+          document.getElementById("file-type-note").classList.remove("story");
+        } else if (mediaType === "reel") {
+          mediaFileInput.accept = "video/*";
+          captionGroup.style.display = "none";
+          document.getElementById("file-type-note").textContent = "For reels: Upload a video.";
+          document.getElementById("file-type-note").classList.remove("story");
+        } else if (mediaType === "story") {
+          mediaFileInput.accept = "image/*,video/*";
+          captionGroup.style.display = "block";
+          document.getElementById("file-type-note").textContent = "For stories: Upload an image or short video (up to 60s).";
+          document.getElementById("file-type-note").classList.add("story");
+        }
         mediaFileInput.value = "";
         previewImage.style.display = "none";
         previewVideo.style.display = "none";
@@ -701,19 +719,43 @@
         uploadBtn.disabled = true;
         return;
       }
-      const isPost = document.querySelector('input[name="media-type"]:checked').value === "post";
-      if (!isPost && !file.type.startsWith("video/")) {
+      const mediaType = document.querySelector('input[name="media-type"]:checked').value;
+      if (mediaType === "reel" && !file.type.startsWith("video/")) {
         showError("Please select a video for reels.");
         uploadBtn.disabled = true;
         return;
       }
-      if (isPost && !file.type.startsWith("image/") && !file.type.startsWith("video/")) {
+      if (mediaType === "post" && !file.type.startsWith("image/") && !file.type.startsWith("video/")) {
         showError("Please select an image or video for posts.");
         uploadBtn.disabled = true;
         return;
       }
+      if (mediaType === "story") {
+        if (!file.type.startsWith("image/") && !file.type.startsWith("video/")) {
+          showError("Please select an image or video for stories.");
+          uploadBtn.disabled = true;
+          return;
+        }
+        if (file.type.startsWith("video/")) {
+          const video = document.createElement("video");
+          video.src = URL.createObjectURL(file);
+          video.onloadedmetadata = () => {
+            if (video.duration > 60) {
+              showError("Story videos must be 60 seconds or shorter.");
+              uploadBtn.disabled = true;
+              URL.revokeObjectURL(video.src);
+              return;
+            }
+            uploadBtn.disabled = false;
+            URL.revokeObjectURL(video.src);
+          };
+        } else {
+          uploadBtn.disabled = false;
+        }
+      } else {
+        uploadBtn.disabled = false;
+      }
       clearError();
-      uploadBtn.disabled = false;
       const reader = new FileReader();
       reader.onload = (e) => {
         if (file.type.startsWith("image/")) {
@@ -818,8 +860,8 @@
         showError("Please select a file.");
         return;
       }
-      const isPost = document.querySelector('input[name="media-type"]:checked').value === "post";
-      const caption = isPost ? captionInput.value.trim() : "";
+      const mediaType = document.querySelector('input[name="media-type"]:checked').value;
+      const caption = (mediaType === "post" || mediaType === "story") ? captionInput.value.trim() : "";
       showLoading();
       try {
         const formData = new FormData();
@@ -847,7 +889,14 @@
           xhr.send(formData);
         });
         const mediaUrl = response.secure_url;
-        const dbPath = isPost ? "posts" : "reels";
+        let dbPath;
+        if (mediaType === "post") {
+          dbPath = "posts";
+        } else if (mediaType === "reel") {
+          dbPath = "reels";
+        } else {
+          dbPath = "stories";
+        }
         const newRef = push(ref(db, dbPath));
         const dbData = {
           userId: user.uid,
@@ -855,9 +904,14 @@
           timestamp: Date.now(),
           [file.type.startsWith("image/") ? "imageUrl" : "videoUrl"]: mediaUrl
         };
-        if (isPost && caption) dbData.caption = caption;
+        if ((mediaType === "post" || mediaType === "story") && caption) {
+          dbData.caption = caption;
+        }
         if (selectedSongInput.value) {
           dbData.song = JSON.parse(selectedSongInput.value);
+        }
+        if (mediaType === "story") {
+          dbData.expiresAt = Date.now() + 24 * 60 * 60 * 1000; // Story expires in 24 hours
         }
         await set(newRef, dbData);
         uploadMsg.textContent = "Upload successful!";
@@ -875,6 +929,7 @@
           audio = null;
         }
         uploadBtn.disabled = true;
+        document.getElementById("file-type-note").classList.remove("story");
         setTimeout(() => location.href = "home.html", 1000);
       } catch (err) {
         showError(err.message || "Upload failed. Please try again.");
