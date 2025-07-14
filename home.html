@@ -1410,26 +1410,32 @@
     </a>
     <!-- Other story cards will be dynamically populated here -->
   </div>
-  <div id="story-viewer" class="hidden fixed inset-0 bg-black z-50 flex items-center justify-center">
-    <div class="relative w-full max-w-md">
-      <button id="story-close" class="absolute top-4 right-4 text-white">
-        <svg viewBox="0 0 24 24" class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M6 18L18 6M6 6l12 12"/>
-        </svg>
-      </button>
-      <div id="story-content" class="w-full h-screen max-h-[80vh] bg-black story-content"></div>
-      <button id="story-prev" class="absolute left-4 top-1/2 transform -translate-y-1/2 text-white">
-        <svg viewBox="0 0 24 24" class="w-8 h-8" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M15 18l-6-6 6-6"/>
-        </svg>
-      </button>
-      <button id="story-next" class="absolute right-4 top-1/2 transform -translate-y-1/2 text-white">
-        <svg viewBox="0 0 24 24" class="w-8 h-8" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M9 18l6-6-6-6"/>
-        </svg>
-      </button>
+ <div id="story-viewer" class="hidden fixed inset-0 bg-black z-50 flex items-center justify-center">
+  <div class="relative w-full max-w-md h-screen">
+    <div class="absolute top-0 left-0 right-0 h-1 bg-gray-800 z-10">
+      <div id="story-progress" class="h-full bg-[var(--primary-red)]" style="width: 0%; transition: width linear;"></div>
     </div>
+    <button id="story-close" class="absolute top-4 right-4 text-white">
+      <svg viewBox="0 0 24 24" class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M6 18L18 6M6 6l12 12"/>
+      </svg>
+    </button>
+    <div id="story-content" class="w-full h-full max-h-[80vh] bg-black story-content"></div>
+    <div class="absolute bottom-4 left-4 text-white bg-black bg-opacity-50 px-2 py-1 rounded">
+      <span id="story-username"></span>
+    </div>
+    <button id="story-prev" class="absolute left-4 top-1/2 transform -translate-y-1/2 text-white">
+      <svg viewBox="0 0 24 24" class="w-8 h-8" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M15 18l-6-6 6-6"/>
+      </svg>
+    </button>
+    <button id="story-next" class="absolute right-4 top-1/2 transform -translate-y-1/2 text-white">
+      <svg viewBox="0 0 24 24" class="w-8 h-8" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M9 18l6-6-6-6"/>
+      </svg>
+    </button>
   </div>
+</div>
   <div id="posts-container">
     <div class="loading">Loading posts...</div>
   </div>
@@ -2047,27 +2053,66 @@ async function loadStories() {
 async function showStoryViewer(userStories, userData) {
   const storyViewer = document.getElementById("story-viewer");
   const storyContent = document.getElementById("story-content");
+  const storyUsername = document.getElementById("story-username");
   const storyClose = document.getElementById("story-close");
   const storyPrev = document.getElementById("story-prev");
   const storyNext = document.getElementById("story-next");
-
+  const storyProgress = document.getElementById("story-progress");
   let currentIndex = 0;
+  let progressInterval = null;
+  const STORY_DURATION = 30000; // 30 seconds for images
+
+  const updateStoryCountBadge = () => {
+    const storyCard = document.querySelector(`.story-card[data-user-id="${userData.uid}"]`);
+    if (!storyCard) return;
+    const unviewedCount = userStories.filter(story => !story.viewedBy?.includes(currentUserUid)).length;
+    const badge = storyCard.querySelector(".story-count-badge");
+    badge.textContent = unviewedCount || userStories.length;
+    if (unviewedCount === 0) {
+      storyCard.classList.remove("unviewed");
+      storyCard.classList.add("viewed");
+    } else {
+      storyCard.classList.remove("viewed");
+      storyCard.classList.add("unviewed");
+    }
+  };
+
+  const startProgress = (duration) => {
+    clearInterval(progressInterval);
+    storyProgress.style.transition = `width ${duration}ms linear`;
+    storyProgress.style.width = "0%";
+    setTimeout(() => {
+      storyProgress.style.width = "100%";
+    }, 10);
+
+    progressInterval = setTimeout(() => {
+      if (currentIndex < userStories.length - 1) {
+        currentIndex++;
+        renderStory();
+      } else {
+        storyViewer.classList.add("hidden");
+        storyContent.innerHTML = "";
+        clearInterval(progressInterval);
+        pauseAllMedia();
+      }
+    }, duration);
+  };
 
   const renderStory = () => {
     const currentStory = userStories[currentIndex];
     storyContent.innerHTML = currentStory.mediaType === "video"
-      ? `<video src="${currentStory.mediaUrl}" autoplay loop class="story-content"></video>`
+      ? `<video src="${currentStory.mediaUrl}" class="story-content" autoplay></video>`
       : `<img src="${currentStory.mediaUrl}" alt="${userData.username} story" class="story-content">`;
-    
-    // Add caption if present
+
+    storyUsername.textContent = userData.username;
+
     if (currentStory.caption) {
-      storyContent.insertAdjacentHTML("beforeend", `<p class="absolute bottom-4 left-4 text-white bg-black bg-opacity-50 px-2 py-1 rounded">${currentStory.caption}</p>`);
+      storyContent.insertAdjacentHTML("beforeend", `<p class="absolute bottom-12 left-4 text-white bg-black bg-opacity-50 px-2 py-1 rounded">${currentStory.caption}</p>`);
     }
-    
-    // Add song info if present
+
     if (currentStory.song) {
       storyContent.insertAdjacentHTML("beforeend", `
-        <div class="absolute bottom-12 left-4 text-white bg-black bg-opacity-50 px-2 py-1 rounded flex items-center gap-2">
+        <div class="absolute bottom-20 left-4 text-white bg-black bg-opacity-50 px-2 py-1 rounded flex items-center gap-2">
           <img src="${currentStory.song.thumbnail}" alt="${currentStory.song.title}" class="w-8 h-8 rounded">
           <div>
             <p class="text-sm font-semibold">${currentStory.song.title}</p>
@@ -2077,23 +2122,35 @@ async function showStoryViewer(userStories, userData) {
       `);
     }
 
-    // Update navigation buttons
     storyPrev.style.display = currentIndex === 0 ? "none" : "block";
     storyNext.style.display = currentIndex === userStories.length - 1 ? "none" : "block";
 
-    // Mark story as viewed
     if (!currentStory.viewedBy?.includes(currentUserUid)) {
       update(ref(db, `stories/${currentStory.id}`), {
         viewedBy: [...(currentStory.viewedBy || []), currentUserUid]
       }).then(() => {
-        // Check if all stories are viewed
-        const allViewed = userStories.every(story => story.viewedBy?.includes(currentUserUid) || story.id === currentStory.id);
-        const storyCard = document.querySelector(`.story-card[data-user-id="${userData.uid}"]`);
-        if (storyCard && allViewed) {
-          storyCard.classList.remove("unviewed");
-          storyCard.classList.add("viewed");
-        }
+        updateStoryCountBadge();
       }).catch(error => console.error("Error marking story as viewed:", error.message));
+    }
+
+    if (currentStory.mediaType === "video") {
+      const video = storyContent.querySelector("video");
+      video.currentTime = 0;
+      video.play().catch(error => console.error("Error playing video:", error.message));
+      video.onended = () => {
+        if (currentIndex < userStories.length - 1) {
+          currentIndex++;
+          renderStory();
+        } else {
+          storyViewer.classList.add("hidden");
+          storyContent.innerHTML = "";
+          clearInterval(progressInterval);
+          pauseAllMedia();
+        }
+      };
+      startProgress(video.duration * 1000 || STORY_DURATION);
+    } else {
+      startProgress(STORY_DURATION);
     }
   };
 
@@ -2103,6 +2160,7 @@ async function showStoryViewer(userStories, userData) {
   storyPrev.onclick = () => {
     if (currentIndex > 0) {
       currentIndex--;
+      clearInterval(progressInterval);
       renderStory();
     }
   };
@@ -2110,6 +2168,7 @@ async function showStoryViewer(userStories, userData) {
   storyNext.onclick = () => {
     if (currentIndex < userStories.length - 1) {
       currentIndex++;
+      clearInterval(progressInterval);
       renderStory();
     }
   };
@@ -2117,6 +2176,7 @@ async function showStoryViewer(userStories, userData) {
   storyClose.onclick = () => {
     storyViewer.classList.add("hidden");
     storyContent.innerHTML = "";
+    clearInterval(progressInterval);
     pauseAllMedia();
   };
 }
