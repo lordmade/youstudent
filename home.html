@@ -1399,6 +1399,87 @@
     height: 8px;
   }
 }
+    /* Reaction Popup */
+.reaction-popup {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%) translateY(-10px);
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: 9999px;
+  padding: 0.5rem 1rem;
+  display: flex;
+  gap: 0.5rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  z-index: 20;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s ease, visibility 0.2s ease, transform 0.2s ease;
+}
+
+.reaction-popup.open {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(-8px);
+}
+
+.reaction-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  transition: transform 0.2s ease;
+}
+
+.reaction-btn:hover {
+  transform: scale(1.2);
+}
+
+.reaction-btn img {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+}
+
+.reaction-counts {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-left: 0.5rem;
+}
+
+.reaction-counts img {
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+}
+
+@media (max-width: 414px) {
+  .reaction-popup {
+    padding: 0.4rem 0.8rem;
+  }
+
+  .reaction-btn {
+    width: 28px;
+    height: 28px;
+  }
+
+  .reaction-btn img {
+    width: 20px;
+    height: 20px;
+  }
+
+  .reaction-counts img {
+    width: 14px;
+    height: 14px;
+  }
+}
     
   </style>
 </head>
@@ -1583,7 +1664,8 @@
     </div>
   </div>
 <script type="module"> 
-import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
+
+      import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
 import { getAuth, onAuthStateChanged, updateProfile } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
 import { getDatabase, ref, onValue, query, orderByChild, limitToLast, set, get, push, update } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
 
@@ -1615,9 +1697,15 @@ const editUsername = document.getElementById("edit-username");
 const editBio = document.getElementById("edit-bio");
 const editPhoto = document.getElementById("edit-photo");
 const editProfileError = document.getElementById("edit-profile-error");
+const deletePostModal = document.getElementById("delete-post-modal");
+const deletePostClose = document.getElementById("delete-post-close");
+const deletePostCancel = document.getElementById("delete-post-cancel");
+const deletePostConfirm = document.getElementById("delete-post-confirm");
 let currentPostId = null;
 let currentPlayingAudio = null;
-
+let currentDeletePostId = null;
+let currentDeletePostElement = null;
+const REACTION_TYPES = ['like', 'love', 'haha', 'wow', 'sad', 'angry'];
 const CLOUDINARY_UPLOAD_PRESET = "banter_box";
 const CLOUDINARY_CLOUD_NAME = "dqkujefxj";
 const CLOUDINARY_UPLOAD_URL = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`;
@@ -1636,7 +1724,7 @@ function hideError(element) {
 }
 
 function pauseAllMedia(exceptAudioId = null) {
-  const allMedia = document.querySelectorAll('audio');
+  const allMedia = document.querySelectorAll('audio, video');
   allMedia.forEach(media => {
     if (media.id !== exceptAudioId && !media.paused) {
       media.pause();
@@ -1650,7 +1738,135 @@ function pauseAllMedia(exceptAudioId = null) {
   }
 }
 
-// Save button event listener
+function timeAgo(timestamp) {
+  if (!timestamp) return "";
+  const now = Date.now();
+  const diff = now - timestamp;
+  if (diff < 60000) return "just now";
+  if (diff < 3600000) return Math.floor(diff / 60000) + "m ago";
+  if (diff < 86400000) return Math.floor(diff / 3600000) + "h ago";
+  return Math.floor(diff / 86400000) + "d ago";
+}
+
+// Reaction popup HTML
+function createReactionPopup(postId) {
+  return `
+    <div class="reaction-popup hidden absolute bottom-16 left-1/2 transform -translate-x-1/2 bg-white rounded-full shadow-lg flex p-2 space-x-2 z-50" data-post-id="${postId}">
+      ${REACTION_TYPES.map(type => `
+        <button class="reaction-btn" data-reaction="${type}" title="${type.charAt(0).toUpperCase() + type.slice(1)}">
+          <img src="/path/to/reactions/${type}.png" alt="${type} reaction" class="w-8 h-8">
+        </button>
+      `).join('')}
+    </div>
+  `;
+}
+
+// Toggle reaction
+async function toggleReaction(postId, reactionType, button) {
+  const userId = currentUserUid;
+  const postRef = ref(db, `posts/${postId}`);
+  const likeCountSpan = button.closest('.post-actions').querySelector(".like-count");
+  const likeIcon = button.closest('.post-actions').querySelector(".like-btn svg");
+
+  showLoading();
+  try {
+    const snapshot = await get(postRef);
+    const post = snapshot.val() || {};
+    const reactions = post.reactions || {};
+    const userReactions = reactions[userId] || [];
+    const currentLikes = post.likes || 0;
+
+    if (userReactions.includes(reactionType)) {
+      // Remove reaction
+      const updatedReactions = { ...reactions, [userId]: userReactions.filter(r => r !== reactionType) };
+      if (updatedReactions[userId].length === 0) delete updatedReactions[userId];
+      await update(postRef, {
+        reactions: updatedReactions,
+        likes: currentLikes - 1,
+        likedBy: (post.likedBy || []).filter(id => id !== userId)
+      });
+      likeCountSpan.textContent = currentLikes - 1;
+      likeIcon.classList.remove("text-red-500");
+      likeIcon.classList.add("text-gray-500");
+    } else {
+      // Add or update reaction
+      const updatedReactions = { ...reactions, [userId]: [...userReactions.filter(r => r !== 'like'), reactionType] };
+      const isNewLike = !post.likedBy?.includes(userId);
+      await update(postRef, {
+        reactions: updatedReactions,
+        likes: isNewLike ? currentLikes + 1 : currentLikes,
+        likedBy: isNewLike ? [...(post.likedBy || []), userId] : post.likedBy
+      });
+      likeCountSpan.textContent = isNewLike ? currentLikes + 1 : currentLikes;
+      likeIcon.classList.remove("text-gray-500");
+      likeIcon.classList.add("text-red-500");
+      if (post.userId !== userId && isNewLike) {
+        const notifRef = push(ref(db, `notifications/${post.userId}/${postId}/reactions`));
+        await set(notifRef, { type: 'reaction', reactionType, userId: currentUserUid, timestamp: Date.now(), read: false });
+      }
+    }
+  } catch (error) {
+    console.error("Error updating reaction:", error.message);
+    showError(document.getElementById(`post-${postId}`), "Failed to update reaction.");
+  } finally {
+    hideLoading();
+  }
+}
+
+// Handle long press for like button
+function setupLongPress(button, postId) {
+  let pressTimer;
+  let touchTimer;
+  let isLongPress = false;
+
+  const startPress = () => {
+    isLongPress = false;
+    pressTimer = setTimeout(() => {
+      isLongPress = true;
+      const existingPopup = document.querySelector(`.reaction-popup[data-post-id="${postId}"]`);
+      if (!existingPopup) {
+        const postElement = document.getElementById(`post-${postId}`);
+        postElement.insertAdjacentHTML('beforeend', createReactionPopup(postId));
+        const popup = postElement.querySelector(`.reaction-popup[data-post-id="${postId}"]`);
+        popup.classList.remove('hidden');
+        popup.querySelectorAll('.reaction-btn').forEach(btn => {
+          btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            toggleReaction(postId, btn.dataset.reaction, button);
+            popup.classList.add('hidden');
+            setTimeout(() => popup.remove(), 300);
+          });
+        });
+      }
+    }, 500);
+  };
+
+  const endPress = () => {
+    clearTimeout(pressTimer);
+    if (!isLongPress) {
+      toggleReaction(postId, 'like', button);
+    }
+    const popup = document.querySelector(`.reaction-popup[data-post-id="${postId}"]`);
+    if (popup) {
+      popup.classList.add('hidden');
+      setTimeout(() => popup.remove(), 300);
+    }
+  };
+
+  button.addEventListener('mousedown', startPress);
+  button.addEventListener('mouseup', endPress);
+  button.addEventListener('mouseleave', endPress);
+  button.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    startPress();
+  });
+  button.addEventListener('touchend', (e) => {
+    e.preventDefault();
+    endPress();
+  });
+}
+
+// Edit profile save button
 editProfileSaveBtn.addEventListener("click", async () => {
   const newUsername = editUsername.value.trim();
   const newBio = editBio.value.trim();
@@ -1670,13 +1886,10 @@ editProfileSaveBtn.addEventListener("click", async () => {
       return;
     }
 
-    const profileUpdates = {
-      displayName: newUsername,
-    };
-
+    const profileUpdates = { displayName: newUsername };
     let photoURL = user.photoURL;
     if (newPhoto) {
-      const maxFileSize = 5 * 1024 * 1024; // 5MB
+      const maxFileSize = 5 * 1024 * 1024;
       if (newPhoto.size > maxFileSize) {
         showError(editProfileError, "Photo must be under 5MB.");
         return;
@@ -1686,10 +1899,7 @@ editProfileSaveBtn.addEventListener("click", async () => {
       formData.append("file", newPhoto);
       formData.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
 
-      const response = await fetch(CLOUDINARY_UPLOAD_URL, {
-        method: "POST",
-        body: formData,
-      });
+      const response = await fetch(CLOUDINARY_UPLOAD_URL, { method: "POST", body: formData });
       const data = await response.json();
       if (data.secure_url) {
         photoURL = data.secure_url;
@@ -1699,10 +1909,7 @@ editProfileSaveBtn.addEventListener("click", async () => {
       }
     }
 
-    // Update Firebase Authentication profile
     await updateProfile(user, profileUpdates);
-
-    // Update user data in Realtime Database
     const userRef = ref(db, `users/${user.uid}`);
     await update(userRef, {
       username: newUsername,
@@ -1714,7 +1921,6 @@ editProfileSaveBtn.addEventListener("click", async () => {
     editProfileModal.classList.remove("open");
     editProfileModal.classList.add("hidden");
     hideError(editProfileError);
-
     loadProfile();
   } catch (error) {
     console.error("Error updating profile:", error.code, error.message);
@@ -1735,49 +1941,6 @@ editProfileCloseBtn.addEventListener("click", () => {
   editProfileModal.classList.add("hidden");
   hideError(editProfileError);
 });
-
-function toggleLike(postId, button) {
-  const userId = currentUserUid;
-  const postRef = ref(db, `posts/${postId}`);
-  const likeCountSpan = button.querySelector(".like-count");
-  const likeIcon = button.querySelector("svg");
-
-  showLoading();
-  get(postRef).then((snapshot) => {
-    const post = snapshot.val() || {};
-    const currentLikes = post.likes || 0;
-    const likedBy = post.likedBy || [];
-    const isLiked = likedBy.includes(userId);
-
-    if (isLiked) {
-      update(postRef, {
-        likes: currentLikes - 1,
-        likedBy: likedBy.filter(id => id !== userId)
-      }).then(() => {
-        likeCountSpan.textContent = currentLikes - 1;
-        likeIcon.classList.remove("text-red-500");
-        likeIcon.classList.add("text-gray-500");
-      });
-    } else {
-      update(postRef, {
-        likes: currentLikes + 1,
-        likedBy: [...likedBy, userId]
-      }).then(() => {
-        likeCountSpan.textContent = currentLikes + 1;
-        likeIcon.classList.remove("text-gray-500");
-        likeIcon.classList.add("text-red-500");
-        if (post.userId !== userId) {
-          const notifRef = push(ref(db, `notifications/${post.userId}/${postId}/likes`));
-          set(notifRef, { type: 'like', userId: currentUserUid, timestamp: Date.now(), read: false });
-        }
-      });
-    }
-  }).catch((error) => {
-    console.error("Error updating like:", error.message);
-  }).finally(() => {
-    hideLoading();
-  });
-}
 
 async function toggleFollow(targetUid, button, containerId) {
   if (targetUid === currentUserUid) return;
@@ -1866,15 +2029,11 @@ async function toggleFollow(targetUid, button, containerId) {
     console.error("Error toggling follow:", error.message);
     if (['friends-container', 'followers-container', 'following-container'].includes(containerId)) {
       document.getElementById(containerId).innerHTML = `<p class="error">Failed to load ${containerId.replace('-container', '')}: ${error.message}</p>`;
-    } else {
-      console.error("Error in posts-container follow action:", error.message);
     }
   } finally {
     hideLoading();
   }
 }
-
-
 
 const tabBtns = document.querySelectorAll(".tab-btn");
 const tabs = document.querySelectorAll(".tab-content");
@@ -1899,16 +2058,6 @@ tabBtns.forEach(btn => {
     pauseAllMedia();
   });
 });
-
-function timeAgo(timestamp) {
-  if (!timestamp) return "";
-  const now = Date.now();
-  const diff = now - timestamp;
-  if (diff < 60000) return "just now";
-  if (diff < 3600000) return Math.floor(diff / 60000) + "m ago";
-  if (diff < 86400000) return Math.floor(diff / 3600000) + "h ago";
-  return Math.floor(diff / 86400000) + "d ago";
-}
 
 async function showCommentSheet(postId) {
   currentPostId = postId;
@@ -2020,7 +2169,6 @@ async function loadStories() {
     const storiesData = storiesSnap.val() || {};
     const users = usersSnap.val() || {};
 
-    // Group stories by userId
     const storiesByUser = {};
     Object.entries(storiesData).forEach(([id, story]) => {
       if (story.userId && (story.imageUrl || story.videoUrl) && story.timestamp && (!story.expiresAt || story.expiresAt > Date.now())) {
@@ -2036,12 +2184,10 @@ async function loadStories() {
       }
     });
 
-    // Sort stories for each user by timestamp (newest first)
     Object.values(storiesByUser).forEach(userStories => {
       userStories.sort((a, b) => b.timestamp - a.timestamp);
     });
 
-    // Clear existing stories (except the "Add Story" card)
     storiesContainer.innerHTML = `
       <a href="upload.html" id="add-story-card" class="story-card flex-shrink-0 w-20 text-center cursor-pointer" aria-label="Add new story">
         <div class="relative w-16 h-16 mx-auto rounded-full border-2 border-gray-300 bg-gray-200 flex items-center justify-center">
@@ -2060,11 +2206,9 @@ async function loadStories() {
       return;
     }
 
-    // Create one story card per user
     for (const userId in storiesByUser) {
       const userStories = storiesByUser[userId];
       const userData = users[userId] || { username: "Unknown", photoURL: "https://www.gravatar.com/avatar?d=mp" };
-      // Use the most recent story's image as the thumbnail
       const thumbnailStory = userStories[0];
       const isAllViewed = userStories.every(story => story.viewedBy?.includes(currentUserUid));
       const storyCard = document.createElement("div");
@@ -2098,7 +2242,7 @@ async function showStoryViewer(userStories, userData) {
   const storyProgress = document.getElementById("story-progress");
   let currentIndex = 0;
   let progressInterval = null;
-  const STORY_DURATION = 30000; // 30 seconds for images
+  const STORY_DURATION = 30000;
 
   const updateStoryCountBadge = () => {
     const storyCard = document.querySelector(`.story-card[data-user-id="${userData.uid}"]`);
@@ -2219,34 +2363,11 @@ async function showStoryViewer(userStories, userData) {
   };
 }
 
-// Call loadStories in onAuthStateChanged
-onAuthStateChanged(auth, (user) => {
-  if (!user) {
-    location.href = "index.html";
-  } else {
-    currentUserUid = user.uid;
-    loadStories(); // Add this to load stories
-    loadPosts();
-    loadFriends();
-    loadSearch();
-    loadProfile();
-  }
-});
-
-
-
-
-
-
-  
-
 async function loadPosts() {
   const postsContainer = document.getElementById("posts-container");
-  const postsRef = query(ref(db, "posts"), orderByChild("timestamp")); // Removed limitToLast(20)
+  const postsRef = query(ref(db, "posts"), orderByChild("timestamp"));
 
   showLoading();
-
-  // Create Intersection Observer to detect when posts enter/leave viewport
   const observer = new IntersectionObserver((entries) => {
     entries.forEach(entry => {
       const postElement = entry.target;
@@ -2254,23 +2375,18 @@ async function loadPosts() {
       if (!audioElement) return;
 
       if (entry.isIntersecting) {
-        // Post is in viewport, play its audio
         pauseAllMedia(audioElement.id);
         audioElement.play().catch(error => {
           console.warn(`Failed to play audio for post ${postElement.id}:`, error.message);
         });
       } else {
-        // Post is out of viewport, pause its audio
         if (!audioElement.paused) {
           audioElement.pause();
           audioElement.currentTime = 0;
         }
       }
     });
-  }, {
-    root: null, // Use viewport as root
-    threshold: 0.6 // Trigger when 60% of the post is visible
-  });
+  }, { root: null, threshold: 0.6 });
 
   try {
     const [postsSnap, usersSnap, followingSnap] = await Promise.all([
@@ -2305,15 +2421,11 @@ async function loadPosts() {
 
     posts.sort((a, b) => b.timestamp - a.timestamp);
     const mostRecentPost = posts.shift();
-
     for (let i = posts.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [posts[i], posts[j]] = [posts[j], posts[i]];
     }
-
     const finalPosts = mostRecentPost ? [mostRecentPost, ...posts] : posts;
-
-    console.log(`Fetched ${finalPosts.length} posts and ${Object.keys(users).length} users`);
 
     finalPosts.forEach(post => {
       const isFollowing = !!followingData[post.userId];
@@ -2400,11 +2512,7 @@ async function loadPosts() {
       `;
 
       const likeBtn = postElement.querySelector(".like-btn");
-      likeBtn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        toggleLike(post.id, likeBtn);
-        pauseAllMedia();
-      });
+      setupLongPress(likeBtn, post.id);
 
       const commentBtn = postElement.querySelector(".comment-btn");
       commentBtn.addEventListener("click", (e) => {
@@ -2415,7 +2523,7 @@ async function loadPosts() {
       if (post.song && post.song.audioUrl) {
         const playSongBtn = postElement.querySelector(".play-song-btn");
         const audioElement = postElement.querySelector(`#audio-${post.id}`);
-        playSongBtn.removeAttribute("disabled"); // Enable the button
+        playSongBtn.removeAttribute("disabled");
         playSongBtn.addEventListener('click', (e) => {
           e.stopPropagation();
           if (audioElement.paused) {
@@ -2428,7 +2536,6 @@ async function loadPosts() {
             audioElement.currentTime = 0;
           }
         });
-        // Observe the post for viewport intersection
         observer.observe(postElement);
       }
 
@@ -2586,7 +2693,6 @@ async function loadFriends() {
               lastMessageTimeAgo = timeAgo(lastMessageTimestamp);
             }
 
-            // Calculate unread messages
             const allMessagesRef = ref(db, `messages/${chatId}`);
             const allMessagesSnap = await get(allMessagesRef);
             if (allMessagesSnap.exists()) {
@@ -2595,7 +2701,6 @@ async function loadFriends() {
               ).length;
             }
 
-            // Set up real-time listener for messages
             onValue(allMessagesRef, (snap) => {
               if (!snap.exists()) {
                 const friendItem = friendsContainer.querySelector(`[data-uid="${friendUid}"]`);
@@ -2633,7 +2738,6 @@ async function loadFriends() {
               }
             });
 
-            // Set up real-time listener for user presence
             onValue(ref(db, `users/${friendUid}`), (snap) => {
               if (snap.exists()) {
                 const userData = snap.val();
@@ -2644,7 +2748,6 @@ async function loadFriends() {
                 }
               }
             });
-
           } catch (error) {
             console.warn(`Error fetching messages for friend ${friendUid}:`, error.message);
             lastMessageTimeAgo = "No messages yet";
@@ -2693,7 +2796,6 @@ async function loadFriends() {
           friendItems.push({ friendItem, timestamp: lastMessageTimestamp || 0 });
         }
 
-        // Sort friend items by last message timestamp (newest first)
         friendItems.sort((a, b) => b.timestamp - a.timestamp);
         friendItems.forEach(({ friendItem }) => friendsContainer.appendChild(friendItem));
       }
@@ -2705,7 +2807,6 @@ async function loadFriends() {
     }
   }, { onlyOnce: false });
 
-  // Followers and Following containers remain unchanged for brevity
   const followersRef = ref(db, `users/${currentUserUid}/followers`);
   showLoading();
   onValue(followersRef, async (snapshot) => {
@@ -2798,6 +2899,7 @@ async function loadFriends() {
     }
   }, { onlyOnce: false });
 }
+
 function loadSearch() {
   const searchInput = document.getElementById("search-input");
   const searchResults = document.getElementById("search-results");
@@ -2911,28 +3013,23 @@ function loadSearch() {
 
 async function loadProfile() {
   const profileContainer = document.getElementById("profile-container");
-  const deletePostModal = document.getElementById("delete-post-modal");
-  const deletePostClose = document.getElementById("delete-post-close");
-  const deletePostCancel = document.getElementById("delete-post-cancel");
-  const deletePostConfirm = document.getElementById("delete-post-confirm");
-  let currentDeletePostId = null;
-  let currentDeletePostElement = null;
-
   showLoading();
-  Promise.all([
-    Promise.race([
-      get(ref(db, `users/${currentUserUid}`)),
-      new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout loading user")), 10000))
-    ]),
-    Promise.race([
-      new Promise(resolve => onValue(query(ref(db, "posts"), orderByChild("userId"), limitToLast(20)), resolve, { onlyOnce: true })),
-      new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout loading posts")), 10000))
-    ]),
-    Promise.race([
-      get(ref(db, `notifications/${currentUserUid}`)),
-      new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout loading notifications")), 10000))
-    ])
-  ]).then(([userSnap, postsSnap, notificationsSnap]) => {
+  try {
+    const [userSnap, postsSnap, notificationsSnap] = await Promise.all([
+      Promise.race([
+        get(ref(db, `users/${currentUserUid}`)),
+        new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout loading user")), 10000))
+      ]),
+      Promise.race([
+        new Promise(resolve => onValue(query(ref(db, "posts"), orderByChild("userId"), limitToLast(20)), resolve, { onlyOnce: true })),
+        new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout loading posts")), 10000))
+      ]),
+      Promise.race([
+        get(ref(db, `notifications/${currentUserUid}`)),
+        new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout loading notifications")), 10000))
+      ])
+    ]);
+
     const user = userSnap.val() || { username: "Anonymous", photoURL: null, bio: "", verified: false };
     const userPostCount = postsSnap.val()
       ? Object.values(postsSnap.val()).filter(post => post.userId === currentUserUid).length
@@ -2947,6 +3044,7 @@ async function loadProfile() {
         });
       });
     });
+
     profileContainer.innerHTML = `
       <div class="profile-header">
         <img src="${user.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="Profile"/>
@@ -2976,6 +3074,7 @@ async function loadProfile() {
       const post = child.val();
       if (post.userId === currentUserUid) posts.push({ id: child.key, ...post });
     });
+
     if (userPostCount === 10 && !Object.values(notificationsData).some(postNotifs => 
       Object.values(postNotifs).some(typeNotifs => 
         Object.values(typeNotifs).some(notif => notif.type === 'verified')
@@ -2989,12 +3088,14 @@ async function loadProfile() {
         read: false
       });
     }
+
     posts.sort((a, b) => b.timestamp - a.timestamp);
     if (posts.length === 0) {
       profileContent.innerHTML = '<div class="placeholder">No posts yet.</div>';
       hideLoading();
       return;
     }
+
     for (const post of posts) {
       const postId = `profile-post-${post.id}`;
       const postElement = document.createElement("div");
@@ -3025,7 +3126,7 @@ async function loadProfile() {
       });
       profileContent.appendChild(postElement);
     }
-    hideLoading();
+
     document.getElementById("edit-profile-btn").addEventListener("click", () => {
       editUsername.value = user.username;
       editBio.value = user.bio || "";
@@ -3065,12 +3166,26 @@ async function loadProfile() {
         hideLoading();
       }
     });
-  }).catch(error => {
+  } catch (error) {
     console.error("Error loading profile:", error.code, error.message);
     profileContainer.innerHTML = `<p class="error">Failed to load profile: ${error.message}</p>`;
+  } finally {
     hideLoading();
-  });
+  }
 }
+
+onAuthStateChanged(auth, (user) => {
+  if (!user) {
+    location.href = "index.html";
+  } else {
+    currentUserUid = user.uid;
+    loadStories();
+    loadPosts();
+    loadFriends();
+    loadSearch();
+    loadProfile();
+  }
+});
 </script>
  
       
