@@ -2016,6 +2016,58 @@
     font-size: clamp(0.7rem, 0.9vw, 0.8rem);
   }
 }
+    .reaction-display, .comment-reaction-display {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.reaction-emoji-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 1.125rem; /* Adjust as needed */
+}
+
+.reaction-emoji-group .count {
+  font-size: 0.75rem;
+  background-color: #f1f1f1;
+  border-radius: 9999px;
+  padding: 0 0.5rem;
+  line-height: 1.25rem;
+}
+
+.reaction-popup, .comment-reaction-popup {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  background: white;
+  border-radius: 9999px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  transform: translateX(-50%) scale(0);
+  transition: transform 0.3s ease, opacity 0.3s ease;
+}
+
+.reaction-popup.open, .comment-reaction-popup.open {
+  transform: translateX(-50%) scale(1);
+  opacity: 1;
+}
+
+.reaction-btn, .comment-reaction-btn {
+  padding: 0.25rem;
+  border-radius: 9999px;
+  transition: background-color 0.2s;
+}
+
+.reaction-btn:hover, .comment-reaction-btn:hover {
+  background-color: #f1f1f1;
+}
+
+.reaction-emoji {
+  font-size: 1.5rem; /* Adjust emoji size */
+  line-height: 1.5rem;
+}
   </style>
 </head>
 <body>
@@ -2200,7 +2252,7 @@
   </div>
 <script type="module"> 
 
-      import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
 import { getAuth, onAuthStateChanged, updateProfile } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
 import { getDatabase, ref, onValue, query, orderByChild, limitToLast, set, get, push, update } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
 
@@ -2286,11 +2338,20 @@ function timeAgo(timestamp) {
 
 // Reaction popup HTML for comments
 function createCommentReactionPopup(postId, commentId) {
+  const reactions = [
+    { type: 'like', emoji: '👍' },
+    { type: 'love', emoji: '❤️' },
+    { type: 'haha', emoji: '😂' },
+    { type: 'wow', emoji: '😮' },
+    { type: 'sad', emoji: '😢' },
+    { type: 'angry', emoji: '😣' }
+  ];
+
   return `
-    <div class="comment-reaction-popup hidden" data-post-id="${postId}" data-comment-id="${commentId}">
-      ${REACTION_TYPES.map(type => `
-        <button class="comment-reaction-btn" data-reaction="${type}" title="${type.charAt(0).toUpperCase() + type.slice(1)}">
-          <img src="/path/to/reactions/${type}.png" alt="${type} reaction" class="w-6 h-6">
+    <div class="comment-reaction-popup hidden absolute bottom-12 left-1/2 transform -translate-x-1/2 bg-white rounded-full shadow-lg flex p-2 space-x-2 z-50" data-post-id="${postId}" data-comment-id="${commentId}">
+      ${reactions.map(({ type, emoji }) => `
+        <button class="comment-reaction-btn p-1 hover:bg-gray-100 rounded-full" data-reaction="${type}" title="${type.charAt(0).toUpperCase() + type.slice(1)}" aria-label="React with ${type}">
+          <span class="reaction-emoji text-2xl">${emoji}</span>
         </button>
       `).join('')}
     </div>
@@ -2303,6 +2364,11 @@ async function toggleCommentReaction(postId, commentId, reactionType, button) {
   const commentRef = ref(db, `posts/${postId}/comments/${commentId}`);
   const likeCountSpan = button.closest('.comment-item').querySelector(".comment-reaction-count");
   const likeIcon = button.closest('.comment-item').querySelector(".comment-reaction-btn svg");
+  const reactionDisplay = button.closest('.comment-actions').previousElementSibling?.classList.contains('comment-reaction-display')
+    ? button.closest('.comment-actions').previousElementSibling
+    : button.closest('.comment-actions').insertAdjacentElement('beforebegin', document.createElement('div'));
+
+  reactionDisplay.className = 'comment-reaction-display flex items-center space-x-1 mb-1';
 
   showLoading();
   try {
@@ -2328,7 +2394,7 @@ async function toggleCommentReaction(postId, commentId, reactionType, button) {
       }
     } else {
       // Add or update reaction
-      const updatedReactions = { ...reactions, [userId]: [...userReactions.filter(r => r !== 'like'), reactionType] };
+      const updatedReactions = { ...reactions, [userId]: [reactionType] }; // Only one reaction per user
       const isNewLike = !comment.likedBy?.includes(userId);
       await update(commentRef, {
         reactions: updatedReactions,
@@ -2345,6 +2411,22 @@ async function toggleCommentReaction(postId, commentId, reactionType, button) {
         await set(notifRef, { type: 'comment-reaction', reactionType, userId: currentUserUid, commentId, timestamp: Date.now(), read: false });
       }
     }
+
+    // Update reaction display
+    const reactionCounts = {};
+    Object.values(reactions).forEach(userReactions => {
+      userReactions.forEach(type => {
+        reactionCounts[type] = (reactionCounts[type] || 0) + 1;
+      });
+    });
+    reactionDisplay.innerHTML = Object.entries(reactionCounts)
+      .map(([type, count]) => {
+        const emoji = reactions.find(r => r.type === type)?.emoji || '';
+        return `<span class="reaction-emoji-group text-lg" title="${type.charAt(0).toUpperCase() + type.slice(1)}: ${count}">${emoji}${count > 1 ? `<span class="count text-sm">${count}</span>` : ''}</span>`;
+      })
+      .join('');
+    if (Object.keys(reactionCounts).length === 0) reactionDisplay.remove();
+
   } catch (error) {
     console.error("Error updating comment reaction:", error.message);
     showError(commentsList, "Failed to update reaction.");
@@ -2353,67 +2435,59 @@ async function toggleCommentReaction(postId, commentId, reactionType, button) {
   }
 }
 
-// Setup long press for comment reaction button
-function setupCommentLongPress(button, postId, commentId) {
-  let pressTimer;
-  let touchTimer;
-  let isLongPress = false;
+// Setup click for comment reaction button
+function setupCommentReactionClick(button, postId, commentId) {
+  button.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const existingPopup = document.querySelector(`.comment-reaction-popup[data-comment-id="${commentId}"]`);
+    if (existingPopup) {
+      existingPopup.classList.remove('open');
+      setTimeout(() => existingPopup.remove(), 300);
+      return;
+    }
 
-  const startPress = () => {
-    isLongPress = false;
-    pressTimer = setTimeout(() => {
-      isLongPress = true;
-      const existingPopup = document.querySelector(`.comment-reaction-popup[data-comment-id="${commentId}"]`);
-      if (!existingPopup) {
-        const commentElement = document.querySelector(`.comment-item[data-comment-id="${commentId}"]`);
-        commentElement.querySelector('.comment-content').insertAdjacentHTML('beforeend', createCommentReactionPopup(postId, commentId));
-        const popup = commentElement.querySelector(`.comment-reaction-popup[data-comment-id="${commentId}"]`);
-        popup.classList.remove('hidden');
-        popup.classList.add('open');
-        popup.querySelectorAll('.comment-reaction-btn').forEach(btn => {
-          btn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            toggleCommentReaction(postId, commentId, btn.dataset.reaction, button);
-            popup.classList.remove('open');
-            setTimeout(() => popup.remove(), 300);
-          });
-        });
+    const commentElement = document.querySelector(`.comment-item[data-comment-id="${commentId}"]`);
+    commentElement.querySelector('.comment-content').insertAdjacentHTML('beforeend', createCommentReactionPopup(postId, commentId));
+    const popup = commentElement.querySelector(`.comment-reaction-popup[data-comment-id="${commentId}"]`);
+    popup.classList.remove('hidden');
+    popup.classList.add('open');
+
+    popup.querySelectorAll('.comment-reaction-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        toggleCommentReaction(postId, commentId, btn.dataset.reaction, button);
+        popup.classList.remove('open');
+        setTimeout(() => popup.remove(), 300);
+      });
+    });
+
+    // Close popup when clicking outside
+    document.addEventListener('click', function closePopup(event) {
+      if (!popup.contains(event.target) && !button.contains(event.target)) {
+        popup.classList.remove('open');
+        setTimeout(() => popup.remove(), 300);
+        document.removeEventListener('click', closePopup);
       }
-    }, 500);
-  };
-
-  const endPress = () => {
-    clearTimeout(pressTimer);
-    if (!isLongPress) {
-      toggleCommentReaction(postId, commentId, 'like', button);
-    }
-    const popup = document.querySelector(`.comment-reaction-popup[data-comment-id="${commentId}"]`);
-    if (popup) {
-      popup.classList.remove('open');
-      setTimeout(() => popup.remove(), 300);
-    }
-  };
-
-  button.addEventListener('mousedown', startPress);
-  button.addEventListener('mouseup', endPress);
-  button.addEventListener('mouseleave', endPress);
-  button.addEventListener('touchstart', (e) => {
-    e.preventDefault();
-    startPress();
-  });
-  button.addEventListener('touchend', (e) => {
-    e.preventDefault();
-    endPress();
+    }, { once: true });
   });
 }
 
 // Reaction popup HTML for posts
 function createReactionPopup(postId) {
+  const reactions = [
+    { type: 'like', emoji: '👍' },
+    { type: 'love', emoji: '❤️' },
+    { type: 'haha', emoji: '😂' },
+    { type: 'wow', emoji: '😮' },
+    { type: 'sad', emoji: '😢' },
+    { type: 'angry', emoji: '😣' }
+  ];
+
   return `
-    <div class="reaction-popup hidden absolute bottom-16 left-1/2 transform -translate-x-1/2 bg-white rounded-full shadow-lg flex p-2 space-x-2 z-50" data-post-id="${postId}">
-      ${REACTION_TYPES.map(type => `
-        <button class="reaction-btn" data-reaction="${type}" title="${type.charAt(0).toUpperCase() + type.slice(1)}">
-          <img src="/path/to/reactions/${type}.png" alt="${type} reaction" class="w-8 h-8">
+    <div class="reaction-popup hidden absolute bottom-12 left-1/2 transform -translate-x-1/2 bg-white rounded-full shadow-lg flex p-2 space-x-2 z-50" data-post-id="${postId}">
+      ${reactions.map(({ type, emoji }) => `
+        <button class="reaction-btn p-1 hover:bg-gray-100 rounded-full" data-reaction="${type}" title="${type.charAt(0).toUpperCase() + type.slice(1)}" aria-label="React with ${type}">
+          <span class="reaction-emoji text-2xl">${emoji}</span>
         </button>
       `).join('')}
     </div>
@@ -2426,6 +2500,11 @@ async function toggleReaction(postId, reactionType, button) {
   const postRef = ref(db, `posts/${postId}`);
   const likeCountSpan = button.closest('.post-actions').querySelector(".like-count");
   const likeIcon = button.closest('.post-actions').querySelector(".like-btn svg");
+  const reactionDisplay = button.closest('.post-actions').previousElementSibling?.classList.contains('reaction-display')
+    ? button.closest('.post-actions').previousElementSibling
+    : button.closest('.post-actions').insertAdjacentElement('beforebegin', document.createElement('div'));
+
+  reactionDisplay.className = 'reaction-display flex items-center space-x-1 mb-2';
 
   showLoading();
   try {
@@ -2444,12 +2523,12 @@ async function toggleReaction(postId, reactionType, button) {
         likes: currentLikes - 1,
         likedBy: (post.likedBy || []).filter(id => id !== userId)
       });
-      likeCountSpan.textContent = currentLikes - 1;
+      likeCountSpan.textContent = currentLikes - 1 || '';
       likeIcon.classList.remove("text-red-500");
       likeIcon.classList.add("text-gray-500");
     } else {
       // Add or update reaction
-      const updatedReactions = { ...reactions, [userId]: [...userReactions.filter(r => r !== 'like'), reactionType] };
+      const updatedReactions = { ...reactions, [userId]: [reactionType] }; // Only one reaction per user
       const isNewLike = !post.likedBy?.includes(userId);
       await update(postRef, {
         reactions: updatedReactions,
@@ -2464,6 +2543,22 @@ async function toggleReaction(postId, reactionType, button) {
         await set(notifRef, { type: 'reaction', reactionType, userId: currentUserUid, timestamp: Date.now(), read: false });
       }
     }
+
+    // Update reaction display
+    const reactionCounts = {};
+    Object.values(reactions).forEach(userReactions => {
+      userReactions.forEach(type => {
+        reactionCounts[type] = (reactionCounts[type] || 0) + 1;
+      });
+    });
+    reactionDisplay.innerHTML = Object.entries(reactionCounts)
+      .map(([type, count]) => {
+        const emoji = reactions.find(r => r.type === type)?.emoji || '';
+        return `<span class="reaction-emoji-group text-lg" title="${type.charAt(0).toUpperCase() + type.slice(1)}: ${count}">${emoji}${count > 1 ? `<span class="count text-sm">${count}</span>` : ''}</span>`;
+      })
+      .join('');
+    if (Object.keys(reactionCounts).length === 0) reactionDisplay.remove();
+
   } catch (error) {
     console.error("Error updating reaction:", error.message);
     showError(document.getElementById(`post-${postId}`), "Failed to update reaction.");
@@ -2472,57 +2567,40 @@ async function toggleReaction(postId, reactionType, button) {
   }
 }
 
-// Handle long press for post like button
-function setupLongPress(button, postId) {
-  let pressTimer;
-  let touchTimer;
-  let isLongPress = false;
+// Setup click for post reaction button
+function setupReactionClick(button, postId) {
+  button.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const existingPopup = document.querySelector(`.reaction-popup[data-post-id="${postId}"]`);
+    if (existingPopup) {
+      existingPopup.classList.remove('open');
+      setTimeout(() => existingPopup.remove(), 300);
+      return;
+    }
 
-  const startPress = () => {
-    isLongPress = false;
-    pressTimer = setTimeout(() => {
-      isLongPress = true;
-      const existingPopup = document.querySelector(`.reaction-popup[data-post-id="${postId}"]`);
-      if (!existingPopup) {
-        const postElement = document.getElementById(`post-${postId}`);
-        postElement.insertAdjacentHTML('beforeend', createReactionPopup(postId));
-        const popup = postElement.querySelector(`.reaction-popup[data-post-id="${postId}"]`);
-        popup.classList.remove('hidden');
-        popup.classList.add('open');
-        popup.querySelectorAll('.reaction-btn').forEach(btn => {
-          btn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            toggleReaction(postId, btn.dataset.reaction, button);
-            popup.classList.remove('open');
-            setTimeout(() => popup.remove(), 300);
-          });
-        });
+    const postElement = document.getElementById(`post-${postId}`);
+    postElement.insertAdjacentHTML('beforeend', createReactionPopup(postId));
+    const popup = postElement.querySelector(`.reaction-popup[data-post-id="${postId}"]`);
+    popup.classList.remove('hidden');
+    popup.classList.add('open');
+
+    popup.querySelectorAll('.reaction-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        toggleReaction(postId, btn.dataset.reaction, button);
+        popup.classList.remove('open');
+        setTimeout(() => popup.remove(), 300);
+      });
+    });
+
+    // Close popup when clicking outside
+    document.addEventListener('click', function closePopup(event) {
+      if (!popup.contains(event.target) && !button.contains(event.target)) {
+        popup.classList.remove('open');
+        setTimeout(() => popup.remove(), 300);
+        document.removeEventListener('click', closePopup);
       }
-    }, 500);
-  };
-
-  const endPress = () => {
-    clearTimeout(pressTimer);
-    if (!isLongPress) {
-      toggleReaction(postId, 'like', button);
-    }
-    const popup = document.querySelector(`.reaction-popup[data-post-id="${postId}"]`);
-    if (popup) {
-      popup.classList.remove('open');
-      setTimeout(() => popup.remove(), 300);
-    }
-  };
-
-  button.addEventListener('mousedown', startPress);
-  button.addEventListener('mouseup', endPress);
-  button.addEventListener('mouseleave', endPress);
-  button.addEventListener('touchstart', (e) => {
-    e.preventDefault();
-    startPress();
-  });
-  button.addEventListener('touchend', (e) => {
-    e.preventDefault();
-    endPress();
+    }, { once: true });
   });
 }
 
@@ -2731,7 +2809,7 @@ async function showCommentSheet(postId) {
       get(ref(db, `posts/${postId}`)),
       new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout loading comments")), 10000))
     ]);
-    const post = postSnap.val();
+    const post = postSnap.val() || {};
     const comments = post.comments || {};
     const usersSnap = await Promise.race([
       get(ref(db, "users")),
@@ -2739,6 +2817,15 @@ async function showCommentSheet(postId) {
     ]);
     const users = usersSnap.val() || {};
     commentsList.innerHTML = "";
+
+    const reactions = [
+      { type: 'like', emoji: '👍' },
+      { type: 'love', emoji: '❤️' },
+      { type: 'haha', emoji: '😂' },
+      { type: 'wow', emoji: '😮' },
+      { type: 'sad', emoji: '😢' },
+      { type: 'angry', emoji: '😣' }
+    ];
 
     const renderComment = (cid, comment, isReply = false, parentId = null) => {
       const userData = users[comment.userId] || { username: "Unknown", photoURL: null };
@@ -2755,6 +2842,19 @@ async function showCommentSheet(postId) {
           <p class="comment-username">${userData.username}</p>
           <p class="comment-text">${comment.text}</p>
           <p class="comment-time">${timeAgo(comment.timestamp)}</p>
+          <div class="comment-reaction-display flex items-center space-x-1 mb-1">
+            ${Object.entries(
+              Object.values(comment.reactions || {}).reduce((acc, userReactions) => {
+                userReactions.forEach(type => {
+                  acc[type] = (acc[type] || 0) + 1;
+                });
+                return acc;
+              }, {})
+            ).map(([type, count]) => {
+              const emoji = reactions.find(r => r.type === type)?.emoji || '';
+              return `<span class="reaction-emoji-group text-lg" title="${type.charAt(0).toUpperCase() + type.slice(1)}: ${count}">${emoji}${count > 1 ? `<span class="count text-sm">${count}</span>` : ''}</span>`;
+            }).join('')}
+          </div>
           <div class="comment-actions">
             <button class="comment-action-btn reaction-btn" data-comment-id="${cid}" aria-label="React to comment">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="${isLiked ? 'text-red-500' : 'text-gray-500'}">
@@ -2775,7 +2875,7 @@ async function showCommentSheet(postId) {
           </div>
         </div>
       `;
-      setupCommentLongPress(commentItem.querySelector('.reaction-btn'), postId, cid);
+      setupCommentReactionClick(commentItem.querySelector('.reaction-btn'), postId, cid);
       commentItem.querySelector('.reply-btn').addEventListener('click', (e) => {
         e.stopPropagation();
         const replyContainer = commentItem.querySelector('.reply-input-container');
@@ -2886,7 +2986,10 @@ commentSubmit.addEventListener("click", async () => {
   showLoading();
   try {
     const commentRef = push(ref(db, `posts/${currentPostId}/comments`));
-    const postSnap = await get(ref(db, `posts/${currentPostId}`));
+    const postSnap = await Promise.race([
+      get(ref(db, `posts/${currentPostId}`)),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout fetching post")), 10000))
+    ]);
     const post = postSnap.val();
     await set(commentRef, {
       userId: currentUserUid,
@@ -2924,48 +3027,6 @@ onAuthStateChanged(auth, (user) => {
     loadFriends();
     loadSearch();
     loadProfile();
-  }
-});
-
-commentSheetClose.addEventListener("click", () => {
-  commentSheet.classList.remove("open");
-  setTimeout(() => commentSheet.classList.add("hidden"), 300);
-  currentPostId = null;
-});
-
-commentSubmit.addEventListener("click", async () => {
-  if (!currentPostId || !commentInput.value.trim()) return;
-  showLoading();
-  try {
-    const commentRef = push(ref(db, `posts/${currentPostId}/comments`));
-    const postSnap = await Promise.race([
-      get(ref(db, `posts/${currentPostId}`)),
-      new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout fetching post")), 10000))
-    ]);
-    const post = postSnap.val();
-    await set(commentRef, {
-      userId: currentUserUid,
-      text: commentInput.value.trim(),
-      timestamp: Date.now(),
-    });
-    if (post.userId !== currentUserUid) {
-      const notifRef = push(ref(db, `notifications/${post.userId}/${currentPostId}/comments`));
-      await set(notifRef, { type: 'comment', userId: currentUserUid, timestamp: Date.now(), read: false });
-    }
-    commentInput.value = "";
-    await showCommentSheet(currentPostId);
-  } catch (error) {
-    console.error("Error adding comment:", error.code, error.message);
-    showError(commentsList, `Failed to add comment: ${error.message}`);
-  } finally {
-    hideLoading();
-  }
-});
-
-commentInput.addEventListener("keydown", (e) => {
-  if (e.key === "Enter") {
-    e.preventDefault();
-    commentSubmit.click();
   }
 });
 
@@ -3046,143 +3107,23 @@ async function loadStories() {
     hideLoading();
   }
 }
-async function showStoryViewer(userStories, userData) {
-  const storyViewer = document.getElementById("story-viewer");
-  const storyContent = document.getElementById("story-content");
-  const storyUsername = document.getElementById("story-username");
-  const storyClose = document.getElementById("story-close");
-  const storyPrev = document.getElementById("story-prev");
-  const storyNext = document.getElementById("story-next");
-  const storyProgress = document.getElementById("story-progress");
-  let currentIndex = 0;
-  let progressInterval = null;
-  const STORY_DURATION = 30000;
-
-  const updateStoryCountBadge = () => {
-    const storyCard = document.querySelector(`.story-card[data-user-id="${userData.uid}"]`);
-    if (!storyCard) return;
-    const unviewedCount = userStories.filter(story => !story.viewedBy?.includes(currentUserUid)).length;
-    const badge = storyCard.querySelector(".story-count-badge");
-    badge.textContent = unviewedCount || userStories.length;
-    if (unviewedCount === 0) {
-      storyCard.classList.remove("unviewed");
-      storyCard.classList.add("viewed");
-    } else {
-      storyCard.classList.remove("viewed");
-      storyCard.classList.add("unviewed");
-    }
-  };
-
-  const startProgress = (duration) => {
-    clearInterval(progressInterval);
-    storyProgress.style.transition = `width ${duration}ms linear`;
-    storyProgress.style.width = "0%";
-    setTimeout(() => {
-      storyProgress.style.width = "100%";
-    }, 10);
-
-    progressInterval = setTimeout(() => {
-      if (currentIndex < userStories.length - 1) {
-        currentIndex++;
-        renderStory();
-      } else {
-        storyViewer.classList.add("hidden");
-        storyContent.innerHTML = "";
-        clearInterval(progressInterval);
-        pauseAllMedia();
-      }
-    }, duration);
-  };
-
-  const renderStory = () => {
-    const currentStory = userStories[currentIndex];
-    storyContent.innerHTML = currentStory.mediaType === "video"
-      ? `<video src="${currentStory.mediaUrl}" class="story-content" autoplay></video>`
-      : `<img src="${currentStory.mediaUrl}" alt="${userData.username} story" class="story-content">`;
-
-    storyUsername.textContent = userData.username;
-
-    if (currentStory.caption) {
-      storyContent.insertAdjacentHTML("beforeend", `<p class="absolute bottom-12 left-4 text-white bg-black bg-opacity-50 px-2 py-1 rounded">${currentStory.caption}</p>`);
-    }
-
-    if (currentStory.song) {
-      storyContent.insertAdjacentHTML("beforeend", `
-        <div class="absolute bottom-20 left-4 text-white bg-black bg-opacity-50 px-2 py-1 rounded flex items-center gap-2">
-          <img src="${currentStory.song.thumbnail}" alt="${currentStory.song.title}" class="w-8 h-8 rounded">
-          <div>
-            <p class="text-sm font-semibold">${currentStory.song.title}</p>
-            <p class="text-xs">${currentStory.song.artist}</p>
-          </div>
-        </div>
-      `);
-    }
-
-    storyPrev.style.display = currentIndex === 0 ? "none" : "block";
-    storyNext.style.display = currentIndex === userStories.length - 1 ? "none" : "block";
-
-    if (!currentStory.viewedBy?.includes(currentUserUid)) {
-      update(ref(db, `stories/${currentStory.id}`), {
-        viewedBy: [...(currentStory.viewedBy || []), currentUserUid]
-      }).then(() => {
-        updateStoryCountBadge();
-      }).catch(error => console.error("Error marking story as viewed:", error.message));
-    }
-
-    if (currentStory.mediaType === "video") {
-      const video = storyContent.querySelector("video");
-      video.currentTime = 0;
-      video.play().catch(error => console.error("Error playing video:", error.message));
-      video.onended = () => {
-        if (currentIndex < userStories.length - 1) {
-          currentIndex++;
-          renderStory();
-        } else {
-          storyViewer.classList.add("hidden");
-          storyContent.innerHTML = "";
-          clearInterval(progressInterval);
-          pauseAllMedia();
-        }
-      };
-      startProgress(video.duration * 1000 || STORY_DURATION);
-    } else {
-      startProgress(STORY_DURATION);
-    }
-  };
-
-  renderStory();
-  storyViewer.classList.remove("hidden");
-
-  storyPrev.onclick = () => {
-    if (currentIndex > 0) {
-      currentIndex--;
-      clearInterval(progressInterval);
-      renderStory();
-    }
-  };
-
-  storyNext.onclick = () => {
-    if (currentIndex < userStories.length - 1) {
-      currentIndex++;
-      clearInterval(progressInterval);
-      renderStory();
-    }
-  };
-
-  storyClose.onclick = () => {
-    storyViewer.classList.add("hidden");
-    storyContent.innerHTML = "";
-    clearInterval(progressInterval);
-    pauseAllMedia();
-  };
-}
 
 async function loadPosts() {
   const postsContainer = document.getElementById("posts-container");
   const postsRef = query(ref(db, "posts"), orderByChild("timestamp"));
+  const reactions = [
+    { type: 'like', emoji: '👍' },
+    { type: 'love', emoji: '❤️' },
+    { type: 'haha', emoji: '😂' },
+    { type: 'wow', emoji: '😮' },
+    { type: 'sad', emoji: '😢' },
+    { type: 'angry', emoji: '😣' }
+  ];
 
   showLoading();
-  const observer = new IntersectionObserver((entries) => {
+  let observer = null;
+  if (observer) observer.disconnect(); // Clean up previous observer
+  observer = new IntersectionObserver((entries) => {
     entries.forEach(entry => {
       const postElement = entry.target;
       const audioElement = postElement.querySelector('audio');
@@ -3237,7 +3178,7 @@ async function loadPosts() {
     const mostRecentPost = posts.shift();
     for (let i = posts.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
-      [posts[i], posts[j]] = [posts[j], posts[i]];
+      [posts[i], posts[j] = [posts[j], posts[i]];
     }
     const finalPosts = mostRecentPost ? [mostRecentPost, ...posts] : posts;
 
@@ -3286,6 +3227,19 @@ async function loadPosts() {
             </div>
           ` : ''}
         </div>
+        <div class="reaction-display flex items-center space-x-1 mb-2">
+          ${Object.entries(
+            Object.values(post.reactions || {}).reduce((acc, userReactions) => {
+              userReactions.forEach(type => {
+                acc[type] = (acc[type] || 0) + 1;
+              });
+              return acc;
+            }, {})
+          ).map(([type, count]) => {
+            const emoji = reactions.find(r => r.type === type)?.emoji || '';
+            return `<span class="reaction-emoji-group text-lg" title="${type.charAt(0).toUpperCase() + type.slice(1)}: ${count}">${emoji}${count > 1 ? `<span class="count text-sm">${count}</span>` : ''}</span>`;
+          }).join('')}
+        </div>
         <div class="post-actions">
           <button class="like-btn" data-post-id="${post.id}">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="${post.likedBy && post.likedBy.includes(currentUserUid) ? 'text-red-500' : 'text-gray-500'}">
@@ -3326,7 +3280,7 @@ async function loadPosts() {
       `;
 
       const likeBtn = postElement.querySelector(".like-btn");
-      setupLongPress(likeBtn, post.id);
+      setupReactionClick(likeBtn, post.id);
 
       const commentBtn = postElement.querySelector(".comment-btn");
       commentBtn.addEventListener("click", (e) => {
@@ -3451,6 +3405,7 @@ async function loadPosts() {
     hideLoading();
   }
 }
+  
 async function loadFriends() {
   const friendsContainer = document.getElementById("friends-container");
   const followersContainer = document.getElementById("followers-container");
