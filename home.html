@@ -2188,7 +2188,7 @@ async function toggleCommentReaction(postId, commentId, reactionType, button) {
   const userId = currentUserUid;
   const commentRef = ref(db, `posts/${postId}/comments/${commentId}`);
   const likeCountSpan = button.closest('.comment-item').querySelector(".comment-reaction-count");
-  const likeIcon = button.closest('.comment-item').querySelector(".comment-reaction-btn svg");
+  const reactionDisplay = button.closest('.comment-item').querySelector(".comment-reaction-display");
 
   showLoading();
   try {
@@ -2208,13 +2208,14 @@ async function toggleCommentReaction(postId, commentId, reactionType, button) {
         likedBy: (comment.likedBy || []).filter(id => id !== userId)
       });
       likeCountSpan.textContent = currentLikes - 1 || '';
-      if (likeIcon) {
-        likeIcon.classList.remove("text-red-500");
-        likeIcon.classList.add("text-gray-500");
-      }
+      reactionDisplay.innerHTML = `
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-gray-500">
+          <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+        </svg>
+      `;
     } else {
       // Add or update reaction
-      const updatedReactions = { ...reactions, [userId]: [...userReactions.filter(r => r !== 'like'), reactionType] };
+      const updatedReactions = { ...reactions, [userId]: [reactionType] };
       const isNewLike = !comment.likedBy?.includes(userId);
       await update(commentRef, {
         reactions: updatedReactions,
@@ -2222,10 +2223,15 @@ async function toggleCommentReaction(postId, commentId, reactionType, button) {
         likedBy: isNewLike ? [...(comment.likedBy || []), userId] : comment.likedBy
       });
       likeCountSpan.textContent = isNewLike ? currentLikes + 1 : currentLikes;
-      if (likeIcon) {
-        likeIcon.classList.remove("text-gray-500");
-        likeIcon.classList.add("text-red-500");
-      }
+      const reactionEmojis = {
+        like: '👍',
+        love: '❤️',
+        haha: '😂',
+        wow: '😮',
+        sad: '😢',
+        angry: '😣'
+      };
+      reactionDisplay.innerHTML = `<span class="text-2xl">${reactionEmojis[reactionType]}</span>`;
       if (comment.userId !== userId && isNewLike) {
         const notifRef = push(ref(db, `notifications/${comment.userId}/${postId}/comment-reactions`));
         await set(notifRef, { type: 'comment-reaction', reactionType, userId: currentUserUid, commentId, timestamp: Date.now(), read: false });
@@ -2238,6 +2244,34 @@ async function toggleCommentReaction(postId, commentId, reactionType, button) {
     hideLoading();
   }
 }
+
+
+function setupCommentReactionClick(button, postId, commentId) {
+  button.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const existingPopup = document.querySelector(`.comment-reaction-popup[data-comment-id="${commentId}"]`);
+    if (existingPopup && existingPopup.classList.contains('open')) {
+      existingPopup.classList.remove('open');
+      setTimeout(() => existingPopup.remove(), 300);
+    } else {
+      const commentElement = document.querySelector(`.comment-item[data-comment-id="${commentId}"]`);
+      commentElement.querySelector('.comment-content').insertAdjacentHTML('beforeend', createCommentReactionPopup(postId, commentId));
+      const popup = commentElement.querySelector(`.comment-reaction-popup[data-comment-id="${commentId}"]`);
+      popup.classList.remove('hidden');
+      popup.classList.add('open');
+      popup.querySelectorAll('.comment-reaction-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          toggleCommentReaction(postId, commentId, btn.dataset.reaction, button);
+          popup.classList.remove('open');
+          setTimeout(() => popup.remove(), 300);
+        });
+      });
+    }
+  });
+}
+
+  
 
 // Setup long press for comment reaction button
 function setupCommentLongPress(button, postId, commentId) {
@@ -2319,7 +2353,7 @@ async function toggleReaction(postId, reactionType, button) {
   const userId = currentUserUid;
   const postRef = ref(db, `posts/${postId}`);
   const likeCountSpan = button.closest('.post-actions').querySelector(".like-count");
-  const likeIcon = button.closest('.post-actions').querySelector(".like-btn svg");
+  const reactionDisplay = button.closest('.post-actions').querySelector(".reaction-display");
 
   showLoading();
   try {
@@ -2339,11 +2373,14 @@ async function toggleReaction(postId, reactionType, button) {
         likedBy: (post.likedBy || []).filter(id => id !== userId)
       });
       likeCountSpan.textContent = currentLikes - 1;
-      likeIcon.classList.remove("text-red-500");
-      likeIcon.classList.add("text-gray-500");
+      reactionDisplay.innerHTML = `
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-gray-500">
+          <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+        </svg>
+      `;
     } else {
       // Add or update reaction
-      const updatedReactions = { ...reactions, [userId]: [...userReactions.filter(r => r !== 'like'), reactionType] };
+      const updatedReactions = { ...reactions, [userId]: [reactionType] };
       const isNewLike = !post.likedBy?.includes(userId);
       await update(postRef, {
         reactions: updatedReactions,
@@ -2351,8 +2388,15 @@ async function toggleReaction(postId, reactionType, button) {
         likedBy: isNewLike ? [...(post.likedBy || []), userId] : post.likedBy
       });
       likeCountSpan.textContent = isNewLike ? currentLikes + 1 : currentLikes;
-      likeIcon.classList.remove("text-gray-500");
-      likeIcon.classList.add("text-red-500");
+      const reactionEmojis = {
+        like: '👍',
+        love: '❤️',
+        haha: '😂',
+        wow: '😮',
+        sad: '😢',
+        angry: '😣'
+      };
+      reactionDisplay.innerHTML = `<span class="text-2xl">${reactionEmojis[reactionType]}</span>`;
       if (post.userId !== userId && isNewLike) {
         const notifRef = push(ref(db, `notifications/${post.userId}/${postId}/reactions`));
         await set(notifRef, { type: 'reaction', reactionType, userId: currentUserUid, timestamp: Date.now(), read: false });
@@ -2365,6 +2409,33 @@ async function toggleReaction(postId, reactionType, button) {
     hideLoading();
   }
 }
+
+function setupReactionClick(button, postId) {
+  button.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const existingPopup = document.querySelector(`.reaction-popup[data-post-id="${postId}"]`);
+    if (existingPopup && existingPopup.classList.contains('open')) {
+      existingPopup.classList.remove('open');
+      setTimeout(() => existingPopup.remove(), 300);
+    } else {
+      const postElement = document.getElementById(`post-${postId}`);
+      postElement.insertAdjacentHTML('beforeend', createReactionPopup(postId));
+      const popup = postElement.querySelector(`.reaction-popup[data-post-id="${postId}"]`);
+      popup.classList.remove('hidden');
+      popup.classList.add('open');
+      popup.querySelectorAll('.reaction-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          toggleReaction(postId, btn.dataset.reaction, button);
+          popup.classList.remove('open');
+          setTimeout(() => popup.remove(), 300);
+        });
+      });
+    }
+  });
+}
+
+  
 
 // Handle long press for post like button
 function setupLongPress(button, postId) {
@@ -2642,7 +2713,15 @@ async function showCommentSheet(postId) {
       if (parentId) commentItem.dataset.parentId = parentId;
       const reactionCount = comment.likes || 0;
       const userReactions = comment.reactions?.[currentUserUid] || [];
-      const isLiked = userReactions.includes('like');
+      const userReaction = userReactions[0];
+      const reactionEmojis = {
+        like: '👍',
+        love: '❤️',
+        haha: '😂',
+        wow: '😮',
+        sad: '😢',
+        angry: '😣'
+      };
       commentItem.innerHTML = `
         <img src="${userData.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${userData.username} avatar" class="comment-avatar"/>
         <div class="comment-content">
@@ -2651,9 +2730,15 @@ async function showCommentSheet(postId) {
           <p class="comment-time">${timeAgo(comment.timestamp)}</p>
           <div class="comment-actions">
             <button class="comment-action-btn reaction-btn" data-comment-id="${cid}" aria-label="React to comment">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="${isLiked ? 'text-red-500' : 'text-gray-500'}">
-                <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
-              </svg>
+              <span class="comment-reaction-display">
+                ${userReaction ? `
+                  <span class="text-2xl">${reactionEmojis[userReaction]}</span>
+                ` : `
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="${userReactions.length > 0 ? 'text-red-500' : 'text-gray-500'}">
+                    <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+                  </svg>
+                `}
+              </span>
               <span class="comment-reaction-count">${reactionCount || ''}</span>
             </button>
             <button class="comment-action-btn reply-btn" data-comment-id="${cid}" aria-label="Reply to comment">
@@ -2669,7 +2754,7 @@ async function showCommentSheet(postId) {
           </div>
         </div>
       `;
-      setupCommentLongPress(commentItem.querySelector('.reaction-btn'), postId, cid);
+      setupCommentReactionClick(commentItem.querySelector('.reaction-btn'), postId, cid);
       commentItem.querySelector('.reply-btn').addEventListener('click', (e) => {
         e.stopPropagation();
         const replyContainer = commentItem.querySelector('.reply-input-container');
@@ -2732,7 +2817,7 @@ async function showCommentSheet(postId) {
     hideLoading();
   }
 }
-
+  
 async function submitReply(postId, parentCommentId, replyText) {
   if (!postId || !parentCommentId || !replyText) return;
   showLoading();
@@ -3140,6 +3225,15 @@ async function loadPosts() {
       const showFollowButton = post.userId !== currentUserUid;
       const imageUrls = Array.isArray(post.imageUrls) ? post.imageUrls : [post.imageUrl].filter(Boolean);
       const isVerified = users[post.userId]?.verified || false;
+      const userReaction = post.reactions?.[currentUserUid]?.[0];
+      const reactionEmojis = {
+        like: '👍',
+        love: '❤️',
+        haha: '😂',
+        wow: '😮',
+        sad: '😢',
+        angry: '😣'
+      };
 
       const postElement = document.createElement("div");
       postElement.className = "post";
@@ -3182,9 +3276,15 @@ async function loadPosts() {
         </div>
         <div class="post-actions">
           <button class="like-btn" data-post-id="${post.id}">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="${post.likedBy && post.likedBy.includes(currentUserUid) ? 'text-red-500' : 'text-gray-500'}">
-              <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
-            </svg>
+            <span class="reaction-display">
+              ${userReaction ? `
+                <span class="text-2xl">${reactionEmojis[userReaction]}</span>
+              ` : `
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="${post.likedBy && post.likedBy.includes(currentUserUid) ? 'text-red-500' : 'text-gray-500'}">
+                  <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+                </svg>
+              `}
+            </span>
             <span class="like-count">${post.likes || 0}</span>
           </button>
           <button class="comment-btn" aria-label="Comment on post">
@@ -3220,7 +3320,7 @@ async function loadPosts() {
       `;
 
       const likeBtn = postElement.querySelector(".like-btn");
-      setupLongPress(likeBtn, post.id);
+      setupReactionClick(likeBtn, post.id);
 
       const commentBtn = postElement.querySelector(".comment-btn");
       commentBtn.addEventListener("click", (e) => {
