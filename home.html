@@ -1858,6 +1858,8 @@ body {
   }
 }
 
+
+    
     
   </style>
 </head>
@@ -1980,10 +1982,66 @@ body {
         <div class="loading">Loading reels...</div>
       </div>
     </div>
-    <div id="profile" class="tab-content">
-      <div id="profile-container" class="loading">Loading profile...</div>
+
+    
+   <div id="profile" class="tab-content">
+  <div id="profile-container" class="profile-container">
+    <div class="profile-header">
+      <div class="cover-image">
+        <img src="https://via.placeholder.com/1500x500?text=Cover+Image" alt="Cover image" id="cover-image">
+      </div>
+      <div class="profile-details">
+        <div class="profile-pic-container">
+          <img src="https://www.gravatar.com/avatar?d=mp" alt="User avatar" class="profile-pic" id="profile-pic">
+        </div>
+        <button id="edit-profile-btn" class="edit-profile-btn" aria-label="Edit profile">Edit profile</button>
+        <button id="notifications-btn" class="notifications-btn" aria-label="View notifications">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9m-4 11a2 2 0 01-4 0"/>
+          </svg>
+        </button>
+        <div class="profile-info">
+          <h1 id="profile-username">Username</h1>
+          <span id="profile-handle">@username</span>
+          <p id="profile-bio" class="bio">No bio yet.</p>
+          <div class="profile-meta">
+            <span id="profile-location" class="meta-item">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 2a7 7 0 00-7 7c0 5.25 7 13 7 13s7-7.75 7-13a7 7 0 00-7-7z"/>
+              </svg>
+              Location
+            </span>
+            <span id="profile-joined" class="meta-item">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M6 2h12v4H6zM3 6h18v16H3z"/>
+              </svg>
+              Joined
+            </span>
+          </div>
+          <div class="profile-stats">
+            <span><strong id="post-count">0</strong> Posts</span>
+            <span><strong id="followers-count">0</strong> Followers</span>
+            <span><strong id="following-count">0</strong> Following</span>
+          </div>
+        </div>
+      </div>
+      <div class="profile-sub-tabs">
+        <button class="sub-tab-btn active" data-sub-tab="profile-posts" aria-label="Posts">Posts</button>
+        <button class="sub-tab-btn" data-sub-tab="profile-followers" aria-label="Followers">Followers</button>
+        <button class="sub-tab-btn" data-sub-tab="profile-following" aria-label="Following">Following</button>
+      </div>
+      <div id="profile-posts" class="sub-tab-content active" data-sub-tab="profile-posts">
+        <div class="profile-posts-grid"></div>
+      </div>
+      <div id="profile-followers" class="sub-tab-content" data-sub-tab="profile-followers">
+        <div class="loading">Loading followers...</div>
+      </div>
+      <div id="profile-following" class="sub-tab-content" data-sub-tab="profile-following">
+        <div class="loading">Loading following...</div>
+      </div>
     </div>
   </div>
+</div>
 
   <a href="upload.html" class="fab" aria-label="Upload new media">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -2007,21 +2065,23 @@ body {
     </div>
   </div>
 
-  <div id="edit-profile-modal" class="edit-profile-modal hidden">
-    <div class="edit-profile-modal-content">
-      <button class="close-modal" aria-label="Close edit profile modal">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M6 18L18 6M6 6l12 12"/>
-        </svg>
-      </button>
-      <h3>Edit Profile</h3>
-      <div class="error edit-profile-error" id="edit-profile-error"></div>
-      <input type="text" id="edit-username" placeholder="Username" aria-label="Edit username"/>
-      <textarea id="edit-bio" placeholder="Bio" aria-label="Edit bio"></textarea>
-      <input type="file" id="edit-photo" accept="image/*" aria-label="Upload profile photo"/>
-      <button id="edit-profile-save-btn">Save</button>
-    </div>
+ <div id="edit-profile-modal" class="edit-profile-modal hidden">
+  <div class="edit-profile-modal-content">
+    <button class="close-modal" aria-label="Close edit profile modal">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M6 18L18 6M6 6l12 12"/>
+      </svg>
+    </button>
+    <h3>Edit Profile</h3>
+    <div class="error edit-profile-error" id="edit-profile-error"></div>
+    <input type="text" id="edit-username" placeholder="Username" aria-label="Edit username"/>
+    <textarea id="edit-bio" placeholder="Bio" aria-label="Edit bio"></textarea>
+    <input type="text" id="edit-location" placeholder="Location" aria-label="Edit location"/>
+    <input type="file" id="edit-photo" accept="image/*" aria-label="Upload profile photo"/>
+    <input type="file" id="edit-cover-photo" accept="image/*" aria-label="Upload cover photo"/>
+    <button id="edit-profile-save-btn">Save</button>
   </div>
+</div>
   <div id="loading-overlay" class="loading-overlay hidden">
     <div class="spinner"></div>
   </div>
@@ -3850,62 +3910,106 @@ function loadSearch() {
 
 async function loadProfile() {
   const profileContainer = document.getElementById("profile-container");
-  showLoading();
-  try {
-    const [userSnap, postsSnap, notificationsSnap, followersSnap, followingSnap] = await Promise.all([
-      get(ref(db, `users/${currentUserUid}`)),
-      new Promise(resolve => onValue(query(ref(db, "posts"), orderByChild("userId"), limitToLast(100)), resolve, { onlyOnce: true })),
-      get(ref(db, `notifications/${currentUserUid}`)),
-      get(ref(db, `users/${currentUserUid}/followers`)),
-      get(ref(db, `users/${currentUserUid}/following`))
-    ]);
+  const profileUsername = document.getElementById("profile-username");
+  const profileHandle = document.getElementById("profile-handle");
+  const profileBio = document.getElementById("profile-bio");
+  const profileLocation = document.getElementById("profile-location");
+  const profileJoined = document.getElementById("profile-joined");
+  const profilePic = document.getElementById("profile-pic");
+  const coverImage = document.getElementById("cover-image");
+  const postCountEl = document.getElementById("post-count");
+  const followersCountEl = document.getElementById("followers-count");
+  const followingCountEl = document.getElementById("following-count");
+  const profilePosts = document.getElementById("profile-posts");
+  const profileFollowers = document.getElementById("profile-followers");
+  const profileFollowing = document.getElementById("profile-following");
 
-    const userData = userSnap.val() || { username: "Unknown", photoURL: "https://www.gravatar.com/avatar?d=mp", bio: "" };
-    const postsData = postsSnap.val() || {};
-    const notificationsData = notificationsSnap.val() || {};
-    const followersData = followersSnap.val() || {};
-    const followingData = followingSnap.val() || {};
+  // Sub-tab navigation
+  const subTabBtns = document.querySelectorAll(".profile-sub-tabs .sub-tab-btn");
+  const subTabs = document.querySelectorAll(".profile-container .sub-tab-content");
 
-    const postCount = Object.values(postsData).filter(post => post.userId === currentUserUid).length;
-    const isVerified = postCount >= 10;
-    const followerCount = Object.keys(followersData).length;
-    const followingCount = Object.keys(followingData).length;
-    const unreadNotifications = Object.values(notificationsData).flatMap(postNotifs => 
-      Object.values(postNotifs).flatMap(typeNotifs => 
-        Object.values(typeNotifs).filter(notif => !notif.read)
-      )
-    ).length;
+  subTabBtns.forEach(btn => {
+    btn.addEventListener("click", () => {
+      subTabBtns.forEach(b => {
+        b.classList.remove("active");
+        b.setAttribute("aria-selected", "false");
+      });
+      subTabs.forEach(t => t.classList.remove("active"));
+      btn.classList.add("active");
+      btn.setAttribute("aria-selected", "true");
+      const subTabId = btn.dataset.subTab;
+      document.getElementById(subTabId).classList.add("active");
+      
+      if (subTabId === "profile-followers") {
+        loadFollowers();
+      } else if (subTabId === "profile-following") {
+        loadFollowing();
+      } else {
+        loadPostsTab();
+      }
+      pauseAllMedia();
+    });
+  });
 
-    profileContainer.innerHTML = `
-      <div class="profile-header">
-        <img src="${userData.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${userData.username} avatar" class="profile-pic">
-        <div class="profile-info">
-          <h2>${userData.username || 'Unknown'}${
-            isVerified
-              ? `<span class="verified-icon" aria-label="Verified user" title="Verified user"><svg viewBox="0 0 24 24"><path d="M9 16.2l-3.5-3.5L4 14.1 9 19 20 8l-1.4-1.4z"/></svg></span>`
-              : ''
-          }</h2>
-          <p class="bio">${userData.bio || 'No bio yet.'}</p>
-          <div class="profile-stats">
-            <span><strong>${postCount}</strong> posts</span>
-            <span><strong>${followerCount}</strong> followers</span>
-            <span><strong>${followingCount}</strong> following</span>
-          </div>
-        </div>
-        <button id="edit-profile-btn" aria-label="Edit profile">Edit Profile</button>
-        <button id="notifications-btn" aria-label="View notifications">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9m-4 11a2 2 0 01-4 0"/>
-          </svg>
-          ${unreadNotifications > 0 ? `<span class="notification-badge">${unreadNotifications}</span>` : ''}
-        </button>
-      </div>
-      <div class="profile-posts">
-        ${Object.entries(postsData)
-          .filter(([_, post]) => post.userId === currentUserUid && post.imageUrl)
-          .map(([postId, post]) => `
+  // Load posts by default
+  loadPostsTab();
+
+  async function loadPostsTab() {
+    profilePosts.querySelector('.profile-posts-grid').innerHTML = '<div class="loading">Loading posts...</div>';
+    showLoading();
+    try {
+      const [userSnap, postsSnap, notificationsSnap, followersSnap, followingSnap] = await Promise.all([
+        get(ref(db, `users/${currentUserUid}`)),
+        new Promise(resolve => onValue(query(ref(db, "posts"), orderByChild("userId"), limitToLast(100)), resolve, { onlyOnce: true })),
+        get(ref(db, `notifications/${currentUserUid}`)),
+        get(ref(db, `users/${currentUserUid}/followers`)),
+        get(ref(db, `users/${currentUserUid}/following`))
+      ]);
+
+      const userData = userSnap.val() || { username: "Unknown", photoURL: "https://www.gravatar.com/avatar?d=mp", bio: "", location: "", joined: Date.now(), coverImage: "https://via.placeholder.com/1500x500?text=Cover+Image" };
+      const postsData = postsSnap.val() || {};
+      const notificationsData = notificationsSnap.val() || {};
+      const followersData = followersSnap.val() || {};
+      const followingData = followingSnap.val() || {};
+
+      const postCount = Object.values(postsData).filter(post => post.userId === currentUserUid).length;
+      const isVerified = postCount >= 10;
+      const followerCount = Object.keys(followersData).length;
+      const followingCount = Object.keys(followingData).length;
+      const unreadNotifications = Object.values(notificationsData).flatMap(postNotifs => 
+        Object.values(postNotifs).flatMap(typeNotifs => 
+          Object.values(typeNotifs).filter(notif => !notif.read)
+        )
+      ).length;
+
+      profileUsername.innerHTML = `${userData.username || 'Unknown'}${isVerified ? `<span class="verified-icon" aria-label="Verified user" title="Verified user"><svg viewBox="0 0 24 24"><path d="M9 16.2l-3.5-3.5L4 14.1 9 19 20 8l-1.4-1.4z"/></svg></span>` : ''}`;
+      profileHandle.textContent = `@${userData.username || 'Unknown'}`;
+      profileBio.textContent = userData.bio || 'No bio yet.';
+      profileLocation.textContent = userData.location || 'Not specified';
+      profileJoined.textContent = `Joined ${new Date(userData.joined || Date.now()).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}`;
+      profilePic.src = userData.photoURL || 'https://www.gravatar.com/avatar?d=mp';
+      coverImage.src = userData.coverImage || 'https://via.placeholder.com/1500x500?text=Cover+Image';
+      postCountEl.textContent = postCount;
+      followersCountEl.textContent = followerCount;
+      followingCountEl.textContent = followingCount;
+
+      document.getElementById("notifications-btn").innerHTML = `
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9m-4 11a2 2 0 01-4 0"/>
+        </svg>
+        ${unreadNotifications > 0 ? `<span class="notification-badge">${unreadNotifications}</span>` : ''}
+      `;
+
+      const postsGrid = profilePosts.querySelector('.profile-posts-grid');
+      postsGrid.innerHTML = '';
+      const userPosts = Object.entries(postsData)
+        .filter(([_, post]) => post.userId === currentUserUid && (post.imageUrl || post.imageUrls?.length))
+        .sort(([, a], [, b]) => (b.timestamp || 0) - (a.timestamp || 0))
+        .map(([postId, post]) => {
+          const imageUrl = post.imageUrl || (Array.isArray(post.imageUrls) && post.imageUrls[0]) || 'https://via.placeholder.com/150?text=Image+Not+Found';
+          return `
             <div class="profile-post" data-post-id="${postId}">
-              <img src="${post.imageUrl}" alt="Post thumbnail" onerror="this.src='https://via.placeholder.com/150?text=Image+Not+Found';">
+              <img src="${imageUrl}" alt="Post thumbnail">
               <div class="post-overlay">
                 <button class="delete-post-btn" data-post-id="${postId}" aria-label="Delete post">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -3914,85 +4018,217 @@ async function loadProfile() {
                 </button>
               </div>
             </div>
-          `).join('')}
-      </div>
-    `;
+          `;
+        }).join('');
 
-    document.getElementById("edit-profile-btn").addEventListener("click", () => {
-      editUsername.value = userData.username || "";
-      editBio.value = userData.bio || "";
-      editPhoto.value = "";
-      editProfileModal.classList.remove("hidden");
-      editProfileModal.classList.add("open");
-    });
+      if (userPosts.length === 0) {
+        postsGrid.innerHTML = '<div class="placeholder">No posts yet.</div>';
+      } else {
+        postsGrid.innerHTML = userPosts;
+      }
 
-    document.getElementById("notifications-btn").addEventListener("click", () => {
-      console.log("Navigating to notifications");
-      location.href = "notifications.html";
-      pauseAllMedia();
-    });
+      document.getElementById("edit-profile-btn").addEventListener("click", () => {
+        editUsername.value = userData.username || "";
+        editBio.value = userData.bio || "";
+        editLocation.value = userData.location || "";
+        editPhoto.value = "";
+        document.getElementById("edit-cover-photo").value = "";
+        editProfileModal.classList.remove("hidden");
+        editProfileModal.classList.add("open");
+      });
 
-    profileContainer.querySelectorAll(".profile-post img").forEach(img => {
-      img.addEventListener("click", (e) => {
-        e.stopPropagation();
-        const postId = img.parentElement.dataset.postId;
-        console.log("Navigating to post:", postId);
-        location.href = `post.html?id=${postId}`;
+      document.getElementById("notifications-btn").addEventListener("click", () => {
+        console.log("Navigating to notifications");
+        location.href = "notifications.html";
         pauseAllMedia();
       });
-    });
 
-    profileContainer.querySelectorAll(".delete-post-btn").forEach(btn => {
-      btn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        currentDeletePostId = btn.dataset.postId;
-        currentDeletePostElement = btn.closest(".profile-post");
-        deletePostModal.classList.remove("hidden");
-        deletePostModal.classList.add("open");
+      profilePosts.querySelectorAll(".profile-post img").forEach(img => {
+        img.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const postId = img.parentElement.dataset.postId;
+          console.log("Navigating to post:", postId);
+          location.href = `post.html?id=${postId}`;
+          pauseAllMedia();
+        });
       });
-    });
-  } catch (error) {
-    console.error("Error loading profile:", error.code, error.message);
-    profileContainer.innerHTML = `<p class="error">Failed to load profile: ${error.message}</p>`;
-  } finally {
-    hideLoading();
+
+      profilePosts.querySelectorAll(".delete-post-btn").forEach(btn => {
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          currentDeletePostId = btn.dataset.postId;
+          currentDeletePostElement = btn.closest(".profile-post");
+          deletePostModal.classList.remove("hidden");
+          deletePostModal.classList.add("open");
+        });
+      });
+    } catch (error) {
+      console.error("Error loading profile:", error.code, error.message);
+      profileContainer.innerHTML = `<p class="error">Failed to load profile: ${error.message}</p>`;
+    } finally {
+      hideLoading();
+    }
+  }
+
+  async function loadFollowers() {
+    profileFollowers.innerHTML = '<div class="loading">Loading followers...</div>';
+    try {
+      const followersRef = ref(db, `users/${currentUserUid}/followers`);
+      const snapshot = await get(followersRef);
+      const followersData = snapshot.val() || {};
+      profileFollowers.innerHTML = "";
+      if (Object.keys(followersData).length === 0) {
+        profileFollowers.innerHTML = '<div class="placeholder">No followers found.</div>';
+      } else {
+        const usersSnap = await get(ref(db, "users"));
+        const users = usersSnap.val() || {};
+        for (const followerUid in followersData) {
+          const userData = users[followerUid] || { username: "Unknown", photoURL: null };
+          const isFollowing = (await get(ref(db, `users/${currentUserUid}/following/${followerUid}`))).exists();
+          const followerItem = document.createElement("div");
+          followerItem.className = "friend-item";
+          followerItem.innerHTML = `
+            <img src="${userData.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${userData.username} avatar"/>
+            <span>${userData.username}</span>
+            <button class="friend-item-btn ${isFollowing ? 'following' : 'follow'}">${isFollowing ? 'Following' : 'Follow'}</button>
+          `;
+          followerItem.querySelector(".friend-item-btn").addEventListener("click", (e) => {
+            e.stopPropagation();
+            toggleFollow(followerUid, e.target, 'profile-followers');
+          });
+          followerItem.addEventListener("click", (e) => {
+            if (e.target.classList.contains("friend-item-btn")) return;
+            console.log("Navigating to profile:", followerUid);
+            location.href = `profile.html?uid=${followerUid}`;
+            pauseAllMedia();
+          });
+          profileFollowers.appendChild(followerItem);
+        }
+      }
+    } catch (error) {
+      console.error("Error loading followers:", error.code, error.message);
+      profileFollowers.innerHTML = `<p class="error">Failed to load followers: ${error.message}</p>`;
+    } finally {
+      hideLoading();
+    }
+  }
+
+  async function loadFollowing() {
+    profileFollowing.innerHTML = '<div class="loading">Loading following...</div>';
+    try {
+      const followingRef = ref(db, `users/${currentUserUid}/following`);
+      const snapshot = await get(followingRef);
+      const followingData = snapshot.val() || {};
+      profileFollowing.innerHTML = "";
+      if (Object.keys(followingData).length === 0) {
+        profileFollowing.innerHTML = '<div class="placeholder">Not following anyone.</div>';
+      } else {
+        const usersSnap = await get(ref(db, "users"));
+        const users = usersSnap.val() || {};
+        for (const followingUid in followingData) {
+          const userData = users[followingUid] || { username: "Unknown", photoURL: null };
+          const followingItem = document.createElement("div");
+          followingItem.className = "friend-item";
+          followingItem.innerHTML = `
+            <img src="${userData.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${userData.username} avatar"/>
+            <span>${userData.username}</span>
+            <button class="friend-item-btn following">Following</button>
+          `;
+          followingItem.querySelector(".friend-item-btn").addEventListener("click", (e) => {
+            e.stopPropagation();
+            toggleFollow(followingUid, e.target, 'profile-following');
+          });
+          followingItem.addEventListener("click", (e) => {
+            if (e.target.classList.contains("friend-item-btn")) return;
+            console.log("Navigating to profile:", followingUid);
+            location.href = `profile.html?uid=${followingUid}`;
+            pauseAllMedia();
+          });
+          profileFollowing.appendChild(followingItem);
+        }
+      }
+    } catch (error) {
+      console.error("Error loading following:", error.code, error.message);
+      profileFollowing.innerHTML = `<p class="error">Failed to load following: ${error.message}</p>`;
+    } finally {
+      hideLoading();
+    }
   }
 }
+  editProfileSaveBtn.addEventListener("click", async () => {
+  const newUsername = editUsername.value.trim();
+  const newBio = editBio.value.trim();
+  const newPhoto = editPhoto.files[0];
+  const newCoverPhoto = document.getElementById("edit-cover-photo")?.files[0];
+  const newLocation = document.getElementById("edit-location")?.value.trim();
 
-deletePostClose.addEventListener("click", () => {
-  deletePostModal.classList.remove("open");
-  setTimeout(() => {
-    deletePostModal.classList.add("hidden");
-    currentDeletePostId = null;
-    currentDeletePostElement = null;
-  }, 300);
-});
+  if (!newUsername) {
+    showError(editProfileError, "Username cannot be empty.");
+    editUsername.focus();
+    return;
+  }
 
-deletePostCancel.addEventListener("click", () => {
-  deletePostModal.classList.remove("open");
-  setTimeout(() => {
-    deletePostModal.classList.add("hidden");
-    currentDeletePostId = null;
-    currentDeletePostElement = null;
-  }, 300);
-});
-
-deletePostConfirm.addEventListener("click", async () => {
-  if (!currentDeletePostId || !currentDeletePostElement) return;
   showLoading();
   try {
-    await set(ref(db, `posts/${currentDeletePostId}`), null);
-    await set(ref(db, `notifications/${currentUserUid}/${currentDeletePostId}`), null);
-    currentDeletePostElement.remove();
-    deletePostModal.classList.remove("open");
-    setTimeout(() => {
-      deletePostModal.classList.add("hidden");
-      currentDeletePostId = null;
-      currentDeletePostElement = null;
-    }, 300);
+    const user = auth.currentUser;
+    if (!user) {
+      showError(editProfileError, "User not authenticated.");
+      return;
+    }
+
+    const profileUpdates = { displayName: newUsername };
+    let photoURL = user.photoURL;
+    let coverPhotoURL = user.coverImage || "https://via.placeholder.com/1500x500?text=Cover+Image";
+
+    const maxFileSize = 5 * 1024 * 1024;
+    const uploadImage = async (file) => {
+      if (file.size > maxFileSize) {
+        throw new Error("Image must be under 5MB.");
+      }
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
+      const response = await fetch(CLOUDINARY_UPLOAD_URL, { method: "POST", body: formData });
+      const data = await response.json();
+      if (!data.secure_url) {
+        throw new Error("Failed to upload image to Cloudinary.");
+      }
+      return data.secure_url;
+    };
+
+    if (newPhoto) {
+      photoURL = await uploadImage(newPhoto);
+      profileUpdates.photoURL = photoURL;
+    }
+
+    if (newCoverPhoto) {
+      coverPhotoURL = await uploadImage(newCoverPhoto);
+    }
+
+    await updateProfile(user, profileUpdates);
+    const userRef = ref(db, `users/${user.uid}`);
+    await update(userRef, {
+      username: newUsername,
+      bio: newBio || "",
+      photoURL: photoURL,
+      coverImage: coverPhotoURL,
+      location: newLocation || "",
+      updatedAt: Date.now(),
+    });
+
+    editProfileModal.classList.remove("open");
+    editProfileModal.classList.add("hidden");
+    hideError(editProfileError);
+    loadProfile();
   } catch (error) {
-    console.error("Error deleting post:", error.code, error.message);
-    showError(document.getElementById(`post-${currentDeletePostId}`) || document.body, `Failed to delete post: ${error.message}`);
+    console.error("Error updating profile:", error.code, error.message);
+    let errorMessage = "Failed to update profile. Please try again.";
+    if (error.code === "auth/requires-recent-login") {
+      errorMessage = "Please log in again to update your profile.";
+    } else if (error.message.includes("Cloudinary")) {
+      errorMessage = "Failed to upload image. Please try again.";
+    }
+    showError(editProfileError, errorMessage);
   } finally {
     hideLoading();
   }
