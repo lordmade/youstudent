@@ -2078,6 +2078,7 @@ body {
   </div>
 
 <script type="module"> 
+<script type="module"> 
 
       import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
 import { getAuth, onAuthStateChanged, updateProfile } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
@@ -2165,11 +2166,19 @@ function timeAgo(timestamp) {
 
 // Reaction popup HTML for comments
 function createCommentReactionPopup(postId, commentId) {
+  const reactionEmojis = {
+    like: '👍',
+    love: '❤️',
+    haha: '😂',
+    wow: '😮',
+    sad: '😢',
+    angry: '😣'
+  };
   return `
     <div class="comment-reaction-popup hidden" data-post-id="${postId}" data-comment-id="${commentId}">
       ${REACTION_TYPES.map(type => `
         <button class="comment-reaction-btn" data-reaction="${type}" title="${type.charAt(0).toUpperCase() + type.slice(1)}">
-          <img src="/path/to/reactions/${type}.png" alt="${type} reaction" class="w-6 h-6">
+          <span class="text-2xl">${reactionEmojis[type]}</span>
         </button>
       `).join('')}
     </div>
@@ -2288,11 +2297,19 @@ function setupCommentLongPress(button, postId, commentId) {
 
 // Reaction popup HTML for posts
 function createReactionPopup(postId) {
+  const reactionEmojis = {
+    like: '👍',
+    love: '❤️',
+    haha: '😂',
+    wow: '😮',
+    sad: '😢',
+    angry: '😣'
+  };
   return `
     <div class="reaction-popup hidden absolute bottom-16 left-1/2 transform -translate-x-1/2 bg-white rounded-full shadow-lg flex p-2 space-x-2 z-50" data-post-id="${postId}">
       ${REACTION_TYPES.map(type => `
         <button class="reaction-btn" data-reaction="${type}" title="${type.charAt(0).toUpperCase() + type.slice(1)}">
-          <img src="/path/to/reactions/${type}.png" alt="${type} reaction" class="w-8 h-8">
+          <span class="text-2xl">${reactionEmojis[type]}</span>
         </button>
       `).join('')}
     </div>
@@ -3711,186 +3728,102 @@ async function loadProfile() {
   try {
     const [userSnap, postsSnap, notificationsSnap, followersSnap, followingSnap] = await Promise.all([
       get(ref(db, `users/${currentUserUid}`)),
-      new Promise(resolve => onValue(query(ref(db, "posts"), orderByChild("userId"), limitToLast(50)), resolve, { onlyOnce: true })),
+      new Promise(resolve => onValue(query(ref(db, "posts"), orderByChild("userId"), limitToLast(100)), resolve, { onlyOnce: true })),
       get(ref(db, `notifications/${currentUserUid}`)),
       get(ref(db, `users/${currentUserUid}/followers`)),
       get(ref(db, `users/${currentUserUid}/following`))
     ]);
 
-    const user = userSnap.val() || { username: "Anonymous", photoURL: null, bio: "", verified: false };
-    const posts = [];
-    postsSnap.forEach(child => {
-      const post = child.val();
-      if (post.userId === currentUserUid) posts.push({ id: child.key, ...post });
-    });
-    const userPostCount = posts.length;
-    const followersCount = Object.keys(followersSnap.val() || {}).length;
-    const followingCount = Object.keys(followingSnap.val() || {}).length;
-    const isVerified = user.verified || userPostCount >= 10;
-
-    let unreadCount = 0;
+    const userData = userSnap.val() || { username: "Unknown", photoURL: "https://www.gravatar.com/avatar?d=mp", bio: "" };
+    const postsData = postsSnap.val() || {};
     const notificationsData = notificationsSnap.val() || {};
-    Object.values(notificationsData).forEach(postNotifications => {
-      Object.values(postNotifications).forEach(typeNotifications => {
-        Object.values(typeNotifications).forEach(notification => {
-          if (!notification.read) unreadCount++;
-        });
-      });
-    });
+    const followersData = followersSnap.val() || {};
+    const followingData = followingSnap.val() || {};
+
+    const postCount = Object.values(postsData).filter(post => post.userId === currentUserUid).length;
+    const isVerified = postCount >= 10;
+    const followerCount = Object.keys(followersData).length;
+    const followingCount = Object.keys(followingData).length;
+    const unreadNotifications = Object.values(notificationsData).flatMap(postNotifs => 
+      Object.values(postNotifs).flatMap(typeNotifs => 
+        Object.values(typeNotifs).filter(notif => !notif.read)
+      )
+    ).length;
 
     profileContainer.innerHTML = `
       <div class="profile-header">
-        <img src="${user.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${user.username}'s profile picture" aria-label="Profile picture"/>
-        <div class="profile-username-container">
-          <h2>${user.username}${isVerified ? `<span class="verified-icon" aria-label="Verified user" title="Verified user"><svg viewBox="0 0 24 24"><path d="M9 16.2l-3.5-3.5L4 14.1 9 19 20 8l-1.4-1.4z"/></svg></span>` : ''}</h2>
-          <p>${user.bio || "No bio available."}</p>
-        </div>
-        <div class="profile-stats">
-          <div class="profile-stat">
-            <span>${userPostCount}</span>
-            <p>Posts</p>
-          </div>
-          <div class="profile-stat">
-            <span>${followersCount}</span>
-            <p>Followers</p>
-          </div>
-          <div class="profile-stat">
-            <span>${followingCount}</span>
-            <p>Following</p>
+        <img src="${userData.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${userData.username} avatar" class="profile-pic">
+        <div class="profile-info">
+          <h2>${userData.username || 'Unknown'}${
+            isVerified
+              ? `<span class="verified-icon" aria-label="Verified user" title="Verified user"><svg viewBox="0 0 24 24"><path d="M9 16.2l-3.5-3.5L4 14.1 9 19 20 8l-1.4-1.4z"/></svg></span>`
+              : ''
+          }</h2>
+          <p class="bio">${userData.bio || 'No bio yet.'}</p>
+          <div class="profile-stats">
+            <span><strong>${postCount}</strong> posts</span>
+            <span><strong>${followerCount}</strong> followers</span>
+            <span><strong>${followingCount}</strong> following</span>
           </div>
         </div>
-        <div class="profile-action-container">
-          <button id="edit-profile-btn" class="edit-profile-btn" aria-label="Edit profile">Edit Profile</button>
-          <a href="notifications.html" id="notification-btn" class="profile-action-btn" aria-label="Notifications${unreadCount > 0 ? `, ${unreadCount} unread` : ''}">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
-            </svg>
-            ${unreadCount > 0 ? `<span class="unread-badge">${unreadCount}</span>` : ''}
-          </a>
-          <a href="settings.html" id="settings-btn" class="profile-action-btn" aria-label="Settings">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M12 15a3 3 0 100-6 3 3 0 000 6z"/>
-              <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/>
-            </svg>
-          </a>
-        </div>
+        <button id="edit-profile-btn" aria-label="Edit profile">Edit Profile</button>
+        <button id="notifications-btn" aria-label="View notifications">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9m-4 11a2 2 0 01-4 0"/>
+          </svg>
+          ${unreadNotifications > 0 ? `<span class="notification-badge">${unreadNotifications}</span>` : ''}
+        </button>
       </div>
-      <div class="sub-tab-nav profile-sub-tabs">
-        <button class="sub-tab-btn profile-sub-tab active" data-sub-tab="posts" aria-label="Your posts">Posts</button>
-        <button class="sub-tab-btn profile-sub-tab" data-sub-tab="tagged" aria-label="Posts you're tagged in">Tagged</button>
-        <button class="sub-tab-btn profile-sub-tab" data-sub-tab="saved" aria-label="Saved posts">Saved</button>
-      </div>
-      <div id="profile-posts" class="sub-tab-content active" data-sub-tab="posts"></div>
-      <div id="profile-tagged" class="sub-tab-content" data-sub-tab="tagged">
-        <div class="placeholder">No tagged posts yet.</div>
-      </div>
-      <div id="profile-saved" class="sub-tab-content" data-sub-tab="saved">
-        <div class="placeholder">No saved posts yet.</div>
+      <div class="profile-posts">
+        ${Object.entries(postsData)
+          .filter(([_, post]) => post.userId === currentUserUid && post.imageUrl)
+          .map(([postId, post]) => `
+            <div class="profile-post" data-post-id="${postId}">
+              <img src="${post.imageUrl}" alt="Post thumbnail" onerror="this.src='https://via.placeholder.com/150?text=Image+Not+Found';">
+              <div class="post-overlay">
+                <button class="delete-post-btn" data-post-id="${postId}" aria-label="Delete post">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M3 6h18M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2M6 6l1.5 15h10L18 6"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+          `).join('')}
       </div>
     `;
 
-    const profileContent = document.getElementById("profile-posts");
-    if (userPostCount === 10 && !Object.values(notificationsData).some(postNotifs =>
-      Object.values(postNotifs).some(typeNotifs =>
-        Object.values(typeNotifs).some(notif => notif.type === 'verified')
-      )
-    )) {
-      const notifRef = push(ref(db, `notifications/${currentUserUid}/system/verified`));
-      await set(notifRef, {
-        type: 'verified',
-        userId: currentUserUid,
-        timestamp: Date.now(),
-        read: false
-      });
-    }
+    document.getElementById("edit-profile-btn").addEventListener("click", () => {
+      editUsername.value = userData.username || "";
+      editBio.value = userData.bio || "";
+      editPhoto.value = "";
+      editProfileModal.classList.remove("hidden");
+      editProfileModal.classList.add("open");
+    });
 
-    posts.sort((a, b) => b.timestamp - a.timestamp);
-    if (posts.length === 0) {
-      profileContent.innerHTML = '<div class="placeholder">No posts yet.</div>';
-    } else {
-      for (const post of posts) {
-        const postId = `profile-post-${post.id}`;
-        const postElement = document.createElement("div");
-        postElement.className = "post delete-overlay";
-        postElement.id = postId;
-        const imageUrl = Array.isArray(post.imageUrls) && post.imageUrls.length > 0 ? post.imageUrls[0] : post.imageUrl;
-        postElement.innerHTML = `
-          <img class="post-image" src="${imageUrl || 'https://via.placeholder.com/150?text=Image+Not+Found'}" alt="Post by ${user.username}" aria-label="Post by ${user.username}">
-        `;
-        postElement.addEventListener("click", (e) => {
-          e.stopPropagation();
-          if (post.userId === currentUserUid) {
-            currentDeletePostId = post.id;
-            currentDeletePostElement = postElement;
-            deletePostModal.classList.remove("hidden");
-            deletePostModal.classList.add("open");
-          } else {
-            console.log("Navigating to post:", post.id);
-            location.href = `post.html?id=${post.id}`;
-            pauseAllMedia();
-          }
-        });
-        profileContent.appendChild(postElement);
-      }
-    }
+    document.getElementById("notifications-btn").addEventListener("click", () => {
+      console.log("Navigating to notifications");
+      location.href = "notifications.html";
+      pauseAllMedia();
+    });
 
-    // Sub-tab navigation
-    const subTabBtns = profileContainer.querySelectorAll(".sub-tab-btn.profile-sub-tab");
-    const subTabs = profileContainer.querySelectorAll(".sub-tab-content");
-    subTabBtns.forEach(btn => {
-      btn.addEventListener("click", () => {
-        subTabBtns.forEach(b => {
-          b.classList.remove("active");
-          b.setAttribute("aria-selected", "false");
-        });
-        subTabs.forEach(t => t.classList.remove("active"));
-        btn.classList.add("active");
-        btn.setAttribute("aria-selected", "true");
-        document.querySelector(`.sub-tab-content[data-sub-tab="${btn.dataset.subTab}"]`).classList.add("active");
+    profileContainer.querySelectorAll(".profile-post img").forEach(img => {
+      img.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const postId = img.parentElement.dataset.postId;
+        console.log("Navigating to post:", postId);
+        location.href = `post.html?id=${postId}`;
         pauseAllMedia();
       });
     });
 
-    // Edit profile button
-    document.getElementById("edit-profile-btn").addEventListener("click", () => {
-      editUsername.value = user.username;
-      editBio.value = user.bio || "";
-      editPhoto.value = "";
-      hideError(editProfileError);
-      editProfileModal.classList.remove("hidden");
-      editProfileModal.classList.add("open");
-      editUsername.focus();
-    });
-
-    // Delete post modal handling
-    const closeModal = () => {
-      deletePostModal.classList.remove("open");
-      setTimeout(() => deletePostModal.classList.add("hidden"), 300);
-      currentDeletePostId = null;
-      currentDeletePostElement = null;
-      pauseAllMedia();
-    };
-
-    deletePostClose.addEventListener("click", closeModal);
-    deletePostCancel.addEventListener("click", closeModal);
-
-    deletePostConfirm.addEventListener("click", async () => {
-      if (!currentDeletePostId || !currentDeletePostElement) return;
-      showLoading();
-      try {
-        const postRef = ref(db, `posts/${currentDeletePostId}`);
-        await set(postRef, null);
-        currentDeletePostElement.remove();
-        if (!profileContent.querySelector(".post")) {
-          profileContent.innerHTML = '<div class="placeholder">No posts yet.</div>';
-        }
-        closeModal();
-      } catch (error) {
-        console.error("Error deleting post:", error.message);
-        profileContent.innerHTML = `<p class="error">Failed to delete post: ${error.message}</p>`;
-      } finally {
-        hideLoading();
-      }
+    profileContainer.querySelectorAll(".delete-post-btn").forEach(btn => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        currentDeletePostId = btn.dataset.postId;
+        currentDeletePostElement = btn.closest(".profile-post");
+        deletePostModal.classList.remove("hidden");
+        deletePostModal.classList.add("open");
+      });
     });
   } catch (error) {
     console.error("Error loading profile:", error.code, error.message);
@@ -3900,16 +3833,42 @@ async function loadProfile() {
   }
 }
 
-onAuthStateChanged(auth, (user) => {
-  if (!user) {
-    location.href = "index.html";
-  } else {
-    currentUserUid = user.uid;
-    loadStories();
-    loadPosts();
-    loadFriends();
-    loadSearch();
-    loadProfile();
+deletePostClose.addEventListener("click", () => {
+  deletePostModal.classList.remove("open");
+  setTimeout(() => {
+    deletePostModal.classList.add("hidden");
+    currentDeletePostId = null;
+    currentDeletePostElement = null;
+  }, 300);
+});
+
+deletePostCancel.addEventListener("click", () => {
+  deletePostModal.classList.remove("open");
+  setTimeout(() => {
+    deletePostModal.classList.add("hidden");
+    currentDeletePostId = null;
+    currentDeletePostElement = null;
+  }, 300);
+});
+
+deletePostConfirm.addEventListener("click", async () => {
+  if (!currentDeletePostId || !currentDeletePostElement) return;
+  showLoading();
+  try {
+    await set(ref(db, `posts/${currentDeletePostId}`), null);
+    await set(ref(db, `notifications/${currentUserUid}/${currentDeletePostId}`), null);
+    currentDeletePostElement.remove();
+    deletePostModal.classList.remove("open");
+    setTimeout(() => {
+      deletePostModal.classList.add("hidden");
+      currentDeletePostId = null;
+      currentDeletePostElement = null;
+    }, 300);
+  } catch (error) {
+    console.error("Error deleting post:", error.code, error.message);
+    showError(document.getElementById(`post-${currentDeletePostId}`) || document.body, `Failed to delete post: ${error.message}`);
+  } finally {
+    hideLoading();
   }
 });
 </script>
