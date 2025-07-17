@@ -2078,7 +2078,8 @@ body {
   </div>
 
 <script type="module"> 
-import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
+
+      import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
 import { getAuth, onAuthStateChanged, updateProfile } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
 import { getDatabase, ref, onValue, query, orderByChild, limitToLast, set, get, push, update } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
 
@@ -2119,14 +2120,7 @@ let currentPlayingAudio = null;
 let currentDeletePostId = null;
 let currentDeletePostElement = null;
 let currentReplyCommentId = null;
-const REACTION_TYPES = {
-  'like': '👍',
-  'love': '❤️',
-  'haha': '😂',
-  'wow': '😮',
-  'sad': '😢',
-  'angry': '😣'
-};
+const REACTION_TYPES = ['like', 'love', 'haha', 'wow', 'sad', 'angry'];
 const CLOUDINARY_UPLOAD_PRESET = "banter_box";
 const CLOUDINARY_CLOUD_NAME = "dqkujefxj";
 const CLOUDINARY_UPLOAD_URL = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`;
@@ -2172,10 +2166,10 @@ function timeAgo(timestamp) {
 // Reaction popup HTML for comments
 function createCommentReactionPopup(postId, commentId) {
   return `
-    <div class="comment-reaction-popup hidden absolute bottom-8 left-1/2 transform -translate-x-1/2 bg-white rounded-full shadow-lg flex p-2 space-x-2 z-50" data-post-id="${postId}" data-comment-id="${commentId}">
-      ${Object.entries(REACTION_TYPES).map(([type, emoji]) => `
-        <button class="comment-reaction-btn text-2xl" data-reaction="${type}" title="${type.charAt(0).toUpperCase() + type.slice(1)}">
-          ${emoji}
+    <div class="comment-reaction-popup hidden" data-post-id="${postId}" data-comment-id="${commentId}">
+      ${REACTION_TYPES.map(type => `
+        <button class="comment-reaction-btn" data-reaction="${type}" title="${type.charAt(0).toUpperCase() + type.slice(1)}">
+          <img src="/path/to/reactions/${type}.png" alt="${type} reaction" class="w-6 h-6">
         </button>
       `).join('')}
     </div>
@@ -2188,7 +2182,6 @@ async function toggleCommentReaction(postId, commentId, reactionType, button) {
   const commentRef = ref(db, `posts/${postId}/comments/${commentId}`);
   const likeCountSpan = button.closest('.comment-item').querySelector(".comment-reaction-count");
   const likeIcon = button.closest('.comment-item').querySelector(".comment-reaction-btn svg");
-  const reactionDisplay = button.closest('.comment-item').querySelector(".comment-reaction-display");
 
   showLoading();
   try {
@@ -2212,10 +2205,9 @@ async function toggleCommentReaction(postId, commentId, reactionType, button) {
         likeIcon.classList.remove("text-red-500");
         likeIcon.classList.add("text-gray-500");
       }
-      updateCommentReactionDisplay(postId, commentId, updatedReactions);
     } else {
       // Add or update reaction
-      const updatedReactions = { ...reactions, [userId]: [reactionType] };
+      const updatedReactions = { ...reactions, [userId]: [...userReactions.filter(r => r !== 'like'), reactionType] };
       const isNewLike = !comment.likedBy?.includes(userId);
       await update(commentRef, {
         reactions: updatedReactions,
@@ -2227,7 +2219,6 @@ async function toggleCommentReaction(postId, commentId, reactionType, button) {
         likeIcon.classList.remove("text-gray-500");
         likeIcon.classList.add("text-red-500");
       }
-      updateCommentReactionDisplay(postId, commentId, updatedReactions);
       if (comment.userId !== userId && isNewLike) {
         const notifRef = push(ref(db, `notifications/${comment.userId}/${postId}/comment-reactions`));
         await set(notifRef, { type: 'comment-reaction', reactionType, userId: currentUserUid, commentId, timestamp: Date.now(), read: false });
@@ -2241,55 +2232,57 @@ async function toggleCommentReaction(postId, commentId, reactionType, button) {
   }
 }
 
-// Update comment reaction display
-function updateCommentReactionDisplay(postId, commentId, reactions) {
-  const commentElement = document.querySelector(`.comment-item[data-comment-id="${commentId}"]`);
-  const reactionDisplay = commentElement.querySelector(".comment-reaction-display");
-  if (!reactionDisplay) return;
+// Setup long press for comment reaction button
+function setupCommentLongPress(button, postId, commentId) {
+  let pressTimer;
+  let touchTimer;
+  let isLongPress = false;
 
-  const reactionCounts = {};
-  Object.values(reactions).forEach(userReactions => {
-    userReactions.forEach(reaction => {
-      reactionCounts[reaction] = (reactionCounts[reaction] || 0) + 1;
-    });
-  });
-
-  const emojis = Object.entries(reactionCounts)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 3)
-    .map(([type]) => REACTION_TYPES[type])
-    .join('');
-  
-  reactionDisplay.innerHTML = emojis ? `<span class="text-lg">${emojis}</span>` : '';
-}
-
-// Setup click for comment reaction button
-function setupCommentReaction(button, postId, commentId) {
-  button.addEventListener('click', (e) => {
-    e.stopPropagation();
-    const existingPopup = document.querySelector(`.comment-reaction-popup[data-comment-id="${commentId}"]`);
-    if (existingPopup && existingPopup.classList.contains('open')) {
-      existingPopup.classList.remove('open');
-      setTimeout(() => existingPopup.remove(), 300);
-    } else {
-      document.querySelectorAll('.comment-reaction-popup.open').forEach(popup => {
-        popup.classList.remove('open');
-        setTimeout(() => popup.remove(), 300);
-      });
-      const commentElement = document.querySelector(`.comment-item[data-comment-id="${commentId}"]`);
-      commentElement.querySelector('.comment-content').insertAdjacentHTML('beforeend', createCommentReactionPopup(postId, commentId));
-      const popup = commentElement.querySelector(`.comment-reaction-popup[data-comment-id="${commentId}"]`);
-      popup.classList.remove('hidden');
-      popup.classList.add('open');
-      popup.querySelectorAll('.comment-reaction-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          toggleCommentReaction(postId, commentId, btn.dataset.reaction, button);
-          popup.classList.remove('open');
-          setTimeout(() => popup.remove(), 300);
+  const startPress = () => {
+    isLongPress = false;
+    pressTimer = setTimeout(() => {
+      isLongPress = true;
+      const existingPopup = document.querySelector(`.comment-reaction-popup[data-comment-id="${commentId}"]`);
+      if (!existingPopup) {
+        const commentElement = document.querySelector(`.comment-item[data-comment-id="${commentId}"]`);
+        commentElement.querySelector('.comment-content').insertAdjacentHTML('beforeend', createCommentReactionPopup(postId, commentId));
+        const popup = commentElement.querySelector(`.comment-reaction-popup[data-comment-id="${commentId}"]`);
+        popup.classList.remove('hidden');
+        popup.classList.add('open');
+        popup.querySelectorAll('.comment-reaction-btn').forEach(btn => {
+          btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            toggleCommentReaction(postId, commentId, btn.dataset.reaction, button);
+            popup.classList.remove('open');
+            setTimeout(() => popup.remove(), 300);
+          });
         });
-      });
+      }
+    }, 500);
+  };
+
+  const endPress = () => {
+    clearTimeout(pressTimer);
+    if (!isLongPress) {
+      toggleCommentReaction(postId, commentId, 'like', button);
     }
+    const popup = document.querySelector(`.comment-reaction-popup[data-comment-id="${commentId}"]`);
+    if (popup) {
+      popup.classList.remove('open');
+      setTimeout(() => popup.remove(), 300);
+    }
+  };
+
+  button.addEventListener('mousedown', startPress);
+  button.addEventListener('mouseup', endPress);
+  button.addEventListener('mouseleave', endPress);
+  button.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    startPress();
+  });
+  button.addEventListener('touchend', (e) => {
+    e.preventDefault();
+    endPress();
   });
 }
 
@@ -2297,9 +2290,9 @@ function setupCommentReaction(button, postId, commentId) {
 function createReactionPopup(postId) {
   return `
     <div class="reaction-popup hidden absolute bottom-16 left-1/2 transform -translate-x-1/2 bg-white rounded-full shadow-lg flex p-2 space-x-2 z-50" data-post-id="${postId}">
-      ${Object.entries(REACTION_TYPES).map(([type, emoji]) => `
-        <button class="reaction-btn text-2xl" data-reaction="${type}" title="${type.charAt(0).toUpperCase() + type.slice(1)}">
-          ${emoji}
+      ${REACTION_TYPES.map(type => `
+        <button class="reaction-btn" data-reaction="${type}" title="${type.charAt(0).toUpperCase() + type.slice(1)}">
+          <img src="/path/to/reactions/${type}.png" alt="${type} reaction" class="w-8 h-8">
         </button>
       `).join('')}
     </div>
@@ -2312,7 +2305,6 @@ async function toggleReaction(postId, reactionType, button) {
   const postRef = ref(db, `posts/${postId}`);
   const likeCountSpan = button.closest('.post-actions').querySelector(".like-count");
   const likeIcon = button.closest('.post-actions').querySelector(".like-btn svg");
-  const reactionDisplay = button.closest('.post').querySelector(".reaction-display");
 
   showLoading();
   try {
@@ -2334,10 +2326,9 @@ async function toggleReaction(postId, reactionType, button) {
       likeCountSpan.textContent = currentLikes - 1;
       likeIcon.classList.remove("text-red-500");
       likeIcon.classList.add("text-gray-500");
-      updateReactionDisplay(postId, updatedReactions);
     } else {
       // Add or update reaction
-      const updatedReactions = { ...reactions, [userId]: [reactionType] };
+      const updatedReactions = { ...reactions, [userId]: [...userReactions.filter(r => r !== 'like'), reactionType] };
       const isNewLike = !post.likedBy?.includes(userId);
       await update(postRef, {
         reactions: updatedReactions,
@@ -2347,7 +2338,6 @@ async function toggleReaction(postId, reactionType, button) {
       likeCountSpan.textContent = isNewLike ? currentLikes + 1 : currentLikes;
       likeIcon.classList.remove("text-gray-500");
       likeIcon.classList.add("text-red-500");
-      updateReactionDisplay(postId, updatedReactions);
       if (post.userId !== userId && isNewLike) {
         const notifRef = push(ref(db, `notifications/${post.userId}/${postId}/reactions`));
         await set(notifRef, { type: 'reaction', reactionType, userId: currentUserUid, timestamp: Date.now(), read: false });
@@ -2361,55 +2351,57 @@ async function toggleReaction(postId, reactionType, button) {
   }
 }
 
-// Update reaction display
-function updateReactionDisplay(postId, reactions) {
-  const postElement = document.getElementById(`post-${postId}`);
-  const reactionDisplay = postElement.querySelector(".reaction-display");
-  if (!reactionDisplay) return;
+// Handle long press for post like button
+function setupLongPress(button, postId) {
+  let pressTimer;
+  let touchTimer;
+  let isLongPress = false;
 
-  const reactionCounts = {};
-  Object.values(reactions).forEach(userReactions => {
-    userReactions.forEach(reaction => {
-      reactionCounts[reaction] = (reactionCounts[reaction] || 0) + 1;
-    });
-  });
-
-  const emojis = Object.entries(reactionCounts)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 3)
-    .map(([type]) => REACTION_TYPES[type])
-    .join('');
-  
-  reactionDisplay.innerHTML = emojis ? `<span class="text-lg">${emojis}</span>` : '';
-}
-
-// Handle click for post reaction button
-function setupReaction(button, postId) {
-  button.addEventListener('click', (e) => {
-    e.stopPropagation();
-    const existingPopup = document.querySelector(`.reaction-popup[data-post-id="${postId}"]`);
-    if (existingPopup && existingPopup.classList.contains('open')) {
-      existingPopup.classList.remove('open');
-      setTimeout(() => existingPopup.remove(), 300);
-    } else {
-      document.querySelectorAll('.reaction-popup.open').forEach(popup => {
-        popup.classList.remove('open');
-        setTimeout(() => popup.remove(), 300);
-      });
-      const postElement = document.getElementById(`post-${postId}`);
-      postElement.insertAdjacentHTML('beforeend', createReactionPopup(postId));
-      const popup = postElement.querySelector(`.reaction-popup[data-post-id="${postId}"]`);
-      popup.classList.remove('hidden');
-      popup.classList.add('open');
-      popup.querySelectorAll('.reaction-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          toggleReaction(postId, btn.dataset.reaction, button);
-          popup.classList.remove('open');
-          setTimeout(() => popup.remove(), 300);
+  const startPress = () => {
+    isLongPress = false;
+    pressTimer = setTimeout(() => {
+      isLongPress = true;
+      const existingPopup = document.querySelector(`.reaction-popup[data-post-id="${postId}"]`);
+      if (!existingPopup) {
+        const postElement = document.getElementById(`post-${postId}`);
+        postElement.insertAdjacentHTML('beforeend', createReactionPopup(postId));
+        const popup = postElement.querySelector(`.reaction-popup[data-post-id="${postId}"]`);
+        popup.classList.remove('hidden');
+        popup.classList.add('open');
+        popup.querySelectorAll('.reaction-btn').forEach(btn => {
+          btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            toggleReaction(postId, btn.dataset.reaction, button);
+            popup.classList.remove('open');
+            setTimeout(() => popup.remove(), 300);
+          });
         });
-      });
+      }
+    }, 500);
+  };
+
+  const endPress = () => {
+    clearTimeout(pressTimer);
+    if (!isLongPress) {
+      toggleReaction(postId, 'like', button);
     }
+    const popup = document.querySelector(`.reaction-popup[data-post-id="${postId}"]`);
+    if (popup) {
+      popup.classList.remove('open');
+      setTimeout(() => popup.remove(), 300);
+    }
+  };
+
+  button.addEventListener('mousedown', startPress);
+  button.addEventListener('mouseup', endPress);
+  button.addEventListener('mouseleave', endPress);
+  button.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    startPress();
+  });
+  button.addEventListener('touchend', (e) => {
+    e.preventDefault();
+    endPress();
   });
 }
 
@@ -2636,17 +2628,6 @@ async function showCommentSheet(postId) {
       const reactionCount = comment.likes || 0;
       const userReactions = comment.reactions?.[currentUserUid] || [];
       const isLiked = userReactions.includes('like');
-      const reactionCounts = {};
-      Object.values(comment.reactions || {}).forEach(userReactions => {
-        userReactions.forEach(reaction => {
-          reactionCounts[reaction] = (reactionCounts[reaction] || 0) + 1;
-        });
-      });
-      const emojis = Object.entries(reactionCounts)
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 3)
-        .map(([type]) => REACTION_TYPES[type])
-        .join('');
       commentItem.innerHTML = `
         <img src="${userData.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${userData.username} avatar" class="comment-avatar"/>
         <div class="comment-content">
@@ -2660,7 +2641,6 @@ async function showCommentSheet(postId) {
               </svg>
               <span class="comment-reaction-count">${reactionCount || ''}</span>
             </button>
-            <div class="comment-reaction-display">${emojis ? `<span class="text-lg">${emojis}</span>` : ''}</div>
             <button class="comment-action-btn reply-btn" data-comment-id="${cid}" aria-label="Reply to comment">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M3 10h11m0 0l-3-3m3 3l-3 3m7-3v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-2"/>
@@ -2674,7 +2654,7 @@ async function showCommentSheet(postId) {
           </div>
         </div>
       `;
-      setupCommentReaction(commentItem.querySelector('.reaction-btn'), postId, cid);
+      setupCommentLongPress(commentItem.querySelector('.reaction-btn'), postId, cid);
       commentItem.querySelector('.reply-btn').addEventListener('click', (e) => {
         e.stopPropagation();
         const replyContainer = commentItem.querySelector('.reply-input-container');
@@ -2716,6 +2696,7 @@ async function showCommentSheet(postId) {
       if (!comment.parentId) {
         const commentItem = renderComment(cid, comment);
         commentsList.appendChild(commentItem);
+        // Render replies
         const replies = sortedComments.filter(reply => reply.parentId === cid);
         for (const reply of replies) {
           const replyItem = renderComment(reply.cid, reply, true, cid);
@@ -2785,6 +2766,61 @@ commentSubmit.addEventListener("click", async () => {
   try {
     const commentRef = push(ref(db, `posts/${currentPostId}/comments`));
     const postSnap = await get(ref(db, `posts/${currentPostId}`));
+    const post = postSnap.val();
+    await set(commentRef, {
+      userId: currentUserUid,
+      text: commentInput.value.trim(),
+      timestamp: Date.now(),
+    });
+    if (post.userId !== currentUserUid) {
+      const notifRef = push(ref(db, `notifications/${post.userId}/${currentPostId}/comments`));
+      await set(notifRef, { type: 'comment', userId: currentUserUid, timestamp: Date.now(), read: false });
+    }
+    commentInput.value = "";
+    await showCommentSheet(currentPostId);
+  } catch (error) {
+    console.error("Error adding comment:", error.code, error.message);
+    showError(commentsList, `Failed to add comment: ${error.message}`);
+  } finally {
+    hideLoading();
+  }
+});
+
+commentInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    commentSubmit.click();
+  }
+});
+
+onAuthStateChanged(auth, (user) => {
+  if (!user) {
+    location.href = "index.html";
+  } else {
+    currentUserUid = user.uid;
+    loadStories();
+    loadPosts();
+    loadFriends();
+    loadSearch();
+    loadProfile();
+  }
+});
+
+commentSheetClose.addEventListener("click", () => {
+  commentSheet.classList.remove("open");
+  setTimeout(() => commentSheet.classList.add("hidden"), 300);
+  currentPostId = null;
+});
+
+commentSubmit.addEventListener("click", async () => {
+  if (!currentPostId || !commentInput.value.trim()) return;
+  showLoading();
+  try {
+    const commentRef = push(ref(db, `posts/${currentPostId}/comments`));
+    const postSnap = await Promise.race([
+      get(ref(db, `posts/${currentPostId}`)),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout fetching post")), 10000))
+    ]);
     const post = postSnap.val();
     await set(commentRef, {
       userId: currentUserUid,
@@ -2889,7 +2925,6 @@ async function loadStories() {
     hideLoading();
   }
 }
-
 async function showStoryViewer(userStories, userData) {
   const storyViewer = document.getElementById("story-viewer");
   const storyContent = document.getElementById("story-content");
@@ -3090,17 +3125,6 @@ async function loadPosts() {
       const showFollowButton = post.userId !== currentUserUid;
       const imageUrls = Array.isArray(post.imageUrls) ? post.imageUrls : [post.imageUrl].filter(Boolean);
       const isVerified = users[post.userId]?.verified || false;
-      const reactionCounts = {};
-      Object.values(post.reactions || {}).forEach(userReactions => {
-        userReactions.forEach(reaction => {
-          reactionCounts[reaction] = (reactionCounts[reaction] || 0) + 1;
-        });
-      });
-      const emojis = Object.entries(reactionCounts)
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 3)
-        .map(([type]) => REACTION_TYPES[type])
-        .join('');
 
       const postElement = document.createElement("div");
       postElement.className = "post";
@@ -3148,7 +3172,6 @@ async function loadPosts() {
             </svg>
             <span class="like-count">${post.likes || 0}</span>
           </button>
-          <div class="reaction-display">${emojis ? `<span class="text-lg">${emojis}</span>` : ''}</div>
           <button class="comment-btn" aria-label="Comment on post">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M21 11.5a8.5 8.5 0 01-11.4 7.9l-4.6 1.5 1.5-4.6A8.5 8.5 0 1121 11.5z"/>
@@ -3182,7 +3205,7 @@ async function loadPosts() {
       `;
 
       const likeBtn = postElement.querySelector(".like-btn");
-      setupReaction(likeBtn, post.id);
+      setupLongPress(likeBtn, post.id);
 
       const commentBtn = postElement.querySelector(".comment-btn");
       commentBtn.addEventListener("click", (e) => {
@@ -3307,7 +3330,6 @@ async function loadPosts() {
     hideLoading();
   }
 }
-
 async function loadFriends() {
   const friendsContainer = document.getElementById("friends-container");
   const followersContainer = document.getElementById("followers-container");
@@ -3373,15 +3395,14 @@ async function loadFriends() {
               ).length;
             }
 
-            // Update friend item dynamically on message changes
             onValue(allMessagesRef, (snap) => {
-              const friendItem = friendsContainer.querySelector(`[data-uid="${friendUid}"]`);
-              if (!friendItem) return;
-
               if (!snap.exists()) {
-                friendItem.querySelector(".last-message-timestamp").textContent = "No messages yet";
-                const badge = friendItem.querySelector(".unread-badge");
-                if (badge) badge.remove();
+                const friendItem = friendsContainer.querySelector(`[data-uid="${friendUid}"]`);
+                if (friendItem) {
+                  friendItem.querySelector(".last-message-timestamp").textContent = "No messages yet";
+                  const badge = friendItem.querySelector(".unread-badge");
+                  if (badge) badge.remove();
+                }
                 return;
               }
 
@@ -3392,68 +3413,96 @@ async function loadFriends() {
                 msg => msg.sender === friendUid && !msg.read && msg.receiver === currentUserUid
               ).length;
 
-              friendItem.querySelector(".last-message-timestamp").textContent = latestMessage.timestamp ? timeAgo(latestMessage.timestamp) : "No messages yet";
-              const existingBadge = friendItem.querySelector(".unread-badge");
-              if (newUnreadCount > 0) {
-                if (existingBadge) {
-                  existingBadge.textContent = newUnreadCount;
-                } else {
-                  const badge = document.createElement("span");
-                  badge.className = "unread-badge";
-                  badge.textContent = newUnreadCount;
-                  friendItem.appendChild(badge);
+              const friendItem = friendsContainer.querySelector(`[data-uid="${friendUid}"]`);
+              if (friendItem) {
+                friendItem.querySelector(".last-message-timestamp").textContent = latestMessage.timestamp ? timeAgo(latestMessage.timestamp) : "No messages yet";
+                const existingBadge = friendItem.querySelector(".unread-badge");
+                if (newUnreadCount > 0) {
+                  if (existingBadge) {
+                    existingBadge.textContent = newUnreadCount;
+                  } else {
+                    const badge = document.createElement("span");
+                    badge.className = "unread-badge";
+                    badge.textContent = newUnreadCount;
+                    friendItem.querySelector(".friend-info").prepend(badge);
+                  }
+                } else if (existingBadge) {
+                  existingBadge.remove();
                 }
-              } else if (existingBadge) {
-                existingBadge.remove();
               }
             });
 
-            const friendItem = document.createElement("div");
-            friendItem.className = "friend-item";
-            friendItem.dataset.uid = friendUid;
-            friendItem.innerHTML = `
-              <img src="${userData.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${userData.username} avatar"/>
-              <div class="friend-info">
-                <span class="friend-username">${userData.username}${isVerified ? `<span class="verified-icon" aria-label="Verified user" title="Verified user"><svg viewBox="0 0 24 24"><path d="M9 16.2l-3.5-3.5L4 14.1 9 19 20 8l-1.4-1.4z"/></svg></span>` : ''}</span>
-                <span class="last-message-timestamp">${lastMessageTimeAgo}</span>
-              </div>
-              <button class="friend-item-btn message">Message</button>
-              ${unreadCount > 0 ? `<span class="unread-badge">${unreadCount}</span>` : ''}
-            `;
+            onValue(ref(db, `users/${friendUid}`), (snap) => {
+              if (snap.exists()) {
+                const userData = snap.val();
+                const friendItem = friendsContainer.querySelector(`[data-uid="${friendUid}"]`);
+                if (friendItem) {
+                  friendItem.querySelector(".status").textContent =
+                    userData.presence === "online" ? "Online" : `Last seen ${timeAgo(userData.lastSeen)}`;
+                }
+              }
+            });
+          } catch (error) {
+            console.warn(`Error fetching messages for friend ${friendUid}:`, error.message);
+            lastMessageTimeAgo = "No messages yet";
+            unreadCount = 0;
+          }
 
-            friendItem.querySelector(".friend-item-btn").addEventListener("click", (e) => {
-              e.stopPropagation();
-              console.log(`Initiate message to user: ${friendUid}`);
+          const friendItem = document.createElement("div");
+          friendItem.className = "friend-item";
+          friendItem.dataset.uid = friendUid;
+          friendItem.innerHTML = `
+            <img src="${userData.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${userData.username} avatar"/>
+            <div class="friend-info">
+              <span>${userData.username}${
+                isVerified
+                  ? `<span class="verified-icon" aria-label="Verified user" title="Verified user"><svg viewBox="0 0 24 24"><path d="M9 16.2l-3.5-3.5L4 14.1 9 19 20 8l-1.4-1.4z"/></svg></span>`
+                  : ''
+              }</span>
+              <span class="status">${userData.presence === "online" ? "Online" : `Last seen ${timeAgo(userData.lastSeen)}`}</span>
+              ${unreadCount > 0 ? `<span class="unread-badge">${unreadCount}</span>` : ''}
+              <span class="last-message-timestamp">${lastMessageTimeAgo}</span>
+            </div>
+            <button class="friend-item-btn message">Message</button>
+          `;
+
+          friendItem.addEventListener("click", (e) => {
+            if (e.target.classList.contains("friend-item-btn")) return;
+            e.stopPropagation();
+            showLoading();
+            console.log(`Navigating to chat with user: ${friendUid}`);
+            setTimeout(() => {
               location.href = `chat.html?uid=${friendUid}`;
               pauseAllMedia();
-            });
+            }, 300);
+          });
 
-            friendItem.addEventListener("click", (e) => {
-              if (e.target.classList.contains("friend-item-btn")) return;
-              console.log("Navigating to profile:", friendUid);
-              location.href = `profile.html?uid=${friendUid}`;
+          friendItem.querySelector(".friend-item-btn").addEventListener("click", (e) => {
+            e.stopPropagation();
+            showLoading();
+            console.log(`Navigating to chat with user: ${friendUid}`);
+            setTimeout(() => {
+              location.href = `chat.html?uid=${friendUid}`;
               pauseAllMedia();
-            });
+            }, 300);
+          });
 
-            friendItems.push({ friendItem, lastMessageTimestamp: lastMessageTimestamp || 0 });
-          } catch (error) {
-            console.error(`Error loading data for friend ${friendUid}:`, error.message);
-          }
+          friendItems.push({ friendItem, timestamp: lastMessageTimestamp || 0 });
         }
 
-        friendItems.sort((a, b) => b.lastMessageTimestamp - a.lastMessageTimestamp);
+        friendItems.sort((a, b) => b.timestamp - a.timestamp);
         friendItems.forEach(({ friendItem }) => friendsContainer.appendChild(friendItem));
       }
     } catch (error) {
-      console.error("Error loading friends:", error.message);
+      console.error("Error loading friends:", error.code, error.message);
       friendsContainer.innerHTML = `<p class="error">Failed to load friends: ${error.message}</p>`;
     } finally {
       hideLoading();
     }
   }, { onlyOnce: false });
 
-  // Load followers
   const followersRef = ref(db, `users/${currentUserUid}/followers`);
+  showLoading();
   onValue(followersRef, async (snapshot) => {
     followersContainer.innerHTML = '<div class="loading">Loading followers...</div>';
     try {
@@ -3466,10 +3515,16 @@ async function loadFriends() {
         const users = usersSnap.val() || {};
         for (const followerUid in followersData) {
           const userData = users[followerUid] || { username: "Unknown", photoURL: null };
-          const isFollowing = await get(ref(db, `users/${currentUserUid}/following/${followerUid}`)).then(snap => snap.exists());
+          let isFollowing = false;
+          try {
+            const followingSnap = await get(ref(db, `users/${currentUserUid}/following/${followerUid}`));
+            isFollowing = followingSnap.exists();
+          } catch (error) {
+            console.warn(`Error checking follow status for user ${followerUid}:`, error.message);
+            isFollowing = false;
+          }
           const followerItem = document.createElement("div");
           followerItem.className = "friend-item";
-          followerItem.dataset.uid = followerUid;
           followerItem.innerHTML = `
             <img src="${userData.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${userData.username} avatar"/>
             <span>${userData.username}</span>
@@ -3489,13 +3544,15 @@ async function loadFriends() {
         }
       }
     } catch (error) {
-      console.error("Error loading followers:", error.message);
+      console.error("Error loading followers:", error.code, error.message);
       followersContainer.innerHTML = `<p class="error">Failed to load followers: ${error.message}</p>`;
+    } finally {
+      hideLoading();
     }
   }, { onlyOnce: false });
 
-  // Load following
   const followingRef = ref(db, `users/${currentUserUid}/following`);
+  showLoading();
   onValue(followingRef, async (snapshot) => {
     followingContainer.innerHTML = '<div class="loading">Loading following...</div>';
     try {
@@ -3510,7 +3567,6 @@ async function loadFriends() {
           const userData = users[followingUid] || { username: "Unknown", photoURL: null };
           const followingItem = document.createElement("div");
           followingItem.className = "friend-item";
-          followingItem.dataset.uid = followingUid;
           followingItem.innerHTML = `
             <img src="${userData.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${userData.username} avatar"/>
             <span>${userData.username}</span>
@@ -3530,1068 +3586,330 @@ async function loadFriends() {
         }
       }
     } catch (error) {
-      console.error("Error loading following:", error.message);
+      console.error("Error loading following:", error.code, error.message);
       followingContainer.innerHTML = `<p class="error">Failed to load following: ${error.message}</p>`;
+    } finally {
+      hideLoading();
     }
   }, { onlyOnce: false });
 }
 
+function loadSearch() {
+  const searchInput = document.getElementById("search-input");
+  const searchResults = document.getElementById("search-results");
+  let debounceTimeout;
+
+  const loadAllPosts = async (queryText = "") => {
+    searchResults.innerHTML = '<div class="loading">Loading posts...</div>';
+    showLoading();
+    try {
+      let postsSnap;
+      try {
+        postsSnap = await Promise.race([
+          get(query(ref(db, "posts"), orderByChild("timestamp"), limitToLast(100))),
+          new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout fetching posts")), 15000)),
+        ]);
+      } catch (indexError) {
+        console.warn("Index not defined, falling back to unordered fetch:", indexError.message);
+        postsSnap = await Promise.race([
+          get(ref(db, "posts")),
+          new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout fetching posts")), 15000)),
+        ]);
+      }
+
+      const usersSnap = await Promise.race([
+        get(ref(db, "users")),
+        new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout fetching users")), 15000)),
+      ]);
+
+      searchResults.innerHTML = "";
+      const posts = [];
+      if (postsSnap.exists()) {
+        postsSnap.forEach(child => {
+          const post = child.val();
+          if (post && post.userId && post.imageUrl && post.timestamp) {
+            posts.push({ id: child.key, ...post });
+          } else {
+            console.warn(`Skipping invalid post ${child.key}: Missing required fields`);
+          }
+        });
+      } else {
+        console.log("No posts found in database");
+        searchResults.innerHTML = '<div class="placeholder">No posts available.</div>';
+        hideLoading();
+        return;
+      }
+
+      const users = usersSnap.exists() ? usersSnap.val() : {};
+      console.log(`Fetched ${posts.length} posts and ${Object.keys(users).length} users`);
+
+      const filteredPosts = queryText
+        ? posts.filter(post => {
+            const username = users[post.userId]?.username?.toLowerCase() || "";
+            const caption = post.caption?.toLowerCase() || "";
+            const matches = username.includes(queryText) || caption.includes(queryText);
+            if (!matches) {
+              console.log(`Post ${post.id} filtered out: username=${username}, caption=${caption}, query=${queryText}`);
+            }
+            return matches;
+          })
+        : posts;
+
+      filteredPosts.sort((a, b) => b.timestamp - a.timestamp);
+
+      if (filteredPosts.length === 0) {
+        console.log("No posts match the search query or no valid posts found");
+        searchResults.innerHTML = '<div class="placeholder">No posts found.</div>';
+        hideLoading();
+        return;
+      }
+
+      console.log(`Displaying ${filteredPosts.length} posts`);
+      for (const post of filteredPosts) {
+        const postId = `search-post-${post.id}`;
+        const postElement = document.createElement("div");
+        postElement.className = "post";
+        postElement.id = postId;
+        postElement.innerHTML = `
+          <img class="post-image" src="${post.imageUrl}" alt="Post" onerror="this.src='https://via.placeholder.com/150?text=Image+Not+Found';">
+        `;
+        postElement.addEventListener("click", (e) => {
+          e.stopPropagation();
+          console.log("Navigating to post:", post.id);
+          location.href = `post.html?id=${post.id}`;
+          pauseAllMedia();
+        });
+        searchResults.appendChild(postElement);
+      }
+    } catch (error) {
+      console.error("Error in loadAllPosts:", {
+        message: error.message,
+        code: error.code || "No code",
+        stack: error.stack,
+      });
+      searchResults.innerHTML = `<p class="error">Failed to load posts: ${error.message || "Unknown error"}</p>`;
+    } finally {
+      hideLoading();
+    }
+  };
+
+  loadAllPosts();
+
+  searchInput.addEventListener("input", () => {
+    clearTimeout(debounceTimeout);
+    debounceTimeout = setTimeout(() => {
+      const queryText = searchInput.value.trim().toLowerCase();
+      console.log("Search query:", queryText);
+      loadAllPosts(queryText);
+    }, 500);
+  });
+}
+
 async function loadProfile() {
   const profileContainer = document.getElementById("profile-container");
-  profileContainer.innerHTML = '<div class="loading">Loading profile...</div>';
   showLoading();
   try {
-    const [userSnap, postsSnap, friendsSnap, followersSnap, followingSnap] = await Promise.all([
+    const [userSnap, postsSnap, notificationsSnap, followersSnap, followingSnap] = await Promise.all([
       get(ref(db, `users/${currentUserUid}`)),
-      get(ref(db, "posts")),
-      get(ref(db, `users/${currentUserUid}/friends`)),
+      new Promise(resolve => onValue(query(ref(db, "posts"), orderByChild("userId"), limitToLast(50)), resolve, { onlyOnce: true })),
+      get(ref(db, `notifications/${currentUserUid}`)),
       get(ref(db, `users/${currentUserUid}/followers`)),
       get(ref(db, `users/${currentUserUid}/following`))
     ]);
 
-    const userData = userSnap.val() || { username: "Unknown", photoURL: null, bio: "" };
-    const postsData = postsSnap.val() || {};
-    const friendsCount = Object.keys(friendsSnap.val() || {}).length;
+    const user = userSnap.val() || { username: "Anonymous", photoURL: null, bio: "", verified: false };
+    const posts = [];
+    postsSnap.forEach(child => {
+      const post = child.val();
+      if (post.userId === currentUserUid) posts.push({ id: child.key, ...post });
+    });
+    const userPostCount = posts.length;
     const followersCount = Object.keys(followersSnap.val() || {}).length;
     const followingCount = Object.keys(followingSnap.val() || {}).length;
-    const userPosts = Object.entries(postsData)
-      .filter(([_, post]) => post.userId === currentUserUid)
-      .map(([id, post]) => ({ id, ...post }))
-      .sort((a, b) => b.timestamp - a.timestamp);
+    const isVerified = user.verified || userPostCount >= 10;
+
+    let unreadCount = 0;
+    const notificationsData = notificationsSnap.val() || {};
+    Object.values(notificationsData).forEach(postNotifications => {
+      Object.values(postNotifications).forEach(typeNotifications => {
+        Object.values(typeNotifications).forEach(notification => {
+          if (!notification.read) unreadCount++;
+        });
+      });
+    });
 
     profileContainer.innerHTML = `
       <div class="profile-header">
-        <img src="${userData.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${userData.username} avatar" class="profile-pic"/>
-        <div class="profile-info">
-          <h2 class="username">${userData.username}</h2>
-          <p class="bio">${userData.bio || "No bio available."}</p>
-          <div class="stats">
-            <span><strong>${userPosts.length}</strong> Posts</span>
-            <span><strong>${followersCount}</strong> Followers</span>
-            <span><strong>${followingCount}</strong> Following</span>
-            <span><strong>${friendsCount}</strong> Friends</span>
+        <img src="${user.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${user.username}'s profile picture" aria-label="Profile picture"/>
+        <div class="profile-username-container">
+          <h2>${user.username}${isVerified ? `<span class="verified-icon" aria-label="Verified user" title="Verified user"><svg viewBox="0 0 24 24"><path d="M9 16.2l-3.5-3.5L4 14.1 9 19 20 8l-1.4-1.4z"/></svg></span>` : ''}</h2>
+          <p>${user.bio || "No bio available."}</p>
+        </div>
+        <div class="profile-stats">
+          <div class="profile-stat">
+            <span>${userPostCount}</span>
+            <p>Posts</p>
           </div>
-          <button id="edit-profile-btn" class="edit-profile-btn">Edit Profile</button>
+          <div class="profile-stat">
+            <span>${followersCount}</span>
+            <p>Followers</p>
+          </div>
+          <div class="profile-stat">
+            <span>${followingCount}</span>
+            <p>Following</p>
+          </div>
+        </div>
+        <div class="profile-action-container">
+          <button id="edit-profile-btn" class="edit-profile-btn" aria-label="Edit profile">Edit Profile</button>
+          <a href="notifications.html" id="notification-btn" class="profile-action-btn" aria-label="Notifications${unreadCount > 0 ? `, ${unreadCount} unread` : ''}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
+            </svg>
+            ${unreadCount > 0 ? `<span class="unread-badge">${unreadCount}</span>` : ''}
+          </a>
+          <a href="settings.html" id="settings-btn" class="profile-action-btn" aria-label="Settings">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 15a3 3 0 100-6 3 3 0 000 6z"/>
+              <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/>
+            </svg>
+          </a>
         </div>
       </div>
-      <div class="profile-posts">
-        ${userPosts.length === 0 ? '<div class="placeholder">No posts yet.</div>' : ''}
+      <div class="sub-tab-nav profile-sub-tabs">
+        <button class="sub-tab-btn profile-sub-tab active" data-sub-tab="posts" aria-label="Your posts">Posts</button>
+        <button class="sub-tab-btn profile-sub-tab" data-sub-tab="tagged" aria-label="Posts you're tagged in">Tagged</button>
+        <button class="sub-tab-btn profile-sub-tab" data-sub-tab="saved" aria-label="Saved posts">Saved</button>
+      </div>
+      <div id="profile-posts" class="sub-tab-content active" data-sub-tab="posts"></div>
+      <div id="profile-tagged" class="sub-tab-content" data-sub-tab="tagged">
+        <div class="placeholder">No tagged posts yet.</div>
+      </div>
+      <div id="profile-saved" class="sub-tab-content" data-sub-tab="saved">
+        <div class="placeholder">No saved posts yet.</div>
       </div>
     `;
 
-    const postsContainer = profileContainer.querySelector(".profile-posts");
-    userPosts.forEach(post => {
-      const imageUrls = Array.isArray(post.imageUrls) ? post.imageUrls : [post.imageUrl].filter(Boolean);
-      const isVerified = userData.verified || false;
-      const reactionCounts = {};
-      Object.values(post.reactions || {}).forEach(userReactions => {
-        userReactions.forEach(reaction => {
-          reactionCounts[reaction] = (reactionCounts[reaction] || 0) + 1;
-        });
+    const profileContent = document.getElementById("profile-posts");
+    if (userPostCount === 10 && !Object.values(notificationsData).some(postNotifs =>
+      Object.values(postNotifs).some(typeNotifs =>
+        Object.values(typeNotifs).some(notif => notif.type === 'verified')
+      )
+    )) {
+      const notifRef = push(ref(db, `notifications/${currentUserUid}/system/verified`));
+      await set(notifRef, {
+        type: 'verified',
+        userId: currentUserUid,
+        timestamp: Date.now(),
+        read: false
       });
-      const emojis = Object.entries(reactionCounts)
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 3)
-        .map(([type]) => REACTION_TYPES[type])
-        .join('');
+    }
 
-      const postElement = document.createElement("div");
-      postElement.className = "post";
-      postElement.id = `post-${post.id}`;
-      postElement.innerHTML = `
-        <div class="post-header">
-          <img src="${userData.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${userData.username} avatar"/>
-          <div class="user-info">
-            <span>${userData.username}${isVerified ? `<span class="verified-icon" aria-label="Verified user" title="Verified user"><svg viewBox="0 0 24 24"><path d="M9 16.2l-3.5-3.5L4 14.1 9 19 20 8l-1.4-1.4z"/></svg></span>` : ''}</span>
-            <span class="timestamp">${timeAgo(post.timestamp)}</span>
-          </div>
-          <button class="delete-post-btn" data-post-id="${post.id}" aria-label="Delete post">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M6 18L18 6M6 6l12 12"/>
-            </svg>
-          </button>
-        </div>
-        <div class="post-image-carousel" data-post-id="${post.id}">
-          <div class="post-image-container">
-            ${imageUrls.map(url => `
-              <img src="${url}" alt="Post image" onerror="this.src='https://via.placeholder.com/150?text=Image+Not+Found';"/>
-            `).join('')}
-          </div>
-          ${imageUrls.length > 1 ? `
-            <button class="carousel-arrow left" aria-label="Previous image">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M15 18l-6-6 6-6"/>
-              </svg>
-            </button>
-            <button class="carousel-arrow right" aria-label="Next image">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M9 18l6-6-6-6"/>
-              </svg>
-            </button>
-            <div class="carousel-indicators">
-              ${imageUrls.map((_, index) => `
-                <span class="carousel-indicator ${index === 0 ? 'active' : ''}"></span>
-              `).join('')}
-            </div>
-          ` : ''}
-        </div>
-        <div class="post-actions">
-          <button class="like-btn" data-post-id="${post.id}">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="${post.likedBy && post.likedBy.includes(currentUserUid) ? 'text-red-500' : 'text-gray-500'}">
-              <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
-            </svg>
-            <span class="like-count">${post.likes || 0}</span>
-          </button>
-          <div class="reaction-display">${emojis ? `<span class="text-lg">${emojis}</span>` : ''}</div>
-          <button class="comment-btn" aria-label="Comment on post">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M21 11.5a8.5 8.5 0 01-11.4 7.9l-4.6 1.5 1.5-4.6A8.5 8.5 0 1121 11.5z"/>
-            </svg>
-            <span class="comment-count">${Object.keys(post.comments || {}).length}</span>
-          </button>
-          ${post.song && post.song.audioUrl ? `
-            <button class="play-song-btn" aria-label="Toggle song playback">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M9 18V5l12-2v13"/>
-                <circle cx="6" cy="18" r="3"/>
-                <circle cx="18" cy="16" r="3"/>
-              </svg>
-            </button>
-          ` : ''}
-        </div>
-        ${post.caption ? `<div class="post-caption"><strong>${userData.username}${isVerified ? `<span class="verified-icon" aria-label="Verified user" title="Verified user"><svg viewBox="0 0 24 24"><path d="M9 16.2l-3.5-3.5L4 14.1 9 19 20 8l-1.4-1.4z"/></svg></span>` : ''}:</strong> ${post.caption}</div>` : ''}
-        ${post.song && post.song.audioUrl ? `
-          <div class="post-caption song-display">
-            <span>${post.song.title} - ${post.song.artist}</span>
-            <audio id="audio-${post.id}" src="${post.song.audioUrl}" preload="auto"></audio>
-          </div>
-        ` : ''}
-      `;
-
-      const likeBtn = postElement.querySelector(".like-btn");
-      setupReaction(likeBtn, post.id);
-
-      const commentBtn = postElement.querySelector(".comment-btn");
-      commentBtn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        showCommentSheet(post.id);
-      });
-
-      const deleteBtn = postElement.querySelector(".delete-post-btn");
-      deleteBtn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        currentDeletePostId = post.id;
-        currentDeletePostElement = postElement;
-        deletePostModal.classList.remove("hidden");
-        deletePostModal.classList.add("open");
-      });
-
-      if (post.song && post.song.audioUrl) {
-        const playSongBtn = postElement.querySelector(".play-song-btn");
-        const audioElement = postElement.querySelector(`#audio-${post.id}`);
-        playSongBtn.removeAttribute("disabled");
-        playSongBtn.addEventListener('click', (e) => {
+    posts.sort((a, b) => b.timestamp - a.timestamp);
+    if (posts.length === 0) {
+      profileContent.innerHTML = '<div class="placeholder">No posts yet.</div>';
+    } else {
+      for (const post of posts) {
+        const postId = `profile-post-${post.id}`;
+        const postElement = document.createElement("div");
+        postElement.className = "post delete-overlay";
+        postElement.id = postId;
+        const imageUrl = Array.isArray(post.imageUrls) && post.imageUrls.length > 0 ? post.imageUrls[0] : post.imageUrl;
+        postElement.innerHTML = `
+          <img class="post-image" src="${imageUrl || 'https://via.placeholder.com/150?text=Image+Not+Found'}" alt="Post by ${user.username}" aria-label="Post by ${user.username}">
+        `;
+        postElement.addEventListener("click", (e) => {
           e.stopPropagation();
-          if (audioElement.paused) {
-            pauseAllMedia(`audio-${post.id}`);
-            audioElement.play().catch(error => {
-              console.warn(`Failed to play audio for post ${post.id}:`, error.message);
-            });
+          if (post.userId === currentUserUid) {
+            currentDeletePostId = post.id;
+            currentDeletePostElement = postElement;
+            deletePostModal.classList.remove("hidden");
+            deletePostModal.classList.add("open");
           } else {
-            audioElement.pause();
-            audioElement.currentTime = 0;
+            console.log("Navigating to post:", post.id);
+            location.href = `post.html?id=${post.id}`;
+            pauseAllMedia();
           }
         });
+        profileContent.appendChild(postElement);
       }
+    }
 
-      if (imageUrls.length > 1) {
-        const carousel = postElement.querySelector(".post-image-carousel");
-        const imageContainer = carousel.querySelector(".post-image-container");
-        const indicators = carousel.querySelectorAll(".carousel-indicator");
-        const leftArrow = carousel.querySelector(".carousel-arrow.left");
-        const rightArrow = carousel.querySelector(".carousel-arrow.right");
-        let currentIndex = 0;
-        let startX = 0;
-        let isDragging = false;
-
-        const updateCarousel = () => {
-          imageContainer.style.transform = `translateX(-${currentIndex * 100}%)`;
-          indicators.forEach((indicator, index) => {
-            indicator.classList.toggle("active", index === currentIndex);
-          });
-          leftArrow.style.display = currentIndex === 0 ? "none" : "block";
-          rightArrow.style.display = currentIndex === imageUrls.length - 1 ? "none" : "block";
-        };
-
-        leftArrow.addEventListener("click", (e) => {
-          e.stopPropagation();
-          if (currentIndex > 0) {
-            currentIndex--;
-            updateCarousel();
-          }
+    // Sub-tab navigation
+    const subTabBtns = profileContainer.querySelectorAll(".sub-tab-btn.profile-sub-tab");
+    const subTabs = profileContainer.querySelectorAll(".sub-tab-content");
+    subTabBtns.forEach(btn => {
+      btn.addEventListener("click", () => {
+        subTabBtns.forEach(b => {
+          b.classList.remove("active");
+          b.setAttribute("aria-selected", "false");
         });
-
-        rightArrow.addEventListener("click", (e) => {
-          e.stopPropagation();
-          if (currentIndex < imageUrls.length - 1) {
-            currentIndex++;
-            updateCarousel();
-          }
-        });
-
-        carousel.addEventListener("touchstart", (e) => {
-          e.stopPropagation();
-          startX = e.touches[0].clientX;
-          isDragging = true;
-        });
-
-        carousel.addEventListener("touchmove", (e) => {
-          if (!isDragging) return;
-          e.stopPropagation();
-          const currentX = e.touches[0].clientX;
-          const diffX = startX - currentX;
-          if (Math.abs(diffX) > 50) {
-            if (diffX > 0 && currentIndex < imageUrls.length - 1) {
-              currentIndex++;
-            } else if (diffX < 0 && currentIndex > 0) {
-              currentIndex--;
-            }
-            updateCarousel();
-            isDragging = false;
-          }
-        });
-
-        carousel.addEventListener("touchend", (e) => {
-          e.stopPropagation();
-          isDragging = false;
-        });
-      }
-
-      postElement.addEventListener("click", (e) => {
-        if (e.target.closest('.post-actions button, .song-display, .post-header img, .post-header .user-info span:first-child, .delete-post-btn, .carousel-arrow')) return;
-        showCommentSheet(post.id);
+        subTabs.forEach(t => t.classList.remove("active"));
+        btn.classList.add("active");
+        btn.setAttribute("aria-selected", "true");
+        document.querySelector(`.sub-tab-content[data-sub-tab="${btn.dataset.subTab}"]`).classList.add("active");
+        pauseAllMedia();
       });
-
-      postsContainer.appendChild(postElement);
     });
 
-    const editProfileBtn = profileContainer.querySelector("#edit-profile-btn");
-    editProfileBtn.addEventListener("click", () => {
-      editUsername.value = userData.username || "";
-      editBio.value = userData.bio || "";
+    // Edit profile button
+    document.getElementById("edit-profile-btn").addEventListener("click", () => {
+      editUsername.value = user.username;
+      editBio.value = user.bio || "";
       editPhoto.value = "";
+      hideError(editProfileError);
       editProfileModal.classList.remove("hidden");
       editProfileModal.classList.add("open");
-      hideError(editProfileError);
+      editUsername.focus();
+    });
+
+    // Delete post modal handling
+    const closeModal = () => {
+      deletePostModal.classList.remove("open");
+      setTimeout(() => deletePostModal.classList.add("hidden"), 300);
+      currentDeletePostId = null;
+      currentDeletePostElement = null;
+      pauseAllMedia();
+    };
+
+    deletePostClose.addEventListener("click", closeModal);
+    deletePostCancel.addEventListener("click", closeModal);
+
+    deletePostConfirm.addEventListener("click", async () => {
+      if (!currentDeletePostId || !currentDeletePostElement) return;
+      showLoading();
+      try {
+        const postRef = ref(db, `posts/${currentDeletePostId}`);
+        await set(postRef, null);
+        currentDeletePostElement.remove();
+        if (!profileContent.querySelector(".post")) {
+          profileContent.innerHTML = '<div class="placeholder">No posts yet.</div>';
+        }
+        closeModal();
+      } catch (error) {
+        console.error("Error deleting post:", error.message);
+        profileContent.innerHTML = `<p class="error">Failed to delete post: ${error.message}</p>`;
+      } finally {
+        hideLoading();
+      }
     });
   } catch (error) {
-    console.error("Error loading profile:", error.message);
+    console.error("Error loading profile:", error.code, error.message);
     profileContainer.innerHTML = `<p class="error">Failed to load profile: ${error.message}</p>`;
   } finally {
     hideLoading();
   }
 }
 
-async function loadSearch() {
-  const searchInput = document.getElementById("search-input");
-  const searchBtn = document.getElementById("search-btn");
-  const searchResults = document.getElementById("search-results");
-
-  searchBtn.addEventListener("click", async () => {
-    const query = searchInput.value.trim().toLowerCase();
-    if (!query) {
-      searchResults.innerHTML = '<div class="placeholder">Enter a search term.</div>';
-      return;
-    }
-
-    showLoading();
-    try {
-      const [postsSnap, usersSnap] = await Promise.all([
-        get(ref(db, "posts")),
-        get(ref(db, "users"))
-      ]);
-
-      const postsData = postsSnap.val() || {};
-      const users = usersSnap.val() || {};
-
-      const results = Object.entries(postsData)
-        .filter(([_, post]) => {
-          const username = users[post.userId]?.username?.toLowerCase() || "";
-          const caption = post.caption?.toLowerCase() || "";
-          return username.includes(query) || caption.includes(query);
-        })
-        .map(([id, post]) => ({ id, ...post }))
-        .sort((a, b) => b.timestamp - a.timestamp);
-
-      searchResults.innerHTML = "";
-      if (results.length === 0) {
-        searchResults.innerHTML = '<div class="placeholder">No results found.</div>';
-        hideLoading();
-        return;
-      }
-
-      results.forEach(post => {
-        const userData = users[post.userId] || { username: "Unknown", photoURL: null };
-        const imageUrls = Array.isArray(post.imageUrls) ? post.imageUrls : [post.imageUrl].filter(Boolean);
-        const isVerified = userData.verified || false;
-        const reactionCounts = {};
-        Object.values(post.reactions || {}).forEach(userReactions => {
-          userReactions.forEach(reaction => {
-            reactionCounts[reaction] = (reactionCounts[reaction] || 0) + 1;
-          });
-        });
-        const emojis = Object.entries(reactionCounts)
-          .sort((a, b) => b[1] - a[1])
-          .slice(0, 3)
-          .map(([type]) => REACTION_TYPES[type])
-          .join('');
-
-        const resultItem = document.createElement("div");
-        resultItem.className = "post";
-        resultItem.id = `post-${post.id}`;
-        resultItem.innerHTML = `
-          <div class="post-header">
-            <img src="${userData.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${userData.username} avatar"/>
-            <div class="user-info">
-              <span>${userData.username}${isVerified ? `<span class="verified-icon" aria-label="Verified user" title="Verified user"><svg viewBox="0 0 24 24"><path d="M9 16.2l-3.5-3.5L4 14.1 9 19 20 8l-1.4-1.4z"/></svg></span>` : ''}</span>
-              <span class="timestamp">${timeAgo(post.timestamp)}</span>
-            </div>
-          </div>
-          <div class="post-image-carousel" data-post-id="${post.id}">
-            <div class="post-image-container">
-              ${imageUrls.map(url => `
-                <img src="${url}" alt="Post image" onerror="this.src='https://via.placeholder.com/150?text=Image+Not+Found';"/>
-              `).join('')}
-            </div>
-            ${imageUrls.length > 1 ? `
-              <button class="carousel-arrow left" aria-label="Previous image">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M15 18l-6-6 6-6"/>
-                </svg>
-              </button>
-              <button class="carousel-arrow right" aria-label="Next image">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M9 18l6-6-6-6"/>
-                </svg>
-              </button>
-              <div class="carousel-indicators">
-                ${imageUrls.map((_, index) => `
-                  <span class="carousel-indicator ${index === 0 ? 'active' : ''}"></span>
-                `).join('')}
-              </div>
-            ` : ''}
-          </div>
-          <div class="post-actions">
-            <button class="like-btn" data-post-id="${post.id}">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="${post.likedBy && post.likedBy.includes(currentUserUid) ? 'text-red-500' : 'text-gray-500'}">
-                <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
-              </svg>
-              <span class="like-count">${post.likes || 0}</span>
-            </button>
-            <div class="reaction-display">${emojis ? `<span class="text-lg">${emojis}</span>` : ''}</div>
-            <button class="comment-btn" aria-label="Comment on post">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M21 11.5a8.5 8.5 0 01-11.4 7.9l-4.6 1.5 1.5-4.6A8.5 8.5 0 1121 11.5z"/>
-              </svg>
-              <span class="comment-count">${Object.keys(post.comments || {}).length}</span>
-            </button>
-            ${post.song && post.song.audioUrl ? `
-              <button class="play-song-btn" aria-label="Toggle song playback">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M9 18V5l12-2v13"/>
-                  <circle cx="6" cy="18" r="3"/>
-                  <circle cx="18" cy="16" r="3"/>
-                </svg>
-              </button>
-            ` : ''}
-          </div>
-          ${post.caption ? `<div class="post-caption"><strong>${userData.username}${isVerified ? `<span class="verified-icon" aria-label="Verified user" title="Verified user"><svg viewBox="0 0 24 24"><path d="M9 16.2l-3.5-3.5L4 14.1 9 19 20 8l-1.4-1.4z"/></svg></span>` : ''}:</strong> ${post.caption}</div>` : ''}
-          ${post.song && post.song.audioUrl ? `
-            <div class="post-caption song-display">
-              <span>${post.song.title} - ${post.song.artist}</span>
-              <audio id="audio-${post.id}" src="${post.song.audioUrl}" preload="auto"></audio>
-            </div>
-          ` : ''}
-        `;
-
-        const likeBtn = resultItem.querySelector(".like-btn");
-        setupReaction(likeBtn, post.id);
-
-        const commentBtn = resultItem.querySelector(".comment-btn");
-        commentBtn.addEventListener("click", (e) => {
-          e.stopPropagation();
-          showCommentSheet(post.id);
-        });
-
-        if (post.song && post.song.audioUrl) {
-          const playSongBtn = resultItem.querySelector(".play-song-btn");
-          const audioElement = resultItem.querySelector(`#audio-${post.id}`);
-          playSongBtn.removeAttribute("disabled");
-          playSongBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            if (audioElement.paused) {
-              pauseAllMedia(`audio-${post.id}`);
-              audioElement.play().catch(error => {
-                console.warn(`Failed to play audio for post ${post.id}:`, error.message);
-              });
-            } else {
-              audioElement.pause();
-              audioElement.currentTime = 0;
-            }
-          });
-        }
-
-        resultItem.querySelectorAll(".post-header img, .post-header .user-info span:first-child").forEach(el => {
-          el.addEventListener("click", (e) => {
-            e.stopPropagation();
-            console.log("Navigating to profile:", post.userId);
-            location.href = `profile.html?uid=${post.userId}`;
-            pauseAllMedia();
-          });
-        });
-
-        if (imageUrls.length > 1) {
-          const carousel = resultItem.querySelector(".post-image-carousel");
-          const imageContainer = carousel.querySelector(".post-image-container");
-          const indicators = carousel.querySelectorAll(".carousel-indicator");
-          const leftArrow = carousel.querySelector(".carousel-arrow.left");
-          const rightArrow = carousel.querySelector(".carousel-arrow.right");
-          let currentIndex = 0;
-          let startX = 0;
-          let isDragging = false;
-
-          const updateCarousel = () => {
-            imageContainer.style.transform = `translateX(-${currentIndex * 100}%)`;
-            indicators.forEach((indicator, index) => {
-              indicator.classList.toggle("active", index === currentIndex);
-            });
-            leftArrow.style.display = currentIndex === 0 ? "none" : "block";
-            rightArrow.style.display = currentIndex === imageUrls.length - 1 ? "none" : "block";
-          };
-
-          leftArrow.addEventListener("click", (e) => {
-            e.stopPropagation();
-            if (currentIndex > 0) {
-              currentIndex--;
-              updateCarousel();
-            }
-          });
-
-          rightArrow.addEventListener("click", (e) => {
-            e.stopPropagation();
-            if (currentIndex < imageUrls.length - 1) {
-              currentIndex++;
-              updateCarousel();
-            }
-          });
-
-          carousel.addEventListener("touchstart", (e) => {
-            e.stopPropagation();
-            startX = e.touches[0].clientX;
-            isDragging = true;
-          });
-
-          carousel.addEventListener("touchmove", (e) => {
-            if (!isDragging) return;
-            e.stopPropagation();
-            const currentX = e.touches[0].clientX;
-            const diffX = startX - currentX;
-            if (Math.abs(diffX) > 50) {
-              if (diffX > 0 && currentIndex < imageUrls.length - 1) {
-                currentIndex++;
-              } else if (diffX < 0 && currentIndex > 0) {
-                currentIndex--;
-              }
-              updateCarousel();
-              isDragging = false;
-            }
-          });
-
-          carousel.addEventListener("touchend", (e) => {
-            e.stopPropagation();
-            isDragging = false;
-          });
-        }
-
-        resultItem.addEventListener("click", (e) => {
-          if (e.target.closest('.post-actions button, .song-display, .post-header img, .post-header .user-info span:first-child, .carousel-arrow')) return;
-          showCommentSheet(post.id);
-        });
-
-        searchResults.appendChild(resultItem);
-      });
-    } catch (error) {
-      console.error("Error searching posts:", error.message);
-      searchResults.innerHTML = `<p class="error">Failed to search posts: ${error.message}</p>`;
-    } finally {
-      hideLoading();
-    }
-  });
-
-  searchInput.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      searchBtn.click();
-    }
-  });
-}
-
-async function loadReels() {
-  const reelsContainer = document.getElementById("reels-container");
-  reelsContainer.innerHTML = '<div class="loading">Loading reels...</div>';
-  showLoading();
-  try {
-    const reelsRef = query(ref(db, "reels"), orderByChild("timestamp"), limitToLast(50));
-    const [reelsSnap, usersSnap] = await Promise.all([
-      get(reelsRef),
-      get(ref(db, "users"))
-    ]);
-
-    const reelsData = reelsSnap.val() || {};
-    const users = usersSnap.val() || {};
-
-    reelsContainer.innerHTML = "";
-    const reels = Object.entries(reelsData)
-      .map(([id, reel]) => ({ id, ...reel }))
-      .filter(reel => reel.userId && reel.videoUrl && reel.timestamp)
-      .sort((a, b) => b.timestamp - a.timestamp);
-
-    if (reels.length === 0) {
-      reelsContainer.innerHTML = '<div class="placeholder">No reels available.</div>';
-      hideLoading();
-      return;
-    }
-
-    reels.forEach(reel => {
-      const userData = users[reel.userId] || { username: "Unknown", photoURL: null };
-      const isVerified = userData.verified || false;
-      const reactionCounts = {};
-      Object.values(reel.reactions || {}).forEach(userReactions => {
-        userReactions.forEach(reaction => {
-          reactionCounts[reaction] = (reactionCounts[reaction] || 0) + 1;
-        });
-      });
-      const emojis = Object.entries(reactionCounts)
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 3)
-        .map(([type]) => REACTION_TYPES[type])
-        .join('');
-
-      const reelElement = document.createElement("div");
-      reelElement.className = "reel";
-      reelElement.id = `reel-${reel.id}`;
-      reelElement.innerHTML = `
-        <div class="reel-header">
-          <img src="${userData.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${userData.username} avatar"/>
-          <div class="user-info">
-            <span>${userData.username}${isVerified ? `<span class="verified-icon" aria-label="Verified user" title="Verified user"><svg viewBox="0 0 24 24"><path d="M9 16.2l-3.5-3.5L4 14.1 9 19 20 8l-1.4-1.4z"/></svg></span>` : ''}</span>
-            <span class="timestamp">${timeAgo(reel.timestamp)}</span>
-          </div>
-        </div>
-        <video src="${reel.videoUrl}" class="reel-video" preload="auto" loop playsinline></video>
-        <div class="reel-actions">
-          <button class="like-btn" data-reel-id="${reel.id}">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="${reel.likedBy && reel.likedBy.includes(currentUserUid) ? 'text-red-500' : 'text-gray-500'}">
-              <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
-            </svg>
-            <span class="like-count">${reel.likes || 0}</span>
-          </button>
-          <div class="reaction-display">${emojis ? `<span class="text-lg">${emojis}</span>` : ''}</div>
-          <button class="comment-btn" aria-label="Comment on reel">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M21 11.5a8.5 8.5 0 01-11.4 7.9l-4.6 1.5 1.5-4.6A8.5 8.5 0 1121 11.5z"/>
-            </svg>
-            <span class="comment-count">${Object.keys(reel.comments || {}).length}</span>
-          </button>
-        </div>
-        ${reel.caption ? `<div class="reel-caption"><strong>${userData.username}${isVerified ? `<span class="verified-icon" aria-label="Verified user" title="Verified user"><svg viewBox="0 0 24 24"><path d="M9 16.2l-3.5-3.5L4 14.1 9 19 20 8l-1.4-1.4z"/></svg></span>` : ''}:</strong> ${reel.caption}</div>` : ''}
-      `;
-
-      const likeBtn = reelElement.querySelector(".like-btn");
-      setupReaction(likeBtn, reel.id, true); // Modified setupReaction to handle reels
-
-      const commentBtn = reelElement.querySelector(".comment-btn");
-      commentBtn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        showCommentSheet(reel.id, true); // Modified showCommentSheet to handle reels
-      });
-
-      const video = reelElement.querySelector(".reel-video");
-      video.addEventListener("click", (e) => {
-        e.stopPropagation();
-        if (video.paused) {
-          pauseAllMedia();
-          video.play().catch(error => {
-            console.warn(`Failed to play reel ${reel.id}:`, error.message);
-          });
-        } else {
-          video.pause();
-        }
-      });
-
-      reelElement.querySelectorAll(".reel-header img, .reel-header .user-info span:first-child").forEach(el => {
-        el.addEventListener("click", (e) => {
-          e.stopPropagation();
-          console.log("Navigating to profile:", reel.userId);
-          location.href = `profile.html?uid=${reel.userId}`;
-          pauseAllMedia();
-        });
-      });
-
-      reelElement.addEventListener("click", (e) => {
-        if (e.target.closest('.reel-actions button, .reel-header img, .reel-header .user-info span:first-child')) return;
-        showCommentSheet(reel.id, true);
-      });
-
-      reelsContainer.appendChild(reelElement);
-    });
-
-    const observer = new IntersectionObserver((entries) => {
-      entries.forEach(entry => {
-        const reelElement = entry.target;
-        const video = reelElement.querySelector(".reel-video");
-        if (entry.isIntersecting) {
-          pauseAllMedia();
-          video.play().catch(error => {
-            console.warn(`Failed to play reel ${reelElement.id}:`, error.message);
-          });
-        } else {
-          video.pause();
-          video.currentTime = 0;
-        }
-      });
-    }, { root: null, threshold: 0.9 });
-
-    document.querySelectorAll(".reel-video").forEach(video => observer.observe(video.parentElement));
-  } catch (error) {
-    console.error("Error loading reels:", error.message);
-    reelsContainer.innerHTML = `<p class="error">Failed to load reels: ${error.message}</p>`;
-  } finally {
-    hideLoading();
-  }
-}
-
-// Modified setupReaction to handle reels
-function setupReaction(button, id, isReel = false) {
-  button.addEventListener('click', (e) => {
-    e.stopPropagation();
-    const popupKey = isReel ? `reel-${id}` : `post-${id}`;
-    const existingPopup = document.querySelector(`.reaction-popup[data-${isReel ? 'reel' : 'post'}-id="${id}"]`);
-    if (existingPopup && existingPopup.classList.contains('open')) {
-      existingPopup.classList.remove('open');
-      setTimeout(() => existingPopup.remove(), 300);
-    } else {
-      document.querySelectorAll('.reaction-popup.open').forEach(popup => {
-        popup.classList.remove('open');
-        setTimeout(() => popup.remove(), 300);
-      });
-      const element = document.getElementById(popupKey);
-      element.insertAdjacentHTML('beforeend', createReactionPopup(id));
-      const popup = element.querySelector(`.reaction-popup[data-${isReel ? 'reel' : 'post'}-id="${id}"]`);
-      popup.classList.remove('hidden');
-      popup.classList.add('open');
-      popup.querySelectorAll('.reaction-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          toggleReaction(id, btn.dataset.reaction, button, isReel);
-          popup.classList.remove('open');
-          setTimeout(() => popup.remove(), 300);
-        });
-      });
-    }
-  });
-}
-
-// Modified toggleReaction to handle reels
-async function toggleReaction(id, reactionType, button, isReel = false) {
-  const userId = currentUserUid;
-  const refPath = isReel ? `reels/${id}` : `posts/${id}`;
-  const itemRef = ref(db, refPath);
-  const likeCountSpan = button.closest(`.${isReel ? 'reel' : 'post'}-actions`).querySelector(".like-count");
-  const likeIcon = button.closest(`.${isReel ? 'reel' : 'post'}-actions`).querySelector(".like-btn svg");
-  const reactionDisplay = button.closest(`.${isReel ? 'reel' : 'post'}`).querySelector(".reaction-display");
-
-  showLoading();
-  try {
-    const snapshot = await get(itemRef);
-    const item = snapshot.val() || {};
-    const reactions = item.reactions || {};
-    const userReactions = reactions[userId] || [];
-    const currentLikes = item.likes || 0;
-
-    if (userReactions.includes(reactionType)) {
-      const updatedReactions = { ...reactions, [userId]: userReactions.filter(r => r !== reactionType) };
-      if (updatedReactions[userId].length === 0) delete updatedReactions[userId];
-      await update(itemRef, {
-        reactions: updatedReactions,
-        likes: currentLikes - 1,
-        likedBy: (item.likedBy || []).filter(id => id !== userId)
-      });
-      likeCountSpan.textContent = currentLikes - 1 || '';
-      likeIcon.classList.remove("text-red-500");
-      likeIcon.classList.add("text-gray-500");
-      updateReactionDisplay(id, updatedReactions, isReel);
-    } else {
-      const updatedReactions = { ...reactions, [userId]: [reactionType] };
-      const isNewLike = !item.likedBy?.includes(userId);
-      await update(itemRef, {
-        reactions: updatedReactions,
-        likes: isNewLike ? currentLikes + 1 : currentLikes,
-        likedBy: isNewLike ? [...(item.likedBy || []), userId] : item.likedBy
-      });
-      likeCountSpan.textContent = isNewLike ? currentLikes + 1 : currentLikes;
-      likeIcon.classList.remove("text-gray-500");
-      likeIcon.classList.add("text-red-500");
-      updateReactionDisplay(id, updatedReactions, isReel);
-      if (item.userId !== userId && isNewLike) {
-        const notifRef = push(ref(db, `notifications/${item.userId}/${id}/reactions`));
-        await set(notifRef, { type: 'reaction', reactionType, userId: currentUserUid, timestamp: Date.now(), read: false });
-      }
-    }
-  } catch (error) {
-    console.error(`Error updating ${isReel ? 'reel' : 'post'} reaction:`, error.message);
-    showError(document.getElementById(`${isReel ? 'reel' : 'post'}-${id}`), "Failed to update reaction.");
-  } finally {
-    hideLoading();
-  }
-}
-
-// Modified updateReactionDisplay to handle reels
-function updateReactionDisplay(id, reactions, isReel = false) {
-  const element = document.getElementById(`${isReel ? 'reel' : 'post'}-${id}`);
-  const reactionDisplay = element.querySelector(".reaction-display");
-  if (!reactionDisplay) return;
-
-  const reactionCounts = {};
-  Object.values(reactions).forEach(userReactions => {
-    userReactions.forEach(reaction => {
-      reactionCounts[reaction] = (reactionCounts[reaction] || 0) + 1;
-    });
-  });
-
-  const emojis = Object.entries(reactionCounts)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 3)
-    .map(([type]) => REACTION_TYPES[type])
-    .join('');
-  
-  reactionDisplay.innerHTML = emojis ? `<span class="text-lg">${emojis}</span>` : '';
-}
-
-// Modified showCommentSheet to handle reels
-async function showCommentSheet(id, isReel = false) {
-  currentPostId = id;
-  commentSheet.classList.remove("hidden");
-  commentSheet.classList.add("open");
-  commentsList.innerHTML = '<div class="loading">Loading comments...</div>';
-  showLoading();
-  pauseAllMedia();
-  try {
-    const itemRef = ref(db, isReel ? `reels/${id}` : `posts/${id}`);
-    const postSnap = await get(itemRef);
-    const item = postSnap.val();
-    const comments = item.comments || {};
-    const usersSnap = await get(ref(db, "users"));
-    const users = usersSnap.val() || {};
-    commentsList.innerHTML = "";
-
-    const renderComment = (cid, comment, isReply = false, parentId = null) => {
-      const userData = users[comment.userId] || { username: "Unknown", photoURL: null };
-      const commentItem = document.createElement("div");
-      commentItem.className = `comment-item ${isReply ? 'reply' : ''}`;
-      commentItem.dataset.commentId = cid;
-      if (parentId) commentItem.dataset.parentId = parentId;
-      const reactionCount = comment.likes || 0;
-      const userReactions = comment.reactions?.[currentUserUid] || [];
-      const isLiked = userReactions.includes('like');
-      const reactionCounts = {};
-      Object.values(comment.reactions || {}).forEach(userReactions => {
-        userReactions.forEach(reaction => {
-          reactionCounts[reaction] = (reactionCounts[reaction] || 0) + 1;
-        });
-      });
-      const emojis = Object.entries(reactionCounts)
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 3)
-        .map(([type]) => REACTION_TYPES[type])
-        .join('');
-      commentItem.innerHTML = `
-        <img src="${userData.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${userData.username} avatar" class="comment-avatar"/>
-        <div class="comment-content">
-          <p class="comment-username">${userData.username}</p>
-          <p class="comment-text">${comment.text}</p>
-          <p class="comment-time">${timeAgo(comment.timestamp)}</p>
-          <div class="comment-actions">
-            <button class="comment-action-btn reaction-btn" data-comment-id="${cid}" aria-label="React to comment">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="${isLiked ? 'text-red-500' : 'text-gray-500'}">
-                <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
-              </svg>
-              <span class="comment-reaction-count">${reactionCount || ''}</span>
-            </button>
-            <div class="comment-reaction-display">${emojis ? `<span class="text-lg">${emojis}</span>` : ''}</div>
-            <button class="comment-action-btn reply-btn" data-comment-id="${cid}" aria-label="Reply to comment">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M3 10h11m0 0l-3-3m3 3l-3 3m7-3v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-2"/>
-              </svg>
-              Reply
-            </button>
-          </div>
-          <div class="reply-input-container" data-comment-id="${cid}">
-            <input type="text" class="reply-input" placeholder="Reply to ${userData.username}..." aria-label="Reply to ${userData.username}"/>
-            <button class="reply-submit">Post</button>
-          </div>
-        </div>
-      `;
-      setupCommentReaction(commentItem.querySelector('.reaction-btn'), id, cid, isReel);
-      commentItem.querySelector('.reply-btn').addEventListener('click', (e) => {
-        e.stopPropagation();
-        const replyContainer = commentItem.querySelector('.reply-input-container');
-        if (replyContainer.classList.contains('active')) {
-          replyContainer.classList.remove('active');
-          currentReplyCommentId = null;
-        } else {
-          document.querySelectorAll('.reply-input-container.active').forEach(container => container.classList.remove('active'));
-          replyContainer.classList.add('active');
-          currentReplyCommentId = cid;
-          replyContainer.querySelector('.reply-input').focus();
-        }
-      });
-      commentItem.querySelector('.reply-submit').addEventListener('click', async (e) => {
-        e.stopPropagation();
-        const replyInput = commentItem.querySelector('.reply-input');
-        const replyText = replyInput.value.trim();
-        if (replyText) {
-          await submitReply(id, cid, replyText, isReel);
-          replyInput.value = '';
-          commentItem.querySelector('.reply-input-container').classList.remove('active');
-          currentReplyCommentId = null;
-        }
-      });
-      commentItem.querySelector('.reply-input').addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') {
-          e.preventDefault();
-          commentItem.querySelector('.reply-submit').click();
-        }
-      });
-      return commentItem;
-    };
-
-    const sortedComments = Object.entries(comments)
-      .map(([cid, comment]) => ({ cid, ...comment }))
-      .sort((a, b) => a.timestamp - b.timestamp);
-
-    for (const { cid, ...comment } of sortedComments) {
-      if (!comment.parentId) {
-        const commentItem = renderComment(cid, comment);
-        commentsList.appendChild(commentItem);
-        const replies = sortedComments.filter(reply => reply.parentId === cid);
-        for (const reply of replies) {
-          const replyItem = renderComment(reply.cid, reply, true, cid);
-          commentsList.appendChild(replyItem);
-        }
-      }
-    }
-
-    if (sortedComments.length === 0) {
-      commentsList.innerHTML = `<p class="text-center text-gray-500">No comments yet.</p>`;
-    }
-    commentInput.value = "";
-    commentInput.focus();
-  } catch (error) {
-    console.error(`Error loading ${isReel ? 'reel' : 'post'} comments:`, error.message);
-    commentsList.innerHTML = `<p class="error">Failed to load comments: ${error.message}</p>`;
-  } finally {
-    hideLoading();
-  }
-}
-
-// Modified submitReply to handle reels
-async function submitReply(id, parentCommentId, replyText, isReel = false) {
-  if (!id || !parentCommentId || !replyText) return;
-  showLoading();
-  try {
-    const commentRef = push(ref(db, `${isReel ? 'reels' : 'posts'}/${id}/comments`));
-    const itemSnap = await get(ref(db, `${isReel ? 'reels' : 'posts'}/${id}`));
-    const item = itemSnap.val();
-    const parentCommentSnap = await get(ref(db, `${isReel ? 'reels' : 'posts'}/${id}/comments/${parentCommentId}`));
-    const parentComment = parentCommentSnap.val();
-    await set(commentRef, {
-      userId: currentUserUid,
-      text: replyText,
-      timestamp: Date.now(),
-      parentId: parentCommentId
-    });
-    if (parentComment.userId !== currentUserUid) {
-      const notifRef = push(ref(db, `notifications/${parentComment.userId}/${id}/comment-replies`));
-      await set(notifRef, { type: 'comment-reply', userId: currentUserUid, commentId: parentCommentId, timestamp: Date.now(), read: false });
-    }
-    if (item.userId !== currentUserUid && parentComment.userId !== item.userId) {
-      const notifRef = push(ref(db, `notifications/${item.userId}/${id}/comment-replies`));
-      await set(notifRef, { type: 'comment-reply', userId: currentUserUid, commentId: parentCommentId, timestamp: Date.now(), read: false });
-    }
-    await showCommentSheet(id, isReel);
-  } catch (error) {
-    console.error(`Error adding reply to ${isReel ? 'reel' : 'post'}:`, error.message);
-    showError(commentsList, `Failed to add reply: ${error.message}`);
-  } finally {
-    hideLoading();
-  }
-}
-
-// Modified toggleCommentReaction to handle reels
-async function toggleCommentReaction(id, commentId, reactionType, button, isReel = false) {
-  const userId = currentUserUid;
-  const commentRef = ref(db, `${isReel ? 'reels' : 'posts'}/${id}/comments/${commentId}`);
-  const likeCountSpan = button.closest('.comment-item').querySelector(".comment-reaction-count");
-  const likeIcon = button.closest('.comment-item').querySelector(".comment-reaction-btn svg");
-  const reactionDisplay = button.closest('.comment-item').querySelector(".comment-reaction-display");
-
-  showLoading();
-  try {
-    const snapshot = await get(commentRef);
-    const comment = snapshot.val() || {};
-    const reactions = comment.reactions || {};
-    const userReactions = reactions[userId] || [];
-    const currentLikes = comment.likes || 0;
-
-    if (userReactions.includes(reactionType)) {
-      const updatedReactions = { ...reactions, [userId]: userReactions.filter(r => r !== reactionType) };
-      if (updatedReactions[userId].length === 0) delete updatedReactions[userId];
-      await update(commentRef, {
-        reactions: updatedReactions,
-        likes: currentLikes - 1,
-        likedBy: (comment.likedBy || []).filter(id => id !== userId)
-      });
-      likeCountSpan.textContent = currentLikes - 1 || '';
-      if (likeIcon) {
-        likeIcon.classList.remove("text-red-500");
-        likeIcon.classList.add("text-gray-500");
-      }
-      updateCommentReactionDisplay(id, commentId, updatedReactions, isReel);
-    } else {
-      const updatedReactions = { ...reactions, [userId]: [reactionType] };
-      const isNewLike = !comment.likedBy?.includes(userId);
-      await update(commentRef, {
-        reactions: updatedReactions,
-        likes: isNewLike ? currentLikes + 1 : currentLikes,
-        likedBy: isNewLike ? [...(comment.likedBy || []), userId] : comment.likedBy
-      });
-      likeCountSpan.textContent = isNewLike ? currentLikes + 1 : currentLikes;
-      if (likeIcon) {
-        likeIcon.classList.remove("text-gray-500");
-        likeIcon.classList.add("text-red-500");
-      }
-      updateCommentReactionDisplay(id, commentId, updatedReactions, isReel);
-      if (comment.userId !== userId && isNewLike) {
-        const notifRef = push(ref(db, `notifications/${comment.userId}/${id}/comment-reactions`));
-        await set(notifRef, { type: 'comment-reaction', reactionType, userId: currentUserUid, commentId, timestamp: Date.now(), read: false });
-      }
-    }
-  } catch (error) {
-    console.error(`Error updating ${isReel ? 'reel' : 'post'} comment reaction:`, error.message);
-    showError(commentsList, "Failed to update reaction.");
-  } finally {
-    hideLoading();
-  }
-}
-
-// Modified updateCommentReactionDisplay to handle reels
-function updateCommentReactionDisplay(id, commentId, reactions, isReel = false) {
-  const commentElement = document.querySelector(`.comment-item[data-comment-id="${commentId}"]`);
-  const reactionDisplay = commentElement.querySelector(".comment-reaction-display");
-  if (!reactionDisplay) return;
-
-  const reactionCounts = {};
-  Object.values(reactions).forEach(userReactions => {
-    userReactions.forEach(reaction => {
-      reactionCounts[reaction] = (reactionCounts[reaction] || 0) + 1;
-    });
-  });
-
-  const emojis = Object.entries(reactionCounts)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 3)
-    .map(([type]) => REACTION_TYPES[type])
-    .join('');
-  
-  reactionDisplay.innerHTML = emojis ? `<span class="text-lg">${emojis}</span>` : '';
-}
-
-// Modified setupCommentReaction to handle reels
-function setupCommentReaction(button, id, commentId, isReel = false) {
-  button.addEventListener('click', (e) => {
-    e.stopPropagation();
-    const existingPopup = document.querySelector(`.comment-reaction-popup[data-comment-id="${commentId}"]`);
-    if (existingPopup && existingPopup.classList.contains('open')) {
-      existingPopup.classList.remove('open');
-      setTimeout(() => existingPopup.remove(), 300);
-    } else {
-      document.querySelectorAll('.comment-reaction-popup.open').forEach(popup => {
-        popup.classList.remove('open');
-        setTimeout(() => popup.remove(), 300);
-      });
-      const commentElement = document.querySelector(`.comment-item[data-comment-id="${commentId}"]`);
-      commentElement.querySelector('.comment-content').insertAdjacentHTML('beforeend', createCommentReactionPopup(id, commentId));
-      const popup = commentElement.querySelector(`.comment-reaction-popup[data-comment-id="${commentId}"]`);
-      popup.classList.remove('hidden');
-      popup.classList.add('open');
-      popup.querySelectorAll('.comment-reaction-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          toggleCommentReaction(id, commentId, btn.dataset.reaction, button, isReel);
-          popup.classList.remove('open');
-          setTimeout(() => popup.remove(), 300);
-        });
-      });
-    }
-  });
-}
-
-deletePostClose.addEventListener("click", () => {
-  deletePostModal.classList.remove("open");
-  deletePostModal.classList.add("hidden");
-  currentDeletePostId = null;
-  currentDeletePostElement = null;
-});
-
-deletePostCancel.addEventListener("click", () => {
-  deletePostModal.classList.remove("open");
-  deletePostModal.classList.add("hidden");
-  currentDeletePostId = null;
-  currentDeletePostElement = null;
-});
-
-deletePostConfirm.addEventListener("click", async () => {
-  if (!currentDeletePostId || !currentDeletePostElement) return;
-  showLoading();
-  try {
-    await set(ref(db, `posts/${currentDeletePostId}`), null);
-    currentDeletePostElement.remove();
-    deletePostModal.classList.remove("open");
-    deletePostModal.classList.add("hidden");
-    currentDeletePostId = null;
-    currentDeletePostElement = null;
-  } catch (error) {
-    console.error("Error deleting post:", error.message);
-    showError(document.querySelector(".profile-posts"), "Failed to delete post.");
-  } finally {
-    hideLoading();
-  }
-});
-
-onAuthStateChanged(auth, user => {
-  if (user) {
+onAuthStateChanged(auth, (user) => {
+  if (!user) {
+    location.href = "index.html";
+  } else {
     currentUserUid = user.uid;
-    document.getElementById("add-story-img").src = user.photoURL || 'https://www.gravatar.com/avatar?d=mp';
     loadStories();
     loadPosts();
     loadFriends();
     loadSearch();
-    loadReels();
     loadProfile();
-  } else {
-    console.log("User not authenticated, redirecting to login...");
-    location.href = "login.html";
   }
 });
 </script>
