@@ -233,19 +233,16 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js"></script>
   <script>
-    // Firebase configuration (replace with your actual config)
+    // Firebase configuration
     const firebaseConfig = {
-      // Your Firebase configuration object here
-      const firebaseConfig = {
-  apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
-  authDomain: "fire-b-a8878.firebaseapp.com",
-  databaseURL: "https://fire-b-a8878.firebaseio.com",
-  projectId: "fire-b-a8878",
-  storageBucket: "fire-b-a8878.appspot.com",
-  messagingSenderId: "658673187627",
-  appId: "1:658673187627:web:6e4c29af661785f0afa36e"
-};
-
+      apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
+      authDomain: "fire-b-a8878.firebaseapp.com",
+      databaseURL: "https://fire-b-a8878-default-rtdb.firebaseio.com",
+      projectId: "fire-b-a8878",
+      storageBucket: "fire-b-a8878.appspot.com",
+      messagingSenderId: "658673187627",
+      appId: "1:658673187627:web:6e4c29af661785f0afa36e"
+    };
 
     // Initialize Firebase
     firebase.initializeApp(firebaseConfig);
@@ -272,7 +269,7 @@
           userRef.once('value').then((snapshot) => {
             const userData = snapshot.val() || {};
             document.getElementById('username-input').value = userData.username || '';
-            document.getElementById('handle-input').value = `@${userData.username || ''}`;
+            document.getElementById('handle-input').value = userData.username ? `@${userData.username}` : '';
             document.getElementById('bio-input').value = userData.bio || '';
             document.getElementById('location-input').value = userData.location || '';
             document.getElementById('joined-input').value = userData.joined ? new Date(userData.joined).toISOString().split('T')[0] : '';
@@ -286,6 +283,7 @@
           });
         } else {
           showError('username-error', 'User not authenticated.');
+          window.location.href = 'index.html'; // Redirect to login or profile page
         }
       });
 
@@ -309,7 +307,7 @@
 
       // Close button redirects to profile page
       closeBtn.addEventListener('click', () => {
-        window.location.href = 'index.html'; // Adjust to your profile page URL
+        window.location.href = 'index.html';
       });
 
       // Form submission with Cloudinary upload and Firebase save
@@ -333,6 +331,7 @@
           showError('handle-error', 'Handle must start with @');
           hasError = true;
         }
+        const cleanUsername = handle.startsWith('@') ? handle.slice(1) : handle;
         if (hasError) return;
 
         loading.classList.add('visible');
@@ -368,14 +367,14 @@
           const coverImageUrl = coverImageFile ? await uploadImage(coverImageFile) : coverImagePreview.src;
 
           // Update Firebase Authentication profile
-          await auth.currentUser.updateProfile({
+          await user.updateProfile({
             displayName: username,
             photoURL: profilePicUrl
           });
 
           // Save to Firebase Realtime Database
           await db.ref(`users/${user.uid}`).update({
-            username,
+            username: cleanUsername,
             bio: bio || '',
             location: location || '',
             joined: joined ? new Date(joined).getTime() : Date.now(),
@@ -384,10 +383,14 @@
             updatedAt: Date.now()
           });
 
-          window.location.href = 'index.html'; // Redirect to profile page
+          window.location.href = 'index.html';
         } catch (error) {
           console.error('Error saving profile:', error);
-          showError('username-error', error.message || 'Failed to save profile.');
+          let errorMessage = error.message || 'Failed to save profile.';
+          if (error.code === 'auth/requires-recent-login') {
+            errorMessage = 'Please log in again to update your profile.';
+          }
+          showError('username-error', errorMessage);
         } finally {
           loading.classList.remove('visible');
         }
