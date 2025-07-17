@@ -2150,79 +2150,80 @@ function createCommentReactionPopup(postId, commentId) {
 
 // Toggle reaction for comments
 async function toggleCommentReaction(postId, commentId, reactionType, button) {
-      const userId = currentUserUid;
-      const commentRef = ref(db, `posts/${postId}/comments/${commentId}`);
-      const likeCountSpan = button.closest('.comment-item').querySelector(".comment-reaction-count");
-      const reactionDisplay = button.closest('.comment-item').querySelector(".comment-reaction-display");
+  const userId = currentUserUid;
+  const commentRef = ref(db, `posts/${postId}/comments/${commentId}`);
+  const likeCountSpan = button.closest('.comment-item').querySelector(".comment-reaction-count");
+  const reactionDisplay = button.closest('.comment-item').querySelector(".comment-reaction-display");
 
-      showLoading();
-      try {
-        const snapshot = await get(commentRef);
-        const comment = snapshot.val() || {};
-        const reactions = comment.reactions || {};
-        const userReactions = reactions[userId] || [];
-        const currentLikes = comment.likes || 0;
+  showLoading();
+  try {
+    const snapshot = await get(commentRef);
+    const comment = snapshot.val() || {};
+    const reactions = comment.reactions || {};
+    // Ensure userReactions is an array
+    let userReactions = Array.isArray(reactions[userId]) ? reactions[userId] : [];
+    const currentLikes = comment.likes || 0;
 
-        let updatedReactions, updatedLikes, updatedLikedBy;
-        if (userReactions.includes(reactionType)) {
-          // Remove reaction
-          updatedReactions = { ...reactions, [userId]: userReactions.filter(r => r !== reactionType) };
-          if (updatedReactions[userId].length === 0) delete updatedReactions[userId];
-          updatedLikes = currentLikes - 1;
-          updatedLikedBy = (comment.likedBy || []).filter(id => id !== userId);
-        } else {
-          // Add or update reaction
-          updatedReactions = { ...reactions, [userId]: [reactionType] };
-          updatedLikes = comment.likedBy?.includes(userId) ? currentLikes : currentLikes + 1;
-          updatedLikedBy = comment.likedBy?.includes(userId) ? comment.likedBy : [...(comment.likedBy || []), userId];
-        }
-
-        await update(commentRef, {
-          reactions: updatedReactions,
-          likes: updatedLikes,
-          likedBy: updatedLikedBy
-        });
-
-        // Update UI with grouped reactions
-        const reactionCounts = {};
-        REACTION_TYPES.forEach(type => {
-          reactionCounts[type] = Object.values(updatedReactions).filter(r => r.includes(type)).length;
-        });
-        const totalReactions = Object.values(reactionCounts).reduce((sum, count) => sum + count, 0);
-        const activeReactions = REACTION_TYPES.filter(type => reactionCounts[type] > 0);
-        const reactionEmojis = {
-          like: '👍',
-          love: '❤️',
-          haha: '😂',
-          wow: '😮',
-          sad: '😢',
-          angry: '😣'
-        };
-        likeCountSpan.innerHTML = `
-          <span class="emoji-group">
-            ${activeReactions.map(type => `<span>${reactionEmojis[type]}</span>`).join('')}
-          </span>
-          ${totalReactions || ''}
-        `;
-        reactionDisplay.innerHTML = userReactions.includes(reactionType) ?
-          `<span class="text-2xl">${reactionEmojis[reactionType]}</span>` :
-          `
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="${updatedLikes > 0 && updatedLikedBy.includes(userId) ? 'text-red-500' : 'text-gray-500'}">
-              <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
-            </svg>
-          `;
-
-        if (comment.userId !== userId && !userReactions.includes(reactionType)) {
-          const notifRef = push(ref(db, `notifications/${comment.userId}/${postId}/comment-reactions`));
-          await set(notifRef, { type: 'comment-reaction', reactionType, userId: currentUserUid, commentId, timestamp: Date.now(), read: false });
-        }
-      } catch (error) {
-        console.error("Error updating comment reaction:", error.message);
-        showError(commentsList, "Failed to update reaction.");
-      } finally {
-        hideLoading();
-      }
+    let updatedReactions, updatedLikes, updatedLikedBy;
+    if (userReactions.includes(reactionType)) {
+      // Remove reaction
+      updatedReactions = { ...reactions, [userId]: userReactions.filter(r => r !== reactionType) };
+      if (updatedReactions[userId].length === 0) delete updatedReactions[userId];
+      updatedLikes = currentLikes - 1;
+      updatedLikedBy = (comment.likedBy || []).filter(id => id !== userId);
+    } else {
+      // Add or update reaction
+      updatedReactions = { ...reactions, [userId]: [reactionType] };
+      updatedLikes = comment.likedBy?.includes(userId) ? currentLikes : currentLikes + 1;
+      updatedLikedBy = comment.likedBy?.includes(userId) ? comment.likedBy : [...(comment.likedBy || []), userId];
     }
+
+    await update(commentRef, {
+      reactions: updatedReactions,
+      likes: updatedLikes,
+      likedBy: updatedLikedBy
+    });
+
+    // Update UI with grouped reactions
+    const reactionCounts = {};
+    REACTION_TYPES.forEach(type => {
+      reactionCounts[type] = Object.values(updatedReactions).filter(r => Array.isArray(r) && r.includes(type)).length;
+    });
+    const totalReactions = Object.values(reactionCounts).reduce((sum, count) => sum + count, 0);
+    const activeReactions = REACTION_TYPES.filter(type => reactionCounts[type] > 0);
+    const reactionEmojis = {
+      like: '👍',
+      love: '❤️',
+      haha: '😂',
+      wow: '😮',
+      sad: '😢',
+      angry: '😣'
+    };
+    likeCountSpan.innerHTML = `
+      <span class="emoji-group">
+        ${activeReactions.map(type => `<span>${reactionEmojis[type]}</span>`).join('')}
+      </span>
+      ${totalReactions || ''}
+    `;
+    reactionDisplay.innerHTML = userReactions.includes(reactionType) ?
+      `<span class="text-2xl">${reactionEmojis[reactionType]}</span>` :
+      `
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="${updatedLikes > 0 && updatedLikedBy.includes(userId) ? 'text-red-500' : 'text-gray-500'}">
+          <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+        </svg>
+      `;
+
+    if (comment.userId !== userId && !userReactions.includes(reactionType)) {
+      const notifRef = push(ref(db, `notifications/${comment.userId}/${postId}/comment-reactions`));
+      await set(notifRef, { type: 'comment-reaction', reactionType, userId: currentUserUid, commentId, timestamp: Date.now(), read: false });
+    }
+  } catch (error) {
+    console.error("Error updating comment reaction:", error.message);
+    showError(commentsList, "Failed to update reaction.");
+  } finally {
+    hideLoading();
+  }
+}
 
 
 function setupCommentReactionClick(button, postId, commentId) {
