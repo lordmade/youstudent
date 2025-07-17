@@ -198,11 +198,6 @@
           <span class="error" id="username-error"></span>
         </div>
         <div class="form-group">
-          <label for="handle-input">Handle</label>
-          <input type="text" id="handle-input" placeholder="@username" required>
-          <span class="error" id="handle-error"></span>
-        </div>
-        <div class="form-group">
           <label for="bio-input">Bio</label>
           <textarea id="bio-input" placeholder="Tell us about yourself" rows="4"></textarea>
         </div>
@@ -229,10 +224,12 @@
     </div>
   </div>
   <div class="loading" id="loading">Saving...</div>
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js"></script>
-  <script>
+  <script type="module">
+    // Import Firebase SDK 9.6.11
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js';
+    import { getAuth, onAuthStateChanged, updateProfile } from 'https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js';
+    import { getDatabase, ref, get, update } from 'https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js';
+
     // Firebase configuration
     const firebaseConfig = {
       apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
@@ -245,9 +242,9 @@
     };
 
     // Initialize Firebase
-    firebase.initializeApp(firebaseConfig);
-    const db = firebase.database();
-    const auth = firebase.auth();
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getDatabase(app);
 
     // Cloudinary configuration
     const CLOUDINARY_UPLOAD_URL = 'https://api.cloudinary.com/v1_1/YOUR_CLOUD_NAME/image/upload';
@@ -263,13 +260,12 @@
       const loading = document.getElementById('loading');
 
       // Pre-fill form with existing user data
-      auth.onAuthStateChanged((user) => {
+      onAuthStateChanged(auth, (user) => {
         if (user) {
-          const userRef = db.ref(`users/${user.uid}`);
-          userRef.once('value').then((snapshot) => {
+          const userRef = ref(db, `users/${user.uid}`);
+          get(userRef).then((snapshot) => {
             const userData = snapshot.val() || {};
             document.getElementById('username-input').value = userData.username || '';
-            document.getElementById('handle-input').value = userData.username ? `@${userData.username}` : '';
             document.getElementById('bio-input').value = userData.bio || '';
             document.getElementById('location-input').value = userData.location || '';
             document.getElementById('joined-input').value = userData.joined ? new Date(userData.joined).toISOString().split('T')[0] : '';
@@ -283,7 +279,7 @@
           });
         } else {
           showError('username-error', 'User not authenticated.');
-          window.location.href = 'index.html'; // Redirect to login or profile page
+          window.location.href = 'home.html';
         }
       });
 
@@ -305,34 +301,27 @@
         }
       });
 
-      // Close button redirects to profile page
+      // Close button redirects to home page
       closeBtn.addEventListener('click', () => {
-        window.location.href = 'index.html';
+        window.location.href = 'home.html';
       });
 
       // Form submission with Cloudinary upload and Firebase save
       addProfileForm.addEventListener('submit', async (e) => {
         e.preventDefault();
-        const username = document.getElementById('username-input').value.trim();
-        const handle = document.getElementById('handle-input').value.trim();
-        const bio = document.getElementById('bio-input').value.trim();
-        const location = document.getElementById('location-input').value.trim();
-        const joined = document.getElementById('joined-input').value;
-        const profilePicFile = profilePicInput.files[0];
-        const coverImageFile = coverImageInput.files[0];
+        const newUsername = document.getElementById('username-input').value.trim();
+        const newBio = document.getElementById('bio-input').value.trim();
+        const newLocation = document.getElementById('location-input').value.trim();
+        const newJoined = document.getElementById('joined-input').value;
+        const newPhoto = profilePicInput.files[0];
+        const newCoverPhoto = coverImageInput.files[0];
 
         // Validation
-        let hasError = false;
-        if (!username) {
-          showError('username-error', 'Username is required');
-          hasError = true;
+        if (!newUsername) {
+          showError('username-error', 'Username cannot be empty.');
+          document.getElementById('username-input').focus();
+          return;
         }
-        if (!handle || !handle.startsWith('@')) {
-          showError('handle-error', 'Handle must start with @');
-          hasError = true;
-        }
-        const cleanUsername = handle.startsWith('@') ? handle.slice(1) : handle;
-        if (hasError) return;
 
         loading.classList.add('visible');
         try {
@@ -341,6 +330,10 @@
             showError('username-error', 'User not authenticated.');
             return;
           }
+
+          const profileUpdates = { displayName: newUsername };
+          let photoURL = user.photoURL || 'https://www.gravatar.com/avatar?d=mp';
+          let coverPhotoURL = user.coverImage || 'https://via.placeholder.com/1500x500?text=Cover+Image';
 
           const maxFileSize = 5 * 1024 * 1024; // 5MB
           const uploadImage = async (file) => {
@@ -362,33 +355,35 @@
             return data.secure_url;
           };
 
-          // Upload images to Cloudinary
-          const profilePicUrl = profilePicFile ? await uploadImage(profilePicFile) : profilePicPreview.src;
-          const coverImageUrl = coverImageFile ? await uploadImage(coverImageFile) : coverImagePreview.src;
+          if (newPhoto) {
+            photoURL = await uploadImage(newPhoto);
+            profileUpdates.photoURL = photoURL;
+          }
 
-          // Update Firebase Authentication profile
-          await user.updateProfile({
-            displayName: username,
-            photoURL: profilePicUrl
-          });
+          if (newCoverPhoto) {
+            coverPhotoURL = await uploadImage(newCoverPhoto);
+          }
 
-          // Save to Firebase Realtime Database
-          await db.ref(`users/${user.uid}`).update({
-            username: cleanUsername,
-            bio: bio || '',
-            location: location || '',
-            joined: joined ? new Date(joined).getTime() : Date.now(),
-            photoURL: profilePicUrl || 'https://www.gravatar.com/avatar?d=mp',
-            coverImage: coverImageUrl || 'https://via.placeholder.com/1500x500?text=Cover+Image',
+          await updateProfile(user, profileUpdates);
+          const userRef = ref(db, `users/${user.uid}`);
+          await update(userRef, {
+            username: newUsername,
+            bio: newBio || '',
+            photoURL: photoURL,
+            coverImage: coverPhotoURL,
+            location: newLocation || '',
+            joined: newJoined ? new Date(newJoined).getTime() : Date.now(),
             updatedAt: Date.now()
           });
 
-          window.location.href = 'index.html';
+          window.location.href = 'home.html';
         } catch (error) {
-          console.error('Error saving profile:', error);
-          let errorMessage = error.message || 'Failed to save profile.';
+          console.error('Error updating profile:', error.code, error.message);
+          let errorMessage = 'Failed to update profile. Please try again.';
           if (error.code === 'auth/requires-recent-login') {
             errorMessage = 'Please log in again to update your profile.';
+          } else if (error.message.includes('Cloudinary')) {
+            errorMessage = 'Failed to upload image. Please try again.';
           }
           showError('username-error', errorMessage);
         } finally {
