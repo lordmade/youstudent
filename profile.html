@@ -119,6 +119,10 @@
       opacity: 0.5;
     }
 
+    .form-input[type="file"] {
+      display: none;
+    }
+
     @media (max-width: 640px) {
       .navbar-links {
         gap: 1rem;
@@ -251,10 +255,6 @@
       background: #66b0ff;
       cursor: not-allowed;
       opacity: 0.5;
-    }
-
-    .profile-form input[type="file"] {
-      display: none;
     }
 
     .custom-alert {
@@ -413,7 +413,7 @@
           <textarea id="bio" placeholder="Tell us about yourself" aria-label="Bio"></textarea>
           <span class="error" id="bio-error">Bio cannot exceed 160 characters</span>
         </div>
-        <input type="file" id="profile-picture-upload" accept="image/*" disabled>
+        <input type="file" id="media-file" class="form-input" accept="image/*,video/*" required aria-label="Media file"/>
         <button type="button" id="choose-image-btn" class="choose-image-btn" disabled aria-label="Choose profile picture">Choose Profile Picture</button>
         <div class="progress-bar" id="progress-bar">
           <div id="progress"></div>
@@ -444,7 +444,7 @@
 
     const profileAvatar = document.getElementById("profile-avatar");
     const avatarInitials = document.getElementById("avatar-initials");
-    const profilePictureUpload = document.getElementById("profile-picture-upload");
+    const mediaFile = document.getElementById("media-file");
     const chooseImageBtn = document.getElementById("choose-image-btn");
     const profileUsername = document.getElementById("profile-username");
     const profileHandle = document.getElementById("profile-handle");
@@ -513,32 +513,57 @@
       });
 
       if (file.size > 5 * 1024 * 1024) {
-        throw new Error("Image size must be less than 5MB");
+        throw new Error("Media size must be less than 5MB");
       }
-      if (!file.type.startsWith("image/")) {
-        throw new Error("Please select an image file.");
+
+      const isImage = file.type.startsWith("image/");
+      const isVideo = file.type.startsWith("video/");
+      if (!isImage && !isVideo) {
+        throw new Error("Please select an image (JPG/PNG) or video (MP4/WEBM) file.");
+      }
+
+      const allowedImageTypes = ["image/jpeg", "image/png"];
+      const allowedVideoTypes = ["video/mp4", "video/webm"];
+      if (isImage && !allowedImageTypes.includes(file.type)) {
+        throw new Error("Only JPG or PNG images are allowed.");
+      }
+      if (isVideo && !allowedVideoTypes.includes(file.type)) {
+        throw new Error("Only MP4 or WEBM videos are allowed.");
       }
 
       const formData = new FormData();
       formData.append("file", file);
       formData.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
-      formData.append("resource_type", "image");
+      formData.append("resource_type", isImage ? "image" : "video");
       formData.append("context", `user_id=${auth.currentUser.uid}`);
-      const transformations = {
-        width: 200,
-        height: 200,
-        crop: "fill",
-        quality: "auto",
-        fetch_format: "jpg"
-      };
-      formData.append("transformation", JSON.stringify(transformations));
+      if (isImage) {
+        const transformations = {
+          width: 200,
+          height: 200,
+          crop: "fill",
+          quality: "auto",
+          fetch_format: "jpg"
+        };
+        formData.append("transformation", JSON.stringify(transformations));
+      } else {
+        const transformations = {
+          width: 200,
+          height: 200,
+          crop: "fill",
+          quality: "auto"
+        };
+        formData.append("transformation", JSON.stringify(transformations));
+      }
 
       progressBar.classList.add("active");
       progress.style.width = "0%";
 
       try {
         const xhr = new XMLHttpRequest();
-        xhr.open("POST", `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`, true);
+        const uploadEndpoint = isImage
+          ? `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`
+          : `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/video/upload`;
+        xhr.open("POST", uploadEndpoint, true);
         xhr.setRequestHeader("X-Requested-With", "XMLHttpRequest");
         xhr.upload.addEventListener("progress", (event) => {
           if (event.lengthComputable) {
@@ -572,7 +597,7 @@
       }
     }
 
-    async function updateProfilePicture(profilePictureUrl) {
+    async function updateProfilePicture(profilePictureUrl, isVideo) {
       try {
         const userRef = ref(db, `users/${auth.currentUser.uid}`);
         const userSnapshot = await new Promise((resolve) => {
@@ -584,12 +609,17 @@
           handle: userData.handle || handleInput.value.trim().substring(1),
           bio: userData.bio || bioInput.value.trim(),
           profilePicture: profilePictureUrl,
+          isVideo: isVideo || false,
           isGuest: userData.isGuest || false
         });
-        profileAvatar.innerHTML = `<img src="${profilePictureUrl}" alt="Profile picture" />`;
-        showAlert("Profile picture updated successfully!", true);
+        if (isVideo) {
+          profileAvatar.innerHTML = `<video src="${profilePictureUrl}" alt="Profile video" autoplay loop muted playsinline style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover;"></video>`;
+        } else {
+          profileAvatar.innerHTML = `<img src="${profilePictureUrl}" alt="Profile picture" />`;
+        }
+        showAlert("Profile media updated successfully!", true);
       } catch (error) {
-        showAlert(`Failed to update profile picture: ${error.message}`, false);
+        showAlert(`Failed to update profile media: ${error.message}`, false);
         progressBar.classList.remove("active");
       }
     }
@@ -603,8 +633,8 @@
         return;
       }
 
-      // Enable profile picture upload and choose button for authenticated users
-      profilePictureUpload.disabled = false;
+      // Enable media file input and choose button for authenticated users
+      mediaFile.disabled = false;
       chooseImageBtn.disabled = false;
 
       const userRef = ref(db, `users/${user.uid}`);
@@ -617,7 +647,11 @@
           profileUsername.textContent = userData.username || "Anonymous";
           profileHandle.textContent = userData.handle ? `@${userData.handle}` : "";
           if (userData.profilePicture) {
-            profileAvatar.innerHTML = `<img src="${userData.profilePicture}" alt="${userData.username}'s profile picture" />`;
+            if (userData.isVideo) {
+              profileAvatar.innerHTML = `<video src="${userData.profilePicture}" alt="${userData.username}'s profile video" autoplay loop muted playsinline style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover;"></video>`;
+            } else {
+              profileAvatar.innerHTML = `<img src="${userData.profilePicture}" alt="${userData.username}'s profile picture" />`;
+            }
           } else {
             avatarInitials.textContent = getAvatarInitials(userData.username);
           }
@@ -631,22 +665,24 @@
         showAlert("You must be logged in to upload a profile picture.", false);
         return;
       }
-      profilePictureUpload.click();
+      mediaFile.click();
     });
 
-    profilePictureUpload.addEventListener("change", async () => {
+    mediaFile.addEventListener("change", async () => {
       if (!auth.currentUser) {
         showAlert("You must be logged in to upload a profile picture.", false);
         return;
       }
 
-      if (profilePictureUpload.files[0]) {
+      if (mediaFile.files[0]) {
         try {
-          const profilePictureUrl = await uploadProfilePicture(profilePictureUpload.files[0]);
+          const file = mediaFile.files[0];
+          const isVideo = file.type.startsWith("video/");
+          const profilePictureUrl = await uploadProfilePicture(file);
           if (!profilePictureUrl) return;
-          await updateProfilePicture(profilePictureUrl);
+          await updateProfilePicture(profilePictureUrl, isVideo);
         } catch (error) {
-          showAlert(`Failed to update profile picture: ${error.message}`, false);
+          showAlert(`Failed to update profile media: ${error.message}`, false);
         }
       }
     });
@@ -669,6 +705,7 @@
           handle: handleInput.value.trim().substring(1),
           bio: bioInput.value.trim(),
           profilePicture: userData.profilePicture || "",
+          isVideo: userData.isVideo || false,
           isGuest: userData.isGuest || false
         });
         showAlert("Profile updated successfully!", true);
