@@ -1112,7 +1112,7 @@
           mediaHtml = `<div class="tweet-media"><img src="${tweetData.mediaUrl}" alt="Tweet media" /></div>`;
         } else if (tweetData.mediaType === "video") {
           const posterUrl = tweetData.mediaUrl.replace(/\.mp4$|\.webm$/, '.jpg'); // Cloudinary thumbnail
-          mediaHtml = `<div class="tweet-media"><video loop muted playsinline src="${tweetData.mediaUrl}" poster="${posterUrl}" class="tweet-video"></video></div>`;
+          mediaHtml = `<div class="tweet-media"><video loop playsinline src="${tweetData.mediaUrl}" poster="${posterUrl}" class="tweet-video"></video></div>`;
         }
       }
       const likeCount = tweetData.likes ? Object.keys(tweetData.likes).length : 0;
@@ -1172,11 +1172,27 @@
       const video = tweetDiv.querySelector(".tweet-video");
       if (video) {
         tweetDiv.addEventListener("focus", () => {
-          video.play().catch(error => console.error("Video playback failed:", error));
+          video.muted = false; // Unmute on focus
+          video.play().catch(error => {
+            console.error("Video playback failed:", error);
+            showAlert("Video playback failed. Try clicking the video.", false);
+          });
         });
         tweetDiv.addEventListener("blur", () => {
+          video.muted = true; // Mute on blur
           video.pause();
           video.currentTime = 0; // Reset to show poster
+        });
+        // Allow manual click to play with sound
+        video.addEventListener("click", () => {
+          if (video.paused) {
+            video.muted = false;
+            video.play().catch(error => console.error("Manual video playback failed:", error));
+          } else {
+            video.pause();
+            video.muted = true;
+            video.currentTime = 0;
+          }
         });
       }
 
