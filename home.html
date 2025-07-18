@@ -812,7 +812,7 @@
   <script type="module">
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
     import { getAuth, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
-    import { getDatabase, ref, push, set, remove, onValue } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js';
+    import { getDatabase, ref, push, set, remove, onValue, get } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js';
 
     const firebaseConfig = {
       apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
@@ -856,6 +856,7 @@
     let userHandles = {};
     let currentSuggestions = [];
     let selectedSuggestionIndex = -1;
+    let currentUser = null;
 
     const CLOUDINARY_CLOUD_NAME = "dqkujefxj";
     const CLOUDINARY_UPLOAD_PRESET = "banter_box";
@@ -1164,7 +1165,6 @@
       const retweetBtn = tweetDiv.querySelector(".retweet-btn");
       const likeBtn = tweetDiv.querySelector(".like-btn");
       const deleteBtn = tweetDiv.querySelector(".delete-btn");
-      const commentsSection = tweetDiv.querySelector(`#comments-${tweetId}`);
 
       commentBtn.addEventListener("click", () => {
         if (isGuest) {
@@ -1187,9 +1187,7 @@
         showLoading();
         try {
           const userRef = ref(db, `users/${user.uid}`);
-          const userSnapshot = await new Promise((resolve) => {
-            onValue(userRef, resolve, { onlyOnce: true });
-          });
+          const userSnapshot = await get(userRef);
           const userData = userSnapshot.val();
           const username = userData?.username || "Anonymous";
           const handle = userData?.handle || "";
@@ -1201,6 +1199,7 @@
             createdAt: Date.now()
           });
           showAlert("Retweeted successfully!", true);
+          await refreshTweets(user, userProfiles); // Refresh to update retweet count
         } catch (error) {
           showAlert("Failed to retweet. Please try again.", false);
         } finally {
@@ -1221,6 +1220,7 @@
           } else {
             await set(likeRef, true);
           }
+          await refreshTweets(user, userProfiles); // Refresh to update like count
         } catch (error) {
           showAlert("Failed to update like. Please try again.", false);
         } finally {
@@ -1236,6 +1236,7 @@
             try {
               await remove(ref(db, `tweets/${tweetId}`));
               showAlert("Tweet deleted successfully!", true);
+              await refreshTweets(user, userProfiles); // Refresh to remove deleted tweet
             } catch (error) {
               showAlert("Failed to delete tweet. Please try again.", false);
             } finally {
@@ -1245,8 +1246,9 @@
         });
       }
 
+      // Load comments once, no real-time updates
       const commentsRef = ref(db, `tweets/${tweetId}/comments`);
-      onValue(commentsRef, (snapshot) => {
+      get(commentsRef).then((snapshot) => {
         const commentsList = tweetDiv.querySelector(".comments-list");
         commentsList.innerHTML = "";
         const comments = snapshot.val();
@@ -1309,6 +1311,7 @@
                 try {
                   await remove(ref(db, `tweets/${tweetId}/comments/${btn.dataset.commentId}`));
                   showAlert("Comment deleted successfully!", true);
+                  await refreshTweets(user, userProfiles); // Refresh to update comments
                 } catch (error) {
                   showAlert("Failed to delete comment. Please try again.", false);
                 } finally {
@@ -1334,6 +1337,54 @@
       });
     }
 
+    async function refreshTweets(user, userProfiles) {
+      showLoading();
+      try {
+        const tweetsRef = ref(db, "tweets");
+        const tweetsSnapshot = await get(tweetsRef);
+        const retweetsRef = ref(db, "retweets");
+        const retweetsSnapshot = await get(retweetsRef);
+
+        tweetFeed.innerHTML = "";
+        const tweets = tweetsSnapshot.val();
+        const retweets = retweetsSnapshot.val();
+        if (tweets) {
+          let tweetEntries = Object.entries(tweets);
+          tweetEntries.sort((a, b) => b[1].createdAt - a[1].createdAt);
+          const mostRecentTweet = tweetEntries.shift();
+          tweetEntries = shuffleArray(tweetEntries);
+          if (mostRecentTweet) {
+            const tweetId = mostRecentTweet[0];
+            const tweetData = mostRecentTweet[1];
+            tweetData.retweetCount = retweets
+              ? Object.values(retweets).filter(r => r.originalTweetId === tweetId).length
+              : 0;
+            tweetData.retweetUsers = retweets
+              ? Object.fromEntries(
+                  Object.entries(retweets).filter(([_, r]) => r.originalTweetId === tweetId)
+                )
+              : {};
+            renderTweet(tweetData, tweetId, user, userProfiles);
+          }
+          tweetEntries.forEach(([id, tweet]) => {
+            tweet.retweetCount = retweets
+              ? Object.values(retweets).filter(r => r.originalTweetId === id).length
+              : 0;
+            tweet.retweetUsers = retweets
+              ? Object.fromEntries(
+                  Object.entries(retweets).filter(([_, r]) => r.originalTweetId === id)
+                )
+              : {};
+            renderTweet(tweet, id, user, userProfiles);
+          });
+        }
+      } catch (error) {
+        showAlert("Failed to load tweets. Please try again.", false);
+      } finally {
+        hideLoading();
+      }
+    }
+
     onAuthStateChanged(auth, (user) => {
       if (!user) {
         document.body.classList.add("fade-out");
@@ -1343,9 +1394,10 @@
         return;
       }
 
+      currentUser = user;
       showLoading();
       const userRef = ref(db, `users/${user.uid}`);
-      onValue(userRef, (snapshot) => {
+      get(userRef).then((snapshot) => {
         const userData = snapshot.val();
         const isGuest = userData && userData.isGuest;
         user.isGuest = isGuest;
@@ -1360,7 +1412,7 @@
         tweetInput.placeholder = isGuest ? "Guests cannot post tweets or media." : "What's happening?";
 
         const usersRef = ref(db, "users");
-        onValue(usersRef, (usersSnapshot) => {
+        get(usersRef).then((usersSnapshot) => {
           const userProfiles = usersSnapshot.val() || {};
           userHandles = {};
           Object.entries(userProfiles).forEach(([uid, profile]) => {
@@ -1369,40 +1421,15 @@
             }
           });
 
-          const tweetsRef = ref(db, "tweets");
-          onValue(tweetsRef, (snapshot) => {
-            tweetFeed.innerHTML = "";
-            const tweets = snapshot.val();
-            if (tweets) {
-              let tweetEntries = Object.entries(tweets);
-              tweetEntries.sort((a, b) => b[1].createdAt - a[1].createdAt);
-              const mostRecentTweet = tweetEntries.shift();
-              tweetEntries = shuffleArray(tweetEntries);
-              if (mostRecentTweet) {
-                renderTweet(mostRecentTweet[1], mostRecentTweet[0], user, userProfiles);
-              }
-              tweetEntries.forEach(([id, tweet]) => {
-                renderTweet(tweet, id, user, userProfiles);
-              });
-            }
-          });
-
-          const retweetsRef = ref(db, "retweets");
-          onValue(retweetsRef, (snapshot) => {
-            const retweets = snapshot.val();
-            const tweetDivs = tweetFeed.querySelectorAll(".tweet");
-            tweetDivs.forEach(tweetDiv => {
-              const tweetId = tweetDiv.dataset.tweetId;
-              const retweetCount = retweets ? Object.values(retweets).filter(r => r.originalTweetId === tweetId).length : 0;
-              const retweetBtn = tweetDiv.querySelector(".retweet-btn");
-              const isRetweeted = retweets && Object.values(retweets).some(r => r.originalTweetId === tweetId && r.userId === user.uid);
-              retweetBtn.classList.toggle("retweeted", isRetweeted);
-              retweetBtn.querySelector("span").textContent = retweetCount;
-            });
-          });
-        }, { onlyOnce: true });
+          refreshTweets(user, userProfiles);
+        }).catch(() => {
+          showAlert("Failed to load user profiles. Please try again.", false);
+          hideLoading();
+        });
+      }).catch(() => {
+        showAlert("Failed to load user data. Please try again.", false);
         hideLoading();
-      }, { onlyOnce: true });
+      });
     });
 
     tweetInput.addEventListener("input", () => {
@@ -1425,14 +1452,14 @@
     imageUpload.addEventListener("change", () => {
       tweetBtn.disabled = tweetInput.value.trim() === "" && !imageUpload.files[0] && !videoUpload.files[0];
       if (imageUpload.files[0]) {
-        videoUpload.value = ""; // Clear video input if image is selected
+        videoUpload.value = "";
       }
     });
 
     videoUpload.addEventListener("change", () => {
       tweetBtn.disabled = tweetInput.value.trim() === "" && !imageUpload.files[0] && !videoUpload.files[0];
       if (videoUpload.files[0]) {
-        imageUpload.value = ""; // Clear image input if video is selected
+        imageUpload.value = "";
       }
     });
 
@@ -1441,9 +1468,7 @@
       showLoading();
       try {
         const userRef = ref(db, `users/${auth.currentUser.uid}`);
-        const userSnapshot = await new Promise((resolve) => {
-          onValue(userRef, resolve, { onlyOnce: true });
-        });
+        const userSnapshot = await get(userRef);
         const userData = userSnapshot.val();
         const tweetData = {
           text: tweetInput.value,
@@ -1465,6 +1490,10 @@
         videoUpload.value = "";
         tweetBtn.disabled = true;
         showAlert("Tweet posted successfully!", true);
+        const usersRef = ref(db, "users");
+        const usersSnapshot = await get(usersRef);
+        const userProfiles = usersSnapshot.val() || {};
+        await refreshTweets(currentUser, userProfiles); // Refresh to show new tweet
       } catch (error) {
         showAlert(`Failed to post tweet: ${error.message}`, false);
       } finally {
@@ -1480,9 +1509,7 @@
       showLoading();
       try {
         const userRef = ref(db, `users/${auth.currentUser.uid}`);
-        const userSnapshot = await new Promise((resolve) => {
-          onValue(userRef, resolve, { onlyOnce: true });
-        });
+        const userSnapshot = await get(userRef);
         const userData = userSnapshot.val();
         const commentData = {
           text: commentInput.value,
@@ -1497,6 +1524,10 @@
         commentInput.value = "";
         replyToCommentId = null;
         showAlert("Comment posted successfully!", true);
+        const usersRef = ref(db, "users");
+        const usersSnapshot = await get(usersRef);
+        const userProfiles = usersSnapshot.val() || {};
+        await refreshTweets(currentUser, userProfiles); // Refresh to show new comment
       } catch (error) {
         showAlert("Failed to post comment. Please try again.", false);
       } finally {
@@ -1522,6 +1553,7 @@
 
     document.querySelector(".theme-toggle").addEventListener("click", toggleDarkMode);
 
+    // Initialize theme on page load
     const savedTheme = localStorage.getItem("theme") || "light";
     document.body.dataset.theme = savedTheme;
   </script>
