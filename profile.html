@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Profile - Edit</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://upload-widget.cloudinary.com/global/all.js" type="text/javascript"></script>
   <style>
     :root {
       --twitter-blue: #1DA1F2;
@@ -96,28 +95,6 @@
       stroke-width: 2;
     }
 
-    .upload-widget-btn {
-      background: var(--twitter-blue);
-      color: var(--white);
-      padding: 0.5rem 1rem;
-      border-radius: 8px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: transform 0.2s ease, box-shadow 0.2s ease;
-      margin-top: 0.5rem;
-    }
-
-    .upload-widget-btn:hover:not(:disabled) {
-      transform: scale(1.02);
-      box-shadow: 0 2px 8px rgba(29, 161, 242, 0.3);
-    }
-
-    .upload-widget-btn:disabled {
-      background: #66b0ff;
-      cursor: not-allowed;
-      opacity: 0.5;
-    }
-
     @media (max-width: 640px) {
       .navbar-links {
         gap: 1rem;
@@ -125,10 +102,6 @@
       }
 
       .navbar-links a, .navbar-links button {
-        font-size: 0.9rem;
-      }
-
-      .upload-widget-btn {
         font-size: 0.9rem;
       }
     }
@@ -427,7 +400,6 @@
               <path d="M19 3H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V5a2 2 0 00-2-2zm-9 14l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
             </svg>
           </label>
-          <button class="upload-widget-btn" id="upload-widget-btn" disabled>Choose Image</button>
         </div>
         <div class="profile-info">
           <h2 id="profile-username">Loading...</h2>
@@ -481,7 +453,6 @@
     const avatarInitials = document.getElementById("avatar-initials");
     const profilePictureUpload = document.getElementById("profile-picture-upload");
     const profilePictureLabel = document.getElementById("profile-picture-label");
-    const uploadWidgetBtn = document.getElementById("upload-widget-btn");
     const profileUsername = document.getElementById("profile-username");
     const profileHandle = document.getElementById("profile-handle");
     const profileForm = document.getElementById("profile-form");
@@ -500,85 +471,40 @@
     const CLOUDINARY_CLOUD_NAME = "dqkujefxj";
     const CLOUDINARY_UPLOAD_PRESET = "banter_box";
 
-    // Initialize Cloudinary Upload Widget
-    const myWidget = cloudinary.createUploadWidget(
-      {
-        cloudName: CLOUDINARY_CLOUD_NAME,
-        uploadPreset: CLOUDINARY_UPLOAD_PRESET,
-        sources: ["local", "url", "camera"],
-        multiple: false,
-        resourceType: "image",
-        clientAllowedFormats: ["jpg", "png", "jpeg"],
-        maxFileSize: 5 * 1024 * 1024, // 5MB
-        cropping: true,
-        croppingAspectRatio: 1,
-        showSkipCropButton: false,
-        transformation: { width: 200, height: 200, crop: "fill", quality: "auto", fetch_format: "jpg" },
-        styles: {
-          palette: {
-            window: "#FFFFFF",
-            sourceBg: "#F5F8FA",
-            windowBorder: "#D8D9DB",
-            tabIcon: "#1DA1F2",
-            inactiveTabIcon: "#536471",
-            menuIcons: "#1DA1F2",
-            link: "#1DA1F2",
-            action: "#1DA1F2",
-            textDark: "#0F1419",
-            textLight: "#536471",
-          },
-          fonts: {
-            default: null,
-            "'Inter', sans-serif": {
-              url: null,
-              active: true
-            }
-          }
-        }
-      },
-      (error, result) => {
-        if (!error && result && result.event === "success") {
-          const profilePictureUrl = result.info.secure_url;
-          updateProfilePicture(profilePictureUrl);
-        } else if (error) {
-          showAlert(`Upload failed: ${error.message || "Unknown error"}`, false);
-          progressBar.classList.remove("active");
-        } else if (result.event === "upload-added") {
-          progressBar.classList.add("active");
-          progress.style.width = "0%";
-        } else if (result.event === "progress") {
-          const percent = Math.round(result.info.progress.percent);
-          progress.style.width = `${percent}%`;
-        } else if (result.event === "close") {
-          progressBar.classList.remove("active");
-        }
-      }
-    );
+    function getAvatarInitials(username) {
+      return username ? username.charAt(0).toUpperCase() : "A";
+    }
 
-    async function updateProfilePicture(profilePictureUrl) {
-      try {
-        const userRef = ref(db, `users/${auth.currentUser.uid}`);
-        const userSnapshot = await new Promise((resolve) => {
-          onValue(userRef, resolve, { onlyOnce: true });
-        });
-        const userData = userSnapshot.val() || {};
-        await set(userRef, {
-          username: userData.username || usernameInput.value.trim(),
-          handle: userData.handle || handleInput.value.trim().substring(1),
-          bio: userData.bio || bioInput.value.trim(),
-          profilePicture: profilePictureUrl,
-          isGuest: userData.isGuest || false
-        });
-        profileAvatar.innerHTML = `<img src="${profilePictureUrl}" alt="Profile picture" />`;
-        profileAvatar.appendChild(profilePictureUpload);
-        profileAvatar.appendChild(profilePictureLabel);
-        profileAvatar.appendChild(uploadWidgetBtn);
-        showAlert("Profile picture updated successfully!", true);
-        setTimeout(() => progressBar.classList.remove("active"), 500);
-      } catch (error) {
-        showAlert(`Failed to update profile picture: ${error.message}`, false);
-        progressBar.classList.remove("active");
-      }
+    function showAlert(message, isSuccess) {
+      alertMessage.textContent = message;
+      alert.style.background = isSuccess ? "rgba(29, 161, 242, 0.1)" : "rgba(255, 0, 0, 0.1)";
+      alert.classList.add("active");
+      setTimeout(() => alert.classList.remove("active"), 3000);
+    }
+
+    function validateUsername(username) {
+      const isValid = username.length >= 3 && username.length <= 15;
+      usernameError.style.display = isValid ? "none" : "block";
+      return isValid;
+    }
+
+    function validateHandle(handle) {
+      const isValid = /^@[a-zA-Z0-9_]{2,14}$/.test(handle);
+      handleError.style.display = isValid ? "none" : "block";
+      return isValid;
+    }
+
+    function validateBio(bio) {
+      const isValid = bio.length <= 160;
+      bioError.style.display = isValid ? "none" : "block";
+      return isValid;
+    }
+
+    function checkFormValidity() {
+      const usernameValid = validateUsername(usernameInput.value.trim());
+      const handleValid = validateHandle(handleInput.value.trim());
+      const bioValid = validateBio(bioInput.value.trim());
+      saveProfileBtn.disabled = !(usernameValid && handleValid && bioValid);
     }
 
     async function uploadProfilePicture(file) {
@@ -604,6 +530,7 @@
       formData.append("file", file);
       formData.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
       formData.append("resource_type", "image");
+      formData.append("context", `user_id=${auth.currentUser.uid}`);
       const transformations = {
         width: 200,
         height: 200,
@@ -652,42 +579,6 @@
       }
     }
 
-    function getAvatarInitials(username) {
-      return username ? username.charAt(0).toUpperCase() : "A";
-    }
-
-    function showAlert(message, isSuccess) {
-      alertMessage.textContent = message;
-      alert.style.background = isSuccess ? "rgba(29, 161, 242, 0.1)" : "rgba(255, 0, 0, 0.1)";
-      alert.classList.add("active");
-      setTimeout(() => alert.classList.remove("active"), 3000);
-    }
-
-    function validateUsername(username) {
-      const isValid = username.length >= 3 && username.length <= 15;
-      usernameError.style.display = isValid ? "none" : "block";
-      return isValid;
-    }
-
-    function validateHandle(handle) {
-      const isValid = /^@[a-zA-Z0-9_]{2,14}$/.test(handle);
-      handleError.style.display = isValid ? "none" : "block";
-      return isValid;
-    }
-
-    function validateBio(bio) {
-      const isValid = bio.length <= 160;
-      bioError.style.display = isValid ? "none" : "block";
-      return isValid;
-    }
-
-    function checkFormValidity() {
-      const usernameValid = validateUsername(usernameInput.value.trim());
-      const handleValid = validateHandle(handleInput.value.trim());
-      const bioValid = validateBio(bioInput.value.trim());
-      saveProfileBtn.disabled = !(usernameValid && handleValid && bioValid);
-    }
-
     onAuthStateChanged(auth, (user) => {
       if (!user) {
         document.body.classList.add("fade-out");
@@ -697,10 +588,9 @@
         return;
       }
 
-      // Enable profile picture upload and widget for authenticated users
+      // Enable profile picture upload for authenticated users
       profilePictureUpload.disabled = false;
       profilePictureLabel.disabled = false;
-      uploadWidgetBtn.disabled = false;
 
       const userRef = ref(db, `users/${user.uid}`);
       onValue(userRef, (snapshot) => {
@@ -715,7 +605,6 @@
             profileAvatar.innerHTML = `<img src="${userData.profilePicture}" alt="${userData.username}'s profile picture" />`;
             profileAvatar.appendChild(profilePictureUpload);
             profileAvatar.appendChild(profilePictureLabel);
-            profileAvatar.appendChild(uploadWidgetBtn);
           } else {
             avatarInitials.textContent = getAvatarInitials(userData.username);
           }
@@ -734,19 +623,27 @@
         try {
           const profilePictureUrl = await uploadProfilePicture(profilePictureUpload.files[0]);
           if (!profilePictureUrl) return;
-          await updateProfilePicture(profilePictureUrl);
+
+          const userRef = ref(db, `users/${auth.currentUser.uid}`);
+          const userSnapshot = await new Promise((resolve) => {
+            onValue(userRef, resolve, { onlyOnce: true });
+          });
+          const userData = userSnapshot.val() || {};
+          await set(userRef, {
+            username: userData.username || usernameInput.value.trim(),
+            handle: userData.handle || handleInput.value.trim().substring(1),
+            bio: userData.bio || bioInput.value.trim(),
+            profilePicture: profilePictureUrl,
+            isGuest: userData.isGuest || false
+          });
+          profileAvatar.innerHTML = `<img src="${profilePictureUrl}" alt="Profile picture" />`;
+          profileAvatar.appendChild(profilePictureUpload);
+          profileAvatar.appendChild(profilePictureLabel);
+          showAlert("Profile picture updated successfully!", true);
         } catch (error) {
           showAlert(`Failed to update profile picture: ${error.message}`, false);
         }
       }
-    });
-
-    uploadWidgetBtn.addEventListener("click", () => {
-      if (!auth.currentUser) {
-        showAlert("You must be logged in to upload a profile picture.", false);
-        return;
-      }
-      myWidget.open();
     });
 
     profileForm.addEventListener("submit", async (event) => {
@@ -765,7 +662,7 @@
         await set(userRef, {
           username: usernameInput.value.trim(),
           handle: handleInput.value.trim().substring(1),
-          bio: userData.bio || bioInput.value.trim(),
+          bio: bioInput.value.trim(),
           profilePicture: userData.profilePicture || "",
           isGuest: userData.isGuest || false
         });
