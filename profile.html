@@ -123,6 +123,47 @@
       display: none;
     }
 
+    .loading-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 2000;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease;
+    }
+
+    .loading-overlay.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .spinner {
+      width: 48px;
+      height: 48px;
+      border: 4px solid transparent;
+      border-top-color: var(--twitter-blue);
+      border-right-color: var(--twitter-purple);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    .spinner-text {
+      color: var(--white);
+      font-size: 0.9rem;
+      font-weight: 500;
+      margin-top: 0.5rem;
+    }
+
     @media (max-width: 640px) {
       .navbar-links {
         gap: 1rem;
@@ -135,6 +176,15 @@
 
       .choose-image-btn {
         font-size: 0.95rem;
+      }
+
+      .spinner {
+        width: 40px;
+        height: 40px;
+      }
+
+      .spinner-text {
+        font-size: 0.8rem;
       }
     }
 
@@ -387,6 +437,10 @@
         </svg>
       </button>
     </div>
+    <div class="loading-overlay" id="loading-overlay">
+      <div class="spinner"></div>
+      <span class="spinner-text">Loading...</span>
+    </div>
     <div class="profile-container">
       <div class="profile-header">
         <div class="profile-avatar" id="profile-avatar">
@@ -460,9 +514,18 @@
     const alertMessage = document.getElementById("alert-message");
     const progressBar = document.getElementById("progress-bar");
     const progress = document.getElementById("progress");
+    const loadingOverlay = document.getElementById("loading-overlay");
 
     const CLOUDINARY_CLOUD_NAME = "dqkujefxj";
     const CLOUDINARY_UPLOAD_PRESET = "banter_box";
+
+    function showLoading() {
+      loadingOverlay.classList.add("active");
+    }
+
+    function hideLoading() {
+      loadingOverlay.classList.remove("active");
+    }
 
     function getAvatarInitials(username) {
       return username ? username.charAt(0).toUpperCase() : "A";
@@ -539,6 +602,7 @@
 
       progressBar.classList.add("active");
       progress.style.width = "0%";
+      showLoading();
 
       try {
         const xhr = new XMLHttpRequest();
@@ -572,14 +636,19 @@
         }
 
         setTimeout(() => progressBar.classList.remove("active"), 500);
+        hideLoading();
         return response.secure_url;
       } catch (error) {
-        progressBar.classList.remove("active");
+        progressBar.classList.remove天子
+
+        .remove("active");
+        hideLoading();
         throw error;
       }
     }
 
     async function updateProfilePicture(profilePictureUrl, isVideo) {
+      showLoading();
       try {
         const userRef = ref(db, `users/${auth.currentUser.uid}`);
         const userSnapshot = await new Promise((resolve) => {
@@ -602,7 +671,8 @@
         showAlert("Profile media updated successfully!", true);
       } catch (error) {
         showAlert(`Failed to update profile media: ${error.message}`, false);
-        progressBar.classList.remove("active");
+      } finally {
+        hideLoading();
       }
     }
 
@@ -618,6 +688,7 @@
       mediaFile.disabled = false;
       chooseImageBtn.disabled = false;
 
+      showLoading();
       const userRef = ref(db, `users/${user.uid}`);
       onValue(userRef, (snapshot) => {
         const userData = snapshot.val();
@@ -638,6 +709,9 @@
           }
           checkFormValidity();
         }
+        hideLoading();
+      }, {
+        onlyOnce: true
       });
     });
 
@@ -675,6 +749,7 @@
         showAlert("You must be logged in to update your profile.", false);
         return;
       }
+      showLoading();
       try {
         const userRef = ref(db, `users/${auth.currentUser.uid}`);
         const userSnapshot = await new Promise((resolve) => {
@@ -692,11 +767,14 @@
         showAlert("Profile updated successfully!", true);
       } catch (error) {
         showAlert("Failed to update profile. Please try again.", false);
+      } finally {
+        hideLoading();
       }
     });
 
     document.querySelector(".logout-btn").addEventListener("click", () => {
-      signOut(auth);
+      showLoading();
+      signOut(auth).finally(() => hideLoading());
     });
 
     document.querySelector(".custom-alert .close-btn").addEventListener("click", () => {
