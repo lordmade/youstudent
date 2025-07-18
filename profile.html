@@ -572,6 +572,28 @@
       }
     }
 
+    async function updateProfilePicture(profilePictureUrl) {
+      try {
+        const userRef = ref(db, `users/${auth.currentUser.uid}`);
+        const userSnapshot = await new Promise((resolve) => {
+          onValue(userRef, resolve, { onlyOnce: true });
+        });
+        const userData = userSnapshot.val() || {};
+        await set(userRef, {
+          username: userData.username || usernameInput.value.trim(),
+          handle: userData.handle || handleInput.value.trim().substring(1),
+          bio: userData.bio || bioInput.value.trim(),
+          profilePicture: profilePictureUrl,
+          isGuest: userData.isGuest || false
+        });
+        profileAvatar.innerHTML = `<img src="${profilePictureUrl}" alt="Profile picture" />`;
+        showAlert("Profile picture updated successfully!", true);
+      } catch (error) {
+        showAlert(`Failed to update profile picture: ${error.message}`, false);
+        progressBar.classList.remove("active");
+      }
+    }
+
     onAuthStateChanged(auth, (user) => {
       if (!user) {
         document.body.classList.add("fade-out");
@@ -622,21 +644,7 @@
         try {
           const profilePictureUrl = await uploadProfilePicture(profilePictureUpload.files[0]);
           if (!profilePictureUrl) return;
-
-          const userRef = ref(db, `users/${auth.currentUser.uid}`);
-          const userSnapshot = await new Promise((resolve) => {
-            onValue(userRef, resolve, { onlyOnce: true });
-          });
-          const userData = userSnapshot.val() || {};
-          await set(userRef, {
-            username: userData.username || usernameInput.value.trim(),
-            handle: userData.handle || handleInput.value.trim().substring(1),
-            bio: userData.bio || bioInput.value.trim(),
-            profilePicture: profilePictureUrl,
-            isGuest: userData.isGuest || false
-          });
-          profileAvatar.innerHTML = `<img src="${profilePictureUrl}" alt="Profile picture" />`;
-          showAlert("Profile picture updated successfully!", true);
+          await updateProfilePicture(profilePictureUrl);
         } catch (error) {
           showAlert(`Failed to update profile picture: ${error.message}`, false);
         }
