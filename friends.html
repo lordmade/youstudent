@@ -281,6 +281,16 @@
       margin-left: auto;
     }
 
+    .unread-badge {
+      background: var(--twitter-blue);
+      color: var(--white);
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 0.25rem 0.5rem;
+      border-radius: 12px;
+      margin-left: 0.5rem;
+    }
+
     .custom-alert {
       display: none;
       position: fixed;
@@ -373,6 +383,11 @@
         font-size: 0.75rem;
       }
 
+      .unread-badge {
+        font-size: 0.7rem;
+        padding: 0.2rem 0.4rem;
+      }
+
       .suggestion-dropdown {
         max-width: 90%;
       }
@@ -419,7 +434,7 @@
   <script type="module">
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
     import { getAuth, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
-    import { getDatabase, ref, get } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js';
+    import { getDatabase, ref, get, push, set } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js';
 
     const firebaseConfig = {
       apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
@@ -486,12 +501,46 @@
       localStorage.setItem("theme", theme);
     }
 
+    async function startOrGetConversation(currentUserId, otherUserId) {
+      try {
+        showLoading();
+        const conversationsRef = ref(db, "conversations");
+        const snapshot = await get(conversationsRef);
+        const convos = snapshot.val();
+        let convoId = null;
+        if (convos) {
+          const existingConvo = Object.entries(convos).find(([_, convo]) =>
+            convo.users.includes(currentUserId) && convo.users.includes(otherUserId)
+          );
+          if (existingConvo) {
+            convoId = existingConvo[0];
+          }
+        }
+        if (!convoId) {
+          const newConvoRef = push(conversationsRef);
+          await set(newConvoRef, {
+            users: [currentUserId, otherUserId],
+            lastMessageAt: Date.now(),
+            messages: {}
+          });
+          convoId = newConvoRef.key;
+        }
+        return convoId;
+      } catch (error) {
+        showAlert("Failed to start conversation. Please try again.", false);
+        return null;
+      } finally {
+        hideLoading();
+      }
+    }
+
     function showSuggestions(input, suggestionsDiv, query) {
       suggestionsDiv.innerHTML = "";
       currentSuggestions = Object.entries(userProfiles)
-        .filter(([_, profile]) => 
-          (profile.username && profile.username.toLowerCase().includes(query.toLowerCase())) ||
-          (profile.handle && profile.handle.toLowerCase().includes(query.toLowerCase()))
+        .filter(([uid, profile]) => 
+          uid !== currentUser.uid &&
+          ((profile.username && profile.username.toLowerCase().includes(query.toLowerCase())) ||
+           (profile.handle && profile.handle.toLowerCase().includes(query.toLowerCase())))
         )
         .slice(0, 10)
         .map(([uid, profile]) => ({ uid, ...profile }));
@@ -506,8 +555,11 @@
             <span class="user-handle">${user.handle ? `@${user.handle}` : ""}</span>
           </div>
         `;
-        suggestionItem.addEventListener("click", () => {
-          window.location.href = `profile.html?uid=${user.uid}`;
+        suggestionItem.addEventListener("click", async () => {
+          const convoId = await startOrGetConversation(currentUser.uid, user.uid);
+          if (convoId) {
+            window.location.href = `messages.html?convoId=${convoId}`;
+          }
         });
         suggestionsDiv.appendChild(suggestionItem);
       });
@@ -538,7 +590,12 @@
         updateSuggestionHighlight(suggestionsDiv);
       } else if (event.key === "Enter" && selectedSuggestionIndex >= 0) {
         event.preventDefault();
-        window.location.href = `profile.html?uid=${currentSuggestions[selectedSuggestionIndex].uid}`;
+        const user = currentSuggestions[selectedSuggestionIndex];
+        startOrGetConversation(currentUser.uid, user.uid).then(convoId => {
+          if (convoId) {
+            window.location.href = `messages.html?convoId=${convoId}`;
+          }
+        });
       } else if (event.key === "Escape") {
         suggestionsDiv.classList.remove("active");
         currentSuggestions = [];
@@ -561,15 +618,28 @@
         const conversations = conversationsSnapshot.val();
         friendsFeed.innerHTML = "";
         if (conversations) {
-          const userConversations = Object.entries(conversations)
-            .filter(([_, convo]) => convo.users.includes(user.uid))
-            .map(([id, convo]) => ({
-              id,
-              otherUserId: convo.users.find(uid => uid !== user.uid),
-              lastMessageAt: convo.lastMessageAt || 0
-            }))
-            .sort((a, b) => b.lastMessageAt - a.lastMessageAt);
-
+          const userConversations = await Promise.all(
+            Object.entries(conversations)
+              .filter(([_, convo]) => convo.users.includes(user.uid))
+              .map(async ([id, convo]) => {
+                const messagesRef = ref(db, `conversations/${id}/messages`);
+                const messagesSnapshot = await get(messagesRef);
+                const messages = messagesSnapshot.val();
+                let unreadCount = 0;
+                if (messages) {
+                  unreadCount = Object.values(messages).filter(
+                    msg => !msg.readBy || !msg.readBy[user.uid]
+                  ).length;
+                }
+                return {
+                  id,
+                  otherUserId: convo.users.find(uid => uid !== user.uid),
+                  lastMessageAt: convo.lastMessageAt || 0,
+                  unreadCount
+                };
+              })
+          );
+          userConversations.sort((a, b) => b.lastMessageAt - a.lastMessageAt);
           for (const convo of userConversations) {
             const otherUserRef = ref(db, `users/${convo.otherUserId}`);
             const otherUserSnapshot = await get(otherUserRef);
@@ -583,6 +653,7 @@
                 <div class="user-info">
                   <span class="user-username">${otherUser.username || "Anonymous"}</span>
                   <span class="user-handle">${otherUser.handle ? `@${otherUser.handle}` : ""}</span>
+                  ${convo.unreadCount > 0 ? `<span class="unread-badge">${convo.unreadCount}</span>` : ""}
                 </div>
                 <span class="user-timestamp">${formatTimestamp(convo.lastMessageAt)}</span>
               `;
