@@ -535,6 +535,7 @@
     .custom-alert .close-btn {
       position: absolute;
       top: 0.75rem;
+-parameter: none;
       right: 0.75rem;
       width: 24px;
       height: 24px;
@@ -670,10 +671,11 @@
       <button class="cancel-btn" id="cancel-comment" aria-label="Cancel">Cancel</button>
     </div>
   </div>
-  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database.js"></script>
-  <script>
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+    import { getAuth, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+    import { getDatabase, ref, push, set, remove, onValue } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js';
+
     const firebaseConfig = {
       apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
       authDomain: "fire-b-a8878.firebaseapp.com",
@@ -684,9 +686,12 @@
       appId: "1:658673187627:web:6e4c29af661785f0afa36e",
       measurementId: "G-V4W97VMSKL"
     };
-    firebase.initializeApp(firebaseConfig);
-    const auth = firebase.auth();
-    const db = firebase.database();
+
+    // Initialize Firebase
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getDatabase(app);
+
     const tweetInput = document.getElementById("tweet-input");
     const tweetBtn = document.getElementById("tweet-btn");
     const imageUpload = document.getElementById("image-upload");
@@ -822,14 +827,14 @@
           return;
         }
         try {
-          const userRef = db.ref(`users/${user.uid}`);
+          const userRef = ref(db, `users/${user.uid}`);
           const userSnapshot = await new Promise((resolve) => {
-            userRef.once("value", resolve);
+            onValue(userRef, resolve, { onlyOnce: true });
           });
           const userData = userSnapshot.val();
           const username = userData?.username || "Anonymous";
           const handle = userData?.handle || "";
-          await db.ref("retweets").push({
+          await push(ref(db, "retweets"), {
             originalTweetId: tweetId,
             userId: user.uid,
             username,
@@ -848,19 +853,19 @@
           return;
         }
         try {
-          const likeRef = db.ref(`tweets/${tweetId}/likes/${user.uid}`);
+          const likeRef = ref(db, `tweets/${tweetId}/likes/${user.uid}`);
           if (isLiked) {
-            await likeRef.remove();
+            await remove(likeRef);
           } else {
-            await likeRef.set(true);
+            await set(likeRef, true);
           }
         } catch (error) {
           showAlert("Failed to update like. Please try again.", false);
         }
       });
 
-      const commentsRef = db.ref(`tweets/${tweetId}/comments`);
-      commentsRef.on("value", (snapshot) => {
+      const commentsRef = ref(db, `tweets/${tweetId}/comments`);
+      onValue(commentsRef, (snapshot) => {
         const commentsList = tweetDiv.querySelector(".comments-list");
         commentsList.innerHTML = "";
         const comments = snapshot.val();
@@ -896,7 +901,7 @@
       });
     }
 
-    auth.onAuthStateChanged((user) => {
+    onAuthStateChanged(auth, (user) => {
       if (!user) {
         document.body.classList.add("fade-out");
         setTimeout(() => {
@@ -905,8 +910,8 @@
         return;
       }
 
-      const userRef = db.ref(`users/${user.uid}`);
-      userRef.once("value", (snapshot) => {
+      const userRef = ref(db, `users/${user.uid}`);
+      onValue(userRef, (snapshot) => {
         const userData = snapshot.val();
         const isGuest = userData && userData.isGuest;
         user.isGuest = isGuest;
@@ -920,8 +925,8 @@
         videoLabel.style.opacity = isGuest ? 0.5 : 1;
         tweetInput.placeholder = isGuest ? "Guests cannot post tweets or media." : "What's happening?";
 
-        const tweetsRef = db.ref("tweets");
-        tweetsRef.on("value", (snapshot) => {
+        const tweetsRef = ref(db, "tweets");
+        onValue(tweetsRef, (snapshot) => {
           tweetFeed.innerHTML = "";
           const tweets = snapshot.val();
           if (tweets) {
@@ -931,8 +936,8 @@
           }
         });
 
-        const retweetsRef = db.ref("retweets");
-        retweetsRef.on("value", (snapshot) => {
+        const retweetsRef = ref(db, "retweets");
+        onValue(retweetsRef, (snapshot) => {
           const retweets = snapshot.val();
           const tweetDivs = tweetFeed.querySelectorAll(".tweet");
           tweetDivs.forEach(tweetDiv => {
@@ -944,7 +949,7 @@
             retweetBtn.querySelector("span").textContent = retweetCount;
           });
         });
-      });
+      }, { onlyOnce: true });
     });
 
     tweetInput.addEventListener("input", () => {
@@ -980,9 +985,9 @@
     tweetBtn.addEventListener("click", async () => {
       if (tweetBtn.disabled) return;
       try {
-        const userRef = db.ref(`users/${auth.currentUser.uid}`);
+        const userRef = ref(db, `users/${auth.currentUser.uid}`);
         const userSnapshot = await new Promise((resolve) => {
-          userRef.once("value", resolve);
+          onValue(userRef, resolve, { onlyOnce: true });
         });
         const userData = userSnapshot.val();
         const tweetData = {
@@ -999,7 +1004,7 @@
           tweetData.mediaUrl = await uploadMedia(videoUpload.files[0], "video");
           tweetData.mediaType = "video";
         }
-        await db.ref("tweets").push(tweetData);
+        await push(ref(db, "tweets"), tweetData);
         tweetInput.value = "";
         imageUpload.value = "";
         videoUpload.value = "";
@@ -1024,12 +1029,12 @@
         return;
       }
       try {
-        const userRef = db.ref(`users/${auth.currentUser.uid}`);
+        const userRef = ref(db, `users/${auth.currentUser.uid}`);
         const userSnapshot = await new Promise((resolve) => {
-          userRef.once("value", resolve);
+          onValue(userRef, resolve, { onlyOnce: true });
         });
         const userData = userSnapshot.val();
-        await db.ref(`tweets/${currentTweetId}/comments`).push({
+        await push(ref(db, `tweets/${currentTweetId}/comments`), {
           text: commentInput.value,
           username: userData?.username || "Anonymous",
           handle: userData?.handle || "",
@@ -1049,7 +1054,7 @@
     });
 
     document.querySelector(".logout-btn").addEventListener("click", () => {
-      auth.signOut();
+      signOut(auth);
     });
 
     document.querySelector(".custom-alert .close-btn").addEventListener("click", () => {
