@@ -259,7 +259,7 @@
       font-weight: 500;
       text-align: center;
       max-width: 90%;
-      width: 320px;
+      width: Kasun320px;
       animation: fadeIn 0.3s ease-out forwards;
       border: 1px solid var(--border);
     }
@@ -383,16 +383,16 @@
     import { getAuth, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
     import { getDatabase, ref, set, onValue } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js';
 
-    const firebaseConfig = {
-      apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
-      authDomain: "fire-b-a8878.firebaseapp.com",
-      databaseURL: "https://fire-b-a8878.firebaseio.com",
-      projectId: "fire-b-a8878",
-      storageBucket: "fire-b-a8878.firebasestorage.app",
-      messagingSenderId: "658673187627",
-      appId: "1:658673187627:web:6e4c29af661785f0afa36e",
-      measurementId: "G-V4W97VMSKL"
-    };
+  const firebaseConfig = {
+  apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
+  authDomain: "fire-b-a8878.firebaseapp.com",
+  databaseURL: "https://fire-b-a8878.firebaseio.com",
+  projectId: "fire-b-a8878",
+  storageBucket: "fire-b-a8878.firebasestorage.app",
+  messagingSenderId: "658673187627",
+  appId: "1:658673187627:web:6e4c29af661785f0afa36e",
+  measurementId: "G-V4W97VMSKL"
+};
 
     // Initialize Firebase
     const app = initializeApp(firebaseConfig);
@@ -437,16 +437,25 @@
     }
 
     async function checkHandleUnique(handle, currentUid) {
-      const usersRef = ref(db, "users");
-      const snapshot = await new Promise((resolve) => {
-        onValue(usersRef, resolve, { onlyOnce: true });
-      });
-      const users = snapshot.val();
-      if (!users) return true;
-      return !Object.entries(users).some(([uid, user]) => user.handle === handle && uid !== currentUid);
+      try {
+        const usersRef = ref(db, "users");
+        const snapshot = await new Promise((resolve) => {
+          onValue(usersRef, resolve, { onlyOnce: true });
+        });
+        const users = snapshot.val();
+        if (!users) return true;
+        return !Object.entries(users).some(([uid, user]) => user.handle === handle && uid !== currentUid);
+      } catch (error) {
+        console.error("Error checking handle uniqueness:", error);
+        showAlert("Failed to check handle uniqueness. Please try again.", false);
+        return false;
+      }
     }
 
     async function uploadProfilePicture(file) {
+      if (!CLOUDINARY_CLOUD_NAME || !CLOUDINARY_UPLOAD_PRESET || CLOUDINARY_CLOUD_NAME === "YOUR_CLOUD_NAME" || CLOUDINARY_UPLOAD_PRESET === "YOUR_CLOUDINARY_UPLOAD_PRESET") {
+        throw new Error("Invalid Cloudinary configuration. Please set CLOUDINARY_CLOUD_NAME and CLOUDINARY_UPLOAD_PRESET.");
+      }
       const formData = new FormData();
       formData.append("file", file);
       formData.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
@@ -467,7 +476,7 @@
         setTimeout(() => progressBar.classList.remove("active"), 500);
         return data.secure_url;
       } catch (error) {
-        showAlert("Failed to upload profile picture. Please try again.", false);
+        console.error("Profile picture upload error:", error);
         throw error;
       }
     }
@@ -497,25 +506,26 @@
         return;
       }
 
+      let userData = null;
+
       const userRef = ref(db, `users/${user.uid}`);
       onValue(userRef, (snapshot) => {
-        const userData = snapshot.val();
-        const isGuest = userData && userData.isGuest;
+        userData = snapshot.val() || {};
+        const isGuest = userData.isGuest || false;
         usernameInput.disabled = isGuest;
         handleInput.disabled = isGuest;
         profilePictureInput.disabled = isGuest;
         profilePictureLabel.style.pointerEvents = isGuest ? "none" : "auto";
         profilePictureLabel.style.opacity = isGuest ? 0.5 : 1;
         saveBtn.disabled = isGuest;
-        usernameInput.value = userData?.username || "";
-        handleInput.value = userData?.handle || "";
-        profilePicture.innerHTML = userData?.profilePicture
+        usernameInput.value = userData.username || "";
+        handleInput.value = userData.handle || "";
+        profilePicture.innerHTML = userData.profilePicture
           ? `<img src="${userData.profilePicture}" alt="Profile picture" />`
-          : getAvatarInitials(userData?.username);
+          : getAvatarInitials(userData.username);
       }, { onlyOnce: true });
 
       let profilePictureChanged = false;
-      let profilePictureUrl = null;
 
       profilePictureInput.addEventListener("change", () => {
         if (profilePictureInput.files[0]) {
@@ -563,7 +573,8 @@
           profilePictureChanged = false;
           saveBtn.disabled = true;
         } catch (error) {
-          showAlert("Failed to update profile. Please try again.", false);
+          console.error("Profile update error:", error.message);
+          showAlert(`Failed to update profile: ${error.message}. Please try again.`, false);
         }
       });
 
