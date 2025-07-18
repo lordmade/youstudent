@@ -1135,7 +1135,7 @@
             </svg>
             <span>${commentCount}</span>
           </div>
-          <div class="tweet-action retweet-btn ${isRetweeted ? 'retweeted' : ''}" ${isGuest ? 'disabled' : ''} data-tweet-id="${tweetId}" aria-label="Retweet">
+          <div class="tweet-action retweet-btn ${isRetweeted ? 'retweeted' : ''}" ${isGuest ? 'disabled' : ''} data-tweet-id="${tweetId}" aria-label="${isRetweeted ? 'Unretweet' : 'Retweet'}">
             <svg viewBox="0 0 24 24">
               <path d="M4.5 3.88l4.432 4.14-1.364 1.46L5.5 7.55V16c0 1.1.896 2 2 2H13v2H7.5c-2.209 0-4-1.79-4-4V7.55L1.432 9.48.068 8.02 4.5 3.88zM16.5 6H11V4h5.5c2.209 0 4 1.79 4 4v8.45l2.068-1.93 1.364 1.46-4.432 4.14-4.432-4.14 1.364-1.46 2.068 1.93V8c0-1.1-.896-2-2-2z"/>
             </svg>
@@ -1191,15 +1191,28 @@
           const userData = userSnapshot.val();
           const username = userData?.username || "Anonymous";
           const handle = userData?.handle || "";
-          await push(ref(db, "retweets"), {
-            originalTweetId: tweetId,
-            userId: user.uid,
-            username,
-            handle,
-            createdAt: Date.now()
-          });
-          showAlert("Retweeted successfully!", true);
-          await refreshTweets(user, userProfiles); // Refresh to update retweet count
+          const retweetRef = ref(db, "retweets");
+          const retweetSnapshot = await get(retweetRef);
+          const retweets = retweetSnapshot.val();
+          const userRetweet = retweets
+            ? Object.entries(retweets).find(([_, r]) => r.originalTweetId === tweetId && r.userId === user.uid)
+            : null;
+          if (userRetweet) {
+            // Unretweet
+            await remove(ref(db, `retweets/${userRetweet[0]}`));
+            showAlert("Unretweeted successfully!", true);
+          } else {
+            // Retweet
+            await push(ref(db, "retweets"), {
+              originalTweetId: tweetId,
+              userId: user.uid,
+              username,
+              handle,
+              createdAt: Date.now()
+            });
+            showAlert("Retweeted successfully!", true);
+          }
+          await refreshTweets(user, userProfiles);
         } catch (error) {
           showAlert("Failed to retweet. Please try again.", false);
         } finally {
@@ -1220,7 +1233,7 @@
           } else {
             await set(likeRef, true);
           }
-          await refreshTweets(user, userProfiles); // Refresh to update like count
+          await refreshTweets(user, userProfiles);
         } catch (error) {
           showAlert("Failed to update like. Please try again.", false);
         } finally {
@@ -1236,7 +1249,7 @@
             try {
               await remove(ref(db, `tweets/${tweetId}`));
               showAlert("Tweet deleted successfully!", true);
-              await refreshTweets(user, userProfiles); // Refresh to remove deleted tweet
+              await refreshTweets(user, userProfiles);
             } catch (error) {
               showAlert("Failed to delete tweet. Please try again.", false);
             } finally {
@@ -1246,7 +1259,6 @@
         });
       }
 
-      // Load comments once, no real-time updates
       const commentsRef = ref(db, `tweets/${tweetId}/comments`);
       get(commentsRef).then((snapshot) => {
         const commentsList = tweetDiv.querySelector(".comments-list");
@@ -1311,7 +1323,7 @@
                 try {
                   await remove(ref(db, `tweets/${tweetId}/comments/${btn.dataset.commentId}`));
                   showAlert("Comment deleted successfully!", true);
-                  await refreshTweets(user, userProfiles); // Refresh to update comments
+                  await refreshTweets(user, userProfiles);
                 } catch (error) {
                   showAlert("Failed to delete comment. Please try again.", false);
                 } finally {
@@ -1361,7 +1373,7 @@
               : 0;
             tweetData.retweetUsers = retweets
               ? Object.fromEntries(
-                  Object.entries(retweets).filter(([_, r]) => r.originalTweetId === tweetId)
+                  Object.entries(retweets).filter(([_, r]) => r.originalTweetId === tweetId).map(([id, r]) => [r.userId, id])
                 )
               : {};
             renderTweet(tweetData, tweetId, user, userProfiles);
@@ -1372,7 +1384,7 @@
               : 0;
             tweet.retweetUsers = retweets
               ? Object.fromEntries(
-                  Object.entries(retweets).filter(([_, r]) => r.originalTweetId === id)
+                  Object.entries(retweets).filter(([_, r]) => r.originalTweetId === id).map(([id, r]) => [r.userId, id])
                 )
               : {};
             renderTweet(tweet, id, user, userProfiles);
@@ -1493,7 +1505,7 @@
         const usersRef = ref(db, "users");
         const usersSnapshot = await get(usersRef);
         const userProfiles = usersSnapshot.val() || {};
-        await refreshTweets(currentUser, userProfiles); // Refresh to show new tweet
+        await refreshTweets(currentUser, userProfiles);
       } catch (error) {
         showAlert(`Failed to post tweet: ${error.message}`, false);
       } finally {
@@ -1527,7 +1539,7 @@
         const usersRef = ref(db, "users");
         const usersSnapshot = await get(usersRef);
         const userProfiles = usersSnapshot.val() || {};
-        await refreshTweets(currentUser, userProfiles); // Refresh to show new comment
+        await refreshTweets(currentUser, userProfiles);
       } catch (error) {
         showAlert("Failed to post comment. Please try again.", false);
       } finally {
@@ -1553,7 +1565,6 @@
 
     document.querySelector(".theme-toggle").addEventListener("click", toggleDarkMode);
 
-    // Initialize theme on page load
     const savedTheme = localStorage.getItem("theme") || "light";
     document.body.dataset.theme = savedTheme;
   </script>
