@@ -172,6 +172,12 @@
       transform: scale(1.1);
     }
 
+    .profile-avatar label:disabled {
+      background: #66b0ff;
+      cursor: not-allowed;
+      opacity: 0.5;
+    }
+
     .profile-avatar label svg {
       width: 20px;
       height: 20px;
@@ -388,8 +394,8 @@
       <div class="profile-header">
         <div class="profile-avatar" id="profile-avatar">
           <span id="avatar-initials"></span>
-          <input type="file" id="profile-picture-upload" accept="image/*">
-          <label for="profile-picture-upload" aria-label="Upload profile picture">
+          <input type="file" id="profile-picture-upload" accept="image/*" disabled>
+          <label for="profile-picture-upload" id="profile-picture-label" aria-label="Upload profile picture">
             <svg viewBox="0 0 24 24">
               <path d="M19 3H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V5a2 2 0 00-2-2zm-9 14l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
             </svg>
@@ -446,6 +452,7 @@
     const profileAvatar = document.getElementById("profile-avatar");
     const avatarInitials = document.getElementById("avatar-initials");
     const profilePictureUpload = document.getElementById("profile-picture-upload");
+    const profilePictureLabel = document.getElementById("profile-picture-label");
     const profileUsername = document.getElementById("profile-username");
     const profileHandle = document.getElementById("profile-handle");
     const profileForm = document.getElementById("profile-form");
@@ -501,7 +508,11 @@
     }
 
     async function uploadProfilePicture(file) {
-      // Validate file size (e.g., max 5MB)
+      if (!auth.currentUser) {
+        showAlert("You must be logged in to upload a profile picture.", false);
+        return null;
+      }
+
       if (file.size > 5 * 1024 * 1024) {
         throw new Error("Image size must be less than 5MB");
       }
@@ -511,7 +522,6 @@
       formData.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
       formData.append("resource_type", "image");
 
-      // Define transformations
       const transformations = {
         width: 200,
         height: 200,
@@ -526,7 +536,6 @@
       progress.style.width = "0%";
 
       try {
-        // Simulate progress for better UX
         let uploadProgress = 0;
         const progressInterval = setInterval(() => {
           uploadProgress = Math.min(uploadProgress + 10, 80);
@@ -569,6 +578,10 @@
         return;
       }
 
+      // Enable profile picture upload for authenticated users
+      profilePictureUpload.disabled = false;
+      profilePictureLabel.disabled = false;
+
       const userRef = ref(db, `users/${user.uid}`);
       onValue(userRef, (snapshot) => {
         const userData = snapshot.val();
@@ -581,7 +594,7 @@
           if (userData.profilePicture) {
             profileAvatar.innerHTML = `<img src="${userData.profilePicture}" alt="${userData.username}'s profile picture" />`;
             profileAvatar.appendChild(profilePictureUpload);
-            profileAvatar.appendChild(document.querySelector(".profile-avatar label"));
+            profileAvatar.appendChild(profilePictureLabel);
           } else {
             avatarInitials.textContent = getAvatarInitials(userData.username);
           }
@@ -590,14 +603,17 @@
       });
     });
 
-    usernameInput.addEventListener("input", checkFormValidity);
-    handleInput.addEventListener("input", checkFormValidity);
-    bioInput.addEventListener("input", checkFormValidity);
-
     profilePictureUpload.addEventListener("change", async () => {
+      if (!auth.currentUser) {
+        showAlert("You must be logged in to upload a profile picture.", false);
+        return;
+      }
+
       if (profilePictureUpload.files[0]) {
         try {
           const profilePictureUrl = await uploadProfilePicture(profilePictureUpload.files[0]);
+          if (!profilePictureUrl) return; // Exit if upload was blocked due to authentication
+
           const userRef = ref(db, `users/${auth.currentUser.uid}`);
           const userSnapshot = await new Promise((resolve) => {
             onValue(userRef, resolve, { onlyOnce: true });
@@ -612,7 +628,7 @@
           });
           profileAvatar.innerHTML = `<img src="${profilePictureUrl}" alt="Profile picture" />`;
           profileAvatar.appendChild(profilePictureUpload);
-          profileAvatar.appendChild(document.querySelector(".profile-avatar label"));
+          profileAvatar.appendChild(profilePictureLabel);
           showAlert("Profile picture updated successfully!", true);
         } catch (error) {
           showAlert(`Failed to update profile picture: ${error.message}`, false);
@@ -623,6 +639,10 @@
     profileForm.addEventListener("submit", async (event) => {
       event.preventDefault();
       if (saveProfileBtn.disabled) return;
+      if (!auth.currentUser) {
+        showAlert("You must be logged in to update your profile.", false);
+        return;
+      }
       try {
         const userRef = ref(db, `users/${auth.currentUser.uid}`);
         const userSnapshot = await new Promise((resolve) => {
