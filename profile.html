@@ -479,13 +479,13 @@
       <label for="bio">Bio</label>
       <textarea id="bio" placeholder="Enter your bio" aria-label="Bio" maxlength="160"></textarea>
       <div class="media-upload">
-        <label for="bio-upload" id="bio-upload-label" aria-label="Upload profile text or image">
+        <label for="bio-upload" id="bio-upload-label" aria-label="Upload bio image">
           <svg viewBox="0 0 24 24">
             <path d="M19 3H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V5a2 2 0 00-2-2zm-9 14l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
           </svg>
           Change Profile Text
         </label>
-        <input type="file" id="bio-upload" accept="image/*,text/plain">
+        <input type="file" id="bio-upload" accept="image/*">
       </div>
       <button class="save-btn" id="save-btn" disabled aria-label="Save profile">Save</button>
     </div>
@@ -606,40 +606,78 @@
       }
     }
 
-    async function uploadMedia(file, resourceType) {
+    async function uploadProfilePicture(file) {
       if (!CLOUDINARY_CLOUD_NAME || !CLOUDINARY_UPLOAD_PRESET) {
-        throw new Error("Cloudinary configuration is missing.");
+        throw new Error("Invalid Cloudinary configuration. Please set CLOUDINARY_CLOUD_NAME and CLOUDINARY_UPLOAD_PRESET.");
+      }
+      if (!file.type.startsWith("image/")) {
+        throw new Error("Only image files are allowed.");
       }
       const formData = new FormData();
       formData.append("file", file);
       formData.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
-      formData.append("resource_type", resourceType);
-      // Only include transformation for images
-      if (resourceType === "image") {
-        formData.append("transformation", JSON.stringify({
-          width: 1200,
-          quality: "auto",
-          fetch_format: "auto"
-        }));
-      }
+      formData.append("resource_type", "image");
+      formData.append("transformation", JSON.stringify({
+        width: 1200,
+        quality: "auto",
+        fetch_format: "auto"
+      }));
       progressBar.classList.add("active");
       progress.style.width = "0%";
       try {
-        const response = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/${resourceType}/upload`, {
+        const response = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`, {
           method: "POST",
           body: formData
         });
         const data = await response.json();
         if (!response.ok) {
           console.error("Cloudinary error response:", data);
-          throw new Error(data.error?.message || `Failed to upload ${resourceType}`);
+          throw new Error(data.error?.message || "Upload failed");
         }
         progress.style.width = "100%";
         setTimeout(() => progressBar.classList.remove("active"), 500);
         return data.secure_url;
       } catch (error) {
-        console.error(`${resourceType} upload error:`, error);
-        showAlert(`Failed to upload ${resourceType}: ${error.message}. Please try again.`, false);
+        console.error("Profile picture upload error:", error);
+        showAlert(`Failed to upload profile picture: ${error.message}. Please try again.`, false);
+        throw error;
+      }
+    }
+
+    async function uploadBioImage(file) {
+      if (!CLOUDINARY_CLOUD_NAME || !CLOUDINARY_UPLOAD_PRESET) {
+        throw new Error("Invalid Cloudinary configuration. Please set CLOUDINARY_CLOUD_NAME and CLOUDINARY_UPLOAD_PRESET.");
+      }
+      if (!file.type.startsWith("image/")) {
+        throw new Error("Only image files are allowed.");
+      }
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
+      formData.append("resource_type", "image");
+      formData.append("transformation", JSON.stringify({
+        width: 1200,
+        quality: "auto",
+        fetch_format: "auto"
+      }));
+      progressBar.classList.add("active");
+      progress.style.width = "0%";
+      try {
+        const response = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`, {
+          method: "POST",
+          body: formData
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          console.error("Cloudinary error response:", data);
+          throw new Error(data.error?.message || "Upload failed");
+        }
+        progress.style.width = "100%";
+        setTimeout(() => progressBar.classList.remove("active"), 500);
+        return data.secure_url;
+      } catch (error) {
+        console.error("Bio image upload error:", error);
+        showAlert(`Failed to upload bio image: ${error.message}. Please try again.`, false);
         throw error;
       }
     }
@@ -756,29 +794,20 @@
 
       bioUploadInput.addEventListener("change", () => {
         if (bioUploadInput.files[0]) {
-          const file = bioUploadInput.files[0];
-          if (file.type.startsWith("image/")) {
-            bioImageChanged = true;
-            const reader = new FileReader();
-            reader.onload = (e) => {
-              profileBioImage.src = e.target.result;
-              profileBioImage.style.display = "block";
-              bioInput.value = "";
-            };
-            reader.readAsDataURL(file);
-          } else if (file.type === "text/plain") {
-            bioImageChanged = false;
-            profileBioImage.style.display = "none";
-            const reader = new FileReader();
-            reader.onload = (e) => {
-              bioInput.value = e.target.result.slice(0, 160);
-            };
-            reader.readAsText(file);
-          } else {
-            showAlert("Please select a valid image or text file.", false);
+          if (!bioUploadInput.files[0].type.startsWith("image/")) {
+            showAlert("Please select a valid image file.", false);
             bioUploadInput.value = "";
             return;
           }
+          bioImageChanged = true;
+          const file = bioUploadInput.files[0];
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            profileBioImage.src = e.target.result;
+            profileBioImage.style.display = "block";
+            bioInput.value = "";
+          };
+          reader.readAsDataURL(file);
           saveBtn.disabled = false;
         }
       });
@@ -836,10 +865,10 @@
           let finalProfilePictureUrl = userData?.profilePicture || null;
           let finalBioImageUrl = userData?.bioImage || null;
           if (profilePictureChanged && profilePictureInput.files[0]) {
-            finalProfilePictureUrl = await uploadMedia(profilePictureInput.files[0], "image");
+            finalProfilePictureUrl = await uploadProfilePicture(profilePictureInput.files[0]);
           }
-          if (bioImageChanged && bioUploadInput.files[0] && bioUploadInput.files[0].type.startsWith("image/")) {
-            finalBioImageUrl = await uploadMedia(bioUploadInput.files[0], "image");
+          if (bioImageChanged && bioUploadInput.files[0]) {
+            finalBioImageUrl = await uploadBioImage(bioUploadInput.files[0]);
           } else if (bio) {
             finalBioImageUrl = null; // Clear bio image if text bio is provided
           }
