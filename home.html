@@ -290,6 +290,11 @@
       animation: fadeIn 0.5s ease-out;
     }
 
+    .tweet:focus {
+      outline: 2px solid var(--twitter-blue);
+      outline-offset: 2px;
+    }
+
     .tweet:hover {
       background: var(--background);
     }
@@ -812,7 +817,7 @@
   <script type="module">
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
     import { getAuth, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
-    import { getDatabase, ref, push, set, remove, onValue, get } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js';
+    import { getDatabase, ref, push, set, remove, get } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js';
 
     const firebaseConfig = {
       apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
@@ -1100,12 +1105,14 @@
       const tweetDiv = document.createElement("div");
       tweetDiv.className = "tweet";
       tweetDiv.dataset.tweetId = tweetId;
+      tweetDiv.tabIndex = 0; // Make tweet card focusable
       let mediaHtml = "";
       if (tweetData.mediaUrl && tweetData.mediaType) {
         if (tweetData.mediaType === "image") {
           mediaHtml = `<div class="tweet-media"><img src="${tweetData.mediaUrl}" alt="Tweet media" /></div>`;
         } else if (tweetData.mediaType === "video") {
-          mediaHtml = `<div class="tweet-media"><video controls src="${tweetData.mediaUrl}"></video></div>`;
+          const posterUrl = tweetData.mediaUrl.replace(/\.mp4$|\.webm$/, '.jpg'); // Cloudinary thumbnail
+          mediaHtml = `<div class="tweet-media"><video loop muted playsinline src="${tweetData.mediaUrl}" poster="${posterUrl}" class="tweet-video"></video></div>`;
         }
       }
       const likeCount = tweetData.likes ? Object.keys(tweetData.likes).length : 0;
@@ -1161,6 +1168,18 @@
       `;
       tweetFeed.appendChild(tweetDiv);
 
+      // Add focus and blur event listeners for video playback
+      const video = tweetDiv.querySelector(".tweet-video");
+      if (video) {
+        tweetDiv.addEventListener("focus", () => {
+          video.play().catch(error => console.error("Video playback failed:", error));
+        });
+        tweetDiv.addEventListener("blur", () => {
+          video.pause();
+          video.currentTime = 0; // Reset to show poster
+        });
+      }
+
       const commentBtn = tweetDiv.querySelector(".comment-btn");
       const retweetBtn = tweetDiv.querySelector(".retweet-btn");
       const likeBtn = tweetDiv.querySelector(".like-btn");
@@ -1198,11 +1217,9 @@
             ? Object.entries(retweets).find(([_, r]) => r.originalTweetId === tweetId && r.userId === user.uid)
             : null;
           if (userRetweet) {
-            // Unretweet
             await remove(ref(db, `retweets/${userRetweet[0]}`));
             showAlert("Unretweeted successfully!", true);
           } else {
-            // Retweet
             await push(ref(db, "retweets"), {
               originalTweetId: tweetId,
               userId: user.uid,
