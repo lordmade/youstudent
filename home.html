@@ -334,6 +334,10 @@
       transition: transform 0.2s ease;
     }
 
+    .tweet-action.comment-btn span {
+      color: #000000;
+    }
+
     .tweet-action:focus, .comment-action:focus {
       outline: 2px solid var(--twitter-blue);
       outline-offset: 2px;
@@ -762,13 +766,16 @@
       localStorage.setItem("theme", theme);
     }
 
-    document.querySelector(".theme-toggle").addEventListener("click", toggleDarkMode);
-
-    if (localStorage.getItem("theme") === "dark") {
-      document.body.dataset.theme = "dark";
+    // Fisher-Yates shuffle for randomization
+    function shuffleArray(array) {
+      for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+      }
+      return array;
     }
 
-    function renderTweet(tweetData, tweetId, user) {
+    function renderTweet(tweetData, tweetId, user, userProfiles) {
       const tweetDiv = document.createElement("div");
       tweetDiv.className = "tweet";
       tweetDiv.dataset.tweetId = tweetId;
@@ -788,9 +795,10 @@
       const isRetweeted = user && tweetData.retweetUsers && tweetData.retweetUsers[user.uid];
       const username = tweetData.username || "Anonymous";
       const handle = tweetData.handle ? `@${tweetData.handle}` : "";
+      const profilePicture = userProfiles[tweetData.userId]?.profilePicture;
       tweetDiv.innerHTML = `
         <div class="tweet-header">
-          <div class="tweet-avatar">${getAvatarInitials(username)}</div>
+          <div class="tweet-avatar">${profilePicture ? `<img src="${profilePicture}" alt="${username}'s profile picture" />` : getAvatarInitials(username)}</div>
           <div class="tweet-user-info">
             <span class="tweet-username">${username} <span class="handle">${handle}</span></span>
             <span class="tweet-timestamp">${formatTimestamp(tweetData.createdAt)}</span>
@@ -822,7 +830,7 @@
           <div class="comments-list"></div>
         </div>
       `;
-      tweetFeed.prepend(tweetDiv);
+      tweetFeed.appendChild(tweetDiv);
 
       const commentBtn = tweetDiv.querySelector(".comment-btn");
       const retweetBtn = tweetDiv.querySelector(".retweet-btn");
@@ -898,8 +906,9 @@
             const commentUsername = comment.username || "Anonymous";
             const commentHandle = comment.handle ? `@${comment.handle}` : "";
             const isOwnComment = user && comment.userId === user.uid;
+            const commentProfilePicture = userProfiles[comment.userId]?.profilePicture;
             commentDiv.innerHTML = `
-              <div class="comment-avatar">${getAvatarInitials(commentUsername)}</div>
+              <div class="comment-avatar">${commentProfilePicture ? `<img src="${commentProfilePicture}" alt="${commentUsername}'s profile picture" />` : getAvatarInitials(commentUsername)}</div>
               <div style="flex: 1;">
                 <div class="comment-header">
                   <span class="comment-username">${commentUsername} <span class="handle">${commentHandle}</span></span>
@@ -993,30 +1002,47 @@
         videoLabel.style.opacity = isGuest ? 0.5 : 1;
         tweetInput.placeholder = isGuest ? "Guests cannot post tweets or media." : "What's happening?";
 
-        const tweetsRef = ref(db, "tweets");
-        onValue(tweetsRef, (snapshot) => {
-          tweetFeed.innerHTML = "";
-          const tweets = snapshot.val();
-          if (tweets) {
-            Object.entries(tweets).forEach(([id, tweet]) => {
-              renderTweet(tweet, id, user);
-            });
-          }
-        });
+        const usersRef = ref(db, "users");
+        onValue(usersRef, (usersSnapshot) => {
+          const userProfiles = usersSnapshot.val() || {};
 
-        const retweetsRef = ref(db, "retweets");
-        onValue(retweetsRef, (snapshot) => {
-          const retweets = snapshot.val();
-          const tweetDivs = tweetFeed.querySelectorAll(".tweet");
-          tweetDivs.forEach(tweetDiv => {
-            const tweetId = tweetDiv.dataset.tweetId;
-            const retweetCount = retweets ? Object.values(retweets).filter(r => r.originalTweetId === tweetId).length : 0;
-            const retweetBtn = tweetDiv.querySelector(".retweet-btn");
-            const isRetweeted = retweets && Object.values(retweets).some(r => r.originalTweetId === tweetId && r.userId === user.uid);
-            retweetBtn.classList.toggle("retweeted", isRetweeted);
-            retweetBtn.querySelector("span").textContent = retweetCount;
+          const tweetsRef = ref(db, "tweets");
+          onValue(tweetsRef, (snapshot) => {
+            tweetFeed.innerHTML = "";
+            const tweets = snapshot.val();
+            if (tweets) {
+              let tweetEntries = Object.entries(tweets);
+              // Sort by createdAt to find the most recent tweet
+              tweetEntries.sort((a, b) => b[1].createdAt - a[1].createdAt);
+              // Keep the most recent tweet
+              const mostRecentTweet = tweetEntries.shift();
+              // Shuffle the remaining tweets
+              tweetEntries = shuffleArray(tweetEntries);
+              // Render the most recent tweet first
+              if (mostRecentTweet) {
+                renderTweet(mostRecentTweet[1], mostRecentTweet[0], user, userProfiles);
+              }
+              // Render the shuffled tweets
+              tweetEntries.forEach(([id, tweet]) => {
+                renderTweet(tweet, id, user, userProfiles);
+              });
+            }
           });
-        });
+
+          const retweetsRef = ref(db, "retweets");
+          onValue(retweetsRef, (snapshot) => {
+            const retweets = snapshot.val();
+            const tweetDivs = tweetFeed.querySelectorAll(".tweet");
+            tweetDivs.forEach(tweetDiv => {
+              const tweetId = tweetDiv.dataset.tweetId;
+              const retweetCount = retweets ? Object.values(retweets).filter(r => r.originalTweetId === tweetId).length : 0;
+              const retweetBtn = tweetDiv.querySelector(".retweet-btn");
+              const isRetweeted = retweets && Object.values(retweets).some(r => r.originalTweetId === tweetId && r.userId === user.uid);
+              retweetBtn.classList.toggle("retweeted", isRetweeted);
+              retweetBtn.querySelector("span").textContent = retweetCount;
+            });
+          });
+        }, { onlyOnce: true });
       }, { onlyOnce: true });
     });
 
