@@ -95,6 +95,30 @@
       stroke-width: 2;
     }
 
+    .choose-image-btn {
+      padding: 0.75rem 1.5rem;
+      background: var(--twitter-blue);
+      color: var(--white);
+      border: none;
+      border-radius: 20px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+      margin-top: 0.5rem;
+    }
+
+    .choose-image-btn:hover:not(:disabled) {
+      transform: scale(1.02);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    }
+
+    .choose-image-btn:disabled {
+      background: #66b0ff;
+      cursor: not-allowed;
+      opacity: 0.5;
+    }
+
     @media (max-width: 640px) {
       .navbar-links {
         gap: 1rem;
@@ -103,6 +127,10 @@
 
       .navbar-links a, .navbar-links button {
         font-size: 0.9rem;
+      }
+
+      .choose-image-btn {
+        font-size: 0.95rem;
       }
     }
 
@@ -139,8 +167,6 @@
       justify-content: center;
       font-size: 2rem;
       font-weight: 600;
-      position: relative;
-      cursor: pointer;
     }
 
     .profile-avatar img {
@@ -148,40 +174,6 @@
       height: 100%;
       border-radius: 50%;
       object-fit: cover;
-    }
-
-    .profile-avatar input {
-      display: none;
-    }
-
-    .profile-avatar label {
-      position: absolute;
-      bottom: 0;
-      right: 0;
-      background: var(--twitter-blue);
-      border-radius: 50%;
-      padding: 0.25rem;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: transform 0.2s ease;
-    }
-
-    .profile-avatar label:hover {
-      transform: scale(1.1);
-    }
-
-    .profile-avatar label:disabled {
-      background: #66b0ff;
-      cursor: not-allowed;
-      opacity: 0.5;
-    }
-
-    .profile-avatar label svg {
-      width: 20px;
-      height: 20px;
-      fill: var(--white);
     }
 
     .profile-info h2 {
@@ -250,7 +242,7 @@
       margin-top: 0.5rem;
     }
 
-    .profile-form button:hover {
+    .profile-form button:hover:not(:disabled) {
       transform: scale(1.02);
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
     }
@@ -258,6 +250,11 @@
     .profile-form button:disabled {
       background: #66b0ff;
       cursor: not-allowed;
+      opacity: 0.5;
+    }
+
+    .profile-form input[type="file"] {
+      display: none;
     }
 
     .custom-alert {
@@ -394,12 +391,6 @@
       <div class="profile-header">
         <div class="profile-avatar" id="profile-avatar">
           <span id="avatar-initials"></span>
-          <input type="file" id="profile-picture-upload" accept="image/*" disabled>
-          <label for="profile-picture-upload" id="profile-picture-label" aria-label="Upload profile picture">
-            <svg viewBox="0 0 24 24">
-              <path d="M19 3H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V5a2 2 0 00-2-2zm-9 14l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
-            </svg>
-          </label>
         </div>
         <div class="profile-info">
           <h2 id="profile-username">Loading...</h2>
@@ -422,6 +413,8 @@
           <textarea id="bio" placeholder="Tell us about yourself" aria-label="Bio"></textarea>
           <span class="error" id="bio-error">Bio cannot exceed 160 characters</span>
         </div>
+        <input type="file" id="profile-picture-upload" accept="image/*" disabled>
+        <button type="button" id="choose-image-btn" class="choose-image-btn" disabled aria-label="Choose profile picture">Choose Profile Picture</button>
         <div class="progress-bar" id="progress-bar">
           <div id="progress"></div>
         </div>
@@ -452,7 +445,7 @@
     const profileAvatar = document.getElementById("profile-avatar");
     const avatarInitials = document.getElementById("avatar-initials");
     const profilePictureUpload = document.getElementById("profile-picture-upload");
-    const profilePictureLabel = document.getElementById("profile-picture-label");
+    const chooseImageBtn = document.getElementById("choose-image-btn");
     const profileUsername = document.getElementById("profile-username");
     const profileHandle = document.getElementById("profile-handle");
     const profileForm = document.getElementById("profile-form");
@@ -588,9 +581,9 @@
         return;
       }
 
-      // Enable profile picture upload for authenticated users
+      // Enable profile picture upload and choose button for authenticated users
       profilePictureUpload.disabled = false;
-      profilePictureLabel.disabled = false;
+      chooseImageBtn.disabled = false;
 
       const userRef = ref(db, `users/${user.uid}`);
       onValue(userRef, (snapshot) => {
@@ -603,14 +596,20 @@
           profileHandle.textContent = userData.handle ? `@${userData.handle}` : "";
           if (userData.profilePicture) {
             profileAvatar.innerHTML = `<img src="${userData.profilePicture}" alt="${userData.username}'s profile picture" />`;
-            profileAvatar.appendChild(profilePictureUpload);
-            profileAvatar.appendChild(profilePictureLabel);
           } else {
             avatarInitials.textContent = getAvatarInitials(userData.username);
           }
           checkFormValidity();
         }
       });
+    });
+
+    chooseImageBtn.addEventListener("click", () => {
+      if (!auth.currentUser) {
+        showAlert("You must be logged in to upload a profile picture.", false);
+        return;
+      }
+      profilePictureUpload.click();
     });
 
     profilePictureUpload.addEventListener("change", async () => {
@@ -637,8 +636,6 @@
             isGuest: userData.isGuest || false
           });
           profileAvatar.innerHTML = `<img src="${profilePictureUrl}" alt="Profile picture" />`;
-          profileAvatar.appendChild(profilePictureUpload);
-          profileAvatar.appendChild(profilePictureLabel);
           showAlert("Profile picture updated successfully!", true);
         } catch (error) {
           showAlert(`Failed to update profile picture: ${error.message}`, false);
