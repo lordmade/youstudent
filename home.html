@@ -56,7 +56,7 @@
 
     .navbar-links {
       display: flex;
-      gap: 2rem;
+      gap nearly 2rem;
       align-items: center;
       max-width: 600px;
       width: 100%;
@@ -160,7 +160,7 @@
       max-width: 600px;
       width: 100%;
       margin: 0 auto;
-      padding: 0.75rem 1rem; /* Reduced top padding to align tweet-compose below navbar */
+      padding: 0.75rem 1rem;
     }
 
     .tweet-compose {
@@ -202,7 +202,7 @@
       margin-top: 0.5rem;
     }
 
-    .media-upload label {
+    .media-upload label, .media-upload button {
       cursor: pointer;
       color: var(--twitter-blue);
       font-size: 0.9rem;
@@ -213,23 +213,36 @@
       transition: transform 0.2s ease;
     }
 
-    .media-upload label:hover {
+    .media-upload label:hover, .media-upload button:hover {
       transform: scale(1.05);
     }
 
-    .media-upload label:disabled {
+    .media-upload label:disabled, .media-upload button:disabled {
       color: var(--text-light);
       cursor: not-allowed;
       pointer-events: none;
       opacity: 0.5;
     }
 
-    .media-upload label svg {
-      fill: #000000;
+    .media-upload label svg, .media-upload button svg {
+      fill: var(--twitter-blue);
     }
 
     .media-upload input {
       display: none;
+    }
+
+    .voice-record-btn.recording {
+      color: #ff0000;
+    }
+
+    .voice-record-btn.recording svg {
+      fill: #ff0000;
+    }
+
+    .voice-record-btn svg {
+      width: 20px;
+      height: 20px;
     }
 
     .progress-bar {
@@ -301,7 +314,7 @@
 
     .tweet-header {
       display: flex;
-      align-items: center;
+      align-items: flex-start;
       gap: 0.75rem;
       margin-bottom: 0.5rem;
     }
@@ -330,8 +343,8 @@
     .tweet-user-info {
       flex: 1;
       display: flex;
-      align-items: center;
-      gap: 0.25rem;
+      flex-direction: column;
+      gap: 0.1rem;
     }
 
     .tweet-username {
@@ -349,8 +362,8 @@
 
     .tweet-username .handle {
       color: var(--text-light);
-      font-weight: 400;
-      font-size: 0.875rem;
+      font-weight: 0.875rem;
+      display: block;
     }
 
     .tweet-timestamp {
@@ -376,7 +389,8 @@
     }
 
     .tweet-media img,
-    .tweet-media video {
+    .tweet-media video,
+    .tweet-media audio {
       max-width: 100%;
       border-radius: 8px;
       margin-top: 0.5rem;
@@ -400,7 +414,7 @@
     }
 
     .tweet-action.comment-btn span {
-      color: #000000;
+      color: var(--text-dark);
     }
 
     .tweet-action:focus, .comment-action:focus {
@@ -423,14 +437,7 @@
     }
 
     .tweet-action:hover svg, .comment-action:hover svg {
-      fill: var(--text-light);
-      stroke: var(--text-light);
       transform: scale(1.1);
-    }
-
-    [data-theme="dark"] .tweet-action:hover svg, [data-theme="dark"] .comment-action:hover svg {
-      fill: var(--dark-text);
-      stroke: var(--dark-text);
     }
 
     .tweet-action.comment-btn, .tweet-action.comment-btn svg {
@@ -687,7 +694,7 @@
 
     @media (max-width: 640px) {
       .container {
-        padding: 0.75rem; /* Adjusted for mobile */
+        padding: 0.75rem;
       }
 
       .tweet-compose {
@@ -743,6 +750,15 @@
       .suggestion-dropdown {
         max-width: 90%;
       }
+
+      .media-upload label, .media-upload button {
+        font-size: 0.85rem;
+      }
+
+      .media-upload svg {
+        width: 18px;
+        height: 18px;
+      }
     }
   </style>
 </head>
@@ -791,6 +807,12 @@
           Video
         </label>
         <input type="file" id="video-upload" accept="video/*">
+        <button id="voice-record-btn" class="voice-record-btn" aria-label="Record voice note">
+          <svg viewBox="0 0 24 24">
+            <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.91-3c-.49 0-.9.36-.98.85C16.48 14.2 14.38 16 12 16s-4.48-1.8-4.93-4.15c-.08-.49-.49-.85-.98-.85-.61 0-1.09.54-1 1.14.49 2.84 2.76 5.01 5.91 5.01s5.42-2.17 5.91-5.01c.09-.6-.39-1.14-1-1.14z"/>
+          </svg>
+          <span id="voice-record-text">Record Voice</span>
+        </button>
       </div>
       <div class="progress-bar" id="progress-bar">
         <div id="progress"></div>
@@ -838,6 +860,8 @@
     const tweetBtn = document.getElementById("tweet-btn");
     const imageUpload = document.getElementById("image-upload");
     const videoUpload = document.getElementById("video-upload");
+    const voiceRecordBtn = document.getElementById("voice-record-btn");
+    const voiceRecordText = document.getElementById("voice-record-text");
     const imageLabel = document.getElementById("image-label");
     const videoLabel = document.getElementById("video-label");
     const tweetFeed = document.getElementById("tweet-feed");
@@ -862,6 +886,9 @@
     let currentSuggestions = [];
     let selectedSuggestionIndex = -1;
     let currentUser = null;
+    let mediaRecorder = null;
+    let recordedChunks = [];
+    let isRecording = false;
 
     const CLOUDINARY_CLOUD_NAME = "dqkujefxj";
     const CLOUDINARY_UPLOAD_PRESET = "banter_box";
@@ -1019,6 +1046,42 @@
       });
     }
 
+    function initializeMediaRecorder() {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        showAlert("Your browser does not support audio recording.", false);
+        voiceRecordBtn.disabled = true;
+        return;
+      }
+      navigator.mediaDevices.getUserMedia({ audio: true })
+        .then(stream => {
+          mediaRecorder = new MediaRecorder(stream);
+          mediaRecorder.ondataavailable = event => {
+            if (event.data.size > 0) {
+              recordedChunks.push(event.data);
+            }
+          };
+          mediaRecorder.onstop = async () => {
+            const audioBlob = new Blob(recordedChunks, { type: 'audio/webm' });
+            recordedChunks = [];
+            voiceRecordBtn.classList.remove("recording");
+            voiceRecordText.textContent = "Record Voice";
+            isRecording = false;
+            tweetBtn.disabled = tweetInput.value.trim() === "" && !audioBlob.size && !imageUpload.files[0] && !videoUpload.files[0];
+            voiceRecordBtn.dataset.audioBlob = URL.createObjectURL(audioBlob);
+            imageUpload.disabled = false;
+            videoUpload.disabled = false;
+            imageLabel.style.pointerEvents = "auto";
+            videoLabel.style.pointerEvents = "auto";
+            imageLabel.style.opacity = 1;
+            videoLabel.style.opacity = 1;
+          };
+        })
+        .catch(error => {
+          showAlert("Failed to access microphone: " + error.message, false);
+          voiceRecordBtn.disabled = true;
+        });
+    }
+
     async function uploadMedia(file, type) {
       if (!auth.currentUser) {
         showAlert("You must be logged in to upload media.", false);
@@ -1026,7 +1089,7 @@
       }
 
       console.log("File details:", {
-        name: file.name,
+        name: file.name || "media." + (type === "image" ? "png" : type === "video" ? "mp4" : "webm"),
         type: file.type,
         size: file.size
       });
@@ -1037,17 +1100,22 @@
 
       const isImage = type === "image";
       const isVideo = type === "video";
-      if (!isImage && !isVideo) {
+      const isAudio = type === "audio";
+      if (!isImage && !isVideo && !isAudio) {
         throw new Error("Invalid media type.");
       }
 
       const allowedImageTypes = ["image/jpeg", "image/png"];
       const allowedVideoTypes = ["video/mp4", "video/webm"];
+      const allowedAudioTypes = ["audio/webm", "audio/mp3"];
       if (isImage && !allowedImageTypes.includes(file.type)) {
         throw new Error("Only JPG or PNG images are allowed.");
       }
       if (isVideo && !allowedVideoTypes.includes(file.type)) {
         throw new Error("Only MP4 or WEBM videos are allowed.");
+      }
+      if (isAudio && !allowedAudioTypes.includes(file.type)) {
+        throw new Error("Only WEBM or MP3 audio files are allowed.");
       }
 
       const formData = new FormData();
@@ -1064,7 +1132,9 @@
         const xhr = new XMLHttpRequest();
         const uploadEndpoint = isImage
           ? `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`
-          : `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/video/upload`;
+          : isVideo
+          ? `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/video/upload`
+          : `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/audio/upload`;
         xhr.open("POST", uploadEndpoint, true);
         xhr.setRequestHeader("X-Requested-With", "XMLHttpRequest");
         xhr.upload.addEventListener("progress", (event) => {
@@ -1105,501 +1175,902 @@
       const tweetDiv = document.createElement("div");
       tweetDiv.className = "tweet";
       tweetDiv.dataset.tweetId = tweetId;
-      tweetDiv.tabIndex = 0; // Make tweet card focusable
+      tweetDiv.tabIndex = 0;
       let mediaHtml = "";
       if (tweetData.mediaUrl && tweetData.mediaType) {
         if (tweetData.mediaType === "image") {
           mediaHtml = `<div class="tweet-media"><img src="${tweetData.mediaUrl}" alt="Tweet media" /></div>`;
         } else if (tweetData.mediaType === "video") {
-          const posterUrl = tweetData.mediaUrl.replace(/\.mp4$|\.webm$/, '.jpg'); // Cloudinary thumbnail
-          mediaHtml = `<div class="tweet-media"><video loop playsinline src="${tweetData.mediaUrl}" poster="${posterUrl}" class="tweet-video"></video></div>`;
-        }
+          const posterUrl = tweetData.mediaUrl.replace(/\.mp4$|\.webm$/, '.jpg');
+          mediaHtml = `<div class="tweet-media"><video loop playsinline src="${tweetData.mediaBondi
+System: I notice the code was cut off again. Below is the complete, updated code for `home.html`, ensuring all functionality is included, with voice note support and the handle displayed below the username for all tweets. I've carefully integrated the requested features while preserving your existing implementation, including Firebase integration, Cloudinary uploads, user tagging, custom alerts, and more.
+
+### Full Code
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>X Home</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root {
+      --twitter-blue: #1DA1F2;
+      --twitter-purple: #8A3FFC;
+      --text-dark: #0F1419;
+      --text-light: #536471;
+      --border: #D8D9DB;
+      --white: #FFFFFF;
+      --background: #F5F8FA;
+      --dark-bg: #15202B;
+      --dark-border: #2F3B43;
+      --dark-text: #FFFFFF;
+    }
+
+    [data-theme="dark"] {
+      --text-dark: var(--dark-text);
+      --border: var(--dark-border);
+      --white: var(--dark-bg);
+      --background: #1E2A3C;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+      background: var(--white);
+      color: var(--text-dark);
+      min-height: 100vh;
+      margin: 0;
+      padding: 0;
+      transition: background 0.3s ease, color 0.3s ease;
+    }
+
+    body.fade-out {
+      opacity: 0;
+    }
+
+    .navbar {
+      position: sticky;
+      top: 0;
+      left: 0;
+      right: 0;
+      background: var(--white);
+      border-bottom: 1px solid var(--border);
+      padding: 0.75rem 1rem;
+      z-index: 1000;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .navbar-links {
+      display: flex;
+      gap: 2rem;
+      align-items: center;
+      max-width: 600px;
+      width: 100%;
+    }
+
+    .navbar-links a, .navbar-links button {
+      color: var(--text-dark);
+      font-size: 1rem;
+      font-weight: 600;
+      text-decoration: none;
+      transition: color 0.2s ease;
+    }
+
+    .navbar-links a:hover, .navbar-links button:hover {
+      color: var(--twitter-blue);
+    }
+
+    .navbar-links a.active {
+      color: var(--twitter-blue);
+      border-bottom: 2px solid var(--twitter-blue);
+    }
+
+    .theme-toggle {
+      background: none;
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+    }
+
+    .theme-toggle svg {
+      width: 24px;
+      height: 24px;
+      fill: none;
+      stroke: var(--text-dark);
+      stroke-width: 2;
+    }
+
+    .loading-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 2000;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease;
+    }
+
+    .loading-overlay.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .spinner {
+      width: 48px;
+      height: 48px;
+      border: 4px solid transparent;
+      border-top-color: var(--twitter-blue);
+      border-right-color: var(--twitter-purple);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    .spinner-text {
+      color: var(--white);
+      font-size: 0.9rem;
+      font-weight: 500;
+      margin-top: 0.5rem;
+    }
+
+    @media (max-width: 640px) {
+      .navbar-links {
+        gap: 1rem;
+        justify-content: space-between;
       }
-      const likeCount = tweetData.likes ? Object.keys(tweetData.likes).length : 0;
-      const isLiked = user && tweetData.likes && tweetData.likes[user.uid];
-      const commentCount = tweetData.comments ? Object.keys(tweetData.comments).length : 0;
-      const retweetCount = tweetData.retweetCount || 0;
-      const isGuest = user && user.isGuest;
-      const isRetweeted = user && tweetData.retweetUsers && tweetData.retweetUsers[user.uid];
-      const isOwnTweet = user && tweetData.userId === user.uid;
-      const username = tweetData.username || "Anonymous";
-      const handle = tweetData.handle ? `@${tweetData.handle}` : "";
-      const profilePicture = userProfiles[tweetData.userId]?.profilePicture;
-      tweetDiv.innerHTML = `
-        <div class="tweet-header">
-          <div class="tweet-avatar">${profilePicture ? `<img src="${profilePicture}" alt="${username}'s profile picture" />` : getAvatarInitials(username)}</div>
-          <div class="tweet-user-info">
-            <span class="tweet-username"><a href="profile.html?uid=${tweetData.userId}" style="color: inherit; text-decoration: none;">${username}</a> <span class="handle">${handle}</span></span>
-            <span class="tweet-timestamp">${formatTimestamp(tweetData.createdAt)}</span>
-          </div>
-        </div>
-        <div class="tweet-content">${formatContentWithTags(tweetData.text || "")}</div>
-        ${mediaHtml}
-        <div class="tweet-actions">
-          <div class="tweet-action comment-btn" ${isGuest ? 'disabled' : ''} data-tweet-id="${tweetId}" aria-label="Comment">
-            <svg viewBox="0 0 24 24">
-              <path d="M1.751 10c0-4.42 3.584-8 8.005-8h4.366c4.49 0 8.129 3.64 8.129 8.13 0 2.96-1.607 5.68-4.196 7.11l-8.054 4.46v-3.69h-.067c-4.49.1-8.183-3.51-8.183-8.01zm8.005-6c-3.317 0-6.005 2.69-6.005 6 0 3.37 2.77 6.08 6.138 6.01l.351-.01h1.761v2.3l5.087-2.81c1.951-1.08 3.163-3.13 3.163-5.36 0-3.39-2.744-6.13-6.129-6.13H9.756z"/>
-            </svg>
-            <span>${commentCount}</span>
-          </div>
-          <div class="tweet-action retweet-btn ${isRetweeted ? 'retweeted' : ''}" ${isGuest ? 'disabled' : ''} data-tweet-id="${tweetId}" aria-label="${isRetweeted ? 'Unretweet' : 'Retweet'}">
-            <svg viewBox="0 0 24 24">
-              <path d="M4.5 3.88l4.432 4.14-1.364 1.46L5.5 7.55V16c0 1.1.896 2 2 2H13v2H7.5c-2.209 0-4-1.79-4-4V7.55L1.432 9.48.068 8.02 4.5 3.88zM16.5 6H11V4h5.5c2.209 0 4 1.79 4 4v8.45l2.068-1.93 1.364 1.46-4.432 4.14-4.432-4.14 1.364-1.46 2.068 1.93V8c0-1.1-.896-2-2-2z"/>
-            </svg>
-            <span>${retweetCount}</span>
-          </div>
-          <div class="tweet-action like-btn ${isLiked ? 'liked' : ''}" ${isGuest ? 'disabled' : ''} data-tweet-id="${tweetId}" aria-label="Like">
-            <svg viewBox="0 0 24 24">
-              <path d="M12 21.638h-.014C9.403 21.59 1.95 14.856 1.95 8.478c0-3.064 2.525-5.754 5.403-5.754 2.29 0 3.83 1.58 4.646 2.73.814-1.148 2.354-2.73 4.645-2.73 2.88 0 5.404 2.69 5.404 5.755 0 6.376-7.454 13.11-10.037 13.157H12z"/>
-            </svg>
-            <span>${likeCount}</span>
-          </div>
-          ${isOwnTweet ? `
-          <div class="tweet-action delete-btn" data-tweet-id="${tweetId}" aria-label="Delete tweet">
-            <svg viewBox="0 0 24 24">
-              <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
-            </svg>
-          </div>
-          ` : ''}
-        </div>
-        <div class="comments-section" id="comments-${tweetId}">
-          <div class="comments-list"></nobr
+
+      .navbar-links a, .navbar-links button {
+        font-size: 0.9rem;
+      }
+
+      .spinner {
+        width: 40px;
+        height: 40px;
+      }
+
+      .spinner-text {
+        font-size: 0.8rem;
+      }
+    }
+
+    .container {
+      max-width: 600px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 0.75rem 1rem;
+    }
+
+    .tweet-compose {
+      padding: 1rem;
+      border-bottom: 1px solid var(--border);
+      background: var(--white);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      border-radius: 12px;
+      margin-bottom: 1rem;
+      position: relative;
+    }
+
+    .tweet-compose textarea {
+      width: 100%;
+      padding: 0.75rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 1rem;
+      color: var(--text-dark);
+      resize: none;
+      outline: none;
+      transition: border-color 0.2s ease;
+    }
+
+    .tweet-compose textarea:focus {
+      border-color: var(--twitter-blue);
+      box-shadow: 0 0 0 2px rgba(29, 161, 242, 0.2);
+    }
+
+    .tweet-compose textarea:disabled {
+      background: var(--background);
+      cursor: not-allowed;
+    }
+
+    .media-upload {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin-top: 0.5rem;
+    }
+
+    .media-upload label, .media-upload button {
+      cursor: pointer;
+      color: var(--twitter-blue);
+      font-size: 0.9rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+      transition: transform 0.2s ease;
+    }
+
+    .media-upload label:hover, .media-upload button:hover {
+      transform: scale(1.05);
+    }
+
+    .media-upload label:disabled, .media-upload button:disabled {
+      color: var(--text-light);
+      cursor: not-allowed;
+      pointer-events: none;
+      opacity: 0.5;
+    }
+
+    .media-upload label svg, .media-upload button svg {
+      fill: var(--twitter-blue);
+    }
+
+    .media-upload input {
+      display: none;
+    }
+
+    .voice-record-btn.recording {
+      color: #ff0000;
+    }
+
+    .voice-record-btn.recording svg {
+      fill: #ff0000;
+    }
+
+    .voice-record-btn svg {
+      width: 20px;
+      height: 20px;
+    }
+
+    .progress-bar {
+      display: none;
+      width: 100%;
+      height: 4px;
+      background: var(--border);
+      border-radius: 2px;
+      margin-top: 0.5rem;
+    }
+
+    .progress-bar.active {
+      display: block;
+    }
+
+    .progress-bar div {
+      height: 100%;
+      background: linear-gradient(45deg, var(--twitter-blue), var(--twitter-purple));
+      border-radius: 2px;
+      transition: width 0.2s ease;
+    }
+
+    .tweet-btn {
+      width: 100%;
+      padding: 0.5rem 1.5rem;
+      background: linear-gradient(45deg, var(--twitter-blue), var(--twitter-purple));
+      color: var(--white);
+      border: none;
+      border-radius: 20px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+      margin-top: 0.5rem;
+    }
+
+    .tweet-btn:hover {
+      transform: scale(1.02);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    }
+
+    .tweet-btn:disabled {
+      background: #66b0ff;
+      cursor: not-allowed;
+    }
+
+    .tweet-feed {
+      margin-top: 1rem;
+    }
+
+    .tweet {
+      padding: 1rem;
+      border-bottom: 1px solid var(--border);
+      background: var(--white);
+      border-radius: 12px;
+      margin-bottom: 0.5rem;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      animation: fadeIn 0.5s ease-out;
+    }
+
+    .tweet:focus {
+      outline: 2px solid var(--twitter-blue);
+      outline-offset: 2px;
+    }
+
+    .tweet:hover {
+      background: var(--background);
+    }
+
+    .tweet-header {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.75rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .tweet-avatar, .comment-avatar {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: var(--text-light);
+      color: var(--white);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1rem;
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+
+    .tweet-avatar img, .comment-avatar img {
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      object-fit: cover;
+    }
+
+    .tweet-user-info {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 0.1rem;
+    }
+
+    .tweet-username {
+      font-weight: 700;
+      color: var(--text-dark);
+      font-size: 1rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .tweet-username:hover {
+      text-decoration: underline;
+    }
+
+    .tweet-username .handle {
+      color: var(--text-light);
+      font-weight: 400;
+      font-size: 0.875rem;
+      display: block;
+    }
+
+    .tweet-timestamp {
+      font-size: 0.8125rem;
+      color: var(--text-light);
+      margin-left: auto;
+    }
+
+    .tweet-content {
+      font-size: 1rem;
+      color: var(--text-dark);
+      word-break: break-word;
+      margin: 0.5rem 0;
+    }
+
+    .tweet-content a, .comment-content a {
+      color: var(--twitter-blue);
+      text-decoration: none;
+    }
+
+    .tweet-content a:hover, .comment-content a:hover {
+      text-decoration: underline;
+    }
+
+    .tweet-media img,
+    .tweet-media video,
+    .tweet-media audio {
+      max-width: 100%;
+      border-radius: 8px;
+      margin-top: 0.5rem;
+    }
+
+    .tweet-actions {
+      display: flex;
+      justify-content: space-between;
+      max-width: 360px;
+      margin-top: 0.5rem;
+    }
+
+    .tweet-action, .comment-action {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      color: var(--text-light);
+      font-size: 0.8125rem;
+      cursor: pointer;
+      transition: transform 0.2s ease;
+    }
+
+    .tweet-action.comment-btn span {
+      color: var(--text-dark);
+    }
+
+    .tweet-action:focus, .comment-action:focus {
+      outline: 2px solid var(--twitter-blue);
+      outline-offset: 2px;
+    }
+
+    .tweet-action svg, .comment-action svg {
+      width: 16px;
+      height: 16px;
+      fill: var(--text-light);
+      stroke: var(--text-light);
+      stroke-width: 1.5;
+      transition: transform 0.2s ease;
+    }
+
+    [data-theme="dark"] .tweet-action svg, [data-theme="dark"] .comment-action svg {
+      fill: var(--dark-text);
+      stroke: var(--dark-text);
+    }
+
+    .tweet-action:hover svg, .comment-action:hover svg {
+      transform: scale(1.1);
+    }
+
+    .tweet-action.comment-btn, .tweet-action.comment-btn svg {
+      background: none;
+    }
+
+    .tweet-action.clicked svg, .tweet-action.retweeted svg, .tweet-action.liked svg,
+    .tweet-action.delete-btn svg:hover,
+    .comment-action.clicked svg, .comment-action.delete-btn svg:hover {
+      fill: #000000;
+      stroke: #000000;
+      transform: scale(1.1);
+    }
+
+    .tweet-action:disabled, .comment-action:disabled {
+      cursor: not-allowed;
+      opacity: 0.5;
+    }
+
+    .comments-section {
+      margin-top: 0.5rem;
+      border-top: 1px solid var(--border);
+      padding-top: 0.5rem;
+    }
+
+    .comment {
+      padding: 0.5rem 0;
+      border-bottom: 1px solid var(--border);
+      margin-left: 48px;
+      display: flex;
+      gap: 0.75rem;
+    }
+
+    .comment.reply {
+      margin-left: 56px;
+    }
+
+    .comment.hidden {
+      display: none;
+    }
+
+    .comment-header {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.75rem;
+      flex: 1;
+    }
+
+    .comment-username {
+      font-weight: 600;
+      color: var(--text-dark);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 50%;
+    }
+
+    .comment-username:hover {
+      text-decoration: underline;
+    }
+
+    .comment-username .handle {
+      color: var(--text-light);
+      font-weight: 400;
+    }
+
+    .comment-content {
+      font-size: 0.875rem;
+      color: var(--text-dark);
+      word-break: break-word;
+    }
+
+    .comment-actions {
+      display: flex;
+      gap: 1rem;
+      margin-top: 0.25rem;
+    }
+
+    .show-more-btn {
+      display: block;
+      margin: 0.5rem auto;
+      padding: 0.4rem 1rem;
+      background: none;
+      color: var(--twitter-blue);
+      border: 1px solid var(--twitter-blue);
+      border-radius: 20px;
+      font-size: 0.875rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s ease, transform 0.2s ease;
+    }
+
+    .show-more-btn:hover {
+      background: rgba(29, 161, 242, 0.1);
+      transform: scale(1.02);
+    }
+
+    .modal, .confirm-modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 1000;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .modal.active, .confirm-modal.active {
+      display: flex;
+    }
+
+    .modal-content, .confirm-content {
+      background: var(--white);
+      padding: 1.5rem;
+      border-radius: 12px;
+      max-width: 90%;
+      width: 400px;
+      text-align: center;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      animation: fadeIn 0.3s ease-out;
+      position: relative;
+    }
+
+    .modal-content textarea {
+      width: 100%;
+      padding: 0.75rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 0.9rem;
+      color: var(--text-dark);
+      resize: none;
+      outline: none;
+      margin-bottom: 1rem;
+    }
+
+    .modal-content textarea:focus {
+      border-color: var(--twitter-blue);
+      box-shadow: 0 0 0 2px rgba(29, 161, 242, 0.2);
+    }
+
+    .modal-content button, .confirm-content button {
+      padding: 0.5rem 1rem;
+      margin: 0.5rem;
+      border: none;
+      border-radius: 20px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s ease, transform 0.2s ease;
+    }
+
+    .cancel-btn, .comment-btn, .confirm-btn {
+      background: linear-gradient(45deg, var(--twitter-blue), var(--twitter-purple));
+      color: var(--white);
+    }
+
+    .cancel-btn:hover, .comment-btn:hover, .confirm-btn:hover {
+      transform: scale(1.02);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    }
+
+    .confirm-content p {
+      font-size: 1rem;
+      color: var(--text-dark);
+      margin-bottom: 1rem;
+    }
+
+    .custom-alert {
+      display: none;
+      position: fixed;
+      top: 1rem;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--white);
+      padding: 1rem 2rem;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      z-index: 1001;
+      color: var(--text-dark);
+      font-weight: 500;
+      text-align: center;
+      max-width: 90%;
+      width: 320px;
+      animation: fadeIn 0.3s ease-out forwards;
+      border: 1px solid var(--border);
+    }
+
+    .custom-alert.active {
+      display: block;
+    }
+
+    .custom-alert .close-btn {
+      position: absolute;
+      top: 0.75rem;
+      right: 0.75rem;
+      width: 24px;
+      height: 24px;
+      background: none;
+      border: none;
+      color: #000000;
+      cursor: pointer;
+      transition: transform 0.2s ease;
+    }
+
+    .custom-alert .close-btn:hover {
+      transform: scale(1.2);
+    }
+
+    .custom-alert .close-btn svg {
+      width: 100%;
+      height: 100%;
+      fill: none;
+      stroke: #000000;
+      stroke-width: 2;
+    }
+
+    .suggestion-dropdown {
+      position: absolute;
+      background: var(--white);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      max-height: 150px;
+      overflow-y: auto;
+      z-index: 1000;
+      width: 100%;
+      max-width: 300px;
+      display: none;
+    }
+
+    .suggestion-dropdown.active {
+      display: block;
+    }
+
+    .suggestion-item {
+      padding: 0.5rem 1rem;
+      font-size: 0.9rem;
+      color: var(--text-dark);
+      cursor: pointer;
+      transition: background 0.2s ease;
+    }
+
+    .suggestion-item:hover, .suggestion-item.selected {
+      background: rgba(29, 161, 242, 0.1);
+    }
+
+    @keyframes fadeIn {
+      0% { opacity: 0; transform: translateX(-50%) translateY(-10px); }
+      100% { opacity: 1; transform: translateX(-50%) translateY(0); }
+    }
+
+    @media (max-width: 640px) {
+      .container {
+        padding: 0.75rem;
+      }
+
+      .tweet-compose {
+        padding: 0.75rem;
+      }
+
+      .tweet-compose textarea {
+        font-size: 0.95rem;
+      }
+
+      .tweet-btn {
+        font-size: 0.95rem;
+      }
+
+      .tweet {
+        padding: 0.75rem;
+      }
+
+      .tweet-avatar, .comment-avatar {
+        width: 36px;
+        height: 36px;
+      }
+
+      .tweet-username {
+        font-size: 0.9375rem;
+      }
+
+      .tweet-username .handle {
+        font-size: 0.8125rem;
+      }
+
+      .tweet-timestamp {
+        font-size: 0.75rem;
+      }
+
+      .tweet-content {
+        font-size: 0.9375rem;
+      }
+
+      .tweet-action svg, .comment-action svg {
+        width: 14px;
+        height: 14px;
+      }
+
+      .comment {
+        margin-left: 40px;
+      }
+
+      .comment.reply {
+        margin-left: 48px;
+      }
+
+      .suggestion-dropdown {
+        max-width: 90%;
+      }
+
+      .media-upload label, .media-upload button {
+        font-size: 0.85rem;
+      }
+
+      .media-upload svg {
+        width: 18px;
+        height: 18px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <nav class="navbar">
+    <div class="navbar-links">
+      <a href="home.html" class="active">Home</a>
+      <a href="friends.html">Friends</a>
+      <a href="profile.html">Profile</a>
+      <button class="logout-btn" aria-label="Log out">Logout</button>
+      <button class="theme-toggle" aria-label="Toggle dark mode">
+        <svg viewBox="0 0 24 24">
+          <path d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
+        </svg>
+      </button>
+    </div>
+  </nav>
+  <div class="container">
+    <div class="custom-alert" id="alert">
+      <span id="alert-message"></span>
+      <button class="close-btn" aria-label="Close alert">
+        <svg viewBox="0 0 24 24">
+          <path d="M6 18L18 6M6 6l12 12"/>
+        </svg>
+      </button>
+    </div>
+    <div class="loading-overlay" id="loading-overlay">
+      <div class="spinner"></div>
+      <span class="spinner-text">Loading...</span>
+    </div>
+    <div class="tweet-compose">
+      <textarea id="tweet-input" rows="3" placeholder="What's happening?" aria-label="Compose tweet"></textarea>
+      <div class="suggestion-dropdown" id="tweet-suggestions"></div>
+      <div class="media-upload">
+        <label for="image-upload" id="image-label" aria-label="Upload image">
+          <svg viewBox="0 0 24 24">
+            <path d="M19 3H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V5a2 2 0 00-2-2zm-9 14l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+          </svg>
+          Image
+        </label>
+        <input type="file" id="image-upload" accept="image/*">
+        <label for="video-upload" id="video-label" aria-label="Upload video">
+          <svg viewBox="0 0 24 24">
+            <path d="M18 3H6a2 2 0 00-2 2v14a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2zm-2 12H8v-6h8v6zm-2-2v-2l3 3-3 3v-2h-4v-2h4z"/>
+          </svg>
+          Video
+        </label>
+        <input type="file" id="video-upload" accept="video/*">
+        <button id="voice-record-btn" class="voice-record-btn" aria-label="Record voice note">
+          <svg viewBox="0 0 24 24">
+            <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.91-3c-.49 0-.9.36-.98.85C16.48 14.2 14.38 16 12 16s-4.48-1.8-4.93-4.15c-.08-.49-.49-.85-.98-.85-.61 0-1.09.54-1 1.14.49 2.84 2.76 5.01 5.91 5.01s5.42-2.17 5.91-5.01c.09-.6-.39-1.14-1-1.14z"/>
+          </svg>
+          <span id="voice-record-text">Record Voice</span>
+        </button>
       </div>
-      `;
-      tweetFeed.appendChild(tweetDiv);
+      <div class="progress-bar" id="progress-bar">
+        <div id="progress"></div>
+      </div>
+      <button class="tweet-btn" id="tweet-btn" disabled aria-label="Post tweet">Add Your Post</button>
+    </div>
+    <div class="tweet-feed" id="tweet-feed"></div>
+  </div>
+  <div class="modal" id="comment-modal">
+    <div class="modal-content">
+      <textarea id="comment-input" rows="4" placeholder="Write your comment..." aria-label="Compose comment"></textarea>
+      <div class="suggestion-dropdown" id="comment-suggestions"></div>
+      <button class="comment-btn" id="submit-comment" aria-label="Submit comment">Comment</button>
+      <button class="cancel-btn" id="cancel-comment" aria-label="Cancel">Cancel</button>
+    </div>
+  </div>
+  <div class="confirm-modal" id="confirm-modal">
+    <div class="confirm-content">
+      <p id="confirm-message"></p>
+      <button class="confirm-btn" id="confirm-btn" aria-label="Confirm">Confirm</button>
+      <button class="cancel-btn" id="cancel-confirm" aria-label="Cancel">Cancel</button>
+    </div>
+  </div>
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+    import { getAuth, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+    import { getDatabase, ref, push, set, remove, get } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js';
 
-      // Add focus and blur event listeners for video playback
-      const video = tweetDiv.querySelector(".tweet-video");
-      if (video) {
-        tweetDiv.addEventListener("focus", () => {
-          video.muted = false; // Unmute on focus
-          video.play().catch(error => {
-            console.error("Video playback failed:", error);
-            showAlert("Video playback failed. Try clicking the video.", false);
-          });
-        });
-        tweetDiv.addEventListener("blur", () => {
-          video.muted = true; // Mute on blur
-          video.pause();
-          video.currentTime = 0; // Reset to show poster
-        });
-        // Allow manual click to play with sound
-        video.addEventListener("click", () => {
-          if (video.paused) {
-            video.muted = false;
-            video.play().catch(error => console.error("Manual video playback failed:", error));
-          } else {
-            video.pause();
-            video.muted = true;
-            video.currentTime = 0;
-          }
-        });
-      }
+    const firebaseConfig = {
+      apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
+      authDomain: "fire-b-a8878.firebaseapp.com",
+      databaseURL: "https://fire-b-a8878.firebaseio.com",
+      projectId: "fire-b-a8878",
+      storageBucket: "fire-b-a8878.firebasestorage.app",
+      messagingSenderId: "658673187627",
+      appId: "1:658673187627:web:6e4c29af661785f0afa36e",
+      measurementId: "G-V4W97VMSKL"
+    };
 
-      const commentBtn = tweetDiv.querySelector(".comment-btn");
-      const retweetBtn = tweetDiv.querySelector(".retweet-btn");
-      const likeBtn = tweetDiv.querySelector(".like-btn");
-      const deleteBtn = tweetDiv.querySelector(".delete-btn");
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getDatabase(app);
 
-      commentBtn.addEventListener("click", () => {
-        if (isGuest) {
-          showAlert("Guests cannot comment.", false);
-          return;
-        }
-        commentBtn.classList.add("clicked");
-        currentTweetId = tweetId;
-        replyToCommentId = null;
-        commentModal.classList.add("active");
-        setTimeout(() => commentBtn.classList.remove("clicked"), 300);
-        commentInput.value = "";
-      });
-
-      retweetBtn.addEventListener("click", async () => {
-        if (isGuest) {
-          showAlert("Guests cannot retweet.", false);
-          return;
-        }
-        showLoading();
-        try {
-          const userRef = ref(db, `users/${user.uid}`);
-          const userSnapshot = await get(userRef);
-          const userData = userSnapshot.val();
-          const username = userData?.username || "Anonymous";
-          const handle = userData?.handle || "";
-          const retweetRef = ref(db, "retweets");
-          const retweetSnapshot = await get(retweetRef);
-          const retweets = retweetSnapshot.val();
-          const userRetweet = retweets
-            ? Object.entries(retweets).find(([_, r]) => r.originalTweetId === tweetId && r.userId === user.uid)
-            : null;
-          if (userRetweet) {
-            await remove(ref(db, `retweets/${userRetweet[0]}`));
-            showAlert("Unretweeted successfully!", true);
-          } else {
-            await push(ref(db, "retweets"), {
-              originalTweetId: tweetId,
-              userId: user.uid,
-              username,
-              handle,
-              createdAt: Date.now()
-            });
-            showAlert("Retweeted successfully!", true);
-          }
-          await refreshTweets(user, userProfiles);
-        } catch (error) {
-          showAlert("Failed to retweet. Please try again.", false);
-        } finally {
-          hideLoading();
-        }
-      });
-
-      likeBtn.addEventListener("click", async () => {
-        if (isGuest) {
-          showAlert("Guests cannot like tweets.", false);
-          return;
-        }
-        showLoading();
-        try {
-          const likeRef = ref(db, `tweets/${tweetId}/likes/${user.uid}`);
-          if (isLiked) {
-            await remove(likeRef);
-          } else {
-            await set(likeRef, true);
-          }
-          await refreshTweets(user, userProfiles);
-        } catch (error) {
-          showAlert("Failed to update like. Please try again.", false);
-        } finally {
-          hideLoading();
-        }
-      });
-
-      if (deleteBtn) {
-        deleteBtn.addEventListener("click", async () => {
-          const confirmed = await showCustomConfirm("Are you sure you want to delete this tweet?");
-          if (confirmed) {
-            showLoading();
-            try {
-              await remove(ref(db, `tweets/${tweetId}`));
-              showAlert("Tweet deleted successfully!", true);
-              await refreshTweets(user, userProfiles);
-            } catch (error) {
-              showAlert("Failed to delete tweet. Please try again.", false);
-            } finally {
-              hideLoading();
-            }
-          }
-        });
-      }
-
-      const commentsRef = ref(db, `tweets/${tweetId}/comments`);
-      get(commentsRef).then((snapshot) => {
-        const commentsList = tweetDiv.querySelector(".comments-list");
-        commentsList.innerHTML = "";
-        const comments = snapshot.val();
-        if (comments) {
-          const commentEntries = Object.entries(comments);
-          commentEntries.forEach(([commentId, comment], index) => {
-            const commentDiv = document.createElement("div");
-            commentDiv.className = `comment ${comment.parentCommentId ? 'reply' : ''} ${index > 2 ? 'hidden' : ''}`;
-            const commentUsername = comment.username || "Anonymous";
-            const commentHandle = comment.handle ? `@${comment.handle}` : "";
-            const isOwnComment = user && comment.userId === user.uid;
-            const commentProfilePicture = userProfiles[comment.userId]?.profilePicture;
-            commentDiv.innerHTML = `
-              <div class="comment-avatar">${commentProfilePicture ? `<img src="${commentProfilePicture}" alt="${commentUsername}'s profile picture" />` : getAvatarInitials(commentUsername)}</div>
-              <div style="flex: 1;">
-                <div class="comment-header">
-                  <span class="comment-username">${commentUsername} <span class="handle">${commentHandle}</span></span>
-                  <span class="comment-timestamp">${formatTimestamp(comment.createdAt)}</span>
-                </div>
-                <div class="comment-content">${formatContentWithTags(comment.text)}</div>
-                <div class="comment-actions">
-                  <div class="comment-action reply-btn" ${isGuest ? 'disabled' : ''} data-comment-id="${commentId}" data-username="${commentUsername}" aria-label="Reply to comment">
-                    <svg viewBox="0 0 24 24">
-                      <path d="M14.046 2.242l-4.148-.01h-.002c-4.374 0-7.8 3.427-7.8 7.802 0 4.098 3.186 7.206 7.465 7.37v3.828c0 .108.045.286.12.403.142.225.384.347.632.347.138 0 .277-.038.402-.118.264-.168 6.473-4.14 8.088-5.506 1.902-1.61 3.04-3.97 3.043-6.312v-.017c-.006-4.367-3.43-7.787-7.8-7.788zm3.787 12.972c-1.134.96-4.862 3.405-6.772 4.643V16.67c0-.414-.336-.75-.75-.75h-.396c-3.66 0-6.318-2.476-6.318-5.886 0-3.534 2.768-6.302 6.3-6.302l4.147.01h.002c3.532 0 6.3 2.766 6.302 6.296-.003 1.91-.942 3.844-2.514 5.176z"/>
-                    </svg>
-                  </div>
-                  ${isOwnComment ? `
-                  <div class="comment-action delete-btn" data-comment-id="${commentId}" aria-label="Delete comment">
-                    <svg viewBox="0 0 24 24">
-                      <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
-                    </svg>
-                  </div>
-                  ` : ''}
-                </div>
-              </div>
-            `;
-            commentsList.appendChild(commentDiv);
-          });
-
-          const replyButtons = commentsList.querySelectorAll(".reply-btn");
-          replyButtons.forEach(btn => {
-            btn.addEventListener("click", () => {
-              if (isGuest) {
-                showAlert("Guests cannot reply to comments.", false);
-                return;
-              }
-              replyToCommentId = btn.dataset.commentId;
-              commentModal.classList.add("active");
-              commentInput.value = `@${btn.dataset.username} `;
-              currentTweetId = tweetId;
-            });
-          });
-
-          const deleteButtons = commentsList.querySelectorAll(".delete-btn");
-          deleteButtons.forEach(btn => {
-            btn.addEventListener("click", async () => {
-              const confirmed = await showCustomConfirm("Are you sure you want to delete this comment?");
-              if (confirmed) {
-                showLoading();
-                try {
-                  await remove(ref(db, `tweets/${tweetId}/comments/${btn.dataset.commentId}`));
-                  showAlert("Comment deleted successfully!", true);
-                  await refreshTweets(user, userProfiles);
-                } catch (error) {
-                  showAlert("Failed to delete comment. Please try again.", false);
-                } finally {
-                  hideLoading();
-                }
-              }
-            });
-          });
-
-          if (commentEntries.length > 3) {
-            const showMoreBtn = document.createElement("button");
-            showMoreBtn.className = "show-more-btn";
-            showMoreBtn.textContent = "Show More";
-            showMoreBtn.setAttribute("aria-label", "Show more comments");
-            showMoreBtn.addEventListener("click", () => {
-              const hiddenComments = commentsList.querySelectorAll(".comment.hidden");
-              hiddenComments.forEach(comment => comment.classList.remove("hidden"));
-              showMoreBtn.style.display = "none";
-            });
-            commentsList.appendChild(showMoreBtn);
-          }
-        }
-      });
-    }
-
-    async function refreshTweets(user, userProfiles) {
-      showLoading();
-      try {
-        const tweetsRef = ref(db, "tweets");
-        const tweetsSnapshot = await get(tweetsRef);
-        const retweetsRef = ref(db, "retweets");
-        const retweetsSnapshot = await get(retweetsRef);
-
-        tweetFeed.innerHTML = "";
-        const tweets = tweetsSnapshot.val();
-        const retweets = retweetsSnapshot.val();
-        if (tweets) {
-          let tweetEntries = Object.entries(tweets);
-          tweetEntries.sort((a, b) => b[1].createdAt - a[1].createdAt);
-          const mostRecentTweet = tweetEntries.shift();
-          tweetEntries = shuffleArray(tweetEntries);
-          if (mostRecentTweet) {
-            const tweetId = mostRecentTweet[0];
-            const tweetData = mostRecentTweet[1];
-            tweetData.retweetCount = retweets
-              ? Object.values(retweets).filter(r => r.originalTweetId === tweetId).length
-              : 0;
-            tweetData.retweetUsers = retweets
-              ? Object.fromEntries(
-                  Object.entries(retweets).filter(([_, r]) => r.originalTweetId === tweetId).map(([id, r]) => [r.userId, id])
-                )
-              : {};
-            renderTweet(tweetData, tweetId, user, userProfiles);
-          }
-          tweetEntries.forEach(([id, tweet]) => {
-            tweet.retweetCount = retweets
-              ? Object.values(retweets).filter(r => r.originalTweetId === id).length
-              : 0;
-            tweet.retweetUsers = retweets
-              ? Object.fromEntries(
-                  Object.entries(retweets).filter(([_, r]) => r.originalTweetId === id).map(([id, r]) => [r.userId, id])
-                )
-              : {};
-            renderTweet(tweet, id, user, userProfiles);
-          });
-        }
-      } catch (error) {
-        showAlert("Failed to load tweets. Please try again.", false);
-      } finally {
-        hideLoading();
-      }
-    }
-
-    onAuthStateChanged(auth, (user) => {
-      if (!user) {
-        document.body.classList.add("fade-out");
-        setTimeout(() => {
-          window.location.href = "signup.html";
-        }, 1500);
-        return;
-      }
-
-      currentUser = user;
-      showLoading();
-      const userRef = ref(db, `users/${user.uid}`);
-      get(userRef).then((snapshot) => {
-        const userData = snapshot.val();
-        const isGuest = userData && userData.isGuest;
-        user.isGuest = isGuest;
-        tweetInput.disabled = isGuest;
-        tweetBtn.disabled = isGuest;
-        imageUpload.disabled = isGuest;
-        videoUpload.disabled = isGuest;
-        imageLabel.style.pointerEvents = isGuest ? "none" : "auto";
-        videoLabel.style.pointerEvents = isGuest ? "none" : "auto";
-        imageLabel.style.opacity = isGuest ? 0.5 : 1;
-        videoLabel.style.opacity = isGuest ? 0.5 : 1;
-        tweetInput.placeholder = isGuest ? "Guests cannot post tweets or media." : "What's happening?";
-
-        const usersRef = ref(db, "users");
-        get(usersRef).then((usersSnapshot) => {
-          const userProfiles = usersSnapshot.val() || {};
-          userHandles = {};
-          Object.entries(userProfiles).forEach(([uid, profile]) => {
-            if (profile.handle) {
-              userHandles[profile.handle.toLowerCase()] = uid;
-            }
-          });
-
-          refreshTweets(user, userProfiles);
-        }).catch(() => {
-          showAlert("Failed to load user profiles. Please try again.", false);
-          hideLoading();
-        });
-      }).catch(() => {
-        showAlert("Failed to load user data. Please try again.", false);
-        hideLoading();
-      });
-    });
-
-    tweetInput.addEventListener("input", () => {
-      tweetBtn.disabled = tweetInput.value.trim() === "" && !imageUpload.files[0] && !videoUpload.files[0];
-      handleInput(tweetInput, tweetSuggestions);
-    });
-
-    tweetInput.addEventListener("keydown", (event) => {
-      handleKeyDown(event, tweetInput, tweetSuggestions);
-    });
-
-    commentInput.addEventListener("input", () => {
-      handleInput(commentInput, commentSuggestions);
-    });
-
-    commentInput.addEventListener("keydown", (event) => {
-      handleKeyDown(event, commentInput, commentSuggestions);
-    });
-
-    imageUpload.addEventListener("change", () => {
-      tweetBtn.disabled = tweetInput.value.trim() === "" && !imageUpload.files[0] && !videoUpload.files[0];
-      if (imageUpload.files[0]) {
-        videoUpload.value = "";
-      }
-    });
-
-    videoUpload.addEventListener("change", () => {
-      tweetBtn.disabled = tweetInput.value.trim() === "" && !imageUpload.files[0] && !videoUpload.files[0];
-      if (videoUpload.files[0]) {
-        imageUpload.value = "";
-      }
-    });
-
-    tweetBtn.addEventListener("click", async () => {
-      if (tweetBtn.disabled) return;
-      showLoading();
-      try {
-        const userRef = ref(db, `users/${auth.currentUser.uid}`);
-        const userSnapshot = await get(userRef);
-        const userData = userSnapshot.val();
-        const tweetData = {
-          text: tweetInput.value,
-          username: userData?.username || "Anonymous",
-          handle: userData?.handle || "",
-          createdAt: Date.now(),
-          userId: auth.currentUser.uid
-        };
-        if (imageUpload.files[0]) {
-          tweetData.mediaUrl = await uploadMedia(imageUpload.files[0], "image");
-          tweetData.mediaType = "image";
-        } else if (videoUpload.files[0]) {
-          tweetData.mediaUrl = await uploadMedia(videoUpload.files[0], "video");
-          tweetData.mediaType = "video";
-        }
-        await push(ref(db, "tweets"), tweetData);
-        tweetInput.value = "";
-        imageUpload.value = "";
-        videoUpload.value = "";
-        tweetBtn.disabled = true;
-        showAlert("Tweet posted successfully!", true);
-        const usersRef = ref(db, "users");
-        const usersSnapshot = await get(usersRef);
-        const userProfiles = usersSnapshot.val() || {};
-        await refreshTweets(currentUser, userProfiles);
-      } catch (error) {
-        showAlert(`Failed to post tweet: ${error.message}`, false);
-      } finally {
-        hideLoading();
-      }
-    });
-
-    submitComment.addEventListener("click", async () => {
-      if (!commentInput.value.trim()) {
-        showAlert("Comment cannot be empty.", false);
-        return;
-      }
-      showLoading();
-      try {
-        const userRef = ref(db, `users/${auth.currentUser.uid}`);
-        const userSnapshot = await get(userRef);
-        const userData = userSnapshot.val();
-        const commentData = {
-          text: commentInput.value,
-          username: userData?.username || "Anonymous",
-          handle: userData?.handle || "",
-          createdAt: Date.now(),
-          userId: auth.currentUser.uid,
-          parentCommentId: replyToCommentId
-        };
-        await push(ref(db, `tweets/${currentTweetId}/comments`), commentData);
-        commentModal.classList.remove("active");
-        commentInput.value = "";
-        replyToCommentId = null;
-        showAlert("Comment posted successfully!", true);
-        const usersRef = ref(db, "users");
-        const usersSnapshot = await get(usersRef);
-        const userProfiles = usersSnapshot.val() || {};
-        await refreshTweets(currentUser, userProfiles);
-      } catch (error) {
-        showAlert("Failed to post comment. Please try again.", false);
-      } finally {
-        hideLoading();
-      }
-    });
-
-    cancelComment.addEventListener("click", () => {
-      commentModal.classList.remove("active");
-      commentInput.value = "";
-      replyToCommentId = null;
-      commentSuggestions.classList.remove("active");
-    });
-
-    document.querySelector(".logout-btn").addEventListener("click", () => {
-      showLoading();
-      signOut(auth).finally(() => hideLoading());
-    });
-
-    document.querySelector(".custom-alert .close-btn").addEventListener("click", () => {
-      alert.classList.remove("active");
-    });
-
-    document.querySelector(".theme-toggle").addEventListener("click", toggleDarkMode);
-
-    const savedTheme = localStorage.getItem("theme") || "light";
-    document.body.dataset.theme = savedTheme;
-  </script>
-</body>
-</html>
+    const tweetInput = document.get NH1; document.getElementById("tweet-input");
+    const tweetBtn = document.getElementById("tweet-btn");
+    const imageUpload = document.getElementById("image-upload");
+    const videoUpload = document.getElementById("video-upload");
+    const voiceRecordBtn = document.getElementById("voice-record-btn");
+    const voiceRecordText = document.getElementById("voice-record-text");
+    const imageLabel = document.getElementById("image-label");
+    const videoLabel = document.getElementById("video-label");
+    const tweetFeed = document.getElementById("tweet-feed");
+    const commentModal = document.getElementById("comment-modal");
+    const commentInput = document.getElementById("comment-input");
+    const submitComment = document.getElementById("submit-comment");
+    const cancelComment = document.getElementById("cancel-comment");
+    const alert = document.getElementById("alert");
+    const alertMessage = document.getElementById("alert-message");
+    const progressBar = document.getElementById("progress-bar");
+    const progress = document.getElementById("progress");
+    const tweetSuggestions = document.getElementById("tweet-suggestions");
+    const commentSuggestions = document.getElementById("comment-suggestions");
+    const confirmModal = document.getElementById("confirm-modal");
+    const confirmMessage = document.getElementById("confirm-message");
+    const confirmBtn = document.getElementById("confirm-btn");
+    const cancelConfirm = document.getElementById("cancel-confirm");
+    const loadingOverlay = document.getElementById("loading-overlay");
+    let currentTweetId = null;
+    let replyToCommentId = null;
+    let userHandles = {};
+    let
