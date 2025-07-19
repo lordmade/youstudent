@@ -865,6 +865,33 @@
         max-height: 300px; /* Increased for mobile to ensure visibility */
       }
     }
+    .follow-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  font-size: 0.875rem;
+  color: var(--text-light);
+  padding: 0.5rem;
+  border-radius: 4px;
+  transition: background 0.2s, color 0.2s;
+}
+
+.follow-btn:hover:not(:disabled) {
+  background: var(--primary-hover);
+  color: var(--primary);
+}
+
+.follow-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.follow-btn svg {
+  width: 20px;
+  height: 20px;
+  fill: currentColor;
+}
   </style>
 </head>
 <body>
@@ -946,8 +973,7 @@
     </div>
   </div>
 
-
-  <script type="module">
+<script type="module">
   import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
   import { getAuth, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
   import { getDatabase, ref, push, set, remove, get } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js';
@@ -1273,7 +1299,47 @@
     }
   }
 
-  function renderTweet(tweetData, tweetId, user, userProfiles) {
+  async function followUser(followedUserId, tweetDiv) {
+    if (!currentUser) {
+      showAlert("You must be logged in to follow users.", false);
+      return;
+    }
+    if (currentUser.isGuest) {
+      showAlert("Guests cannot follow users.", false);
+      return;
+    }
+    if (currentUser.uid === followedUserId) {
+      showAlert("You cannot follow yourself.", false);
+      return;
+    }
+
+    showLoading();
+    try {
+      const followRef = ref(db, `users/${currentUser.uid}/following/${followedUserId}`);
+      const followSnapshot = await get(followRef);
+      if (followSnapshot.exists()) {
+        // Already following, optionally allow unfollow
+        showAlert("You are already following this user.", false);
+      } else {
+        await set(followRef, true);
+        showAlert("User followed successfully!", true);
+        // Refresh the tweet feed to update follow button state
+        const usersRef = ref(db, "users");
+        const usersSnapshot = await get(usersRef);
+        const userProfiles = usersSnapshot.val() || {};
+        const followingRef = ref(db, `users/${currentUser.uid}/following`);
+        const followingSnapshot = await get(followingRef);
+        const following = followingSnapshot.val() || {};
+        await refreshTweets(currentUser, userProfiles, following);
+      }
+    } catch (error) {
+      showAlert("Failed to follow user. Please try again.", false);
+    } finally {
+      hideLoading();
+    }
+  }
+
+  function renderTweet(tweetData, tweetId, user, userProfiles, following) {
     const tweetDiv = document.createElement("div");
     tweetDiv.className = "tweet";
     tweetDiv.dataset.tweetId = tweetId;
@@ -1292,7 +1358,10 @@
     const commentCount = tweetData.comments ? Object.keys(tweetData.comments).length : 0;
     const isGuest = user && user.isGuest;
     const isOwnTweet = user && tweetData.userId === user.uid;
-    const isRepost = !!tweetData.isRetweet;
+    const isRepost = !!tweetData.isRetweet //
+
+    const isFollowing = user && following && following[tweetData.userId];
+    const showFollowButton = user && !isGuest && !isOwnTweet && !isFollowing;
     const username = tweetData.username || "Anonymous";
     const handle = tweetData.handle ? `@${tweetData.handle}` : "";
     const profilePicture = userProfiles[tweetData.userId]?.profilePicture;
@@ -1303,6 +1372,14 @@
           <span class="tweet-username"><a href="profile.html?uid=${tweetData.userId}" style="color: inherit; text-decoration: none;">${username}</a> <span class="handle">${handle}</span></span>
           <span class="tweet-timestamp">${formatTimestamp(tweetData.createdAt)}</span>
         </div>
+        ${showFollowButton ? `
+        <div class="follow-btn" data-user-id="${tweetData.userId}" aria-label="Follow ${username}">
+          <svg viewBox="0 0 24 24">
+            <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+          </svg>
+          <span>Follow</span>
+        </div>
+        ` : ''}
       </div>
       ${isRepost ? `<div class="tweet-content" style="color: var(--text-light); font-size: 0.875rem; margin-bottom: 0.5rem;">Reposted by ${username}</div>` : ''}
       <div class="tweet-content">${formatContentWithTags(tweetData.text || "")}</div>
@@ -1370,6 +1447,7 @@
     const repostBtn = tweetDiv.querySelector(".repost-btn");
     const likeBtn = tweetDiv.querySelector(".like-btn");
     const deleteBtn = tweetDiv.querySelector(".delete-btn");
+    const followBtn = tweetDiv.querySelector(".follow-btn");
 
     commentBtn.addEventListener("click", () => {
       if (isGuest) {
@@ -1419,7 +1497,7 @@
         
         await push(ref(db, "tweets"), repostData);
         showAlert("Repost created successfully!", true);
-        await refreshTweets(user, userProfiles);
+        await refreshTweets(user, userProfiles, following);
       } catch (error) {
         showAlert("Failed to repost. Please try again.", false);
       } finally {
@@ -1440,7 +1518,7 @@
         } else {
           await set(likeRef, true);
         }
-        await refreshTweets(user, userProfiles);
+        await refreshTweets(user, userProfiles, following);
       } catch (error) {
         showAlert("Failed to update like. Please try again.", false);
       } finally {
@@ -1456,13 +1534,19 @@
           try {
             await remove(ref(db, `tweets/${tweetId}`));
             showAlert("Post deleted.", true);
-            await refreshTweets(user, userProfiles);
+            await refreshTweets(user, userProfiles, following);
           } catch (error) {
             showAlert("Failed to delete post. Please try again.", false);
           } finally {
             hideLoading();
           }
         }
+      });
+    }
+
+    if (followBtn) {
+      followBtn.addEventListener("click", async () => {
+        await followUser(tweetData.userId, tweetDiv);
       });
     }
 
@@ -1530,7 +1614,7 @@
               try {
                 await remove(ref(db, `tweets/${tweetId}/comments/${btn.dataset.commentId}`));
                 showAlert("Comment deleted successfully!", true);
-                await refreshTweets(user, userProfiles);
+                await refreshTweets(user, userProfiles, following);
               } catch (error) {
                 showAlert("Failed to delete comment. Please try again.", false);
               } finally {
@@ -1556,7 +1640,7 @@
     });
   }
 
-  async function refreshTweets(user, userProfiles) {
+  async function refreshTweets(user, userProfiles, following) {
     showLoading();
     try {
       const tweetsRef = ref(db, "tweets");
@@ -1569,10 +1653,10 @@
         const mostRecentTweet = tweetEntries.shift();
         tweetEntries = shuffleArray(tweetEntries);
         if (mostRecentTweet) {
-          renderTweet(mostRecentTweet[1], mostRecentTweet[0], user, userProfiles);
+          renderTweet(mostRecentTweet[1], mostRecentTweet[0], user, userProfiles, following);
         }
         tweetEntries.forEach(([id, tweet]) => {
-          renderTweet(tweet, id, user, userProfiles);
+          renderTweet(tweet, id, user, userProfiles, following);
         });
       }
     } catch (error) {
@@ -1619,7 +1703,7 @@
       const isGuest = userData && userData.isGuest;
       user.isGuest = isGuest;
       tweetInput.disabled = isGuest;
-      tweetBtn.disabled = isGuest; // Enable button for non-guest users initially
+      tweetBtn.disabled = isGuest;
       imageUpload.disabled = isGuest;
       videoUpload.disabled = isGuest;
       imageLabel.style.pointerEvents = isGuest ? "none" : "auto";
@@ -1638,7 +1722,15 @@
           }
         });
 
-        refreshTweets(user, userProfiles);
+        const followingRef = ref(db, `users/${user.uid}/following`);
+        get(followingRef).then((followingSnapshot) => {
+          const following = followingSnapshot.val() || {};
+          refreshTweets(user, userProfiles, following);
+        }).catch(() => {
+          showAlert("Failed to load following data. Please try again.", false);
+          refreshTweets(user, userProfiles, {});
+          hideLoading();
+        });
       }).catch(() => {
         showAlert("Failed to load user profiles. Please try again.", false);
         hideLoading();
@@ -1724,7 +1816,6 @@
       return;
     }
 
-    // If input area is visible and there’s content, post it
     if (tweetInput.value.trim() || selectedMediaFile) {
       showLoading();
       try {
@@ -1758,14 +1849,16 @@
         const usersRef = ref(db, "users");
         const usersSnapshot = await get(usersRef);
         const userProfiles = usersSnapshot.val() || {};
-        await refreshTweets(currentUser, userProfiles);
+        const followingRef = ref(db, `users/${currentUser.uid}/following`);
+        const followingSnapshot = await get(followingRef);
+        const following = followingSnapshot.val() || {};
+        await refreshTweets(currentUser, userProfiles, following);
       } catch (error) {
         showAlert(`Failed to create post: ${error.message}`, false);
       } finally {
         hideLoading();
       }
     } else {
-      // If no content, just hide the input area
       toggleInputArea();
     }
   });
@@ -1796,7 +1889,10 @@
       const usersRef = ref(db, "users");
       const usersSnapshot = await get(usersRef);
       const userProfiles = usersSnapshot.val() || {};
-      await refreshTweets(currentUser, userProfiles);
+      const followingRef = ref(db, `users/${currentUser.uid}/following`);
+      const followingSnapshot = await get(followingRef);
+      const following = followingSnapshot.val() || {};
+      await refreshTweets(currentUser, userProfiles, following);
     } catch (error) {
       showAlert("Failed to post comment. Please try again.", false);
     } finally {
@@ -1825,9 +1921,6 @@
   const savedTheme = localStorage.getItem("theme") || "light";
   document.body.dataset.theme = savedTheme;
 </script>
-    
-    
-      
           
         
 </body>
