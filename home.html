@@ -792,42 +792,6 @@
       background: rgba(29, 161, 242, 0.1);
     }
 
-    /* New Posts Notification Styles */
-    .new-posts-notification {
-      display: none;
-      position: fixed;
-      top: 5rem; /* Below navbar */
-      left: 50%;
-      transform: translateX(-50%);
-      background: linear-gradient(45deg, var(--twitter-blue), var(--twitter-purple));
-      color: var(--white);
-      padding: 0.5rem 1.5rem;
-      border-radius: 9999px; /* Pill shape */
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-      z-index: 1001;
-      font-size: 0.9rem;
-      font-weight: 600;
-      cursor: pointer;
-      transition: transform 0.2s ease, opacity 0.3s ease;
-      animation: pulse 2s infinite;
-      max-width: 90%;
-      text-align: center;
-    }
-
-    .new-posts-notification.active {
-      display: block;
-    }
-
-    .new-posts-notification:hover {
-      transform: scale(1.05) translateX(-50%);
-    }
-
-    @keyframes pulse {
-      0% { transform: translateX(-50%) scale(1); }
-      50% { transform: translateX(-50%) scale(1.03); }
-      100% { transform: translateX(-50%) scale(1); }
-    }
-
     @keyframes fadeIn {
       0% { opacity: 0; transform: translateX(-50%) translateY(-10px); }
       100% { opacity: 1; transform: translateX(-50%) translateY(0); }
@@ -898,44 +862,38 @@
       }
 
       .input-area.active {
-        max-height: 300px;
-      }
-
-      .new-posts-notification {
-        font-size: 0.85rem;
-        padding: 0.4rem 1.2rem;
+        max-height: 300px; /* Increased for mobile to ensure visibility */
       }
     }
-
     .follow-btn {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      cursor: pointer;
-      font-size: 0.875rem;
-      color: #ffffff;
-      background-color: #1DA1F2;
-      padding: 0.5rem 1rem;
-      border-radius: 9999px;
-      border: none;
-      transition: background-color 0.2s, opacity 0.2s;
-      margin-left: auto;
-    }
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  font-size: 0.875rem;
+  color: #ffffff; /* White text */
+  background-color: #1DA1F2; /* Blue background */
+  padding: 0.5rem 1rem; /* Increased padding for pill shape */
+  border-radius: 9999px; /* High border-radius for pill shape */
+  border: none;
+  transition: background-color 0.2s, opacity 0.2s;
+  margin-left: auto; /* Push to the right in tweet-header */
+}
 
-    .follow-btn:hover:not(:disabled) {
-      background-color: #1A91DA;
-    }
+.follow-btn:hover:not(:disabled) {
+  background-color: #1A91DA; /* Slightly darker blue on hover */
+}
 
-    .follow-btn:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
+.follow-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
 
-    .follow-btn svg {
-      width: 18px;
-      height: 18px;
-      fill: #ffffff;
-    }
+.follow-btn svg {
+  width: 18px; /* Slightly smaller icon for balance */
+  height: 18px;
+  fill: #ffffff; /* White icon to match text */
+}
   </style>
 </head>
 <body>
@@ -960,10 +918,6 @@
           <path d="M6 18L18 6M6 6l12 12"/>
         </svg>
       </button>
-    </div>
-    <!-- New Posts Notification -->
-    <div class="new-posts-notification" id="new-posts-notification" role="alert" aria-live="polite" tabindex="0">
-      New posts available
     </div>
     <div class="loading-overlay" id="loading-overlay">
       <div class="spinner"></div>
@@ -1069,8 +1023,6 @@
   const mediaConfirmBtn = document.getElementById("media-confirm-btn");
   const mediaReuploadBtn = document.getElementById("media-reupload-btn");
   const mediaCancelBtn = document.getElementById("media-cancel-btn");
-  // New Posts Notification
-  const newPostsNotification = document.getElementById("new-posts-notification");
   let currentTweetId = null;
   let replyToCommentId = null;
   let userHandles = {};
@@ -1080,8 +1032,6 @@
   let selectedMediaFile = null;
   let selectedMediaType = null;
   let isInputAreaVisible = false;
-  let latestTweetTimestamp = 0; // Track the latest tweet timestamp
-  let checkNewPostsInterval = null; // Interval for checking new posts
 
   const CLOUDINARY_CLOUD_NAME = "dqkujefxj";
   const CLOUDINARY_UPLOAD_PRESET = "banter_box";
@@ -1389,6 +1339,14 @@
     }
   }
 
+  function scrollToTweet(tweetId) {
+    const tweetElement = document.querySelector(`.tweet[data-tweet-id="${tweetId}"]`);
+    if (tweetElement) {
+      tweetElement.scrollIntoView({ behavior: "smooth", block: "start" });
+      tweetElement.focus({ preventScroll: true });
+    }
+  }
+
   function renderTweet(tweetData, tweetId, user, userProfiles, following) {
     const tweetDiv = document.createElement("div");
     tweetDiv.className = "tweet";
@@ -1520,7 +1478,6 @@
         showAlert("You cannot repost your own post.", false);
         return;
       }
-      const tweetId = tweetDiv.dataset.tweetId;
       showLoading();
       try {
         const userRef = ref(db, `users/${user.uid}`);
@@ -1547,12 +1504,6 @@
         
         await push(ref(db, "tweets"), repostData);
         showAlert("Repost created successfully!", true);
-        const usersRef = ref(db, "users");
-        const usersSnapshot = await get(usersRef);
-        const userProfiles = usersSnapshot.val() || {};
-        const followingRef = ref(db, `users/${user.uid}/following`);
-        const followingSnapshot = await get(followingRef);
-        const following = followingSnapshot.val() || {};
         await refreshTweets(user, userProfiles, following, tweetId);
       } catch (error) {
         showAlert("Failed to repost. Please try again.", false);
@@ -1566,7 +1517,6 @@
         showAlert("Guests cannot like posts.", false);
         return;
       }
-      const tweetId = tweetDiv.dataset.tweetId;
       showLoading();
       try {
         const likeRef = ref(db, `tweets/${tweetId}/likes/${user.uid}`);
@@ -1575,12 +1525,6 @@
         } else {
           await set(likeRef, true);
         }
-        const usersRef = ref(db, "users");
-        const usersSnapshot = await get(usersRef);
-        const userProfiles = usersSnapshot.val() || {};
-        const followingRef = ref(db, `users/${user.uid}/following`);
-        const followingSnapshot = await get(followingRef);
-        const following = followingSnapshot.val() || {};
         await refreshTweets(user, userProfiles, following, tweetId);
       } catch (error) {
         showAlert("Failed to update like. Please try again.", false);
@@ -1591,23 +1535,13 @@
 
     if (deleteBtn) {
       deleteBtn.addEventListener("click", async () => {
-        const tweetId = tweetDiv.dataset.tweetId;
         const confirmed = await showCustomConfirm("Are you sure you want to delete this post?");
         if (confirmed) {
           showLoading();
           try {
             await remove(ref(db, `tweets/${tweetId}`));
             showAlert("Post deleted.", true);
-            const allTweets = document.querySelectorAll(".tweet");
-            const currentIndex = Array.from(allTweets).findIndex(tweet => tweet.dataset.tweetId === tweetId);
-            const nextTweetId = currentIndex < allTweets.length - 1 ? allTweets[currentIndex + 1]?.dataset.tweetId : (currentIndex > 0 ? allTweets[currentIndex - 1]?.dataset.tweetId : null);
-            const usersRef = ref(db, "users");
-            const usersSnapshot = await get(usersRef);
-            const userProfiles = usersSnapshot.val() || {};
-            const followingRef = ref(db, `users/${user.uid}/following`);
-            const followingSnapshot = await get(followingRef);
-            const following = followingSnapshot.val() || {};
-            await refreshTweets(user, userProfiles, following, nextTweetId || null);
+            await refreshTweets(user, userProfiles, following);
           } catch (error) {
             showAlert("Failed to delete post. Please try again.", false);
           } finally {
@@ -1619,7 +1553,6 @@
 
     if (followBtn) {
       followBtn.addEventListener("click", async () => {
-        const tweetId = tweetDiv.dataset.tweetId;
         await followUser(tweetData.userId, tweetDiv, tweetId);
       });
     }
@@ -1688,12 +1621,6 @@
               try {
                 await remove(ref(db, `tweets/${tweetId}/comments/${btn.dataset.commentId}`));
                 showAlert("Comment deleted successfully!", true);
-                const usersRef = ref(db, "users");
-                const usersSnapshot = await get(usersRef);
-                const userProfiles = usersSnapshot.val() || {};
-                const followingRef = ref(db, `users/${user.uid}/following`);
-                const followingSnapshot = await get(followingRef);
-                const following = followingSnapshot.val() || {};
                 await refreshTweets(user, userProfiles, following, tweetId);
               } catch (error) {
                 showAlert("Failed to delete comment. Please try again.", false);
@@ -1718,14 +1645,9 @@
         }
       }
     });
-
-    // Update latest timestamp
-    if (tweetData.createdAt > latestTweetTimestamp) {
-      latestTweetTimestamp = tweetData.createdAt;
-    }
   }
 
-  async function refreshTweets(user, userProfiles, following, targetTweetId = null) {
+  async function refreshTweets(user, userProfiles, following, scrollToTweetId = null) {
     showLoading();
     try {
       const tweetsRef = ref(db, "tweets");
@@ -1743,40 +1665,14 @@
         tweetEntries.forEach(([id, tweet]) => {
           renderTweet(tweet, id, user, userProfiles, following);
         });
-
-        if (targetTweetId) {
-          const targetTweet = document.querySelector(`.tweet[data-tweet-id="${targetTweetId}"]`);
-          if (targetTweet) {
-            targetTweet.scrollIntoView({ behavior: "smooth", block: "center" });
-            targetTweet.focus({ preventScroll: true });
-          }
-        }
+      }
+      if (scrollToTweetId) {
+        scrollToTweet(scrollToTweetId);
       }
     } catch (error) {
       showAlert("Failed to load posts. Please try again.", false);
     } finally {
       hideLoading();
-    }
-  }
-
-  // Check for new posts
-  async function checkForNewPosts() {
-    try {
-      const tweetsRef = ref(db, "tweets");
-      const tweetsSnapshot = await get(tweetsRef);
-      const tweets = tweetsSnapshot.val();
-      if (tweets) {
-        const tweetEntries = Object.entries(tweets);
-        const latestTweet = tweetEntries.sort((a, b) => b[1].createdAt - a[1].createdAt)[0];
-        if (latestTweet && latestTweet[1].createdAt > latestTweetTimestamp) {
-          if (window.scrollY > 300) { // Show notification only if scrolled down
-            newPostsNotification.classList.add("active");
-          }
-          latestTweetTimestamp = latestTweet[1].createdAt;
-        }
-      }
-    } catch (error) {
-      console.error("Error checking for new posts:", error);
     }
   }
 
@@ -1840,11 +1736,9 @@
         get(followingRef).then((followingSnapshot) => {
           const following = followingSnapshot.val() || {};
           refreshTweets(user, userProfiles, following);
-          // Start checking for new posts every 30 seconds
-          checkNewPostsInterval = setInterval(checkForNewPosts, 30000);
         }).catch(() => {
-          showAlert("Failed to load following data. Please try again.", false}).catch(() => {
           showAlert("Failed to load following data. Please try again.", false);
+          refreshTweets(user, userProfiles, {});
           hideLoading();
         });
       }).catch(() => {
@@ -1857,87 +1751,8 @@
     });
   });
 
-  // Event listener for new posts notification
-  newPostsNotification.addEventListener("click", async () => {
-    newPostsNotification.classList.remove("active");
-    window.scrollTo({ top: 0, behavior: "smooth" });
-    const usersRef = ref(db, "users");
-    const usersSnapshot = await get(usersRef);
-    const userProfiles = usersSnapshot.val() || {};
-    const followingRef = ref(db, `users/${currentUser.uid}/following`);
-    const followingSnapshot = await get(followingRef);
-    const following = followingSnapshot.val() || {};
-    await refreshTweets(currentUser, userProfiles, following);
-  });
-
-  // Hide notification when user scrolls to top
-  window.addEventListener("scroll", () => {
-    if (window.scrollY < 100) {
-      newPostsNotification.classList.remove("active");
-    }
-  });
-
-  // Keyboard accessibility for new posts notification
-  newPostsNotification.addEventListener("keydown", (event) => {
-    if (event.key === "Enter" || event.key === " ") {
-      event.preventDefault();
-      newPostsNotification.click();
-    }
-  });
-
-  tweetBtn.addEventListener("click", async () => {
-    if (!isInputAreaVisible) {
-      toggleInputArea();
-      return;
-    }
-    if (!tweetInput.value.trim() && !selectedMediaFile) {
-      showAlert("Post cannot be empty.", false);
-      return;
-    }
-    showLoading();
-    try {
-      let mediaUrl = null;
-      let mediaType = null;
-      if (selectedMediaFile) {
-        mediaUrl = await uploadMedia(selectedMediaFile, selectedMediaType);
-        mediaType = selectedMediaType;
-      }
-      const userRef = ref(db, `users/${auth.currentUser.uid}`);
-      const userSnapshot = await get(userRef);
-      const userData = userSnapshot.val();
-      const tweetData = {
-        text: tweetInput.value,
-        username: userData?.username || "Anonymous",
-        handle: userData?.handle || "",
-        createdAt: Date.now(),
-        userId: auth.currentUser.uid,
-        mediaUrl,
-        mediaType
-      };
-      await push(ref(db, "tweets"), tweetData);
-      tweetInput.value = "";
-      imageUpload.value = "";
-      videoUpload.value = "";
-      selectedMediaFile = null;
-      selectedMediaType = null;
-      toggleInputArea();
-      showAlert("Post created successfully!", true);
-      const usersRef = ref(db, "users");
-      const usersSnapshot = await get(usersRef);
-      const userProfiles = usersSnapshot.val() || {};
-      const followingRef = ref(db, `users/${currentUser.uid}/following`);
-      const followingSnapshot = await get(followingRef);
-      const following = followingSnapshot.val() || {};
-      await refreshTweets(currentUser, userProfiles, following);
-    } catch (error) {
-      showAlert(`Failed to create post: ${error.message}`, false);
-    } finally {
-      hideLoading();
-    }
-  });
-
   tweetInput.addEventListener("input", () => {
-    tweetBtn.disabled = (!tweetInput.value.trim() && !selectedMediaFile) || (currentUser && currentUser.isGuest);
+    tweetBtn.disabled = tweetInput.value.trim() === "" && !selectedMediaFile;
     handleInput(tweetInput, tweetSuggestions);
   });
 
@@ -1945,45 +1760,117 @@
     handleKeyDown(event, tweetInput, tweetSuggestions);
   });
 
-  imageUpload.addEventListener("change", (event) => {
-    const file = event.target.files[0];
-    if (file) {
-      showMediaPreview(file, "image");
+  commentInput.addEventListener("input", () => {
+    handleInput(commentInput, commentSuggestions);
+  });
+
+  commentInput.addEventListener("keydown", (event) => {
+    handleKeyDown(event, commentInput, commentSuggestions);
+  });
+
+  imageUpload.addEventListener("change", () => {
+    if (imageUpload.files[0]) {
+      videoUpload.value = "";
+      showMediaPreview(imageUpload.files[0], "image");
+    } else {
+      selectedMediaFile = null;
+      selectedMediaType = null;
+      tweetBtn.disabled = tweetInput.value.trim() === "";
     }
   });
 
-  videoUpload.addEventListener("change", (event) => {
-    const file = event.target.files[0];
-    if (file) {
-      showMediaPreview(file, "video");
+  videoUpload.addEventListener("change", () => {
+    if (videoUpload.files[0]) {
+      imageUpload.value = "";
+      showMediaPreview(videoUpload.files[0], "video");
+    } else {
+      selectedMediaFile = null;
+      selectedMediaType = null;
+      tweetBtn.disabled = tweetInput.value.trim() === "";
     }
   });
 
   mediaConfirmBtn.addEventListener("click", () => {
     mediaPreviewModal.classList.remove("active");
-    tweetBtn.disabled = (!tweetInput.value.trim() && !selectedMediaFile) || (currentUser && currentUser.isGuest);
+    tweetBtn.disabled = tweetInput.value.trim() === "" && !selectedMediaFile;
   });
 
   mediaReuploadBtn.addEventListener("click", () => {
     mediaPreviewModal.classList.remove("active");
-    selectedMediaFile = null;
-    selectedMediaType = null;
-    imageUpload.value = "";
-    videoUpload.value = "";
     if (selectedMediaType === "image") {
+      imageUpload.value = "";
       imageUpload.click();
-    } else {
+    } else if (selectedMediaType === "video") {
+      videoUpload.value = "";
       videoUpload.click();
     }
   });
 
   mediaCancelBtn.addEventListener("click", () => {
     mediaPreviewModal.classList.remove("active");
-    selectedMediaFile = null;
-    selectedMediaType = null;
     imageUpload.value = "";
     videoUpload.value = "";
-    tweetBtn.disabled = (!tweetInput.value.trim() && !selectedMediaFile) || (currentUser && currentUser.isGuest);
+    selectedMediaFile = null;
+    selectedMediaType = null;
+    tweetBtn.disabled = tweetInput.value.trim() === "";
+  });
+
+  tweetBtn.addEventListener("click", async () => {
+    if (currentUser && currentUser.isGuest) {
+      showAlert("Guests cannot post.", false);
+      return;
+    }
+
+    if (!isInputAreaVisible) {
+      toggleInputArea();
+      return;
+    }
+
+    if (tweetInput.value.trim() || selectedMediaFile) {
+      showLoading();
+      try {
+        const userRef = ref(db, `users/${auth.currentUser.uid}`);
+        const userSnapshot = await get(userRef);
+        const userData = userSnapshot.val();
+        const tweetData = {
+          text: tweetInput.value,
+          username: userData?.username || "Anonymous",
+          handle: userData?.handle || "",
+          createdAt: Date.now(),
+          userId: auth.currentUser.uid
+        };
+        if (selectedMediaFile) {
+          tweetData.mediaUrl = await uploadMedia(selectedMediaFile, selectedMediaType);
+          tweetData.mediaType = selectedMediaType;
+        }
+        await push(ref(db, "tweets"), tweetData);
+        tweetInput.value = "";
+        imageUpload.value = "";
+        videoUpload.value = "";
+        selectedMediaFile = null;
+        selectedMediaType = null;
+        mediaPreviewModal.classList.remove("active");
+        mediaPreview.innerHTML = "";
+        inputArea.classList.remove("active");
+        tweetBtn.textContent = "Add Your Post";
+        tweetBtn.disabled = false;
+        isInputAreaVisible = false;
+        showAlert("Post created successfully!", true);
+        const usersRef = ref(db, "users");
+        const usersSnapshot = await get(usersRef);
+        const userProfiles = usersSnapshot.val() || {};
+        const followingRef = ref(db, `users/${currentUser.uid}/following`);
+        const followingSnapshot = await get(followingRef);
+        const following = followingSnapshot.val() || {};
+        await refreshTweets(currentUser, userProfiles, following);
+      } catch (error) {
+        showAlert(`Failed to create post: ${error.message}`, false);
+      } finally {
+        hideLoading();
+      }
+    } else {
+      toggleInputArea();
+    }
   });
 
   submitComment.addEventListener("click", async () => {
@@ -2027,43 +1914,24 @@
     commentModal.classList.remove("active");
     commentInput.value = "";
     replyToCommentId = null;
-    currentTweetId = null;
+    commentSuggestions.classList.remove("active");
   });
 
-  commentInput.addEventListener("input", () => {
-    handleInput(commentInput, commentSuggestions);
+  document.querySelector(".logout-btn").addEventListener("click", () => {
+    showLoading();
+    signOut(auth).finally(() => hideLoading());
   });
 
-  commentInput.addEventListener("keydown", (event) => {
-    handleKeyDown(event, commentInput, commentSuggestions);
-  });
-
-  document.querySelector(".logout-btn").addEventListener("click", async () => {
-    try {
-      await signOut(auth);
-      document.body.classList.add("fade-out");
-      setTimeout(() => {
-        window.location.href = "signup.html";
-      }, 1500);
-    } catch (error) {
-      showAlert("Failed to log out. Please try again.", false);
-    }
+  document.querySelector(".custom-alert .close-btn").addEventListener("click", () => {
+    alert.classList.remove("active");
   });
 
   document.querySelector(".theme-toggle").addEventListener("click", toggleDarkMode);
 
-  // Apply saved theme
-  const savedTheme = localStorage.getItem("theme");
-  if (savedTheme) {
-    document.body.dataset.theme = savedTheme;
-  }
-
-  // Clean up interval on page unload
-  window.addEventListener("beforeunload", () => {
-    if (checkNewPostsInterval) {
-      clearInterval(checkNewPostsInterval);
-    }
-  });
+  const savedTheme = localStorage.getItem("theme") || "light";
+  document.body.dataset.theme = savedTheme;
 </script>
+          
+        
 </body>
 </html>
