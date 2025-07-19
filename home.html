@@ -1843,4 +1843,227 @@
           // Start checking for new posts every 30 seconds
           checkNewPostsInterval = setInterval(checkForNewPosts, 30000);
         }).catch(() => {
-          showAlert("Failed to load following data. Please try again.", false
+          showAlert("Failed to load following data. Please try again.", false}).catch(() => {
+          showAlert("Failed to load following data. Please try again.", false);
+          hideLoading();
+        });
+      }).catch(() => {
+        showAlert("Failed to load user profiles. Please try again.", false);
+        hideLoading();
+      });
+    }).catch(() => {
+      showAlert("Failed to load user data. Please try again.", false);
+      hideLoading();
+    });
+  });
+
+  // Event listener for new posts notification
+  newPostsNotification.addEventListener("click", async () => {
+    newPostsNotification.classList.remove("active");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    const usersRef = ref(db, "users");
+    const usersSnapshot = await get(usersRef);
+    const userProfiles = usersSnapshot.val() || {};
+    const followingRef = ref(db, `users/${currentUser.uid}/following`);
+    const followingSnapshot = await get(followingRef);
+    const following = followingSnapshot.val() || {};
+    await refreshTweets(currentUser, userProfiles, following);
+  });
+
+  // Hide notification when user scrolls to top
+  window.addEventListener("scroll", () => {
+    if (window.scrollY < 100) {
+      newPostsNotification.classList.remove("active");
+    }
+  });
+
+  // Keyboard accessibility for new posts notification
+  newPostsNotification.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      newPostsNotification.click();
+    }
+  });
+
+  tweetBtn.addEventListener("click", async () => {
+    if (!isInputAreaVisible) {
+      toggleInputArea();
+      return;
+    }
+    if (!tweetInput.value.trim() && !selectedMediaFile) {
+      showAlert("Post cannot be empty.", false);
+      return;
+    }
+    showLoading();
+    try {
+      let mediaUrl = null;
+      let mediaType = null;
+      if (selectedMediaFile) {
+        mediaUrl = await uploadMedia(selectedMediaFile, selectedMediaType);
+        mediaType = selectedMediaType;
+      }
+      const userRef = ref(db, `users/${auth.currentUser.uid}`);
+      const userSnapshot = await get(userRef);
+      const userData = userSnapshot.val();
+      const tweetData = {
+        text: tweetInput.value,
+        username: userData?.username || "Anonymous",
+        handle: userData?.handle || "",
+        createdAt: Date.now(),
+        userId: auth.currentUser.uid,
+        mediaUrl,
+        mediaType
+      };
+      await push(ref(db, "tweets"), tweetData);
+      tweetInput.value = "";
+      imageUpload.value = "";
+      videoUpload.value = "";
+      selectedMediaFile = null;
+      selectedMediaType = null;
+      toggleInputArea();
+      showAlert("Post created successfully!", true);
+      const usersRef = ref(db, "users");
+      const usersSnapshot = await get(usersRef);
+      const userProfiles = usersSnapshot.val() || {};
+      const followingRef = ref(db, `users/${currentUser.uid}/following`);
+      const followingSnapshot = await get(followingRef);
+      const following = followingSnapshot.val() || {};
+      await refreshTweets(currentUser, userProfiles, following);
+    } catch (error) {
+      showAlert(`Failed to create post: ${error.message}`, false);
+    } finally {
+      hideLoading();
+    }
+  });
+
+  tweetInput.addEventListener("input", () => {
+    tweetBtn.disabled = (!tweetInput.value.trim() && !selectedMediaFile) || (currentUser && currentUser.isGuest);
+    handleInput(tweetInput, tweetSuggestions);
+  });
+
+  tweetInput.addEventListener("keydown", (event) => {
+    handleKeyDown(event, tweetInput, tweetSuggestions);
+  });
+
+  imageUpload.addEventListener("change", (event) => {
+    const file = event.target.files[0];
+    if (file) {
+      showMediaPreview(file, "image");
+    }
+  });
+
+  videoUpload.addEventListener("change", (event) => {
+    const file = event.target.files[0];
+    if (file) {
+      showMediaPreview(file, "video");
+    }
+  });
+
+  mediaConfirmBtn.addEventListener("click", () => {
+    mediaPreviewModal.classList.remove("active");
+    tweetBtn.disabled = (!tweetInput.value.trim() && !selectedMediaFile) || (currentUser && currentUser.isGuest);
+  });
+
+  mediaReuploadBtn.addEventListener("click", () => {
+    mediaPreviewModal.classList.remove("active");
+    selectedMediaFile = null;
+    selectedMediaType = null;
+    imageUpload.value = "";
+    videoUpload.value = "";
+    if (selectedMediaType === "image") {
+      imageUpload.click();
+    } else {
+      videoUpload.click();
+    }
+  });
+
+  mediaCancelBtn.addEventListener("click", () => {
+    mediaPreviewModal.classList.remove("active");
+    selectedMediaFile = null;
+    selectedMediaType = null;
+    imageUpload.value = "";
+    videoUpload.value = "";
+    tweetBtn.disabled = (!tweetInput.value.trim() && !selectedMediaFile) || (currentUser && currentUser.isGuest);
+  });
+
+  submitComment.addEventListener("click", async () => {
+    if (!commentInput.value.trim()) {
+      showAlert("Comment cannot be empty.", false);
+      return;
+    }
+    showLoading();
+    try {
+      const userRef = ref(db, `users/${auth.currentUser.uid}`);
+      const userSnapshot = await get(userRef);
+      const userData = userSnapshot.val();
+      const commentData = {
+        text: commentInput.value,
+        username: userData?.username || "Anonymous",
+        handle: userData?.handle || "",
+        createdAt: Date.now(),
+        userId: auth.currentUser.uid,
+        parentCommentId: replyToCommentId
+      };
+      await push(ref(db, `tweets/${currentTweetId}/comments`), commentData);
+      commentModal.classList.remove("active");
+      commentInput.value = "";
+      replyToCommentId = null;
+      showAlert("Comment posted successfully!", true);
+      const usersRef = ref(db, "users");
+      const usersSnapshot = await get(usersRef);
+      const userProfiles = usersSnapshot.val() || {};
+      const followingRef = ref(db, `users/${currentUser.uid}/following`);
+      const followingSnapshot = await get(followingRef);
+      const following = followingSnapshot.val() || {};
+      await refreshTweets(currentUser, userProfiles, following, currentTweetId);
+    } catch (error) {
+      showAlert("Failed to post comment. Please try again.", false);
+    } finally {
+      hideLoading();
+    }
+  });
+
+  cancelComment.addEventListener("click", () => {
+    commentModal.classList.remove("active");
+    commentInput.value = "";
+    replyToCommentId = null;
+    currentTweetId = null;
+  });
+
+  commentInput.addEventListener("input", () => {
+    handleInput(commentInput, commentSuggestions);
+  });
+
+  commentInput.addEventListener("keydown", (event) => {
+    handleKeyDown(event, commentInput, commentSuggestions);
+  });
+
+  document.querySelector(".logout-btn").addEventListener("click", async () => {
+    try {
+      await signOut(auth);
+      document.body.classList.add("fade-out");
+      setTimeout(() => {
+        window.location.href = "signup.html";
+      }, 1500);
+    } catch (error) {
+      showAlert("Failed to log out. Please try again.", false);
+    }
+  });
+
+  document.querySelector(".theme-toggle").addEventListener("click", toggleDarkMode);
+
+  // Apply saved theme
+  const savedTheme = localStorage.getItem("theme");
+  if (savedTheme) {
+    document.body.dataset.theme = savedTheme;
+  }
+
+  // Clean up interval on page unload
+  window.addEventListener("beforeunload", () => {
+    if (checkNewPostsInterval) {
+      clearInterval(checkNewPostsInterval);
+    }
+  });
+</script>
+</body>
+</html>
