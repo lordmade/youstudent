@@ -136,7 +136,6 @@
       margin-top: 0.5rem;
     }
 
-    /* Shimmer Effect for Loading Tweets */
     .shimmer-container {
       width: 100%;
       margin-bottom: 0.5rem;
@@ -276,6 +275,10 @@
       resize: none;
       outline: none;
       transition: border-color 0.2s ease;
+      background: transparent;
+      position: relative;
+      z-index: 2;
+      min-height: 100px;
     }
 
     .tweet-compose textarea:focus {
@@ -286,6 +289,52 @@
     .tweet-compose textarea:disabled {
       background: var(--background);
       cursor: not-allowed;
+    }
+
+    .media-preview-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+      border-radius: 8px;
+      overflow: hidden;
+      display: none;
+    }
+
+    .media-preview-container.active {
+      display: block;
+    }
+
+    .media-preview-container img,
+    .media-preview-container video {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      opacity: 0.3;
+    }
+
+    .media-preview-container .remove-media {
+      position: absolute;
+      top: 0.5rem;
+      right: 0.5rem;
+      background: rgba(0, 0, 0, 0.6);
+      border: none;
+      border-radius: 50%;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      z-index: 3;
+    }
+
+    .media-preview-container .remove-media svg {
+      width: 16px;
+      height: 16px;
+      fill: var(--white);
     }
 
     .media-upload {
@@ -531,7 +580,11 @@
       background: none;
     }
 
-    .tweet-action.clicked svg, .tweet-action.retweeted svg, .tweet-action.liked svg,
+    .tweet-action.repost-btn, .tweet-action.repost-btn svg {
+      background: none;
+    }
+
+    .tweet-action.clicked svg, .tweet-action.reposted svg, .tweet-action.liked svg,
     .tweet-action.delete-btn svg:hover,
     .comment-action.clicked svg, .comment-action.delete-btn svg:hover {
       fill: #000000;
@@ -869,7 +922,10 @@
       <span class="spinner-text">Loading...</span>
     </div>
     <div class="tweet-compose">
-      <textarea id="tweet-input" rows="3" placeholder="What's happening?" aria-label="Compose tweet"></textarea>
+      <div style="position: relative;">
+        <textarea id="tweet-input" rows="3" placeholder="What's happening?" aria-label="Compose tweet"></textarea>
+        <div class="media-preview-container" id="media-preview"></div>
+      </div>
       <div class="suggestion-dropdown" id="tweet-suggestions"></div>
       <div class="media-upload">
         <label for="image-upload" id="image-label" aria-label="Upload image">
@@ -951,6 +1007,7 @@
     const confirmBtn = document.getElementById("confirm-btn");
     const cancelConfirm = document.getElementById("cancel-confirm");
     const loadingOverlay = document.getElementById("loading-overlay");
+    const mediaPreview = document.getElementById("media-preview");
     let currentTweetId = null;
     let replyToCommentId = null;
     let userHandles = {};
@@ -1135,17 +1192,39 @@
       });
     }
 
+    function showMediaPreview(file, type) {
+      mediaPreview.innerHTML = "";
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const mediaElement = type === "image"
+          ? `<img src="${e.target.result}" alt="Media preview" />`
+          : `<video src="${e.target.result}" muted playsinline></video>`;
+        mediaPreview.innerHTML = `
+          ${mediaElement}
+          <button class="remove-media" aria-label="Remove media">
+            <svg viewBox="0 0 24 24">
+              <path d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+          </button>
+        `;
+        mediaPreview.classList.add("active");
+        const removeMediaBtn = mediaPreview.querySelector(".remove-media");
+        removeMediaBtn.addEventListener("click", () => {
+          mediaPreview.innerHTML = "";
+          mediaPreview.classList.remove("active");
+          imageUpload.value = "";
+          videoUpload.value = "";
+          tweetBtn.disabled = tweetInput.value.trim() === "";
+        });
+      };
+      reader.readAsDataURL(file);
+    }
+
     async function uploadMedia(file, type) {
       if (!auth.currentUser) {
         showAlert("You must be logged in to upload media.", false);
         return null;
       }
-
-      console.log("File details:", {
-        name: file.name,
-        type: file.type,
-        size: file.size
-      });
 
       if (file.size > 5 * 1024 * 1024) {
         throw new Error("Media size must be less than 5MB");
@@ -1236,7 +1315,7 @@
       const commentCount = tweetData.comments ? Object.keys(tweetData.comments).length : 0;
       const isGuest = user && user.isGuest;
       const isOwnTweet = user && tweetData.userId === user.uid;
-      const isRetweet = !!tweetData.isRetweet;
+      const isRepost = !!tweetData.isRetweet;
       const username = tweetData.username || "Anonymous";
       const handle = tweetData.handle ? `@${tweetData.handle}` : "";
       const profilePicture = userProfiles[tweetData.userId]?.profilePicture;
@@ -1248,7 +1327,7 @@
             <span class="tweet-timestamp">${formatTimestamp(tweetData.createdAt)}</span>
           </div>
         </div>
-        ${isRetweet ? `<div class="tweet-content" style="color: var(--text-light); font-size: 0.875rem; margin-bottom: 0.5rem;">Retweeted by ${username}</div>` : ''}
+        ${isRepost ? `<div class="tweet-content" style="color: var(--text-light); font-size: 0.875rem; margin-bottom: 0.5rem;">Reposted by ${username}</div>` : ''}
         <div class="tweet-content">${formatContentWithTags(tweetData.text || "")}</div>
         ${mediaHtml}
         <div class="tweet-actions">
@@ -1258,11 +1337,11 @@
             </svg>
             <span>${commentCount}</span>
           </div>
-          <div class="tweet-action retweet-btn" ${isGuest || isOwnTweet ? 'disabled' : ''} data-tweet-id="${tweetId}" aria-label="Retweet">
+          <div class="tweet-action repost-btn" ${isGuest || isOwnTweet ? 'disabled' : ''} data-tweet-id="${tweetId}" aria-label="Repost">
             <svg viewBox="0 0 24 24">
               <path d="M4.5 3.88l4.432 4.14-1.364 1.46L5.5 7.55V16c0 1.1.896 2 2 2H13v2H7.5c-2.209 0-4-1.79-4-4V7.55L1.432 9.48.068 8.02 4.5 3.88zM16.5 6H11V4h5.5c2.209 0 4 1.79 4 4v8.45l2.068-1.93 1.364 1.46-4.432 4.14-4.432-4.14 1.364-1.46 2.068 1.93V8c0-1.1-.896-2-2-2z"/>
             </svg>
-            <span>Retweet</span>
+            <span>Repost</span>
           </div>
           <div class="tweet-action like-btn ${isLiked ? 'liked' : ''}" ${isGuest ? 'disabled' : ''} data-tweet-id="${tweetId}" aria-label="Like">
             <svg viewBox="0 0 24 24">
@@ -1311,7 +1390,7 @@
       }
 
       const commentBtn = tweetDiv.querySelector(".comment-btn");
-      const retweetBtn = tweetDiv.querySelector(".retweet-btn");
+      const repostBtn = tweetDiv.querySelector(".repost-btn");
       const likeBtn = tweetDiv.querySelector(".like-btn");
       const deleteBtn = tweetDiv.querySelector(".delete-btn");
 
@@ -1328,13 +1407,13 @@
         commentInput.value = "";
       });
 
-      retweetBtn.addEventListener("click", async () => {
+      repostBtn.addEventListener("click", async () => {
         if (isGuest) {
-          showAlert("Guests cannot retweet.", false);
+          showAlert("Guests cannot repost.", false);
           return;
         }
         if (isOwnTweet) {
-          showAlert("You cannot retweet your own tweet.", false);
+          showAlert("You cannot repost your own tweet.", false);
           return;
         }
         showLoading();
@@ -1349,8 +1428,8 @@
           const originalTweetSnapshot = await get(originalTweetRef);
           const originalTweet = originalTweetSnapshot.val();
           
-          const retweetData = {
-            text: `Retweet: @${originalTweet.handle} ${originalTweet.text}`,
+          const repostData = {
+            text: `Repost: @${originalTweet.handle} ${originalTweet.text}`,
             username,
             handle,
             createdAt: Date.now(),
@@ -1361,11 +1440,11 @@
             mediaType: originalTweet.mediaType || null
           };
           
-          await push(ref(db, "tweets"), retweetData);
-          showAlert("Retweeted successfully!", true);
+          await push(ref(db, "tweets"), repostData);
+          showAlert("Reposted successfully!", true);
           await refreshTweets(user, userProfiles);
         } catch (error) {
-          showAlert("Failed to retweet. Please try again.", false);
+          showAlert("Failed to repost. Please try again.", false);
         } finally {
           hideLoading();
         }
@@ -1594,6 +1673,10 @@
       tweetBtn.disabled = tweetInput.value.trim() === "" && !imageUpload.files[0] && !videoUpload.files[0];
       if (imageUpload.files[0]) {
         videoUpload.value = "";
+        showMediaPreview(imageUpload.files[0], "image");
+      } else {
+        mediaPreview.innerHTML = "";
+        mediaPreview.classList.remove("active");
       }
     });
 
@@ -1601,6 +1684,10 @@
       tweetBtn.disabled = tweetInput.value.trim() === "" && !imageUpload.files[0] && !videoUpload.files[0];
       if (videoUpload.files[0]) {
         imageUpload.value = "";
+        showMediaPreview(videoUpload.files[0], "video");
+      } else {
+        mediaPreview.innerHTML = "";
+        mediaPreview.classList.remove("active");
       }
     });
 
@@ -1629,6 +1716,8 @@
         tweetInput.value = "";
         imageUpload.value = "";
         videoUpload.value = "";
+        mediaPreview.innerHTML = "";
+        mediaPreview.classList.remove("active");
         tweetBtn.disabled = true;
         showAlert("Tweet posted successfully!", true);
         const usersRef = ref(db, "users");
