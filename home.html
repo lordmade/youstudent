@@ -1234,10 +1234,9 @@
       const likeCount = tweetData.likes ? Object.keys(tweetData.likes).length : 0;
       const isLiked = user && tweetData.likes && tweetData.likes[user.uid];
       const commentCount = tweetData.comments ? Object.keys(tweetData.comments).length : 0;
-      const retweetCount = tweetData.retweetCount || 0;
       const isGuest = user && user.isGuest;
-      const isRetweeted = user && tweetData.retweetUsers && tweetData.retweetUsers[user.uid];
       const isOwnTweet = user && tweetData.userId === user.uid;
+      const isRetweet = !!tweetData.isRetweet;
       const username = tweetData.username || "Anonymous";
       const handle = tweetData.handle ? `@${tweetData.handle}` : "";
       const profilePicture = userProfiles[tweetData.userId]?.profilePicture;
@@ -1249,6 +1248,7 @@
             <span class="tweet-timestamp">${formatTimestamp(tweetData.createdAt)}</span>
           </div>
         </div>
+        ${isRetweet ? `<div class="tweet-content" style="color: var(--text-light); font-size: 0.875rem; margin-bottom: 0.5rem;">Retweeted by ${username}</div>` : ''}
         <div class="tweet-content">${formatContentWithTags(tweetData.text || "")}</div>
         ${mediaHtml}
         <div class="tweet-actions">
@@ -1258,11 +1258,11 @@
             </svg>
             <span>${commentCount}</span>
           </div>
-          <div class="tweet-action retweet-btn ${isRetweeted ? 'retweeted' : ''}" ${isGuest ? 'disabled' : ''} data-tweet-id="${tweetId}" aria-label="${isRetweeted ? 'Unretweet' : 'Retweet'}">
+          <div class="tweet-action retweet-btn" ${isGuest || isOwnTweet ? 'disabled' : ''} data-tweet-id="${tweetId}" aria-label="Retweet">
             <svg viewBox="0 0 24 24">
               <path d="M4.5 3.88l4.432 4.14-1.364 1.46L5.5 7.55V16c0 1.1.896 2 2 2H13v2H7.5c-2.209 0-4-1.79-4-4V7.55L1.432 9.48.068 8.02 4.5 3.88zM16.5 6H11V4h5.5c2.209 0 4 1.79 4 4v8.45l2.068-1.93 1.364 1.46-4.432 4.14-4.432-4.14 1.364-1.46 2.068 1.93V8c0-1.1-.896-2-2-2z"/>
             </svg>
-            <span>${retweetCount}</span>
+            <span>Retweet</span>
           </div>
           <div class="tweet-action like-btn ${isLiked ? 'liked' : ''}" ${isGuest ? 'disabled' : ''} data-tweet-id="${tweetId}" aria-label="Like">
             <svg viewBox="0 0 24 24">
@@ -1333,6 +1333,10 @@
           showAlert("Guests cannot retweet.", false);
           return;
         }
+        if (isOwnTweet) {
+          showAlert("You cannot retweet your own tweet.", false);
+          return;
+        }
         showLoading();
         try {
           const userRef = ref(db, `users/${user.uid}`);
@@ -1340,25 +1344,25 @@
           const userData = userSnapshot.val();
           const username = userData?.username || "Anonymous";
           const handle = userData?.handle || "";
-          const retweetRef = ref(db, "retweets");
-          const retweetSnapshot = await get(retweetRef);
-          const retweets = retweetSnapshot.val();
-          const userRetweet = retweets
-            ? Object.entries(retweets).find(([_, r]) => r.originalTweetId === tweetId && r.userId === user.uid)
-            : null;
-          if (userRetweet) {
-            await remove(ref(db, `retweets/${userRetweet[0]}`));
-            showAlert("Unretweeted successfully!", true);
-          } else {
-            await push(ref(db, "retweets"), {
-              originalTweetId: tweetId,
-              userId: user.uid,
-              username,
-              handle,
-              createdAt: Date.now()
-            });
-            showAlert("Retweeted successfully!", true);
-          }
+          
+          const originalTweetRef = ref(db, `tweets/${tweetId}`);
+          const originalTweetSnapshot = await get(originalTweetRef);
+          const originalTweet = originalTweetSnapshot.val();
+          
+          const retweetData = {
+            text: `Retweet: @${originalTweet.handle} ${originalTweet.text}`,
+            username,
+            handle,
+            createdAt: Date.now(),
+            userId: user.uid,
+            isRetweet: true,
+            originalTweetId: tweetId,
+            mediaUrl: originalTweet.mediaUrl || null,
+            mediaType: originalTweet.mediaType || null
+          };
+          
+          await push(ref(db, "tweets"), retweetData);
+          showAlert("Retweeted successfully!", true);
           await refreshTweets(user, userProfiles);
         } catch (error) {
           showAlert("Failed to retweet. Please try again.", false);
@@ -1501,39 +1505,17 @@
       try {
         const tweetsRef = ref(db, "tweets");
         const tweetsSnapshot = await get(tweetsRef);
-        const retweetsRef = ref(db, "retweets");
-        const retweetsSnapshot = await get(retweetsRef);
-
         tweetFeed.innerHTML = "";
         const tweets = tweetsSnapshot.val();
-        const retweets = retweetsSnapshot.val();
         if (tweets) {
           let tweetEntries = Object.entries(tweets);
           tweetEntries.sort((a, b) => b[1].createdAt - a[1].createdAt);
           const mostRecentTweet = tweetEntries.shift();
           tweetEntries = shuffleArray(tweetEntries);
           if (mostRecentTweet) {
-            const tweetId = mostRecentTweet[0];
-            const tweetData = mostRecentTweet[1];
-            tweetData.retweetCount = retweets
-              ? Object.values(retweets).filter(r => r.originalTweetId === tweetId).length
-              : 0;
-            tweetData.retweetUsers = retweets
-              ? Object.fromEntries(
-                  Object.entries(retweets).filter(([_, r]) => r.originalTweetId === tweetId).map(([id, r]) => [r.userId, id])
-                )
-              : {};
-            renderTweet(tweetData, tweetId, user, userProfiles);
+            renderTweet(mostRecentTweet[1], mostRecentTweet[0], user, userProfiles);
           }
           tweetEntries.forEach(([id, tweet]) => {
-            tweet.retweetCount = retweets
-              ? Object.values(retweets).filter(r => r.originalTweetId === id).length
-              : 0;
-            tweet.retweetUsers = retweets
-              ? Object.fromEntries(
-                  Object.entries(retweets).filter(([_, r]) => r.originalTweetId === id).map(([id, r]) => [r.userId, id])
-                )
-              : {};
             renderTweet(tweet, id, user, userProfiles);
           });
         }
