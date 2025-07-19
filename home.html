@@ -425,7 +425,9 @@
       background: none;
     }
 
-    .tweet-action.clicked svg, .tweet-action.retweeted svg, .tweet-action.liked svg,
+    .tweet-action.clicked svg, .tweet-action.retweeted svg, .tweet
+
+-action.liked svg,
     .tweet-action.delete-btn svg:hover,
     .comment-action.clicked svg, .comment-action.delete-btn svg:hover {
       fill: #000000;
@@ -1028,45 +1030,52 @@
     }
 
     function initializeMediaRecorder() {
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        showAlert("Your browser does not support audio recording.", false);
-        voiceRecordBtn.disabled = true;
-        return;
-      }
-      navigator.mediaDevices.getUserMedia({ audio: true })
-        .then(stream => {
-          mediaRecorder = new MediaRecorder(stream);
-          mediaRecorder.ondataavailable = event => {
-            if (event.data.size > 0) {
-              recordedChunks.push(event.data);
-            }
-          };
-          mediaRecorder.onstop = async () => {
-            const audioBlob = new Blob(recordedChunks, { type: 'audio/webm' });
-            recordedChunks = [];
-            voiceRecordBtn.classList.remove("recording");
-            voiceRecordText.textContent = "Record Voice";
-            isRecording = false;
-            tweetBtn.disabled = tweetInput.value.trim() === "" && !audioBlob.size && !imageUpload.files[0] && !videoUpload.files[0];
-            voiceRecordBtn.dataset.audioBlob = URL.createObjectURL(audioBlob);
-            imageUpload.disabled = false;
-            videoUpload.disabled = false;
-            imageLabel.style.pointerEvents = "auto";
-            videoLabel.style.pointerEvents = "auto";
-            imageLabel.style.opacity = 1;
-            videoLabel.style.opacity = 1;
-          };
-        })
-        .catch(error => {
-          showAlert("Failed to access microphone: " + error.message, false);
+      return new Promise((resolve, reject) => {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          showAlert("Your browser does not support audio recording.", false);
           voiceRecordBtn.disabled = true;
-        });
+          reject(new Error("Audio recording not supported"));
+          return;
+        }
+        navigator.mediaDevices.getUserMedia({ audio: true })
+          .then(stream => {
+            mediaRecorder = new MediaRecorder(stream);
+            mediaRecorder.ondataavailable = event => {
+              if (event.data.size > 0) {
+                recordedChunks.push(event.data);
+              }
+            };
+            mediaRecorder.onstop = async () => {
+              const audioBlob = new Blob(recordedChunks, { type: 'audio/webm' });
+              recordedChunks = [];
+              voiceRecordBtn.classList.remove("recording");
+              voiceRecordText.textContent = "Record Voice";
+              isRecording = false;
+              tweetBtn.disabled = tweetInput.value.trim() === "" && !audioBlob.size && !imageUpload.files[0] && !videoUpload.files[0];
+              voiceRecordBtn.dataset.audioBlob = URL.createObjectURL(audioBlob);
+              imageUpload.disabled = false;
+              videoUpload.disabled = false;
+              imageLabel.style.pointerEvents = "auto";
+              videoLabel.style.pointerEvents = "auto";
+              imageLabel.style.opacity = 1;
+              videoLabel.style.opacity = 1;
+              hideLoading();
+            };
+            resolve();
+          })
+          .catch(error => {
+            showAlert("Failed to access microphone: " + error.message, false);
+            voiceRecordBtn.disabled = true;
+            reject(error);
+          });
+      });
     }
 
     function toggleRecording() {
       if (isRecording) {
         mediaRecorder.stop();
       } else {
+        showLoading();
         recordedChunks = [];
         mediaRecorder.start();
         voiceRecordBtn.classList.add("recording");
@@ -1086,12 +1095,6 @@
         showAlert("You must be logged in to upload media.", false);
         return null;
       }
-
-      console.log("File details:", {
-        name: file.name || "media." + (type === "image" ? "png" : type === "video" ? "mp4" : "webm"),
-        type: file.type,
-        size: file.size
-      });
 
       if (file.size > 5 * 1024 * 1024) {
         throw new Error("Media size must be less than 5MB");
@@ -1362,6 +1365,8 @@
         });
       } catch (error) {
         showAlert("Failed to load tweets: " + error.message, false);
+      } finally {
+        hideLoading();
       }
     }
 
@@ -1414,17 +1419,23 @@
       }
     });
 
-    voiceRecordBtn.addEventListener("click", () => {
+    voiceRecordBtn.addEventListener("click", async () => {
       if (!currentUser || currentUser.isGuest) {
         showAlert("Guests cannot record voice notes.", false);
         return;
       }
       if (!mediaRecorder) {
-        initializeMediaRecorder();
-        setTimeout(() => toggleRecording(), 100);
-        return;
+        showLoading();
+        try {
+          await initializeMediaRecorder();
+          toggleRecording();
+        } catch (error) {
+          hideLoading();
+          return;
+        }
+      } else {
+        toggleRecording();
       }
-      toggleRecording();
     });
 
     tweetBtn.addEventListener("click", async () => {
@@ -1657,7 +1668,6 @@
       }
 
       currentUser = user;
-      showLoading();
       const userRef = ref(db, `users/${user.uid}`);
       get(userRef).then((snapshot) => {
         const userData = snapshot.val();
@@ -1676,10 +1686,6 @@
         voiceRecordBtn.style.opacity = isGuest ? 0.5 : 1;
         tweetInput.placeholder = isGuest ? "Guests cannot post tweets or media." : "What's happening?";
 
-        if (!isGuest) {
-          initializeMediaRecorder();
-        }
-
         const usersRef = ref(db, "users");
         get(usersRef).then((usersSnapshot) => {
           const userProfiles = usersSnapshot.val() || {};
@@ -1690,12 +1696,12 @@
             }
           });
           refreshTweets(user, userProfiles);
-        }).catch(() => {
-          showAlert("Failed to load user profiles. Please try again.", false);
+        }).catch((error) => {
+          showAlert("Failed to load user profiles: " + error.message, false);
           hideLoading();
         });
-      }).catch(() => {
-        showAlert("Failed to load user data. Please try again.", false);
+      }).catch((error) => {
+        showAlert("Failed to load user data: " + error.message, false);
         hideLoading();
       });
     });
@@ -1703,6 +1709,7 @@
     document.addEventListener("DOMContentLoaded", () => {
       const savedTheme = localStorage.getItem("theme") || "light";
       document.body.dataset.theme = savedTheme;
+      hideLoading(); // Ensure loading spinner is hidden on initial load
     });
   </script>
 </body>
