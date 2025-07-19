@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Profile - Edit</title>
+  <title>Profile</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     :root {
@@ -164,35 +164,24 @@
       margin-top: 0.5rem;
     }
 
-    @media (max-width: 640px) {
-      .navbar-links {
-        gap: 1rem;
-        justify-content: space-between;
-      }
-
-      .navbar-links a, .navbar-links button {
-        font-size: 0.9rem;
-      }
-
-      .choose-image-btn {
-        font-size: 0.95rem;
-      }
-
-      .spinner {
-        width: 40px;
-        height: 40px;
-      }
-
-      .spinner-text {
-        font-size: 0.8rem;
-      }
-    }
-
     .container {
       max-width: 600px;
       width: 100%;
       margin: 0 auto;
       padding: 4.5rem 1rem 1rem;
+    }
+
+    .profile-header-image {
+      height: 200px;
+      background: var(--text-light); /* Solid color fallback */
+      position: relative;
+      overflow: hidden;
+    }
+
+    .profile-header-image img, .profile-header-image video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
     }
 
     .profile-container {
@@ -243,10 +232,21 @@
       font-weight: 400;
     }
 
+    .profile-info .bio {
+      font-size: 1rem;
+      color: var(--text-dark);
+      margin-top: 0.5rem;
+    }
+
     .profile-form {
       display: flex;
       flex-direction: column;
       gap: 1rem;
+      margin-top: 1rem;
+    }
+
+    .profile-form.hidden {
+      display: none;
     }
 
     .profile-form label {
@@ -382,8 +382,34 @@
     }
 
     @media (max-width: 640px) {
+      .navbar-links {
+        gap: 1rem;
+        justify-content: space-between;
+      }
+
+      .navbar-links a, .navbar-links button {
+        font-size: 0.9rem;
+      }
+
+      .choose-image-btn {
+        font-size: 0.95rem;
+      }
+
+      .spinner {
+        width: 40px;
+        height: 40px;
+      }
+
+      .spinner-text {
+        font-size: 0.8rem;
+      }
+
       .container {
         padding: 4rem 0.75rem 0.75rem;
+      }
+
+      .profile-header-image {
+        height: 150px;
       }
 
       .profile-container {
@@ -400,7 +426,7 @@
         font-size: 1.25rem;
       }
 
-      .profile-info .handle {
+      .profile-info .handle, .profile-info .bio {
         font-size: 0.875rem;
       }
 
@@ -418,12 +444,14 @@
   <nav class="navbar">
     <div class="navbar-links">
       <a href="home.html">Home</a>
-      <a href="#">Explore</a>
+      <a href="#">Friends</a>
       <a href="profile.html" class="active">Profile</a>
       <button class="logout-btn" aria-label="Log out">Logout</button>
       <button class="theme-toggle" aria-label="Toggle dark mode">
         <svg viewBox="0 0 24 24">
-          <path d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
+          <path d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12 brewery
+
+          a4 4 0 11-8 0 4 4 0 018 0z"/>
         </svg>
       </button>
     </div>
@@ -441,6 +469,7 @@
       <div class="spinner"></div>
       <span class="spinner-text">Loading...</span>
     </div>
+    <div class="profile-header-image" id="profile-header-image"></div>
     <div class="profile-container">
       <div class="profile-header">
         <div class="profile-avatar" id="profile-avatar">
@@ -449,9 +478,15 @@
         <div class="profile-info">
           <h2 id="profile-username">Loading...</h2>
           <span class="handle" id="profile-handle"></span>
+          <div class="bio" id="profile-bio"></div>
         </div>
       </div>
       <form class="profile-form" id="profile-form">
+        <div>
+          <label for="header-file">Cover Photo</label>
+          <input type="file" id="header-file" class="form-input" accept="image/*,video/*" aria-label="Cover photo"/>
+          <button type="button" id="choose-header-btn" class="choose-image-btn" disabled aria-label="Choose cover photo">Choose Cover Photo</button>
+        </div>
         <div>
           <label for="username">Username</label>
           <input type="text" id="username" placeholder="Enter your username" aria-label="Username" required>
@@ -467,8 +502,11 @@
           <textarea id="bio" placeholder="Tell us about yourself" aria-label="Bio"></textarea>
           <span class="error" id="bio-error">Bio cannot exceed 160 characters</span>
         </div>
-        <input type="file" id="media-file" class="form-input" accept="image/*,video/*" required aria-label="Media file"/>
-        <button type="button" id="choose-image-btn" class="choose-image-btn" disabled aria-label="Choose profile picture">Choose Profile Picture</button>
+        <div>
+          <label for="media-file">Profile Picture</label>
+          <input type="file" id="media-file" class="form-input" accept="image/*,video/*" aria-label="Profile picture"/>
+          <button type="button" id="choose-image-btn" class="choose-image-btn" disabled aria-label="Choose profile picture">Choose Profile Picture</button>
+        </div>
         <div class="progress-bar" id="progress-bar">
           <div id="progress"></div>
         </div>
@@ -479,7 +517,7 @@
   <script type="module">
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
     import { getAuth, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
-    import { getDatabase, ref, set, onValue } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js';
+    import { getDatabase, ref, onValue } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js';
 
     const firebaseConfig = {
       apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
@@ -498,10 +536,14 @@
 
     const profileAvatar = document.getElementById("profile-avatar");
     const avatarInitials = document.getElementById("avatar-initials");
+    const profileHeaderImage = document.getElementById("profile-header-image");
     const mediaFile = document.getElementById("media-file");
+    const headerFile = document.getElementById("header-file");
     const chooseImageBtn = document.getElementById("choose-image-btn");
+    const chooseHeaderBtn = document.getElementById("choose-header-btn");
     const profileUsername = document.getElementById("profile-username");
     const profileHandle = document.getElementById("profile-handle");
+    const profileBio = document.getElementById("profile-bio");
     const profileForm = document.getElementById("profile-form");
     const usernameInput = document.getElementById("username");
     const handleInput = document.getElementById("handle");
@@ -563,9 +605,9 @@
       saveProfileBtn.disabled = !(usernameValid && handleValid && bioValid);
     }
 
-    async function uploadProfilePicture(file) {
+    async function uploadMedia(file, isHeader = false) {
       if (!auth.currentUser) {
-        showAlert("You must be logged in to upload a profile picture.", false);
+        showAlert(`You must be logged in to upload a ${isHeader ? "cover photo" : "profile picture"}.`, false);
         return null;
       }
 
@@ -639,15 +681,13 @@
         hideLoading();
         return response.secure_url;
       } catch (error) {
-        progressBar.classList.remove天子
-
-        .remove("active");
+        progressBar.classList.remove("active");
         hideLoading();
         throw error;
       }
     }
 
-    async function updateProfilePicture(profilePictureUrl, isVideo) {
+    async function updateProfileMedia(mediaUrl, isVideo, isHeader = false) {
       showLoading();
       try {
         const userRef = ref(db, `users/${auth.currentUser.uid}`);
@@ -655,25 +695,44 @@
           onValue(userRef, resolve, { onlyOnce: true });
         });
         const userData = userSnapshot.val() || {};
-        await set(userRef, {
+        const updateData = {
           username: userData.username || usernameInput.value.trim(),
           handle: userData.handle || handleInput.value.trim().substring(1),
           bio: userData.bio || bioInput.value.trim(),
-          profilePicture: profilePictureUrl,
-          isVideo: isVideo || false,
+          profilePicture: userData.profilePicture || "",
+          isVideo: userData.isVideo || false,
+          headerMedia: userData.headerMedia || "",
+          isHeaderVideo: userData.isHeaderVideo || false,
           isGuest: userData.isGuest || false
-        });
-        if (isVideo) {
-          profileAvatar.innerHTML = `<video src="${profilePictureUrl}" alt="Profile video" autoplay loop muted playsinline style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover;"></video>`;
+        };
+        if (isHeader) {
+          updateData.headerMedia = mediaUrl;
+          updateData.isHeaderVideo = isVideo;
         } else {
-          profileAvatar.innerHTML = `<img src="${profilePictureUrl}" alt="Profile picture" />`;
+          updateData.profilePicture = mediaUrl;
+          updateData.isVideo = isVideo;
         }
-        showAlert("Profile media updated successfully!", true);
+        await set(userRef, updateData);
+        if (isHeader) {
+          profileHeaderImage.innerHTML = isVideo
+            ? `<video src="${mediaUrl}" alt="Cover photo video" autoplay loop muted playsinline style="width: 100%; height: 100%; object-fit: cover;"></video>`
+            : `<img src="${mediaUrl}" alt="Cover photo" />`;
+        } else {
+          profileAvatar.innerHTML = isVideo
+            ? `<video src="${mediaUrl}" alt="Profile video" autoplay loop muted playsinline style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover;"></video>`
+            : `<img src="${mediaUrl}" alt="Profile picture" />`;
+        }
+        showAlert(`${isHeader ? "Cover photo" : "Profile picture"} updated successfully!`, true);
       } catch (error) {
-        showAlert(`Failed to update profile media: ${error.message}`, false);
+        showAlert(`Failed to update ${isHeader ? "cover photo" : "profile picture"}: ${error.message}`, false);
       } finally {
         hideLoading();
       }
+    }
+
+    function getProfileUid() {
+      const urlParams = new URLSearchParams(window.location.search);
+      return urlParams.get("uid") || auth.currentUser?.uid;
     }
 
     onAuthStateChanged(auth, (user) => {
@@ -685,11 +744,26 @@
         return;
       }
 
-      mediaFile.disabled = false;
-      chooseImageBtn.disabled = false;
+      const profileUid = getProfileUid();
+      const isOwner = user.uid === profileUid;
+
+      // Enable/disable editing based on ownership
+      if (isOwner) {
+        mediaFile.disabled = false;
+        chooseImageBtn.disabled = false;
+        headerFile.disabled = false;
+        chooseHeaderBtn.disabled = false;
+        profileForm.classList.remove("hidden");
+      } else {
+        mediaFile.disabled = true;
+        chooseImageBtn.disabled = true;
+        headerFile.disabled = true;
+        chooseHeaderBtn.disabled = true;
+        profileForm.classList.add("hidden");
+      }
 
       showLoading();
-      const userRef = ref(db, `users/${user.uid}`);
+      const userRef = ref(db, `users/${profileUid}`);
       onValue(userRef, (snapshot) => {
         const userData = snapshot.val();
         if (userData) {
@@ -698,16 +772,31 @@
           bioInput.value = userData.bio || "";
           profileUsername.textContent = userData.username || "Anonymous";
           profileHandle.textContent = userData.handle ? `@${userData.handle}` : "";
+          profileBio.textContent = userData.bio || "";
           if (userData.profilePicture) {
-            if (userData.isVideo) {
-              profileAvatar.innerHTML = `<video src="${userData.profilePicture}" alt="${userData.username}'s profile video" autoplay loop muted playsinline style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover;"></video>`;
-            } else {
-              profileAvatar.innerHTML = `<img src="${userData.profilePicture}" alt="${userData.username}'s profile picture" />`;
-            }
+            profileAvatar.innerHTML = userData.isVideo
+              ? `<video src="${userData.profilePicture}" alt="${userData.username}'s profile video" autoplay loop muted playsinline style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover;"></video>`
+              : `<img src="${userData.profilePicture}" alt="${userData.username}'s profile picture" />`;
           } else {
             avatarInitials.textContent = getAvatarInitials(userData.username);
           }
-          checkFormValidity();
+          if (userData.headerMedia) {
+            profileHeaderImage.innerHTML = userData.isHeaderVideo
+              ? `<video src="${userData.headerMedia}" alt="${userData.username}'s cover photo video" autoplay loop muted playsinline style="width: 100%; height: 100%; object-fit: cover;"></video>`
+              : `<img src="${userData.headerMedia}" alt="${userData.username}'s cover photo" />`;
+          } else {
+            profileHeaderImage.innerHTML = ""; // Solid color fallback via CSS
+          }
+          if (isOwner) {
+            checkFormValidity();
+          }
+        } else {
+          showAlert("User profile not found.", false);
+          profileUsername.textContent = "User Not Found";
+          profileHandle.textContent = "";
+          profileBio.textContent = "";
+          avatarInitials.textContent = "A";
+          profileHeaderImage.innerHTML = "";
         }
         hideLoading();
       }, {
@@ -723,21 +812,46 @@
       mediaFile.click();
     });
 
+    chooseHeaderBtn.addEventListener("click", () => {
+      if (!auth.currentUser) {
+        showAlert("You must be logged in to upload a cover photo.", false);
+        return;
+      }
+      headerFile.click();
+    });
+
     mediaFile.addEventListener("change", async () => {
       if (!auth.currentUser) {
         showAlert("You must be logged in to upload a profile picture.", false);
         return;
       }
-
       if (mediaFile.files[0]) {
         try {
           const file = mediaFile.files[0];
           const isVideo = file.type.startsWith("video/");
-          const profilePictureUrl = await uploadProfilePicture(file);
-          if (!profilePictureUrl) return;
-          await updateProfilePicture(profilePictureUrl, isVideo);
+          const mediaUrl = await uploadMedia(file);
+          if (!mediaUrl) return;
+          await updateProfileMedia(mediaUrl, isVideo);
         } catch (error) {
-          showAlert(`Failed to update profile media: ${error.message}`, false);
+          showAlert(`Failed to update profile picture: ${error.message}`, false);
+        }
+      }
+    });
+
+    headerFile.addEventListener("change", async () => {
+      if (!auth.currentUser) {
+        showAlert("You must be logged in to upload a cover photo.", false);
+        return;
+      }
+      if (headerFile.files[0]) {
+        try {
+          const file = headerFile.files[0];
+          const isVideo = file.type.startsWith("video/");
+          const mediaUrl = await uploadMedia(file, true);
+          if (!mediaUrl) return;
+          await updateProfileMedia(mediaUrl, isVideo, true);
+        } catch (error) {
+          showAlert(`Failed to update cover photo: ${error.message}`, false);
         }
       }
     });
@@ -762,9 +876,14 @@
           bio: bioInput.value.trim(),
           profilePicture: userData.profilePicture || "",
           isVideo: userData.isVideo || false,
+          headerMedia: userData.headerMedia || "",
+          isHeaderVideo: userData.isHeaderVideo || false,
           isGuest: userData.isGuest || false
         });
         showAlert("Profile updated successfully!", true);
+        profileUsername.textContent = usernameInput.value.trim();
+        profileHandle.textContent = handleInput.value.trim();
+        profileBio.textContent = bioInput.value.trim();
       } catch (error) {
         showAlert("Failed to update profile. Please try again.", false);
       } finally {
@@ -789,6 +908,11 @@
 
     const savedTheme = localStorage.getItem("theme") || "light";
     document.body.dataset.theme = savedTheme;
+
+    // Input validation on change
+    usernameInput.addEventListener("input", checkFormValidity);
+    handleInput.addEventListener("input", checkFormValidity);
+    bioInput.addEventListener("input", checkFormValidity);
   </script>
 </body>
 </html>
