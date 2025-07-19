@@ -186,6 +186,23 @@
       margin-left: 1rem;
     }
 
+    .no-content-prompt {
+      text-align: center;
+      padding: 1rem;
+      color: var(--text-light);
+      font-size: 1rem;
+    }
+
+    .no-content-prompt a {
+      color: var(--twitter-blue);
+      text-decoration: none;
+      font-weight: bold;
+    }
+
+    .no-content-prompt a:hover {
+      text-decoration: underline;
+    }
+
     @media (max-width: 640px) {
       .chat-header h1 {
         font-size: 1.25rem;
@@ -263,6 +280,7 @@
     let currentUser = null;
     let model = null;
     let tokenizer = {};
+    let isModelTrained = false;
 
     function showLoading() {
       loadingOverlay.classList.add("active");
@@ -295,6 +313,14 @@
       chatContainer.scrollTop = chatContainer.scrollHeight;
     }
 
+    function showNoContentPrompt() {
+      chatContainer.innerHTML = `
+        <div class="no-content-prompt">
+          No posts or comments found yet. <a href="home.html">Share something on BanterBox</a> to help Vynix AI learn your style!
+        </div>
+      `;
+    }
+
     async function fetchUserContent(userId) {
       try {
         const tweetsRef = ref(db, "tweets");
@@ -302,27 +328,32 @@
         const tweets = tweetsSnapshot.val() || {};
         const userContent = [];
 
+        console.log(`Fetching content for user: ${userId}`);
         Object.entries(tweets).forEach(([tweetId, tweet]) => {
-          if (tweet.userId === userId) {
+          if (tweet.userId === userId && tweet.text && tweet.text.trim()) {
             userContent.push({ type: "post", content: tweet.text, createdAt: tweet.createdAt });
-            if (tweet.comments) {
-              Object.values(tweet.comments).forEach(comment => {
-                if (comment.userId === userId) {
-                  userContent.push({ type: "comment", content: comment.text, createdAt: comment.createdAt });
-                }
-              });
-            }
+            console.log(`Found post [${tweetId}]: ${tweet.text}`);
+          }
+          if (tweet.comments) {
+            Object.entries(tweet.comments).forEach(([commentId, comment]) => {
+              if (comment.userId === userId && comment.text && comment.text.trim()) {
+                userContent.push({ type: "comment", content: comment.text, createdAt: comment.createdAt });
+                console.log(`Found comment [${commentId}]: ${comment.text}`);
+              }
+            });
           }
         });
 
-        return userContent
+        const sortedContent = userContent
           .sort((a, b) => b.createdAt - a.createdAt)
-          .slice(0, 10)
           .map(item => item.content)
           .filter(text => text && text.trim());
+
+        console.log(`Processed content (${sortedContent.length} items):`, sortedContent);
+        return sortedContent;
       } catch (error) {
         console.error("Error fetching user content:", error);
-        showAlert("Failed to fetch user content.", false);
+        showAlert("Failed to fetch user content. Using default responses.", false);
         return [];
       }
     }
@@ -330,7 +361,7 @@
     function createTokenizer(texts) {
       const wordCounts = {};
       texts.forEach(text => {
-        const words = text.toLowerCase().split(/\s+/);
+        const words = text.toLowerCase().split(/\s+/).filter(word => word.length > 0);
         words.forEach(word => {
           wordCounts[word] = (wordCounts[word] || 0) + 1;
         });
@@ -338,21 +369,22 @@
 
       const sortedWords = Object.keys(wordCounts)
         .sort((a, b) => wordCounts[b] - wordCounts[a])
-        .slice(0, 1000); // Limit vocabulary size
+        .slice(0, 1000);
       sortedWords.forEach((word, index) => {
-        tokenizer[word] = index + 1; // 0 reserved for padding
+        tokenizer[word] = index + 1;
       });
+      console.log("Tokenizer created with vocabulary size:", Object.keys(tokenizer).length);
     }
 
     function tokenizeText(text) {
-      const words = text.toLowerCase().split(/\s+/);
-      return words.map(word => tokenizer[word] || 0).slice(0, 50); // Max sequence length
+      const words = text.toLowerCase().split(/\s+/).filter(word => word.length > 0);
+      return words.map(word => tokenizer[word] || 0).slice(0, 50);
     }
 
     async function initializeModel() {
       model = tf.sequential();
       model.add(tf.layers.embedding({
-        inputDim: Object.keys(tokenizer).length + 1,
+        inputDim: Object.keys(tokenizer).length + 1 || 1000, // Fallback vocab size
         outputDim: 16,
         inputLength: 50
       }));
@@ -364,13 +396,17 @@
         loss: 'binaryCrossentropy',
         metrics: ['accuracy']
       });
+      console.log("Model initialized.");
     }
 
     async function trainModel(texts) {
-      if (texts.length < 2) {
-        showAlert("Not enough content to train model.", false);
+      if (texts.length === 0) {
+        console.log("No content to train model. Using default weights.");
         return;
       }
+
+      createTokenizer(texts);
+      await initializeModel();
 
       const tokenized = texts.map(text => tokenizeText(text));
       const padded = tokenized.map(seq => {
@@ -381,27 +417,41 @@
         return paddedSeq;
       });
 
-      // Dummy labels: Assume positive sentiment for user posts (simplified)
-      const labels = new Array(texts.length).fill(1);
+      const labels = new Array(texts.length).fill(1); // Dummy labels (positive sentiment)
       const xs = tf.tensor2d(padded, [padded.length, 50]);
       const ys = tf.tensor2d(labels, [texts.length, 1]);
 
+      console.log(`Training model with ${texts.length} samples...`);
       await model.fit(xs, ys, {
         epochs: 10,
-        batchSize: 8,
+        batchSize: Math.max(1, Math.min(8, texts.length)),
         callbacks: {
           onEpochEnd: (epoch, logs) => {
-            console.log(`Epoch ${epoch}: loss = ${logs.loss}, accuracy = ${logs.acc}`);
+            console.log(`Epoch ${epoch + 1}: loss = ${logs.loss.toFixed(4)}, accuracy = ${logs.acc.toFixed(4)}`);
           }
         }
       });
 
       xs.dispose();
       ys.dispose();
+      isModelTrained = true;
+      console.log("Model training completed.");
+    }
+
+    async function initializeDefaultModel() {
+      createTokenizer(["welcome", "to", "vynix", "ai"]); // Minimal tokenizer
+      await initializeModel();
+      const weights = model.getWeights().map(w => tf.randomNormal(w.shape));
+      model.setWeights(weights);
+      isModelTrained = false;
+      console.log("Initialized default model with random weights.");
     }
 
     async function predictSentiment(text) {
-      if (!model) return 0.5; // Neutral default
+      if (!model) {
+        console.log("No model available for prediction.");
+        return 0.5;
+      }
       const tokenized = tokenizeText(text);
       const padded = new Array(50).fill(0);
       tokenized.forEach((val, i) => {
@@ -412,16 +462,19 @@
       const score = (await prediction.data())[0];
       input.dispose();
       prediction.dispose();
-      return score; // 0 (negative) to 1 (positive)
+      console.log(`Sentiment prediction for "${text}": ${score}`);
+      return score;
     }
 
     async function generateResponse(userInput, sentimentScore) {
-      // Simple rule-based response based on sentiment
+      if (!isModelTrained) {
+        return `Hey there! I don't have enough of your posts to know your style yet. <a href="home.html">Share something on BanterBox</a> and I'll tailor my responses. For now, how can I help with "${userInput}"?`;
+      }
       const tone = sentimentScore > 0.7 ? "positive" : sentimentScore < 0.3 ? "cautious" : "neutral";
       const responses = {
-        positive: `Sounds like you're in a great mood! How can Vynix AI assist you with "${userInput}"?`,
-        neutral: `Got it! Let's dive into "${userInput}". What do you need help with?`,
-        cautious: `I hear you. Let's carefully explore "${userInput}". Any specific details?`
+        positive: `You're sounding upbeat! Let's dive into "${userInput}". What's up?`,
+        neutral: `Got it! How can Vynix AI assist with "${userInput}"?`,
+        cautious: `Hmm, sounds serious. Tell me more about "${userInput}"—I'm all ears!`
       };
       return responses[tone] || responses.neutral;
     }
@@ -431,16 +484,18 @@
       try {
         const userContent = await fetchUserContent(userId);
         if (userContent.length > 0) {
-          createTokenizer(userContent);
-          await initializeModel();
           await trainModel(userContent);
-          showAlert("Vynix AI model initialized!", true);
+          showAlert(`Vynix AI trained on ${userContent.length} post${userContent.length > 1 ? 's' : ''}!`, true);
         } else {
-          showAlert("No content available to train Vynix AI. Using default responses.", false);
+          await initializeDefaultModel();
+          showNoContentPrompt();
+          showAlert("No content found. Using default responses.", false);
         }
       } catch (error) {
         console.error("Error initializing AI:", error);
-        showAlert("Failed to initialize Vynix AI.", false);
+        showAlert("Failed to initialize Vynix AI. Using default responses.", false);
+        await initializeDefaultModel();
+        showNoContentPrompt();
       } finally {
         hideLoading();
       }
@@ -478,6 +533,8 @@
           Object.values(messages).forEach(message => {
             renderMessage(message, message.isUser);
           });
+        } else if (!isModelTrained) {
+          showNoContentPrompt();
         }
       });
     }
@@ -496,6 +553,7 @@
         chatInput.value = "";
         sendBtn.disabled = true;
       } catch (error) {
+        console.error("Error processing chat:", error);
         showAlert("Failed to process chat. Please try again.", false);
       } finally {
         hideLoading();
