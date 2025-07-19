@@ -421,13 +421,7 @@
       transform: scale(1.1);
     }
 
-    .tweet-action.comment-btn, .tweet-action.comment-btn svg {
-      background: none;
-    }
-
-    .tweet-action.clicked svg, .tweet-action.retweeted svg, .tweet
-
--action.liked svg,
+    .tweet-action.clicked svg, .tweet-action.retweeted svg, .tweet-action.liked svg,
     .tweet-action.delete-btn svg:hover,
     .comment-action.clicked svg, .comment-action.delete-btn svg:hover {
       fill: #000000;
@@ -670,6 +664,61 @@
       background: rgba(29, 161, 242, 0.1);
     }
 
+    /* Shimmer Effect for Tweet Feed */
+    .shimmer-wrapper {
+      margin-top: 1rem;
+    }
+
+    .shimmer-tweet {
+      padding: 1rem;
+      border-bottom: 1px solid var(--border);
+      background: var(--white);
+      border-radius: 12px;
+      margin-bottom: 0.5rem;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+
+    .shimmer {
+      background: linear-gradient(90deg, var(--background) 0%, rgba(0, 0, 0, 0.05) 50%, var(--background) 100%);
+      background-size: 200% 100%;
+      animation: shimmer 1.5s infinite;
+    }
+
+    .shimmer-avatar {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: var(--shimmer);
+    }
+
+    .shimmer-line {
+      height: 16px;
+      background: var(--shimmer);
+      border-radius: 4px;
+      margin: 0.5rem 0;
+    }
+
+    .shimmer-line.short {
+      width: 60%;
+    }
+
+    .shimmer-line.medium {
+      width: 80%;
+    }
+
+    .shimmer-line.long {
+      width: 100%;
+    }
+
+    @keyframes shimmer {
+      0% {
+        background-position: 200% 0;
+      }
+      100% {
+        background-position: -200% 0;
+      }
+    }
+
     @keyframes fadeIn {
       0% { opacity: 0; transform: translateX(-50%) translateY(-10px); }
       100% { opacity: 1; transform: translateX(-50%) translateY(0); }
@@ -742,6 +791,15 @@
         width: 18px;
         height: 18px;
       }
+
+      .shimmer-avatar {
+        width: 36px;
+        height: 36px;
+      }
+
+      .shimmer-line {
+        height: 14px;
+      }
     }
   </style>
 </head>
@@ -802,7 +860,44 @@
       </div>
       <button class="tweet-btn" id="tweet-btn" disabled aria-label="Post tweet">Add Your Post</button>
     </div>
-    <div class="tweet-feed" id="tweet-feed"></div>
+    <div class="tweet-feed" id="tweet-feed">
+      <!-- Shimmer placeholders -->
+      <div class="shimmer-wrapper" id="shimmer-wrapper">
+        <div class="shimmer-tweet">
+          <div class="tweet-header">
+            <div class="shimmer-avatar"></div>
+            <div class="tweet-user-info">
+              <div class="shimmer-line short"></div>
+              <div class="shimmer-line short"></div>
+            </div>
+          </div>
+          <div class="shimmer-line long"></div>
+          <div class="shimmer-line medium"></div>
+        </div>
+        <div class="shimmer-tweet">
+          <div class="tweet-header">
+            <div class="shimmer-avatar"></div>
+            <div class="tweet-user-info">
+              <div class="shimmer-line short"></div>
+              <div class="shimmer-line short"></div>
+            </div>
+          </div>
+          <div class="shimmer-line long"></div>
+          <div class="shimmer-line medium"></div>
+        </div>
+        <div class="shimmer-tweet">
+          <div class="tweet-header">
+            <div class="shimmer-avatar"></div>
+            <div class="tweet-user-info">
+              <div class="shimmer-line short"></div>
+              <div class="shimmer-line short"></div>
+            </div>
+          </div>
+          <div class="shimmer-line long"></div>
+          <div class="shimmer-line medium"></div>
+        </div>
+      </div>
+    </div>
   </div>
   <div class="modal" id="comment-modal">
     <div class="modal-content">
@@ -863,6 +958,7 @@
     const confirmBtn = document.getElementById("confirm-btn");
     const cancelConfirm = document.getElementById("cancel-confirm");
     const loadingOverlay = document.getElementById("loading-overlay");
+    const shimmerWrapper = document.getElementById("shimmer-wrapper");
     let currentTweetId = null;
     let replyToCommentId = null;
     let userHandles = {};
@@ -882,6 +978,14 @@
 
     function hideLoading() {
       loadingOverlay.classList.remove("active");
+    }
+
+    function showShimmer() {
+      shimmerWrapper.style.display = "block";
+    }
+
+    function hideShimmer() {
+      shimmerWrapper.style.display = "none";
     }
 
     function getAvatarInitials(username) {
@@ -942,7 +1046,7 @@
       localStorage.setItem("theme", theme);
     }
 
-    function shuffleArray(array) {
+    function fisherYatesShuffle(array) {
       for (let i = array.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
         [array[i], array[j]] = [array[j], array[i]];
@@ -950,7 +1054,9 @@
       return array;
     }
 
-    function formatContentWithTags(text) {
+    function format PST
+
+function formatContentWithTags(text) {
       return text.replace(/@(\w+)/g, (match, handle) => {
         const uid = userHandles[handle.toLowerCase()];
         return uid ? `<a href="profile.html?uid=${uid}" class="tagged-user">@${handle}</a>` : match;
@@ -1061,11 +1167,13 @@
               videoLabel.style.opacity = 1;
               hideLoading();
             };
+            hideLoading(); // Hide spinner after successful initialization
             resolve();
           })
           .catch(error => {
             showAlert("Failed to access microphone: " + error.message, false);
             voiceRecordBtn.disabled = true;
+            hideLoading(); // Hide spinner on failure
             reject(error);
           });
       });
@@ -1349,23 +1457,26 @@
 
     async function refreshTweets(user, userProfiles) {
       try {
+        showShimmer(); // Show shimmer effect during loading
         const tweetsRef = ref(db, "tweets");
         const snapshot = await get(tweetsRef);
         const tweets = snapshot.val();
         if (!tweets) {
           tweetFeed.innerHTML = "<p>No tweets to display.</p>";
+          hideShimmer();
           return;
         }
         tweetFeed.innerHTML = "";
         const tweetArray = Object.entries(tweets).map(([id, data]) => ({ id, ...data }));
-        const sortedTweets = tweetArray.sort((a, b) => b.createdAt - a.createdAt);
-        sortedTweets.forEach(tweet => renderTweet(tweet, tweet.id, user, userProfiles));
+        const shuffledTweets = fisherYatesShuffle([...tweetArray]); // Randomize tweets using Fisher-Yates
+        shuffledTweets.forEach(tweet => renderTweet(tweet, tweet.id, user, userProfiles));
         Object.entries(tweets).forEach(([tweetId, tweetData]) => {
           renderComments(tweetId, tweetData.comments, user, userProfiles);
         });
       } catch (error) {
         showAlert("Failed to load tweets: " + error.message, false);
       } finally {
+        hideShimmer(); // Hide shimmer effect after loading
         hideLoading();
       }
     }
@@ -1430,7 +1541,7 @@
           await initializeMediaRecorder();
           toggleRecording();
         } catch (error) {
-          hideLoading();
+          // Error handling already includes hideLoading in initializeMediaRecorder
           return;
         }
       } else {
@@ -1698,10 +1809,12 @@
           refreshTweets(user, userProfiles);
         }).catch((error) => {
           showAlert("Failed to load user profiles: " + error.message, false);
+          hideShimmer();
           hideLoading();
         });
       }).catch((error) => {
         showAlert("Failed to load user data: " + error.message, false);
+        hideShimmer();
         hideLoading();
       });
     });
@@ -1709,7 +1822,7 @@
     document.addEventListener("DOMContentLoaded", () => {
       const savedTheme = localStorage.getItem("theme") || "light";
       document.body.dataset.theme = savedTheme;
-      hideLoading(); // Ensure loading spinner is hidden on initial load
+      showShimmer(); // Show shimmer on initial load
     });
   </script>
 </body>
