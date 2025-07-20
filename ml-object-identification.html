@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Object Identification | X Friends</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js"></script>
   <style>
     :root {
       --twitter-blue: #1DA1F2;
@@ -18,7 +20,7 @@
       --dark-bg: #15202B;
       --dark-border: #2F3B43;
       --dark-text: #FFFFFF;
-      --grey-bubble: #E2E8F0; /* Grey for bot messages */
+      --grey-bubble: #E2E8F0;
       --input-bg-light: linear-gradient(180deg, #FFFFFF 0%, #F1F5F9 100%);
       --input-bg-dark: linear-gradient(180deg, #2D3748 0%, #1A202C 100%);
       --modal-bg: linear-gradient(135deg, var(--twitter-blue) 0%, var(--twitter-purple) 100%);
@@ -254,35 +256,6 @@
       transform: translateY(-2px);
     }
 
-    .message-input {
-      flex: 1;
-      width: 100%;
-      padding: 0.75rem 0;
-      border: none;
-      border-radius: 30px;
-      font-size: 1.05rem;
-      line-height: 1.4;
-      color: var(--text-dark);
-      background: transparent;
-      outline: none;
-      box-sizing: border-box;
-    }
-
-    .message-input:focus {
-      box-shadow: inset 0 0 8px rgba(29, 161, 242, 0.2);
-    }
-
-    .message-input:disabled {
-      cursor: not-allowed;
-      opacity: 0.6;
-    }
-
-    .message-input::placeholder {
-      color: var(--text-light);
-      font-style: italic;
-      padding-left: 0.75rem;
-    }
-
     .image-upload {
       display: none;
     }
@@ -397,15 +370,6 @@
         padding: 0.25rem;
       }
 
-      .message-input {
-        font-size: 0.95rem;
-        padding: 0.5rem 0;
-      }
-
-      .message-input::placeholder {
-        padding-left: 0.5rem;
-      }
-
       .image-upload-label {
         padding: 0.65rem;
         margin-left: 0.25rem;
@@ -468,7 +432,8 @@
   <script type="module">
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
     import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
-    import { getDatabase, ref, push, set } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js';
+    import { getDatabase, ref, get, set } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js';
+    import * as cocoSsd from 'https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js';
 
     const firebaseConfig = {
       apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
@@ -495,6 +460,21 @@
     const loadingOverlay = document.getElementById("loading-overlay");
     const alert = document.getElementById("alert");
     const alertMessage = document.getElementById("alert-message");
+
+    let model = null;
+    // Load COCO-SSD model on page load
+    (async () => {
+      showLoading();
+      try {
+        model = await cocoSsd.load();
+        addMessage("Model loaded! Ready to identify objects.", true);
+      } catch (error) {
+        showAlert("Failed to load ML model: " + error.message, false);
+        addMessage("Sorry, I couldn't load the object detection model.", true);
+      } finally {
+        hideLoading();
+      }
+    })();
 
     function showLoading() {
       loadingOverlay.classList.add("active");
@@ -612,16 +592,20 @@
         // Display bot processing message
         addMessage("Image received, processing...", true);
 
-        // Mock results for demonstration
+        // Perform object detection with TensorFlow.js COCO-SSD
+        const imgElement = new Image();
+        imgElement.src = imageUrl;
+        imgElement.crossOrigin = "anonymous"; // Required for cross-origin images
+        await new Promise((resolve) => { imgElement.onload = resolve; });
+        const predictions = await model.detect(imgElement);
         let resultsHtml = "Identified objects:<br>";
-        const mockResults = [
-          { label: "Dog", confidence: 0.95 },
-          { label: "Cat", confidence: 0.03 },
-          { label: "Tree", confidence: 0.02 }
-        ];
-        mockResults.forEach(result => {
-          resultsHtml += `<span class="font-bold">${result.label}</span>: ${(result.confidence * 100).toFixed(2)}% confidence<br>`;
-        });
+        if (predictions.length === 0) {
+          resultsHtml = "No objects detected in the image.";
+        } else {
+          predictions.forEach(prediction => {
+            resultsHtml += `<span class="font-bold">${prediction.class}</span>: ${(prediction.score * 100).toFixed(2)}% confidence<br>`;
+          });
+        }
         addMessage(resultsHtml, true);
 
         showAlert("Objects identified successfully! Image URL saved.", true);
