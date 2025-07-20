@@ -5,25 +5,27 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>AI Chat - Vynix</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.17.0/dist/tf.min.js"></script>
   <style>
     :root {
       --banter-blue: #1DA1F2;
       --banter-purple: #8A3FFC;
-      --text-dark: #0F1419;
-      --text-light: #536471;
-      --border: #D8D9DB;
+      --banter-accent: #FF2D55;
+      --text-dark: #1A202C;
+      --text-light: #718096;
+      --border: #E2E8F0;
       --white: #FFFFFF;
-      --background: #F5F8FA;
-      --dark-bg: #0D1A26;
-      --dark-border: #2F3B43;
-      --dark-text: #E7ECEF;
+      --background: #F7FAFC;
+      --dark-bg: #1A202C;
+      --dark-border: #2D3748;
+      --dark-text: #E2E8F0;
     }
 
     [data-theme="dark"] {
       --text-dark: var(--dark-text);
       --border: var(--dark-border);
       --white: var(--dark-bg);
-      --background: #1E2A3C;
+      --background: #2D3748;
     }
 
     body {
@@ -41,18 +43,41 @@
     }
 
     .container {
-      max-width: 600px;
+      max-width: 800px;
       margin: 0 auto;
       padding: 1rem;
       display: flex;
       flex-direction: column;
       min-height: 100vh;
+      position: relative;
+    }
+
+    .settings-btn {
+      position: absolute;
+      top: 1rem;
+      right: 1rem;
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 0.5rem;
+      z-index: 1000;
+    }
+
+    .settings-btn svg {
+      width: 24px;
+      height: 24px;
+      stroke: var(--text-light);
+      transition: stroke 0.2s ease;
+    }
+
+    .settings-btn:hover svg {
+      stroke: var(--banter-purple);
     }
 
     .loading-overlay {
       position: fixed;
       inset: 0;
-      background: rgba(0, 0, 0, 0.6);
+      background: rgba(0, 0, 0, 0.7);
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -69,9 +94,9 @@
     }
 
     .spinner {
-      width: 40px;
-      height: 40px;
-      border: 3px solid transparent;
+      width: 48px;
+      height: 48px;
+      border: 4px solid transparent;
       border-top-color: var(--banter-blue);
       border-right-color: var(--banter-purple);
       border-radius: 50%;
@@ -85,29 +110,30 @@
 
     .spinner-text {
       color: var(--white);
-      font-size: 0.85rem;
+      font-size: 0.9rem;
       font-weight: 500;
-      margin-top: 0.5rem;
+      margin-top: 0.75rem;
+      letter-spacing: 0.05em;
     }
 
     .ai-chat {
       flex: 1;
       display: flex;
       flex-direction: column-reverse;
-      gap: 0.75rem;
-      padding-bottom: 1rem;
+      gap: 1rem;
+      padding-bottom: 1.5rem;
     }
 
     .chat-message {
       display: flex;
       flex-direction: column;
-      max-width: 80%;
-      padding: 0.75rem 1rem;
-      border-radius: 16px;
+      max-width: 85%;
+      padding: 1rem 1.25rem;
+      border-radius: 20px;
       background: var(--white);
-      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
-      animation: slideIn 0.3s ease-out;
-      transition: transform 0.2s ease;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      animation: slideIn 0.4s ease-out;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
     }
 
     .chat-message.user {
@@ -123,26 +149,27 @@
     }
 
     .chat-message:hover {
-      transform: translateY(-2px);
+      transform: translateY(-3px);
+      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
     }
 
     .chat-header {
       display: flex;
       align-items: center;
-      gap: 0.5rem;
-      margin-bottom: 0.25rem;
+      gap: 0.75rem;
+      margin-bottom: 0.5rem;
     }
 
     .chat-avatar {
-      width: 32px;
-      height: 32px;
+      width: 36px;
+      height: 36px;
       border-radius: 50%;
       background: var(--text-light);
       color: var(--white);
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 0.9rem;
+      font-size: 1rem;
       font-weight: 600;
     }
 
@@ -155,34 +182,36 @@
 
     .chat-username {
       font-weight: 600;
-      font-size: 0.9rem;
+      font-size: 0.95rem;
     }
 
     .chat-timestamp {
-      font-size: 0.75rem;
+      font-size: 0.8rem;
       opacity: 0.7;
     }
 
     .chat-content {
-      font-size: 0.95rem;
-      line-height: 1.4;
+      font-size: 1rem;
+      line-height: 1.5;
       word-break: break-word;
     }
 
     .ai-compose {
       position: sticky;
-      bottom: 1rem;
+      bottom: 1.5rem;
       margin: 0 1rem;
       display: flex;
       align-items: center;
       background: var(--white);
-      border-radius: 24px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-      transition: box-shadow 0.2s ease;
+      border-radius: 30px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+      transition: box-shadow 0.3s ease, transform 0.3s ease;
+      padding: 0.5rem;
     }
 
     .ai-compose:hover {
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+      transform: translateY(-2px);
     }
 
     .ai-input {
@@ -190,7 +219,7 @@
       padding: 0.75rem 1rem;
       border: none;
       border-radius: 24px;
-      font-size: 0.95rem;
+      font-size: 1rem;
       color: var(--text-dark);
       background: transparent;
       resize: none;
@@ -212,34 +241,62 @@
     }
 
     .send-btn {
-      background: none;
+      background: linear-gradient(135deg, var(--banter-blue) 0%, var(--banter-purple) 100%);
       border: none;
-      padding: 0.5rem;
+      padding: 0.75rem;
       cursor: pointer;
       opacity: 0;
-      transition: opacity 0.2s ease;
+      transition: opacity 0.3s ease, transform 0.2s ease;
       display: flex;
       align-items: center;
+      border-radius: 50%;
     }
 
     .send-btn.active {
       opacity: 1;
+      transform: scale(1.1);
     }
 
     .send-btn svg {
       width: 24px;
       height: 24px;
-      stroke: var(--banter-blue);
+      stroke: var(--white);
       stroke-width: 2;
     }
 
-    .send-btn:hover svg {
-      stroke: var(--banter-purple);
+    .send-btn:hover {
+      transform: scale(1.15);
     }
 
     .send-btn:disabled {
       cursor: not-allowed;
       opacity: 0.5;
+      transform: scale(1);
+    }
+
+    .suggestions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+      padding: 0 1rem;
+    }
+
+    .suggestion-btn {
+      background: var(--white);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 0.5rem 1rem;
+      font-size: 0.9rem;
+      color: var(--text-dark);
+      cursor: pointer;
+      transition: background 0.2s ease, transform 0.2s ease;
+    }
+
+    .suggestion-btn:hover {
+      background: var(--banter-blue);
+      color: var(--white);
+      transform: translateY(-2px);
     }
 
     .custom-alert {
@@ -257,7 +314,7 @@
       font-weight: 500;
       text-align: center;
       max-width: 90%;
-      width: 300px;
+      width: 320px;
       animation: fadeIn 0.3s ease-out forwards;
     }
 
@@ -284,7 +341,7 @@
     }
 
     @keyframes slideIn {
-      from { opacity: 0; transform: translateY(10px); }
+      from { opacity: 0; transform: translateY(15px); }
       to { opacity: 1; transform: translateY(0); }
     }
 
@@ -295,38 +352,38 @@
 
     @media (max-width: 640px) {
       .container {
-        padding: 0.5rem;
+        padding: 0.75rem;
       }
 
       .chat-message {
         max-width: 90%;
-        padding: 0.5rem 0.75rem;
+        padding: 0.75rem 1rem;
       }
 
       .chat-avatar {
-        width: 28px;
-        height: 28px;
-        font-size: 0.8rem;
+        width: 32px;
+        height: 32px;
+        font-size: 0.9rem;
       }
 
       .chat-username {
-        font-size: 0.85rem;
+        font-size: 0.9rem;
       }
 
       .chat-timestamp {
-        font-size: 0.7rem;
+        font-size: 0.75rem;
       }
 
       .chat-content {
-        font-size: 0.9rem;
+        font-size: 0.95rem;
       }
 
       .ai-compose {
-        margin: 0 0.5rem;
+        margin: 0 0.75rem;
       }
 
       .ai-input {
-        font-size: 0.9rem;
+        font-size: 0.95rem;
         padding: 0.5rem 0.75rem;
       }
 
@@ -334,11 +391,21 @@
         width: 20px;
         height: 20px;
       }
+
+      .suggestion-btn {
+        font-size: 0.85rem;
+        padding: 0.4rem 0.8rem;
+      }
     }
   </style>
 </head>
 <body>
   <div class="container">
+    <button class="settings-btn" aria-label="Toggle settings" onclick="toggleTheme()">
+      <svg viewBox="0 0 24 24">
+        <path d="M19.14 12.94c.04-.3.06-.61.06-.94s-.02-.64-.06-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.49.49 0 0 0-.48-.41h-3.84a.49.49 0 0 0-.48.41l-.36 2.54c-.59.24-1.13.56-1.62.94l-2.39-.96a.49.49 0 0 0-.59.22L2.86 9.41a.49.49 0 0 0 .12.61l2.03 1.58a2.66 2.66 0 0 0 0 1.88l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32a.49.49 0 0 0 .59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54a.49.49 0 0 0 .48.41h3.84a.49.49 0 0 0 .48-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96a.49.49 0 0 0 .59-.22l1.92-3.32a.49.49 0 0 0-.12-.61l-2.03-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
+      </svg>
+    </button>
     <div class="custom-alert" id="alert">
       <span id="alert-message"></span>
       <button class="close-btn" aria-label="Close alert">
@@ -349,7 +416,12 @@
     </div>
     <div class="loading-overlay" id="loading-overlay">
       <div class="spinner"></div>
-      <span class="spinner-text">Thinking...</span>
+      <span class="spinner-text">Vynix is thinking...</span>
+    </div>
+    <div class="suggestions" id="suggestions">
+      <button class="suggestion-btn" onclick="setPrompt('Tell me a joke!')">Tell me a joke!</button>
+      <button class="suggestion-btn" onclick="setPrompt('What’s a fun fact?')">What’s a fun fact?</button>
+      <button class="suggestion-btn" onclick="setPrompt('Why is Vynix awesome?')">Why is Vynix awesome?</button>
     </div>
     <div class="ai-chat" id="ai-chat"></div>
     <div class="ai-compose">
@@ -366,6 +438,7 @@
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
     import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
     import { getDatabase, ref, push, get } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js';
+    import * as tf from 'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.17.0/dist/tf.min.js';
 
     const firebaseConfig = {
       apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
@@ -390,54 +463,131 @@
     const loadingOverlay = document.getElementById("loading-overlay");
     let currentUser = null;
 
-    const GEMINI_API_KEY = "YOUR_GEMINI_API_KEY"; // Replace with your Gemini API key
-    const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent";
+    // Bigram model state
+    let bigramModel = {};
+    let vocabulary = new Set();
+    let wordToIndex = {};
+    let indexToWord = {};
 
-    async function fetchAIResponse(prompt) {
+    // Expanded initial corpus for better response variety
+    const initialCorpus = [
+      "Hey there! I'm Vynix, your go-to AI for witty banter and spicy answers!",
+      "What's the vibe today? Ask me something fun, and I'll keep it lively!",
+      "Why did the computer go to art school? It wanted to draw a better 'byte'!",
+      "Got a question? I'm all code and no nonsense, with a dash of humor!",
+      "Life’s too short for dull chats. Hit me with your spiciest question!",
+      "Why is Vynix awesome? Because I mix brains with a pinch of sass!",
+      "Fun fact: The shortest war in history lasted 38 minutes. Bet I can answer faster!",
+      "Want a joke? Why did the scarecrow become a motivational speaker? He was outstanding in his field!",
+      "Vynix here, ready to serve answers with a side of wit. What's up?",
+      "Ask me anything, and I’ll make sure it’s a conversation worth screenshotting!"
+    ];
+
+    // Tokenize text into words
+    function tokenize(text) {
+      return text.toLowerCase().replace(/[^\w\s]/g, '').split(/\s+/).filter(word => word.length > 0);
+    }
+
+    // Build bigram model from text
+    function buildBigramModel(texts) {
+      console.log("Building bigram model...");
+      bigramModel = {};
+      vocabulary.clear();
+
+      texts.forEach(text => {
+        const words = tokenize(text);
+        words.forEach(word => vocabulary.add(word));
+        for (let i = 0; i < words.length - 1; i++) {
+          const currentWord = words[i];
+          const nextWord = words[i + 1];
+          if (!bigramModel[currentWord]) {
+            bigramModel[currentWord] = {};
+          }
+          bigramModel[currentWord][nextWord] = (bigramModel[currentWord][nextWord] || 0) + 1;
+        }
+      });
+
+      // Create word-to-index mapping
+      wordToIndex = {};
+      indexToWord = {};
+      Array.from(vocabulary).forEach((word, index) => {
+        wordToIndex[word] = index;
+        indexToWord[index] = word;
+      });
+
+      console.log("Bigram model built:", bigramModel);
+    }
+
+    // Generate response using bigram model
+    function generateResponse(prompt) {
+      console.log("Generating response for prompt:", prompt);
+      const words = tokenize(prompt);
+      const lastWord = words[words.length - 1] || Object.keys(bigramModel)[Math.floor(Math.random() * Object.keys(bigramModel).length)];
+      let response = [lastWord];
+
+      for (let i = 0; i < 12; i++) { // Generate up to 12 words
+        const nextWords = bigramModel[lastWord];
+        if (!nextWords) break;
+
+        const totalCount = Object.values(nextWords).reduce((sum, count) => sum + count, 0);
+        let rand = Math.random() * totalCount;
+        let nextWord = null;
+
+        for (const [word, count] of Object.entries(nextWords)) {
+          rand -= count;
+          if (rand <= 0) {
+            nextWord = word;
+            break;
+          }
+        }
+
+        if (!nextWord) break;
+        response.push(nextWord);
+        lastWord = nextWord;
+      }
+
+      const generated = response.join(" ") || "Vynix says: Let's spice things up!";
+      console.log("Generated response:", generated);
+      return generated.charAt(0).toUpperCase() + generated.slice(1) + "!";
+    }
+
+    // Initialize model with Firebase data or initial corpus
+    async function initializeModel() {
+      if (!currentUser) return;
+      showLoading();
       try {
-        const response = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({
-            contents: [{
-              parts: [{
-                text: `You are Vynix, a witty and helpful AI assistant for BanterBox. Provide concise, accurate, and conversational responses with a touch of humor. Keep responses under 150 words. Prompt: ${prompt}`
-              }]
-            }],
-            generationConfig: {
-              maxOutputTokens: 150,
-              temperature: 0.7,
-              topP: 0.9
-            }
-          })
-        });
+        const chatRef = ref(db, `users/${currentUser.uid}/ai_chat`);
+        const snapshot = await get(chatRef);
+        const messages = snapshot.val();
+        let texts = initialCorpus;
 
-        if (!response.ok) {
-          throw new Error(`HTTP error! Status: ${response.status}`);
+        if (messages) {
+          texts = texts.concat(Object.values(messages).map(msg => msg.text));
         }
 
-        const data = await response.json();
-        if (data && data.candidates && data.candidates[0].content.parts[0].text) {
-          return data.candidates[0].content.parts[0].text.trim();
-        }
-        throw new Error("Invalid response from Gemini API");
+        buildBigramModel(texts);
+        showAlert("Vynix is ready to chat!", true);
       } catch (error) {
-        console.error("Error fetching AI response:", error);
-        throw new Error("Vynix is having a moment. Try again!");
+        console.error("Error initializing model:", error);
+        showAlert("Failed to initialize Vynix. Using default responses.", false);
+        buildBigramModel(initialCorpus);
+      } finally {
+        hideLoading();
       }
     }
 
     function showLoading() {
+      console.log("Showing loading overlay");
       loadingOverlay.classList.add("active");
     }
 
     function hideLoading() {
+      console.log("Hiding loading overlay");
       loadingOverlay.classList.remove("active");
     }
 
     function showAlert(message, isSuccess) {
+      console.log("Showing alert:", message);
       alertMessage.textContent = message;
       alert.style.background = isSuccess ? "rgba(29, 161, 242, 0.1)" : "rgba(255, 0, 0, 0.1)";
       alert.classList.add("active");
@@ -462,6 +612,7 @@
     }
 
     function renderMessage(messageData, isUser, userData = null) {
+      console.log("Rendering message:", messageData);
       const messageDiv = document.createElement("div");
       messageDiv.className = `chat-message ${isUser ? "user" : "ai"}`;
       messageDiv.tabIndex = 0;
@@ -480,11 +631,14 @@
 
     function adjustTextareaHeight() {
       aiInput.style.height = "auto";
-      aiInput.style.height = `${Math.min(aiInput.scrollHeight, 100)}px`;
+      aiInput.style.height = `${Math.min(aiInput.scrollHeight, 120)}px`;
     }
 
     async function sendMessage() {
-      if (!aiInput.value.trim()) return;
+      if (!aiInput.value.trim()) {
+        console.log("No input text, skipping send");
+        return;
+      }
       if (currentUser && currentUser.isGuest) {
         showAlert("Guests can't chat with Vynix.", false);
         return;
@@ -501,17 +655,23 @@
           createdAt: Date.now(),
           isUser: true
         };
+        console.log("Saving user message to Firebase:", userMessage);
         await push(ref(db, `users/${auth.currentUser.uid}/ai_chat`), userMessage);
         renderMessage(userMessage, true, userData);
 
-        const aiResponseText = await fetchAIResponse(aiInput.value);
+        // Generate AI response
+        const aiResponseText = generateResponse(aiInput.value);
         const aiMessage = {
           text: aiResponseText,
           createdAt: Date.now(),
           isUser: false
         };
+        console.log("Saving AI message to Firebase:", aiMessage);
         await push(ref(db, `users/${auth.currentUser.uid}/ai_chat`), aiMessage);
         renderMessage(aiMessage, false);
+
+        // Update bigram model with new messages
+        buildBigramModel([aiInput.value, aiResponseText]);
 
         aiInput.value = "";
         adjustTextareaHeight();
@@ -519,14 +679,30 @@
         sendBtn.disabled = true;
         showAlert("Vynix has spoken!", true);
       } catch (error) {
-        showAlert(error.message, false);
+        console.error("Send message error:", error);
+        showAlert("Failed to process message. Try again!", false);
       } finally {
         hideLoading();
       }
     }
 
+    function toggleTheme() {
+      const isDark = document.documentElement.getAttribute("data-theme") === "dark";
+      document.documentElement.setAttribute("data-theme", isDark ? "light" : "dark");
+      console.log("Toggled theme to:", isDark ? "light" : "dark");
+    }
+
+    function setPrompt(prompt) {
+      aiInput.value = prompt;
+      adjustTextareaHeight();
+      sendBtn.disabled = !prompt.trim() || (currentUser && currentUser.isGuest);
+      sendBtn.classList.toggle("active", prompt.trim() && !(currentUser && currentUser.isGuest));
+      aiInput.focus();
+    }
+
     onAuthStateChanged(auth, (user) => {
       if (!user) {
+        console.log("No user authenticated, redirecting to signup");
         document.body.classList.add("fade-out");
         setTimeout(() => {
           window.location.href = "signup.html";
@@ -544,8 +720,9 @@
         aiInput.disabled = isGuest;
         sendBtn.disabled = isGuest || !aiInput.value.trim();
         aiInput.placeholder = isGuest ? "Guests can't chat with Vynix." : "Ask Vynix something spicy...";
+        console.log("User data loaded:", userData, "Is guest:", isGuest);
 
-        // Load chat history
+        // Load chat history and initialize model
         const chatRef = ref(db, `users/${user.uid}/ai_chat`);
         get(chatRef).then((snapshot) => {
           aiChat.innerHTML = "";
@@ -555,20 +732,21 @@
               renderMessage(message, message.isUser, userData);
             });
           }
-          hideLoading();
+          initializeModel();
         }).catch((error) => {
           console.error("Error loading chat history:", error);
           showAlert("Failed to load chat history. Try again.", false);
-          hideLoading();
+          initializeModel();
         });
       }).catch((error) => {
         console.error("Error loading user data:", error);
         showAlert("Failed to load user data. Try again.", false);
-        hideLoading();
+        initializeModel();
       });
     });
 
     aiInput.addEventListener("input", () => {
+      console.log("Input event triggered, text:", aiInput.value);
       adjustTextareaHeight();
       sendBtn.disabled = !aiInput.value.trim() || (currentUser && currentUser.isGuest);
       sendBtn.classList.toggle("active", aiInput.value.trim() && !(currentUser && currentUser.isGuest));
@@ -576,12 +754,16 @@
 
     aiInput.addEventListener("keypress", async (e) => {
       if (e.key === "Enter" && !e.shiftKey) {
+        console.log("Enter key pressed");
         e.preventDefault();
         await sendMessage();
       }
     });
 
-    sendBtn.addEventListener("click", sendMessage);
+    sendBtn.addEventListener("click", async () => {
+      console.log("Send button clicked");
+      await sendMessage();
+    });
 
     // Initial textarea height adjustment
     adjustTextareaHeight();
