@@ -9,7 +9,6 @@
     :root {
       --twitter-blue: #1DA1F2;
       --twitter-purple: #8A3FFC;
-      --twitter-accent: #FF2D55;
       --text-dark: #0F1419;
       --text-light: #536471;
       --border: #D8D9DB;
@@ -21,7 +20,6 @@
       --grey-bubble: #E2E8F0;
       --input-bg-light: linear-gradient(180deg, #FFFFFF 0%, #F1F5F9 100%);
       --input-bg-dark: linear-gradient(180deg, #2D3748 0%, #1A202C 100%);
-      --modal-bg: linear-gradient(135deg, var(--twitter-blue) 0%, var(--twitter-purple) 100%);
     }
 
     [data-theme="dark"] {
@@ -30,7 +28,6 @@
       --white: var(--dark-bg);
       --background: #1E2A3C;
       --grey-bubble: #2D3748;
-      --modal-bg: linear-gradient(135deg, #4da8f7 0%, #a675fc 100%);
     }
 
     body {
@@ -220,12 +217,6 @@
       word-break: break-word;
     }
 
-    .message-content img {
-      max-width: 100%;
-      border-radius: 8px;
-      margin-top: 0.5rem;
-    }
-
     .message-timestamp {
       font-size: 0.8rem;
       opacity: 0.7;
@@ -254,11 +245,7 @@
       transform: translateY(-2px);
     }
 
-    .image-upload {
-      display: none;
-    }
-
-    .image-upload-label, .send-button {
+    .send-button {
       background: linear-gradient(135deg, var(--twitter-blue) 0%, var(--twitter-purple) 100%);
       border: none;
       padding: 0.85rem;
@@ -269,18 +256,18 @@
       margin-left: 0.25rem;
     }
 
-    .image-upload-label svg, .send-button svg {
+    .send-button svg {
       width: 26px;
       height: 26px;
       stroke: var(--white);
       stroke-width: 2;
     }
 
-    .image-upload-label:hover, .send-button:hover {
+    .send-button:hover {
       transform: scale(1.15) rotate(5deg);
     }
 
-    .send-button.hidden, .image-upload-label.hidden {
+    .send-button.hidden {
       display: none;
     }
 
@@ -382,12 +369,12 @@
         padding: 0.25rem;
       }
 
-      .image-upload-label, .send-button {
+      .send-button {
         padding: 0.65rem;
         margin-left: 0.25rem;
       }
 
-      .image-upload-label svg, .send-button svg {
+      .send-button svg {
         width: 22px;
         height: 22px;
       }
@@ -434,17 +421,11 @@
           <div class="user-username">Math Tutor Bot</div>
           <span class="message-timestamp">Just now</span>
         </div>
-        <div class="message-content">Hello! Type a math expression (e.g., '2 + 2') or upload an image of a math problem, and I'll solve it for you.</div>
+        <div class="message-content">Hello! Type a math expression (e.g., '2 + 2' or 'sin(45 deg)') to solve.</div>
       </div>
     </div>
     <form class="message-form" id="message-form" onsubmit="handleSubmit(event)">
       <input type="text" class="message-input" id="message-input" placeholder="Type a math expression..." />
-      <input type="file" class="image-upload" id="image-upload" accept="image/*" />
-      <label for="image-upload" class="image-upload-label">
-        <svg viewBox="0 0 24 24">
-          <path d="M3 17v2h6v-2H3zM3 5v2h10V5H3zm10 16v-2h8v-2h-8v-2h-2v6h2zM7 9v2H3v2h4v2h2V9H7zm14 4v-2h-4V9h-2v6h6z"/>
-        </svg>
-      </label>
       <button type="submit" class="send-button hidden" aria-label="Send message">
         <svg viewBox="0 0 24 24">
           <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
@@ -468,23 +449,16 @@
       measurementId: "G-V4W97VMSKL"
     };
 
-    // Cloudinary configuration
-    const CLOUDINARY_UPLOAD_PRESET = 'banter_box';
-    const CLOUDINARY_CLOUD_NAME = 'dqkujefxj';
-    const CLOUDINARY_API_URL = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`;
-
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const db = getDatabase(app);
 
     const messageInput = document.getElementById("message-input");
-    const imageUpload = document.getElementById("image-upload");
     const messageForm = document.getElementById("message-form");
     const chatContainer = document.getElementById("chat-container");
     const loadingOverlay = document.getElementById("loading-overlay");
     const alert = document.getElementById("alert");
     const alertMessage = document.getElementById("alert-message");
-    const imageUploadLabel = document.querySelector(".image-upload-label");
     const sendButton = document.querySelector(".send-button");
 
     function showLoading() {
@@ -515,7 +489,7 @@
       return `${seconds}s`;
     }
 
-    function addMessage(content, isBot = false, imageSrc = null, user = { username: "Math Tutor Bot" }) {
+    function addMessage(content, isBot = false, user = { username: "Math Tutor Bot" }) {
       const messageDiv = document.createElement("div");
       messageDiv.className = `message ${isBot ? "received" : "sent"}`;
       messageDiv.tabIndex = 0;
@@ -526,7 +500,7 @@
           <div class="user-username">${user.username}</div>
           <span class="message-timestamp">${formatTimestamp(Date.now())}</span>
         </div>
-        <div class="message-content">${content}${imageSrc ? `<img src="${imageSrc}" alt="Uploaded image" />` : ""}</div>
+        <div class="message-content">${content}</div>
       `;
       chatContainer.prepend(messageDiv);
       chatContainer.scrollTo({ top: chatContainer.scrollHeight, behavior: 'smooth' });
@@ -561,27 +535,11 @@
       alert.classList.remove("active");
     });
 
-    // Toggle between image upload and send button
-    messageInput.addEventListener("focus", () => {
-      if (messageInput.value.trim()) {
-        imageUploadLabel.classList.add("hidden");
-        sendButton.classList.remove("hidden");
-      }
-    });
-
+    // Show/hide send button based on input content
     messageInput.addEventListener("input", () => {
       if (messageInput.value.trim()) {
-        imageUploadLabel.classList.add("hidden");
         sendButton.classList.remove("hidden");
       } else {
-        imageUploadLabel.classList.remove("hidden");
-        sendButton.classList.add("hidden");
-      }
-    });
-
-    messageInput.addEventListener("blur", () => {
-      if (!messageInput.value.trim()) {
-        imageUploadLabel.classList.remove("hidden");
         sendButton.classList.add("hidden");
       }
     });
@@ -609,6 +567,7 @@
 
     async function handleSubmit(event) {
       event.preventDefault();
+      console.log("handleSubmit called"); // Debug log
       const expression = messageInput.value.trim();
       if (!expression) {
         showAlert("Please enter a math expression.", false);
@@ -617,7 +576,7 @@
 
       showLoading();
       try {
-        addMessage(expression, false, null, window.currentUserProfile || { username: "User" });
+        addMessage(expression, false, window.currentUserProfile || { username: "User" });
         const result = await evaluateMathExpression(expression);
         addMessage(`Result: ${result}`, true);
 
@@ -636,63 +595,9 @@
       } finally {
         hideLoading();
         messageInput.value = "";
-        imageUploadLabel.classList.remove("hidden");
         sendButton.classList.add("hidden");
       }
     }
-
-    imageUpload.addEventListener("change", async (event) => {
-      const file = event.target.files[0];
-      if (!file) {
-        showAlert("No image selected.", false);
-        return;
-      }
-
-      showLoading();
-      try {
-        // Display user message with image
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          addMessage("Image uploaded (OCR simulation: enter expression manually)", false, e.target.result, window.currentUserProfile || { username: "User" });
-        };
-        reader.readAsDataURL(file);
-
-        // Upload image to Cloudinary
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
-
-        const cloudinaryResponse = await fetch(CLOUDINARY_API_URL, {
-          method: 'POST',
-          body: formData
-        });
-        const cloudinaryData = await cloudinaryResponse.json();
-
-        if (!cloudinaryResponse.ok || cloudinaryData.error) {
-          throw new Error(cloudinaryData.error?.message || 'Cloudinary upload failed');
-        }
-
-        const imageUrl = cloudinaryData.secure_url;
-
-        // Save the URL to Firebase
-        const imageRef = ref(db, `image_urls/${window.currentUser.uid}/${Date.now()}`);
-        await set(imageRef, {
-          url: imageUrl,
-          timestamp: Date.now(),
-          filename: file.name
-        });
-
-        addMessage("Please type the math expression from the image for evaluation.", true);
-        showAlert("Image uploaded successfully! Enter the expression manually.", true);
-      } catch (error) {
-        console.error("Image upload error:", error);
-        addMessage("Sorry, I couldn't process the image. Please try again.", true);
-        showAlert(`Failed to process image: ${error.message}`, false);
-      } finally {
-        hideLoading();
-        imageUpload.value = "";
-      }
-    });
   </script>
 </body>
 </html>
