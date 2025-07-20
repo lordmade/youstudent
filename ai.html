@@ -362,10 +362,9 @@
     </div>
   </div>
 
-  <script src="https://js.puter.com/v2/"></script>
   <script type="module">
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
-    import { getAuth, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+    import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
     import { getDatabase, ref, push, get } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js';
 
     const firebaseConfig = {
@@ -391,16 +390,39 @@
     const loadingOverlay = document.getElementById("loading-overlay");
     let currentUser = null;
 
+    const GEMINI_API_KEY = "YOUR_GEMINI_API_KEY"; // Replace with your Gemini API key
+    const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent";
+
     async function fetchAIResponse(prompt) {
       try {
-        const response = await puter.ai.chat(
-          `You are Vynix, a witty and helpful AI assistant for BanterBox. Provide concise, accurate, and conversational responses with a touch of humor. Keep responses under 150 words. Prompt: ${prompt}`,
-          { model: "gpt-4o-mini" }
-        );
-        if (response && response.text) {
-          return response.text.trim();
+        const response = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            contents: [{
+              parts: [{
+                text: `You are Vynix, a witty and helpful AI assistant for BanterBox. Provide concise, accurate, and conversational responses with a touch of humor. Keep responses under 150 words. Prompt: ${prompt}`
+              }]
+            }],
+            generationConfig: {
+              maxOutputTokens: 150,
+              temperature: 0.7,
+              topP: 0.9
+            }
+          })
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! Status: ${response.status}`);
         }
-        throw new Error("Invalid response from Vynix");
+
+        const data = await response.json();
+        if (data && data.candidates && data.candidates[0].content.parts[0].text) {
+          return data.candidates[0].content.parts[0].text.trim();
+        }
+        throw new Error("Invalid response from Gemini API");
       } catch (error) {
         console.error("Error fetching AI response:", error);
         throw new Error("Vynix is having a moment. Try again!");
@@ -462,40 +484,44 @@
     }
 
     async function sendMessage() {
-      if (aiInput.value.trim()) {
-        showLoading();
-        try {
-          const userRef = ref(db, `users/${auth.currentUser.uid}`);
-          const userSnapshot = await get(userRef);
-          const userData = userSnapshot.val();
+      if (!aiInput.value.trim()) return;
+      if (currentUser && currentUser.isGuest) {
+        showAlert("Guests can't chat with Vynix.", false);
+        return;
+      }
 
-          const userMessage = {
-            text: aiInput.value,
-            createdAt: Date.now(),
-            isUser: true
-          };
-          await push(ref(db, `users/${auth.currentUser.uid}/ai_chat`), userMessage);
-          renderMessage(userMessage, true, userData);
+      showLoading();
+      try {
+        const userRef = ref(db, `users/${auth.currentUser.uid}`);
+        const userSnapshot = await get(userRef);
+        const userData = userSnapshot.val() || {};
 
-          const aiResponseText = await fetchAIResponse(aiInput.value);
-          const aiMessage = {
-            text: aiResponseText,
-            createdAt: Date.now(),
-            isUser: false
-          };
-          await push(ref(db, `users/${auth.currentUser.uid}/ai_chat`), aiMessage);
-          renderMessage(aiMessage, false);
+        const userMessage = {
+          text: aiInput.value,
+          createdAt: Date.now(),
+          isUser: true
+        };
+        await push(ref(db, `users/${auth.currentUser.uid}/ai_chat`), userMessage);
+        renderMessage(userMessage, true, userData);
 
-          aiInput.value = "";
-          adjustTextareaHeight();
-          sendBtn.classList.remove("active");
-          sendBtn.disabled = true;
-          showAlert("Vynix has spoken!", true);
-        } catch (error) {
-          showAlert(error.message, false);
-        } finally {
-          hideLoading();
-        }
+        const aiResponseText = await fetchAIResponse(aiInput.value);
+        const aiMessage = {
+          text: aiResponseText,
+          createdAt: Date.now(),
+          isUser: false
+        };
+        await push(ref(db, `users/${auth.currentUser.uid}/ai_chat`), aiMessage);
+        renderMessage(aiMessage, false);
+
+        aiInput.value = "";
+        adjustTextareaHeight();
+        sendBtn.classList.remove("active");
+        sendBtn.disabled = true;
+        showAlert("Vynix has spoken!", true);
+      } catch (error) {
+        showAlert(error.message, false);
+      } finally {
+        hideLoading();
       }
     }
 
@@ -512,8 +538,8 @@
       showLoading();
       const userRef = ref(db, `users/${user.uid}`);
       get(userRef).then((snapshot) => {
-        const userData = snapshot.val();
-        const isGuest = userData && userData.isGuest;
+        const userData = snapshot.val() || {};
+        const isGuest = userData.isGuest || false;
         user.isGuest = isGuest;
         aiInput.disabled = isGuest;
         sendBtn.disabled = isGuest || !aiInput.value.trim();
@@ -530,11 +556,13 @@
             });
           }
           hideLoading();
-        }).catch(() => {
+        }).catch((error) => {
+          console.error("Error loading chat history:", error);
           showAlert("Failed to load chat history. Try again.", false);
           hideLoading();
         });
-      }).catch(() => {
+      }).catch((error) => {
+        console.error("Error loading user data:", error);
         showAlert("Failed to load user data. Try again.", false);
         hideLoading();
       });
@@ -547,23 +575,13 @@
     });
 
     aiInput.addEventListener("keypress", async (e) => {
-      if (e.key === "Enter" && !e.shiftKey && aiInput.value.trim()) {
+      if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
-        if (currentUser && currentUser.isGuest) {
-          showAlert("Guests can't chat with Vynix.", false);
-          return;
-        }
         await sendMessage();
       }
     });
 
-    sendBtn.addEventListener("click", async () => {
-      if (currentUser && currentUser.isGuest) {
-        showAlert("Guests can't chat with Vynix.", false);
-        return;
-      }
-      await sendMessage();
-    });
+    sendBtn.addEventListener("click", sendMessage);
 
     // Initial textarea height adjustment
     adjustTextareaHeight();
