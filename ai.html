@@ -1,382 +1,450 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>BanterBox - Vynix AI</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Chat - Vynix</title>
+  <script src="https://cdn.tailwindcss.com"></script>
   <style>
     :root {
-      --primary-blue: #1DA1F2;
-      --primary-purple: #794BC4;
-      --background-dark: #121212;
-      --surface-dark: #1E1E1E;
-      --text-primary: #E0E0E0;
-      --text-secondary: #A0A0A0;
-      --accent-green: #4CAF50;
-      --error-red: #EF5350;
+      --twitter-blue: #1DA1F2;
+      --twitter-purple: #8A3FFC;
+      --text-dark: #0F1419;
+      --text-light: #536471;
+      --border: #D8D9DB;
+      --white: #FFFFFF;
+      --background: #F5F8FA;
+      --dark-bg: #15202B;
+      --dark-border: #2F3B43;
+      --dark-text: #FFFFFF;
     }
 
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
+    [data-theme="dark"] {
+      --text-dark: var(--dark-text);
+      --border: var(--dark-border);
+      --white: var(--dark-bg);
+      --background: #1E2A3C;
     }
 
     body {
       font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
-      background: var(--background-dark);
-      color: var(--text-primary);
+      background: var(--white);
+      color: var(--text-dark);
       min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      line-height: 1.5;
+      margin: 0;
+      padding: 0;
+      transition: background 0.3s ease, color 0.3s ease;
     }
 
-    .chat-header {
-      background: linear-gradient(135deg, var(--primary-blue), var(--primary-purple));
-      padding: 1.5rem;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+    body.fade-out {
+      opacity: 0;
+    }
+
+    .navbar {
       position: sticky;
       top: 0;
-      z-index: 100;
-    }
-
-    .chat-header h1 {
-      font-size: 1.75rem;
-      font-weight: 600;
-      display: flex;
-      align-items: center;
-      gap: 0.75rem;
-    }
-
-    .chat-header svg {
-      width: 28px;
-      height: 28px;
-    }
-
-    .header-btn {
-      background: var(--surface-dark);
-      color: var(--text-primary);
-      border: 1px solid var(--text-secondary);
-      padding: 0.5rem 1.25rem;
-      border-radius: 20px;
-      cursor: pointer;
-      font-weight: 500;
-      transition: transform 0.2s, background 0.2s;
-    }
-
-    .header-btn:hover {
-      background: var(--primary-blue);
-      transform: scale(1.05);
-    }
-
-    .clear-chats-btn {
-      background: linear-gradient(135deg, var(--error-red), #B71C1C);
-      border: none;
-      color: var(--text-primary);
-    }
-
-    .chat-container {
-      flex: 1;
-      padding: 1.5rem;
-      overflow-y: auto;
-      display: flex;
-      flex-direction: column;
-      gap: 1rem;
-      max-width: 800px;
-      margin: 0 auto;
-    }
-
-    .message {
-      max-width: 75%;
+      left: 0;
+      right: 0;
+      background: var(--white);
+      border-bottom: 1px solid var(--border);
       padding: 0.75rem 1rem;
-      border-radius: 12px;
-      animation: fadeIn 0.3s ease-in;
-      position: relative;
-      word-wrap: break-word;
-    }
-
-    .message.user {
-      background: linear-gradient(135deg, var(--primary-blue), var(--primary-purple));
-      align-self: flex-end;
-    }
-
-    .message.ai {
-      background: var(--surface-dark);
-      align-self: flex-start;
-    }
-
-    .message-timestamp {
-      font-size: 0.75rem;
-      color: var(--text-secondary);
-      margin-top: 0.25rem;
-      text-align: right;
-    }
-
-    .chat-input-area {
-      position: sticky;
-      bottom: 0;
-      background: var(--background-dark);
-      padding: 1rem;
-      border-top: 1px solid var(--text-secondary);
-      max-width: 800px;
-      margin: 0 auto;
-    }
-
-    .chat-input-container {
+      z-index: 1000;
       display: flex;
-      gap: 0.5rem;
+      justify-content: center;
       align-items: center;
-      background: var(--surface-dark);
-      padding: 0.5rem;
-      border-radius: 12px;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
     }
 
-    .chat-input {
-      flex: 1;
-      padding: 0.75rem;
-      border: none;
-      border-radius: 8px;
-      background: transparent;
-      color: var(--text-primary);
-      resize: none;
+    .navbar-links {
+      display: flex;
+      gap: 2rem;
+      align-items: center;
+      max-width: 600px;
+      width: 100%;
+    }
+
+    .navbar-links a, .navbar-links button {
+      color: var(--text-dark);
       font-size: 1rem;
-    }
-
-    .chat-input:focus {
-      outline: none;
-      box-shadow: 0 0 0 2px var(--primary-blue);
-    }
-
-    .send-btn {
-      background: linear-gradient(135deg, var(--primary-blue), var(--primary-purple));
-      border: none;
-      border-radius: 12px;
-      padding: 0.75rem 1.5rem;
-      color: var(--text-primary);
-      cursor: pointer;
       font-weight: 600;
-      transition: transform 0.2s;
+      text-decoration: none;
+      transition: color 0.2s ease;
     }
 
-    .send-btn:hover {
-      transform: scale(1.05);
+    .navbar-links a:hover, .navbar-links button:hover {
+      color: var(--twitter-blue);
     }
 
-    .send-btn:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-      transform: none;
+    .navbar-links a.active {
+      color: var(--twitter-blue);
+      border-bottom: 2px solid var(--twitter-blue);
+    }
+
+    .theme-toggle {
+      background: none;
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+    }
+
+    .theme-toggle svg {
+      width: 24px;
+      height: 24px;
+      fill: none;
+      stroke: var(--text-dark);
+      stroke-width: 2;
     }
 
     .loading-overlay {
       position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0, 0, 0, 0.7);
-      display: none;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
+      display: flex;
+      flex-direction: column;
       align-items: center;
       justify-content: center;
-      z-index: 1000;
+      z-index: 2000;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease;
     }
 
     .loading-overlay.active {
-      display: flex;
+      opacity: 1;
+      pointer-events: auto;
     }
 
     .spinner {
       width: 48px;
       height: 48px;
-      border: 5px solid var(--text-primary);
-      border-top-color: var(--primary-blue);
+      border: 4px solid transparent;
+      border-top-color: var(--twitter-blue);
+      border-right-color: var(--twitter-purple);
       border-radius: 50%;
       animation: spin 1s linear infinite;
     }
 
     @keyframes spin {
-      to { transform: rotate(360deg); }
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
     }
 
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(10px); }
-      to { opacity: 1; transform: translateY(0); }
+    .spinner-text {
+      color: var(--white);
+      font-size: 0.9rem;
+      font-weight: 500;
+      margin-top: 0.5rem;
+    }
+
+    .container {
+      max-width: 600px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 0.75rem 0;
+    }
+
+    .ai-compose {
+      padding: 0.5rem 1rem;
+      border-bottom: 1px solid var(--border);
+      background: var(--white);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      border-radius: 12px;
+      margin-bottom: 1rem;
+    }
+
+    .ai-input-area {
+      max-height: 0;
+      opacity: 0;
+      overflow: hidden;
+      transition: max-height 0.3s ease-out, opacity 0.3s ease-out;
+    }
+
+    .ai-input-area.active {
+      max-height: 200px;
+      opacity: 1;
+    }
+
+    .ai-compose textarea {
+      width: 100%;
+      padding: 0.75rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 1rem;
+      color: var(--text-dark);
+      resize: none;
+      outline: none;
+      transition: border-color 0.2s ease;
+    }
+
+    .ai-compose textarea:focus {
+      border-color: var(--twitter-blue);
+      box-shadow: 0 0 0 2px rgba(29, 161, 242, 0.2);
+    }
+
+    .ai-compose textarea:disabled {
+      background: var(--background);
+      cursor: not-allowed;
+    }
+
+    .ai-btn {
+      width: 100%;
+      padding: 0.5rem 1.5rem;
+      background: linear-gradient(45deg, var(--twitter-blue), var(--twitter-purple));
+      color: var(--white);
+      border: none;
+      border-radius: 20px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .ai-btn:hover {
+      transform: scale(1.02);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    }
+
+    .ai-btn:disabled {
+      background: #66b0ff;
+      cursor: not-allowed;
+    }
+
+    .ai-chat {
+      margin-top: 1rem;
+    }
+
+    .chat-message {
+      width: 100%;
+      margin: 0;
+      padding: 1rem;
+      border-bottom: 1px solid var(--border);
+      background: var(--white);
+      border-radius: 0;
+      box-shadow: none;
+      animation: fadeIn 0.5s ease-out;
+    }
+
+    .chat-message.user {
+      background: rgba(29, 161, 242, 0.05);
+    }
+
+    .chat-message.ai {
+      background: rgba(138, 63, 252, 0.05);
+    }
+
+    .chat-message:focus {
+      outline: 2px solid var(--twitter-blue);
+      outline-offset: 2px;
+    }
+
+    .chat-header {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .chat-avatar {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: var(--text-light);
+      color: var(--white);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1rem;
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+
+    .chat-avatar img {
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      object-fit: cover;
+    }
+
+    .chat-user-info {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+    }
+
+    .chat-username {
+      font-weight: 700;
+      color: var(--text-dark);
+      font-size: 1rem;
+    }
+
+    .chat-timestamp {
+      font-size: 0.8125rem;
+      color: var(--text-light);
+      margin-left: auto;
+    }
+
+    .chat-content {
+      font-size: 1rem;
+      color: var(--text-dark);
+      word-break: break-word;
+      margin: 0.5rem 0;
     }
 
     .custom-alert {
+      display: none;
       position: fixed;
       top: 1rem;
       left: 50%;
       transform: translateX(-50%);
-      background: rgba(255, 0, 0, 0.9);
-      color: var(--text-primary);
-      padding: 0.75rem 1.5rem;
-      border-radius: 8px;
-      display: none;
-      z-index: 1000;
+      background: var(--white);
+      padding: 1rem 2rem;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      z-index: 1001;
+      color: var(--text-dark);
+      font-weight: 500;
+      text-align: center;
       max-width: 90%;
-      font-size: 0.9rem;
+      width: 320px;
+      animation: fadeIn 0.3s ease-out forwards;
+      border: 1px solid var(--border);
     }
 
     .custom-alert.active {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-    }
-
-    .custom-alert.success {
-      background: rgba(76, 175, 80, 0.9);
-    }
-
-    .custom-alert .close-btn {
-      background: none;
-      border: none;
-      color: var(--text-primary);
-      font-size: 1rem;
-      cursor: pointer;
-    }
-
-    .confirm-dialog {
-      position: fixed;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      background: var(--surface-dark);
-      padding: 1.5rem;
-      border-radius: 12px;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
-      display: none;
-      z-index: 2000;
-      max-width: 400px;
-      text-align: center;
-    }
-
-    .confirm-dialog.active {
       display: block;
     }
 
-    .confirm-dialog p {
-      margin-bottom: 1.5rem;
-      font-size: 1rem;
-      color: var(--text-primary);
-    }
-
-    .confirm-dialog button {
-      padding: 0.5rem 1.25rem;
+    .custom-alert .close-btn {
+      position: absolute;
+      top: 0.75rem;
+      right: 0.75rem;
+      width: 24px;
+      height: 24px;
+      background: none;
       border: none;
-      border-radius: 12px;
+      color: #000000;
       cursor: pointer;
-      margin: 0 0.5rem;
-      font-weight: 500;
+      transition: transform 0.2s ease;
     }
 
-    .confirm-dialog .confirm-btn {
-      background: linear-gradient(135deg, var(--error-red), #B71C1C);
-      color: var(--text-primary);
+    .custom-alert .close-btn:hover {
+      transform: scale(1.2);
     }
 
-    .confirm-dialog .cancel-btn {
-      background: var(--text-secondary);
-      color: var(--text-primary);
+    .custom-alert .close-btn svg {
+      width: 100%;
+      height: 100%;
+      fill: none;
+      stroke: #000000;
+      stroke-width: 2;
     }
 
-    .no-content-prompt {
-      text-align: center;
-      padding: 2rem;
-      color: var(--text-secondary);
-      font-size: 1rem;
-    }
-
-    .no-content-prompt a {
-      color: var(--primary-blue);
-      text-decoration: none;
-      font-weight: 600;
-    }
-
-    .no-content-prompt a:hover {
-      text-decoration: underline;
+    @keyframes fadeIn {
+      0% { opacity: 0; transform: translateX(-50%) translateY(-10px); }
+      100% { opacity: 1; transform: translateX(-50%) translateY(0); }
     }
 
     @media (max-width: 640px) {
-      .chat-header h1 {
-        font-size: 1.5rem;
+      .navbar-links {
+        gap: 1rem;
+        justify-content: space-between;
       }
 
-      .chat-header svg {
-        width: 24px;
-        height: 24px;
+      .navbar-links a, .navbar-links button {
+        font-size: 0.9rem;
       }
 
-      .message {
-        max-width: 85%;
+      .container {
+        padding: 0;
       }
 
-      .chat-input-container {
-        flex-direction: column;
-        gap: 0.75rem;
+      .ai-compose {
+        padding: 0.5rem 0.75rem;
+        border-radius: 0;
       }
 
-      .send-btn {
-        width: 100%;
+      .ai-compose textarea {
+        font-size: 0.95rem;
+      }
+
+      .ai-btn {
+        font-size: 0.95rem;
+      }
+
+      .chat-message {
         padding: 0.75rem;
+      }
+
+      .chat-avatar {
+        width: 36px;
+        height: 36px;
+      }
+
+      .chat-username {
+        font-size: 0.9375rem;
+      }
+
+      .chat-timestamp {
+        font-size: 0.75rem;
+      }
+
+      .chat-content {
+        font-size: 0.9375rem;
+      }
+
+      .ai-input-area.active {
+        max-height: 300px;
       }
     }
   </style>
 </head>
 <body>
-  <div class="chat-header">
-    <h1>
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <defs>
-          <linearGradient id="vynix-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" style="stop-color: var(--primary-blue);" />
-            <stop offset="100%" style="stop-color: var(--primary-purple);" />
-          </linearGradient>
-        </defs>
-        <path d="M5 18 C7 10, 12 6, 12 6 C12 6, 17 10, 19 18" fill="url(#vynix-gradient)" stroke="var(--text-primary)" stroke-width="0.5" stroke-linecap="round" stroke-linejoin="round" />
-      </svg>
-      Vynix AI
-    </h1>
-    <div>
-      <button class="header-btn clear-chats-btn" id="clear-chats-btn" aria-label="Clear chat history">Clear Chats</button>
-      <button class="header-btn sign-in-btn" id="sign-in-btn" aria-label="Sign in or out">Sign In</button>
+  <nav class="navbar">
+    <div class="navbar-links">
+      <a href="home.html">Home</a>
+      <a href="friends.html">Friends</a>
+      <a href="profile.html">Profile</a>
+      <a href="ai.html" class="active">AI</a>
+      <button class="logout-btn" aria-label="Log out">Logout</button>
+      <button class="theme-toggle" aria-label="Toggle dark mode">
+        <svg viewBox="0 0 24 24">
+          <path d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
+        </svg>
+      </button>
     </div>
-  </div>
-  <div class="chat-container" id="chat-container"></div>
-  <div class="chat-input-area">
-    <div class="chat-input-container">
-      <textarea class="chat-input" id="chat-input" placeholder="Ask Vynix AI something..." aria-label="Chat input"></textarea>
-      <button class="send-btn" id="send-btn" disabled aria-label="Send message">Send</button>
+  </nav>
+  <div class="container">
+    <div class="custom-alert" id="alert">
+      <span id="alert-message"></span>
+      <button class="close-btn" aria-label="Close alert">
+        <svg viewBox="0 0 24 24">
+          <path d="M6 18L18 6M6 6l12 12"/>
+        </svg>
+      </button>
     </div>
-  </div>
-  <div class="loading-overlay" id="loading-overlay">
-    <div class="spinner" aria-label="Loading"></div>
-  </div>
-  <div class="custom-alert" id="alert">
-    <span id="alert-message"></span>
-    <button class="close-btn" aria-label="Close alert">✕</button>
-  </div>
-  <div class="confirm-dialog" id="confirm-clear-dialog">
-    <p>Are you sure you want to delete all your chats with Vynix AI? This action cannot be undone.</p>
-    <button class="confirm-btn" id="confirm-clear-btn" aria-label="Confirm clear chats">Confirm</button>
-    <button class="cancel-btn" id="cancel-clear-btn" aria-label="Cancel clear chats">Cancel</button>
+    <div class="loading-overlay" id="loading-overlay">
+      <div class="spinner"></div>
+      <span class="spinner-text">Loading...</span>
+    </div>
+    <div class="ai-compose">
+      <button class="ai-btn" id="ai-btn" disabled aria-label="Ask AI">Ask AI</button>
+      <div class="ai-input-area" id="ai-input-area">
+        <textarea id="ai-input" rows="3" placeholder="Ask Vynix anything..." aria-label="Compose AI prompt"></textarea>
+      </div>
+    </div>
+    <div class="ai-chat" id="ai-chat"></div>
   </div>
 
   <script type="module">
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
     import { getAuth, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
-    import { getDatabase, ref, push, onValue, get, remove } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js';
-    import { pipeline } from 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@2.17.0/dist/transformers.min.js';
+    import { getDatabase, ref, push, get } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js';
 
     const firebaseConfig = {
       apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
       authDomain: "fire-b-a8878.firebaseapp.com",
-      databaseURL: "https://fire-b-a8878-default-rtdb.firebaseio.com",
+      databaseURL: "https://fire-b-a8878.firebaseio.com",
       projectId: "fire-b-a8878",
       storageBucket: "fire-b-a8878.firebasestorage.app",
       messagingSenderId: "658673187627",
@@ -388,28 +456,60 @@
     const auth = getAuth(app);
     const db = getDatabase(app);
 
-    const chatContainer = document.getElementById("chat-container");
-    const chatInput = document.getElementById("chat-input");
-    const sendBtn = document.getElementById("send-btn");
-    const loadingOverlay = document.getElementById("loading-overlay");
+    const aiInput = document.getElementById("ai-input");
+    const aiBtn = document.getElementById("ai-btn");
+    const aiInputArea = document.getElementById("ai-input-area");
+    const aiChat = document.getElementById("ai-chat");
     const alert = document.getElementById("alert");
     const alertMessage = document.getElementById("alert-message");
-    const signInBtn = document.getElementById("sign-in-btn");
-    const clearChatsBtn = document.getElementById("clear-chats-btn");
-    const confirmClearDialog = document.getElementById("confirm-clear-dialog");
-    const confirmClearBtn = document.getElementById("confirm-clear-btn");
-    const cancelClearBtn = document.getElementById("cancel-clear-btn");
-
+    const loadingOverlay = document.getElementById("loading-overlay");
     let currentUser = null;
-    let sentimentAnalyzer = null;
-    let tokenizer = {};
-    let bigrams = {};
-    let isModelInitialized = false;
-    let chatHistory = [];
+    let isInputAreaVisible = false;
+
+    // Hugging Face API configuration
+    const HUGGING_FACE_API_URL = "https://api-inference.huggingface.co/models/mixtral-8x7b-instruct-v0.1";
+    const HUGGING_FACE_API_TOKEN = "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"; // Replace with your Hugging Face API token
+
+    async function fetchAIResponse(prompt) {
+      try {
+        const response = await fetch(HUGGING_FACE_API_URL, {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${HUGGING_FACE_API_TOKEN}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            inputs: `<s>[INST] You are Vynix, a helpful AI assistant for BanterBox. Provide concise, accurate, and conversational responses to the user's prompt. Keep responses under 150 words and maintain a friendly tone. Prompt: ${prompt} [/INST]`,
+            parameters: {
+              max_new_tokens: 150,
+              temperature: 0.7,
+              top_p: 0.9,
+              do_sample: true
+            }
+          })
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! Status: ${response.status}`);
+        }
+
+        const data = await response.json();
+        if (data && data[0] && data[0].generated_text) {
+          // Extract the response after the instruction prompt
+          const generatedText = data[0].generated_text;
+          const responseText = generatedText.split("[/INST]")[1]?.trim() || generatedText;
+          return responseText;
+        } else {
+          throw new Error("Invalid response from Hugging Face API");
+        }
+      } catch (error) {
+        console.error("Error fetching AI response:", error);
+        throw new Error("Failed to get response from Vynix. Please try again.");
+      }
+    }
 
     function showLoading() {
       loadingOverlay.classList.add("active");
-      setTimeout(() => hideLoading(), 10000); // Prevent stuck loading
     }
 
     function hideLoading() {
@@ -418,359 +518,178 @@
 
     function showAlert(message, isSuccess) {
       alertMessage.textContent = message;
-      alert.classList.remove("success");
-      if (isSuccess) alert.classList.add("success");
+      alert.style.background = isSuccess ? "rgba(29, 161, 242, 0.1)" : "rgba(255, 0, 0, 0.1)";
       alert.classList.add("active");
       setTimeout(() => alert.classList.remove("active"), 3000);
     }
 
-    function showConfirmDialog() {
-      confirmClearDialog.classList.add("active");
-    }
-
-    function hideConfirmDialog() {
-      confirmClearDialog.classList.remove("active");
-    }
-
     function formatTimestamp(timestamp) {
-      const date = new Date(timestamp);
-      return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      const now = Date.now();
+      const diff = now - timestamp;
+      const seconds = Math.floor(diff / 1000);
+      const minutes = Math.floor(seconds / 60);
+      const hours = Math.floor(minutes / 60);
+      const days = Math.floor(hours / 24);
+      if (days > 0) return `${days}d`;
+      if (hours > 0) return `${hours}h`;
+      if (minutes > 0) return `${minutes}m`;
+      return `${seconds}s`;
     }
 
-    function renderMessage(message, isUser) {
+    function toggleDarkMode() {
+      const theme = document.body.dataset.theme === "dark" ? "light" : "dark";
+      document.body.dataset.theme = theme;
+      localStorage.setItem("theme", theme);
+    }
+
+    function getAvatarInitials(username) {
+      return username ? username.charAt(0).toUpperCase() : "V";
+    }
+
+    function renderMessage(messageData, isUser, userData = null) {
       const messageDiv = document.createElement("div");
-      messageDiv.className = `message ${isUser ? "user" : "ai"}`;
+      messageDiv.className = `chat-message ${isUser ? "user" : "ai"}`;
+      messageDiv.tabIndex = 0;
+      const username = isUser ? (userData?.username || "Anonymous") : "Vynix";
+      const profilePicture = isUser ? userData?.profilePicture : null;
       messageDiv.innerHTML = `
-        <div>${message.text}</div>
-        <div class="message-timestamp">${formatTimestamp(message.createdAt)}</div>
-      `;
-      chatContainer.appendChild(messageDiv);
-      chatContainer.scrollTop = chatContainer.scrollHeight;
-    }
-
-    function showNoContentPrompt() {
-      chatContainer.innerHTML = `
-        <div class="no-content-prompt">
-          I'm just getting to know the BanterBox vibe! Keep chatting or <a href="home.html">share something on BanterBox</a> to spark some fun ideas!
+        <div class="chat-header">
+          <div class="chat-avatar">${profilePicture ? `<img src="${profilePicture}" alt="${username}'s profile picture" />` : getAvatarInitials(username)}</div>
+          <div class="chat-user-info">
+            <span class="chat-username">${username}</span>
+            <span class="chat-timestamp">${formatTimestamp(messageData.createdAt)}</span>
+          </div>
         </div>
+        <div class="chat-content">${messageData.text}</div>
       `;
+      aiChat.prepend(messageDiv);
     }
 
-    async function fetchContent() {
-      try {
-        const allContent = [];
-        const tweetsRef = ref(db, "tweets");
-        const tweetsSnapshot = await get(tweetsRef);
-        const tweets = tweetsSnapshot.val() || {};
-        console.log("Fetching community content from tweets...");
-        Object.entries(tweets).forEach(([tweetId, tweet]) => {
-          if (tweet.text && tweet.text.trim()) {
-            allContent.push({ type: "post", content: tweet.text, createdAt: tweet.createdAt });
-            console.log(`Found post [${tweetId}]: ${tweet.text}`);
-          }
-          if (tweet.comments) {
-            Object.entries(tweet.comments).forEach(([commentId, comment]) => {
-              if (comment.text && comment.text.trim()) {
-                allContent.push({ type: "comment", content: comment.text, createdAt: comment.createdAt });
-                console.log(`Found comment [${commentId}]: ${comment.text}`);
-              }
+    function toggleInputArea() {
+      if (isInputAreaVisible) {
+        aiInputArea.classList.remove("active");
+        aiInput.value = "";
+        aiBtn.textContent = "Ask AI";
+        aiBtn.disabled = currentUser && currentUser.isGuest;
+        isInputAreaVisible = false;
+      } else {
+        aiInputArea.classList.add("active");
+        aiBtn.textContent = "Send";
+        aiBtn.disabled = aiInput.value.trim() === "";
+        isInputAreaVisible = true;
+        aiInput.focus();
+      }
+    }
+
+    onAuthStateChanged(auth, (user) => {
+      if (!user) {
+        document.body.classList.add("fade-out");
+        setTimeout(() => {
+          window.location.href = "signup.html";
+        }, 1500);
+        return;
+      }
+
+      currentUser = user;
+      showLoading();
+      const userRef = ref(db, `users/${user.uid}`);
+      get(userRef).then((snapshot) => {
+        const userData = snapshot.val();
+        const isGuest = userData && userData.isGuest;
+        user.isGuest = isGuest;
+        aiInput.disabled = isGuest;
+        aiBtn.disabled = isGuest;
+        aiInput.placeholder = isGuest ? "Guests cannot interact with AI." : "Ask Vynix anything...";
+
+        // Load chat history
+        const chatRef = ref(db, `users/${user.uid}/ai_chat`);
+        get(chatRef).then((snapshot) => {
+          aiChat.innerHTML = "";
+          const messages = snapshot.val();
+          if (messages) {
+            Object.values(messages).sort((a, b) => a.createdAt - b.createdAt).forEach((message) => {
+              renderMessage(message, message.isUser, userData);
             });
           }
+          hideLoading();
+        }).catch(() => {
+          showAlert("Failed to load chat history. Please try again.", false);
+          hideLoading();
         });
-
-        const sortedContent = allContent
-          .sort((a, b) => b.createdAt - a.createdAt)
-          .map(item => item.content)
-          .filter(text => text && text.trim());
-
-        console.log(`Processed content (${sortedContent.length} items):`, sortedContent);
-        return sortedContent;
-      } catch (error) {
-        console.error("Error fetching content:", error);
-        showAlert("Something went wrong fetching content. Let's keep chatting!", false);
-        return [];
-      }
-    }
-
-    function createTokenizerAndBigrams(texts) {
-      tokenizer = {};
-      bigrams = {};
-      const wordCounts = {};
-
-      texts.forEach(text => {
-        const words = text.toLowerCase().split(/\s+/).filter(word => word.length > 0);
-        words.forEach(word => {
-          wordCounts[word] = (wordCounts[word] || 0) + 1;
-        });
-        for (let i = 0; i < words.length - 1; i++) {
-          const bigram = `${words[i]} ${words[i + 1]}`;
-          bigrams[bigram] = (bigrams[bigram] || 0) + 1;
-        }
-      });
-
-      const sortedWords = Object.keys(wordCounts)
-        .sort((a, b) => wordCounts[b] - wordCounts[a])
-        .slice(0, 1000);
-      sortedWords.forEach((word, index) => {
-        tokenizer[word] = index + 1;
-      });
-
-      console.log("Tokenizer created with vocabulary size:", Object.keys(tokenizer).length);
-      console.log("Bigrams created with count:", Object.keys(bigrams).length);
-    }
-
-    async function initializeAI() {
-      showLoading();
-      try {
-        if (!window.WebAssembly) {
-          throw new Error("WebAssembly is not supported in this browser.");
-        }
-        console.log("Attempting to initialize sentiment analyzer...");
-        const modelPromise = pipeline('sentiment-analysis', 'distilbert-base-uncased-finetuned-sst-2-english');
-        const timeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error("Model loading timed out")), 30000)
-        );
-        sentimentAnalyzer = await Promise.race([modelPromise, timeoutPromise]);
-        isModelInitialized = true;
-        console.log("Sentiment analyzer initialized successfully.");
-
-        const allContent = await fetchContent();
-        if (allContent.length > 0) {
-          createTokenizerAndBigrams(allContent);
-        } else {
-          createTokenizerAndBigrams(["welcome to vynix ai"]);
-          showNoContentPrompt();
-        }
-      } catch (error) {
-        console.error("Error initializing AI:", error.message, error.stack);
-        showAlert("Failed to load AI model: " + error.message + ". Using fallback responses.", false);
-        isModelInitialized = false;
-        createTokenizerAndBigrams(["welcome to vynix ai"]);
-        showNoContentPrompt();
-      } finally {
+      }).catch(() => {
+        showAlert("Failed to load user data. Please try again.", false);
         hideLoading();
-      }
-    }
+      });
+    });
 
-    async function predictSentiment(text) {
-      if (!sentimentAnalyzer || !isModelInitialized) {
-        console.log("No sentiment analyzer available. Using neutral fallback.");
-        return 0.5;
-      }
-      try {
-        const result = await sentimentAnalyzer(text);
-        const score = result[0].label === 'POSITIVE' ? result[0].score : 1 - result[0].score;
-        console.log(`Sentiment prediction for "${text}": label=${result[0].label}, score=${score.toFixed(2)}`);
-        return score;
-      } catch (error) {
-        console.error("Error predicting sentiment:", error);
-        return 0.5;
-      }
-    }
+    aiInput.addEventListener("input", () => {
+      aiBtn.disabled = aiInput.value.trim() === "";
+    });
 
-    function getBigramsBySentiment(sentimentScore, userInput) {
-      const inputWords = userInput.toLowerCase().split(/\s+/).filter(word => word.length > 0);
-      const relevantBigrams = Object.keys(bigrams).filter(bigram => 
-        inputWords.some(word => bigram.includes(word)) || bigrams[bigram] > 1
-      );
-
-      const positiveBigrams = ["love gaming", "epic moment", "dope game", "awesome vibe"];
-      const cautiousBigrams = ["feeling down", "tough day", "bit stressed"];
-      const neutralBigrams = ["pretty cool", "nice work", "good stuff"];
-
-      let toneBigrams = neutralBigrams;
-      if (sentimentScore > 0.7) {
-        toneBigrams = positiveBigrams;
-      } else if (sentimentScore < 0.3) {
-        toneBigrams = cautiousBigrams;
-      }
-
-      const filteredBigrams = relevantBigrams.filter(bigram => 
-        toneBigrams.includes(bigram) || bigrams[bigram] > 2
-      );
-      return filteredBigrams.length > 0 ? filteredBigrams : toneBigrams;
-    }
-
-    function generateText(sentimentScore, userInput, context) {
-      const bigramsToUse = getBigramsBySentiment(sentimentScore, userInput);
-      const inputWords = userInput.toLowerCase().split(/\s+/).filter(word => word.length > 0);
-      const mainTopic = inputWords[0] || "it";
-
-      const fallbackResponses = [
-        `Hey, ${mainTopic} sounds interesting! Tell me more about it!`,
-        `${context}What's the deal with ${mainTopic}? Spill the beans!`,
-        `Cool, ${mainTopic}! What's the vibe you're going for?`
-      ];
-
-      if (!isModelInitialized) {
-        return fallbackResponses[Math.floor(Math.random() * fallbackResponses.length)];
-      }
-
-      const selectedBigram = bigramsToUse[Math.floor(Math.random() * bigramsToUse.length)];
-      const [firstWord, secondWord] = selectedBigram.split(" ");
-
-      const tone = sentimentScore > 0.7 ? "positive" : sentimentScore < 0.3 ? "cautious" : "neutral";
-      const templates = {
-        positive: [
-          `${context}${firstWord.charAt(0).toUpperCase() + firstWord.slice(1)} ${secondWord} with ${mainTopic}! What's got you so hyped?`,
-          `${context}Yo, ${mainTopic} is ${selectedBigram}! Tell me about your favorite moment!`
-        ],
-        neutral: [
-          `${context}${mainTopic} feels ${selectedBigram}. What's up with that?`,
-          `${context}Hey, ${selectedBigram} around ${mainTopic}! What's the vibe?`
-        ],
-        cautious: [
-          `${context}Seems like ${mainTopic} is a bit ${selectedBigram}. Wanna share more?`,
-          `${context}${firstWord.charAt(0).toUpperCase() + firstWord.slice(1)} ${secondWord} about ${mainTopic}? What's going on?`
-        ]
-      };
-
-      return templates[tone][Math.floor(Math.random() * templates[tone].length)];
-    }
-
-    async function generateResponse(userInput, sentimentScore) {
-      const relevantHistory = chatHistory
-        .filter(msg => msg.isUser && msg.text.toLowerCase().includes(userInput.toLowerCase().split(/\s+/)[0]))
-        .slice(-2);
-      let context = "";
-      if (relevantHistory.length > 0) {
-        context = `I remember you mentioned "${relevantHistory[relevantHistory.length - 1].text}". `;
-      }
-
-      return generateText(sentimentScore, userInput, context);
-    }
-
-    async function clearChats(userId) {
-      try {
-        const chatRef = ref(db, `chats/${userId}`);
-        await remove(chatRef);
-        console.log(`Chats cleared for user: ${userId}`);
-        chatContainer.innerHTML = "";
-        chatHistory = [];
-        showAlert("Chat history cleared!", true);
-      } catch (error) {
-        console.error("Error clearing chats:", error);
-        showAlert("Something went wrong clearing chats. Try again?", false);
-      }
-    }
-
-    async function handleChat(userInput) {
-      if (!currentUser) {
-        showAlert("Please sign in to chat with me!", false);
+    aiBtn.addEventListener("click", async () => {
+      if (currentUser && currentUser.isGuest) {
+        showAlert("Guests cannot interact with AI.", false);
         return;
       }
 
-      const userMessage = {
-        text: userInput,
-        isUser: true,
-        createdAt: Date.now()
-      };
-
-      await push(ref(db, `chats/${currentUser.uid}`), userMessage);
-      chatHistory.push(userMessage);
-      const sentiment = await predictSentiment(userInput);
-      const aiResponse = await generateResponse(userInput, sentiment);
-      const aiMessage = {
-        text: aiResponse,
-        isUser: false,
-        createdAt: Date.now()
-      };
-      await push(ref(db, `chats/${currentUser.uid}`), aiMessage);
-      chatHistory.push(aiMessage);
-    }
-
-    function loadChatHistory(userId) {
-      const chatRef = ref(db, `chats/${userId}`);
-      onValue(chatRef, (snapshot) => {
-        chatContainer.innerHTML = "";
-        const messages = snapshot.val();
-        chatHistory = messages ? Object.values(messages) : [];
-        if (messages) {
-          Object.values(messages).forEach(message => {
-            renderMessage(message, message.isUser);
-          });
-        } else if (!isModelInitialized) {
-          showNoContentPrompt();
-        }
-      });
-    }
-
-    chatInput.addEventListener("input", () => {
-      sendBtn.disabled = chatInput.value.trim() === "" || !currentUser;
-    });
-
-    chatInput.addEventListener("keydown", (event) => {
-      if (event.key === "Enter" && !event.shiftKey && !sendBtn.disabled) {
-        event.preventDefault();
-        sendBtn.click();
+      if (!isInputAreaVisible) {
+        toggleInputArea();
+        return;
       }
-    });
 
-    sendBtn.addEventListener("click", async () => {
-      const userInput = chatInput.value.trim();
-      if (!userInput) return;
-
-      showLoading();
-      try {
-        await handleChat(userInput);
-        chatInput.value = "";
-        sendBtn.disabled = true;
-      } catch (error) {
-        console.error("Error processing chat:", error);
-        showAlert("Something went wrong. Try chatting again?", false);
-      } finally {
-        hideLoading();
-      }
-    });
-
-    signInBtn.addEventListener("click", () => {
-      if (currentUser) {
+      if (aiInput.value.trim()) {
         showLoading();
-        signOut(auth).finally(() => hideLoading());
+        try {
+          const userRef = ref(db, `users/${auth.currentUser.uid}`);
+          const userSnapshot = await get(userRef);
+          const userData = userSnapshot.val();
+
+          const userMessage = {
+            text: aiInput.value,
+            createdAt: Date.now(),
+            isUser: true
+          };
+          await push(ref(db, `users/${auth.currentUser.uid}/ai_chat`), userMessage);
+          renderMessage(userMessage, true, userData);
+
+          const aiResponseText = await fetchAIResponse(aiInput.value);
+          const aiMessage = {
+            text: aiResponseText,
+            createdAt: Date.now(),
+            isUser: false
+          };
+          await push(ref(db, `users/${auth.currentUser.uid}/ai_chat`), aiMessage);
+          renderMessage(aiMessage, false);
+
+          aiInput.value = "";
+          aiInputArea.classList.remove("active");
+          aiBtn.textContent = "Ask AI";
+          aiBtn.disabled = false;
+          isInputAreaVisible = false;
+          showAlert("Message sent to Vynix!", true);
+        } catch (error) {
+          showAlert(`Failed to send message: ${error.message}`, false);
+        } finally {
+          hideLoading();
+        }
       } else {
-        window.location.href = "signup.html";
+        toggleInputArea();
       }
     });
 
-    clearChatsBtn.addEventListener("click", () => {
-      if (!currentUser) {
-        showAlert("Please sign in to clear chats.", false);
-        return;
-      }
-      showConfirmDialog();
-    });
-
-    confirmClearBtn.addEventListener("click", async () => {
+    document.querySelector(".logout-btn").addEventListener("click", () => {
       showLoading();
-      hideConfirmDialog();
-      await clearChats(currentUser.uid);
-      hideLoading();
-    });
-
-    cancelClearBtn.addEventListener("click", () => {
-      hideConfirmDialog();
-    });
-
-    onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        currentUser = user;
-        signInBtn.textContent = "Sign Out";
-        clearChatsBtn.style.display = "inline-block";
-        await initializeAI();
-        loadChatHistory(user.uid);
-        sendBtn.disabled = chatInput.value.trim() === "";
-      } else {
-        currentUser = null;
-        signInBtn.textContent = "Sign In";
-        clearChatsBtn.style.display = "none";
-        chatContainer.innerHTML = "<p>Please sign in to chat with me!</p>";
-        sendBtn.disabled = true;
-      }
+      signOut(auth).finally(() => hideLoading());
     });
 
     document.querySelector(".custom-alert .close-btn").addEventListener("click", () => {
       alert.classList.remove("active");
     });
+
+    document.querySelector(".theme-toggle").addEventListener("click", toggleDarkMode);
+
+    const savedTheme = localStorage.getItem("theme") || "light";
+    document.body.dataset.theme = savedTheme;
   </script>
 </body>
 </html>
