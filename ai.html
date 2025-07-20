@@ -21,6 +21,7 @@
       --dark-text: #E2E8F0;
       --input-bg-light: linear-gradient(180deg, #FFFFFF 0%, #F1F5F9 100%);
       --input-bg-dark: linear-gradient(180deg, #2D3748 0%, #1A202C 100%);
+      --modal-bg: linear-gradient(135deg, var(--banter-blue) 0%, var(--banter-purple) 100%);
     }
 
     [data-theme="dark"] {
@@ -28,6 +29,7 @@
       --border: var(--dark-border);
       --white: var(--dark-bg);
       --background: #2D3748;
+      --modal-bg: linear-gradient(135deg, #4da8f7 0%, #a675fc 100%);
     }
 
     body {
@@ -364,14 +366,79 @@
       stroke-width: 2;
     }
 
+    .modal {
+      display: none;
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: var(--modal-bg);
+      padding: 1.5rem;
+      border-radius: 12px;
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+      z-index: 1002;
+      color: var(--white);
+      font-weight: 500;
+      text-align: center;
+      max-width: 90%;
+      width: 360px;
+      animation: fadeIn 0.3s ease-out forwards;
+    }
+
+    .modal.active {
+      display: block;
+    }
+
+    .modal p {
+      margin: 0 0 1.5rem;
+      font-size: 1.1rem;
+      line-height: 1.5;
+    }
+
+    .modal-buttons {
+      display: flex;
+      justify-content: center;
+      gap: 1rem;
+    }
+
+    .modal-btn {
+      padding: 0.75rem 1.5rem;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .modal-btn.confirm {
+      background: var(--banter-accent);
+      color: var(--white);
+    }
+
+    .modal-btn.cancel {
+      background: var(--white);
+      color: var(--text-dark);
+    }
+
+    .modal-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    }
+
+    .modal-btn:focus {
+      outline: none;
+      box-shadow: 0 0 8px rgba(29, 161, 242, 0.3);
+    }
+
     @keyframes slideIn {
       from { opacity: 0; transform: translateY(15px); }
       to { opacity: 1; transform: translateY(0); }
     }
 
     @keyframes fadeIn {
-      from { opacity: 0; transform: translateX(-50%) translateY(-10px); }
-      to { opacity: 1; transform: translateX(-50%) translateY(0); }
+      from { opacity: 0; transform: translate(-50%, -60%); }
+      to { opacity: 1; transform: translate(-50%, -50%); }
     }
 
     @media (max-width: 640px) {
@@ -430,13 +497,27 @@
         font-size: 0.85rem;
         padding: 0.4rem 0.8rem;
       }
+
+      .modal {
+        width: 300px;
+        padding: 1rem;
+      }
+
+      .modal p {
+        font-size: 1rem;
+      }
+
+      .modal-btn {
+        padding: 0.5rem 1rem;
+        font-size: 0.9rem;
+      }
     }
   </style>
 </head>
 <body>
   <div class="container">
     <div class="top-buttons">
-      <button class="delete-chat-btn" aria-label="Delete chat history" onclick="deleteChat()">
+      <button class="delete-chat-btn" aria-label="Delete chat history" onclick="showDeleteModal()">
         <svg viewBox="0 0 24 24">
           <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
         </svg>
@@ -454,6 +535,13 @@
           <path d="M6 18L18 6M6 6l12 12"/>
         </svg>
       </button>
+    </div>
+    <div class="modal" id="delete-confirm">
+      <p>Are you sure you want to delete your chat history? This cannot be undone.</p>
+      <div class="modal-buttons">
+        <button class="modal-btn confirm" onclick="confirmDelete()">Yes</button>
+        <button class="modal-btn cancel" onclick="cancelDelete()">No</button>
+      </div>
     </div>
     <div class="loading-overlay" id="loading-overlay">
       <div class="spinner"></div>
@@ -503,6 +591,7 @@
     const alertMessage = document.getElementById("alert-message");
     const loadingOverlay = document.getElementById("loading-overlay");
     const deleteChatBtn = document.querySelector(".delete-chat-btn");
+    const deleteConfirmModal = document.getElementById("delete-confirm");
     let currentUser = null;
 
     // LSTM model parameters
@@ -533,6 +622,83 @@
     function scrollToBottom() {
       console.log("Scrolling to bottom of ai-chat");
       aiChat.scrollTo({ top: aiChat.scrollHeight, behavior: 'smooth' });
+    }
+
+    // Show custom delete confirmation modal
+    function showDeleteModal() {
+      console.log("Showing delete confirmation modal");
+      deleteConfirmModal.classList.add("active");
+    }
+
+    // Hide custom delete confirmation modal
+    function hideDeleteModal() {
+      console.log("Hiding delete confirmation modal");
+      deleteConfirmModal.classList.remove("active");
+    }
+
+    // Confirm deletion
+    async function confirmDelete() {
+      console.log("Delete confirmed");
+      hideDeleteModal();
+      await performDelete();
+    }
+
+    // Cancel deletion
+    function cancelDelete() {
+      console.log("Delete cancelled");
+      hideDeleteModal();
+      showAlert("Chat deletion cancelled.", false);
+    }
+
+    // Perform chat deletion
+    async function performDelete() {
+      if (!currentUser) {
+        showAlert("Please sign in to delete chat history.", false);
+        console.log("Delete attempt blocked: No authenticated user");
+        return;
+      }
+      if (currentUser.isGuest) {
+        showAlert("Guests can't delete chat history.", false);
+        console.log("Delete attempt blocked: User is guest");
+        return;
+      }
+
+      showLoading();
+      try {
+        const chatRef = ref(db, `users/${currentUser.uid}/ai_chat`);
+        console.log("Checking chat history at:", chatRef.toString());
+        const snapshot = await get(chatRef);
+        if (!snapshot.exists()) {
+          console.log("No chat history found in Firebase");
+          showAlert("No chat history to delete.", false);
+          aiChat.innerHTML = "";
+          chatHistory = [];
+          if (model) {
+            model.dispose();
+            model = createModel();
+            await trainModel(initialCorpus);
+          }
+          hideLoading();
+          return;
+        }
+
+        console.log("Deleting chat history from Firebase at:", chatRef.toString());
+        await set(chatRef, null); // Clear chat history in Firebase
+        aiChat.innerHTML = ""; // Clear UI
+        chatHistory = []; // Clear local chat history
+        if (model) {
+          model.dispose(); // Dispose existing model
+        }
+        model = createModel(); // Reset model
+        await trainModel(initialCorpus); // Retrain with initial corpus
+        showAlert("Chat history deleted!", true);
+        console.log("Chat history deleted successfully from Firebase");
+      } catch (error) {
+        console.error("Error deleting chat history from Firebase:", error);
+        showAlert(`Failed to delete chat history: ${error.message}`, false);
+      } finally {
+        hideLoading();
+      }
     }
 
     // Create LSTM model
@@ -690,64 +856,6 @@
         console.error("Error initializing model:", error);
         showAlert(`Failed to initialize Vynix: ${error.message}`, false);
         await trainModel(initialCorpus);
-      } finally {
-        hideLoading();
-      }
-    }
-
-    // Delete chat history from Firebase
-    async function deleteChat() {
-      console.log("deleteChat triggered");
-      if (!currentUser) {
-        showAlert("Please sign in to delete chat history.", false);
-        console.log("Delete attempt blocked: No authenticated user");
-        return;
-      }
-      if (currentUser.isGuest) {
-        showAlert("Guests can't delete chat history.", false);
-        console.log("Delete attempt blocked: User is guest");
-        return;
-      }
-
-      if (!confirm("Are you sure you want to delete your chat history? This cannot be undone.")) {
-        console.log("Chat deletion cancelled by user");
-        showAlert("Chat deletion cancelled.", false);
-        return;
-      }
-
-      showLoading();
-      try {
-        const chatRef = ref(db, `users/${currentUser.uid}/ai_chat`);
-        console.log("Checking chat history at:", chatRef.toString());
-        const snapshot = await get(chatRef);
-        if (!snapshot.exists()) {
-          console.log("No chat history found in Firebase");
-          showAlert("No chat history to delete.", false);
-          aiChat.innerHTML = "";
-          chatHistory = [];
-          if (model) {
-            model.dispose();
-            model = createModel();
-            await trainModel(initialCorpus);
-          }
-          hideLoading();
-          return;
-        }
-
-        console.log("Deleting chat history from Firebase at:", chatRef.toString());
-        await set(chatRef, null); // Clear chat history in Firebase
-        aiChat.innerHTML = ""; // Clear UI
-        chatHistory = []; // Clear local chat history
-        if (model) {
-          model.dispose(); // Dispose existing model
-        }
-        model = createModel(); // Reset model
-        await trainModel(initialCorpus); // Retrain with initial corpus
-        showAlert("Chat history deleted!", true);
-        console.log("Chat history deleted successfully from Firebase");
-      } catch (error) {
-        console.error("Error deleting chat history from Firebase:", error);
-        showAlert(`Failed to delete chat history: ${error.message}`, false);
       } finally {
         hideLoading();
       }
@@ -945,7 +1053,7 @@
     // Debug delete button click
     deleteChatBtn.addEventListener("click", () => {
       console.log("Delete chat button clicked");
-      deleteChat();
+      showDeleteModal();
     });
   </script>
 </body>
