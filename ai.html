@@ -502,13 +502,17 @@
     const loadingOverlay = document.getElementById("loading-overlay");
     let currentUser = null;
 
-    // Bigram model state
-    let bigramModel = {};
-    let vocabulary = new Set();
-    let wordToIndex = {};
-    let indexToWord = {};
+    // LSTM model parameters
+    let model = null;
+    const vocab = "abcdefghijklmnopqrstuvwxyz .,!?";
+    const vocabSize = vocab.length;
+    const charToIndex = Object.fromEntries([...vocab].map((char, i) => [char, i]));
+    const indexToChar = Object.fromEntries([...vocab].map((char, i) => [i, char]));
+    const sequenceLength = 40;
+    const hiddenSize = 128;
+    let chatHistory = [];
 
-    // Expanded initial corpus for better response variety
+    // Initial corpus for pre-training
     const initialCorpus = [
       "Hey there! I'm Vynix, your go-to AI for witty banter and spicy answers!",
       "What's the vibe today? Ask me something fun, and I'll keep it lively!",
@@ -522,71 +526,131 @@
       "Ask me anything, and I’ll make sure it’s a conversation worth screenshotting!"
     ];
 
-    // Tokenize text into words
-    function tokenize(text) {
-      return text.toLowerCase().replace(/[^\w\s]/g, '').split(/\s+/).filter(word => word.length > 0);
+    // Create LSTM model
+    function createModel() {
+      const model = tf.sequential();
+      model.add(tf.layers.lstm({
+        units: hiddenSize,
+        inputShape: [sequenceLength, vocabSize],
+        returnSequences: false
+      }));
+      model.add(tf.layers.dense({ units: vocabSize, activation: 'softmax' }));
+      model.compile({
+        optimizer: tf.train.adam(0.01),
+        loss: 'categoricalCrossentropy'
+      });
+      console.log("LSTM model created");
+      return model;
     }
 
-    // Build bigram model from text
-    function buildBigramModel(texts) {
-      console.log("Building bigram model...");
-      bigramModel = {};
-      vocabulary.clear();
-
-      texts.forEach(text => {
-        const words = tokenize(text);
-        words.forEach(word => vocabulary.add(word));
-        for (let i = 0; i < words.length - 1; i++) {
-          const currentWord = words[i];
-          const nextWord = words[i + 1];
-          if (!bigramModel[currentWord]) {
-            bigramModel[currentWord] = {};
-          }
-          bigramModel[currentWord][nextWord] = (bigramModel[currentWord][nextWord] || 0) + 1;
+    // Convert text to sequences for training
+    function textToSequences(text) {
+      const sequences = [];
+      const nextChars = [];
+      text = text.toLowerCase();
+      for (let i = 0; i < text.length - sequenceLength; i++) {
+        const seq = text.slice(i, i + sequenceLength);
+        const nextChar = text[i + sequenceLength] || ' ';
+        if (seq.length === sequenceLength && vocab.includes(nextChar)) {
+          const inputSeq = Array(sequenceLength).fill(0).map((_, j) => {
+            const char = seq[j] || ' ';
+            return charToIndex[char] !== undefined ? charToIndex[char] : charToIndex[' '];
+          });
+          const outputChar = charToIndex[nextChar] !== undefined ? charToIndex[nextChar] : charToIndex[' '];
+          sequences.push(inputSeq);
+          nextChars.push(outputChar);
         }
-      });
-
-      // Create word-to-index mapping
-      wordToIndex = {};
-      indexToWord = {};
-      Array.from(vocabulary).forEach((word, index) => {
-        wordToIndex[word] = index;
-        indexToWord[index] = word;
-      });
-
-      console.log("Bigram model built:", bigramModel);
+      }
+      return [sequences, nextChars];
     }
 
-    // Generate response using bigram model
-    function generateResponse(prompt) {
+    // One-hot encode sequences
+    function oneHotEncode(sequences, nextChars) {
+      const xs = tf.tensor3d(sequences.map(seq =>
+        seq.map(idx => Array(vocabSize).fill(0).map((_, i) => i === idx ? 1 : 0))
+      ), [sequences.length, sequenceLength, vocabSize]);
+      const ys = tf.tensor2d(nextChars.map(idx =>
+        Array(vocabSize).fill(0).map((_, i) => i === idx ? 1 : 0)
+      ), [nextChars.length, vocabSize]);
+      return [xs, ys];
+    }
+
+    // Train LSTM model
+    async function trainModel(texts) {
+      console.log("Training LSTM model...");
+      showLoading();
+      try {
+        const allText = texts.join(' ');
+        const [sequences, nextChars] = textToSequences(allText);
+        if (sequences.length === 0) {
+          console.log("No valid sequences for training");
+          return;
+        }
+        const [xs, ys] = oneHotEncode(sequences, nextChars);
+        await model.fit(xs, ys, {
+          epochs: 10,
+          batchSize: 32,
+          callbacks: {
+            onEpochEnd: (epoch, logs) => console.log(`Epoch ${epoch + 1}: loss = ${logs.loss}`)
+          }
+        });
+        xs.dispose();
+        ys.dispose();
+        console.log("Model training complete");
+      } catch (error) {
+        console.error("Training error:", error);
+        showAlert("Failed to train Vynix. Using default responses.", false);
+      } finally {
+        hideLoading();
+      }
+    }
+
+    // Generate response using LSTM
+    async function generateResponse(prompt) {
       console.log("Generating response for prompt:", prompt);
-      const words = tokenize(prompt);
-      const lastWord = words[words.length - 1] || Object.keys(bigramModel)[Math.floor(Math.random() * Object.keys(bigramModel).length)];
-      let response = [lastWord];
+      if (!model) {
+        return "Vynix says: I'm still warming up! Try again soon.";
+      }
+      let inputText = prompt.toLowerCase().slice(-sequenceLength);
+      let response = [];
+      const temperature = 0.7; // Controls randomness
 
-      for (let i = 0; i < 12; i++) {
-        const nextWords = bigramModel[lastWord];
-        if (!nextWords) break;
+      for (let i = 0; i < 50; i++) {
+        const inputSeq = Array(sequenceLength).fill(0).map((_, j) => {
+          const char = inputText[j] || ' ';
+          return charToIndex[char] !== undefined ? charToIndex[char] : charToIndex[' '];
+        });
+        const inputTensor = tf.tensor3d([inputSeq.map(idx =>
+          Array(vocabSize).fill(0).map((_, i) => i === idx ? 1 : 0)
+        )], [1, sequenceLength, vocabSize]);
+        const prediction = model.predict(inputTensor);
+        const probs = prediction.dataSync();
+        prediction.dispose();
+        inputTensor.dispose();
 
-        const totalCount = Object.values(nextWords).reduce((sum, count) => sum + count, 0);
-        let rand = Math.random() * totalCount;
-        let nextWord = null;
-
-        for (const [word, count] of Object.entries(nextWords)) {
-          rand -= count;
-          if (rand <= 0) {
-            nextWord = word;
+        // Sample next character with temperature
+        let sum = 0;
+        const scaledProbs = probs.map(p => Math.exp(Math.log(p) / temperature));
+        const probSum = scaledProbs.reduce((a, b) => a + b, 0);
+        const normalizedProbs = scaledProbs.map(p => p / probSum);
+        const rand = Math.random();
+        let nextCharIndex = 0;
+        for (let j = 0; j < normalizedProbs.length; j++) {
+          sum += normalizedProbs[j];
+          if (rand <= sum) {
+            nextCharIndex = j;
             break;
           }
         }
 
-        if (!nextWord) break;
-        response.push(nextWord);
-        lastWord = nextWord;
+        const nextChar = indexToChar[nextCharIndex];
+        response.push(nextChar);
+        inputText = inputText.slice(1) + nextChar;
+
+        if (nextChar === '.' || nextChar === '!') break;
       }
 
-      const generated = response.join(" ") || "Vynix says: Let's spice things up!";
-      console.log("Generated response:", generated);
+      const generated = response.join('').trim() || "Vynix says: Let's spice things up!";
       return generated.charAt(0).toUpperCase() + generated.slice(1) + "!";
     }
 
@@ -595,21 +659,25 @@
       if (!currentUser) return;
       showLoading();
       try {
+        model = createModel();
         const chatRef = ref(db, `users/${currentUser.uid}/ai_chat`);
         const snapshot = await get(chatRef);
         const messages = snapshot.val();
         let texts = initialCorpus;
+        chatHistory = [];
 
         if (messages) {
-          texts = texts.concat(Object.values(messages).map(msg => msg.text));
+          const sortedMessages = Object.values(messages).sort((a, b) => a.createdAt - b.createdAt);
+          texts = texts.concat(sortedMessages.map(msg => msg.text));
+          chatHistory = sortedMessages;
         }
 
-        buildBigramModel(texts);
+        await trainModel(texts);
         showAlert("Vynix is ready to chat!", true);
       } catch (error) {
         console.error("Error initializing model:", error);
         showAlert("Failed to initialize Vynix. Using default responses.", false);
-        buildBigramModel(initialCorpus);
+        await trainModel(initialCorpus);
       } finally {
         hideLoading();
       }
@@ -630,19 +698,21 @@
       showLoading();
       try {
         const chatRef = ref(db, `users/${currentUser.uid}/ai_chat`);
-        // Check if chat history exists
         const snapshot = await get(chatRef);
         if (!snapshot.exists()) {
           showAlert("No chat history to delete.", false);
           aiChat.innerHTML = "";
-          buildBigramModel(initialCorpus);
+          await trainModel(initialCorpus);
+          chatHistory = [];
           hideLoading();
           return;
         }
 
         await set(chatRef, null); // Clear chat history in Firebase
         aiChat.innerHTML = ""; // Clear UI
-        buildBigramModel(initialCorpus); // Rebuild model with initial corpus
+        chatHistory = [];
+        model = createModel(); // Reset model
+        await trainModel(initialCorpus); // Retrain with initial corpus
         showAlert("Chat history deleted!", true);
         console.log("Chat history deleted successfully");
       } catch (error) {
@@ -731,9 +801,10 @@
         console.log("Saving user message to Firebase:", userMessage);
         await push(ref(db, `users/${auth.currentUser.uid}/ai_chat`), userMessage);
         renderMessage(userMessage, true, userData);
+        chatHistory.push(userMessage);
 
         // Generate AI response
-        const aiResponseText = generateResponse(inputText);
+        const aiResponseText = await generateResponse(inputText);
         const aiMessage = {
           text: aiResponseText,
           createdAt: Date.now(),
@@ -742,9 +813,11 @@
         console.log("Saving AI message to Firebase:", aiMessage);
         await push(ref(db, `users/${auth.currentUser.uid}/ai_chat`), aiMessage);
         renderMessage(aiMessage, false);
+        chatHistory.push(aiMessage);
 
-        // Update bigram model with new messages
-        buildBigramModel([inputText, aiResponseText]);
+        // Retrain model with new messages (limited to last 5 for performance)
+        const recentMessages = chatHistory.slice(-5).map(msg => msg.text);
+        await trainModel(recentMessages);
 
         messageInput.value = "";
         sendButton.classList.remove("active");
@@ -799,7 +872,8 @@
           aiChat.innerHTML = "";
           const messages = snapshot.val();
           if (messages) {
-            Object.values(messages).sort((a, b) => a.createdAt - b.createdAt).forEach((message) => {
+            const sortedMessages = Object.values(messages).sort((a, b) => a.createdAt - b.createdAt);
+            sortedMessages.forEach((message) => {
               renderMessage(message, message.isUser, userData);
             });
           }
