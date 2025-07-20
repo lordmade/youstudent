@@ -502,6 +502,7 @@
     const alert = document.getElementById("alert");
     const alertMessage = document.getElementById("alert-message");
     const loadingOverlay = document.getElementById("loading-overlay");
+    const deleteChatBtn = document.querySelector(".delete-chat-btn");
     let currentUser = null;
 
     // LSTM model parameters
@@ -664,7 +665,10 @@
 
     // Initialize model with Firebase data or initial corpus
     async function initializeModel() {
-      if (!currentUser) return;
+      if (!currentUser) {
+        console.log("No user for model initialization");
+        return;
+      }
       showLoading();
       try {
         model = createModel();
@@ -693,9 +697,15 @@
 
     // Delete chat history from Firebase
     async function deleteChat() {
-      if (!currentUser || currentUser.isGuest) {
+      console.log("deleteChat triggered");
+      if (!currentUser) {
+        showAlert("Please sign in to delete chat history.", false);
+        console.log("Delete attempt blocked: No authenticated user");
+        return;
+      }
+      if (currentUser.isGuest) {
         showAlert("Guests can't delete chat history.", false);
-        console.log("Delete attempt blocked: User is guest or not authenticated");
+        console.log("Delete attempt blocked: User is guest");
         return;
       }
 
@@ -708,13 +718,18 @@
       showLoading();
       try {
         const chatRef = ref(db, `users/${currentUser.uid}/ai_chat`);
+        console.log("Checking chat history at:", chatRef.toString());
         const snapshot = await get(chatRef);
         if (!snapshot.exists()) {
-          showAlert("No chat history to delete.", false);
           console.log("No chat history found in Firebase");
+          showAlert("No chat history to delete.", false);
           aiChat.innerHTML = "";
           chatHistory = [];
-          await trainModel(initialCorpus);
+          if (model) {
+            model.dispose();
+            model = createModel();
+            await trainModel(initialCorpus);
+          }
           hideLoading();
           return;
         }
@@ -723,6 +738,9 @@
         await set(chatRef, null); // Clear chat history in Firebase
         aiChat.innerHTML = ""; // Clear UI
         chatHistory = []; // Clear local chat history
+        if (model) {
+          model.dispose(); // Dispose existing model
+        }
         model = createModel(); // Reset model
         await trainModel(initialCorpus); // Retrain with initial corpus
         showAlert("Chat history deleted!", true);
@@ -922,6 +940,12 @@
     sendButton.addEventListener("click", async () => {
       console.log("Send button clicked");
       await sendMessage();
+    });
+
+    // Debug delete button click
+    deleteChatBtn.addEventListener("click", () => {
+      console.log("Delete chat button clicked");
+      deleteChat();
     });
   </script>
 </body>
