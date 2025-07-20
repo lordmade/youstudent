@@ -683,15 +683,17 @@
       }
     }
 
-    // Delete chat history
+    // Delete chat history from Firebase
     async function deleteChat() {
       if (!currentUser || currentUser.isGuest) {
         showAlert("Guests can't delete chat history.", false);
+        console.log("Delete attempt blocked: User is guest or not authenticated");
         return;
       }
 
       if (!confirm("Are you sure you want to delete your chat history? This cannot be undone.")) {
         console.log("Chat deletion cancelled by user");
+        showAlert("Chat deletion cancelled.", false);
         return;
       }
 
@@ -701,23 +703,25 @@
         const snapshot = await get(chatRef);
         if (!snapshot.exists()) {
           showAlert("No chat history to delete.", false);
+          console.log("No chat history found in Firebase");
           aiChat.innerHTML = "";
-          await trainModel(initialCorpus);
           chatHistory = [];
+          await trainModel(initialCorpus);
           hideLoading();
           return;
         }
 
+        console.log("Deleting chat history from Firebase at:", chatRef.toString());
         await set(chatRef, null); // Clear chat history in Firebase
         aiChat.innerHTML = ""; // Clear UI
-        chatHistory = [];
+        chatHistory = []; // Clear local chat history
         model = createModel(); // Reset model
         await trainModel(initialCorpus); // Retrain with initial corpus
         showAlert("Chat history deleted!", true);
-        console.log("Chat history deleted successfully");
+        console.log("Chat history deleted successfully from Firebase");
       } catch (error) {
-        console.error("Error deleting chat history:", error);
-        showAlert("Failed to delete chat history. Try again.", false);
+        console.error("Error deleting chat history from Firebase:", error);
+        showAlert(`Failed to delete chat history: ${error.message}`, false);
       } finally {
         hideLoading();
       }
@@ -825,7 +829,7 @@
         showAlert("Vynix has spoken!", true);
       } catch (error) {
         console.error("Send message error:", error);
-        showAlert("Failed to process message. Try again!", false);
+        showAlert(`Failed to process message: ${error.message}`, false);
       } finally {
         hideLoading();
       }
@@ -876,16 +880,17 @@
             sortedMessages.forEach((message) => {
               renderMessage(message, message.isUser, userData);
             });
+            chatHistory = sortedMessages;
           }
           initializeModel();
         }).catch((error) => {
           console.error("Error loading chat history:", error);
-          showAlert("Failed to load chat history. Try again.", false);
+          showAlert(`Failed to load chat history: ${error.message}`, false);
           initializeModel();
         });
       }).catch((error) => {
         console.error("Error loading user data:", error);
-        showAlert("Failed to load user data. Try again.", false);
+        showAlert(`Failed to load user data: ${error.message}`, false);
         initializeModel();
       });
     });
