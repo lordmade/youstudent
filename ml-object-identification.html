@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Math Tutor | X Friends</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/12.4.2/math.min.js"></script>
   <style>
     :root {
       --twitter-blue: #1DA1F2;
@@ -414,16 +415,7 @@
         <span class="user-handle">@MathTutor</span>
       </div>
     </div>
-    <div class="chat-container" id="chat-container">
-      <div class="message received">
-        <div class="message-header">
-          <div class="user-avatar">MT</div>
-          <div class="user-username">Math Tutor Bot</div>
-          <span class="message-timestamp">Just now</span>
-        </div>
-        <div class="message-content">Hello! Type a math expression (e.g., '2 + 2' or 'sin(45 deg)') to solve.</div>
-      </div>
-    </div>
+    <div class="chat-container" id="chat-container"></div>
     <form class="message-form" id="message-form" onsubmit="handleSubmit(event)">
       <input type="text" class="message-input" id="message-input" placeholder="Type a math expression..." />
       <button type="submit" class="send-button hidden" aria-label="Send message">
@@ -460,6 +452,8 @@
     const alert = document.getElementById("alert");
     const alertMessage = document.getElementById("alert-message");
     const sendButton = document.querySelector(".send-button");
+
+    let isInitialMessageAdded = false;
 
     function showLoading() {
       loadingOverlay.classList.add("active");
@@ -525,6 +519,10 @@
       const userRef = ref(db, `users/${user.uid}`);
       get(userRef).then((snapshot) => {
         window.currentUserProfile = snapshot.val() || { username: "User" };
+        if (!isInitialMessageAdded) {
+          addMessage("Hello! Type a math expression (e.g., '2 + 2' or 'sin(45 deg)') to solve.", true);
+          isInitialMessageAdded = true;
+        }
       }).catch((error) => {
         console.error("Error fetching user profile:", error);
         showAlert("Failed to load user profile.", false);
@@ -537,19 +535,16 @@
 
     // Show/hide send button based on input content
     messageInput.addEventListener("input", () => {
-      if (messageInput.value.trim()) {
-        sendButton.classList.remove("hidden");
-      } else {
-        sendButton.classList.add("hidden");
-      }
+      sendButton.classList.toggle("hidden", !messageInput.value.trim());
     });
 
     async function evaluateMathExpression(expression) {
       try {
-        // Basic client-side validation
+        // Client-side validation
         if (!expression.match(/^[0-9+\-*/^()\s.,a-zA-Z]+$/)) {
           throw new Error("Invalid characters in expression. Use numbers, operators (+, -, *, /, ^), or functions (e.g., sin, sqrt).");
         }
+        // Try API first
         const response = await fetch(`https://api.mathjs.org/v4/?expr=${encodeURIComponent(expression)}`, {
           method: 'GET',
           headers: { 'Content-Type': 'application/json' }
@@ -559,15 +554,22 @@
         }
         const result = await response.text();
         return result;
-      } catch (error) {
-        console.error("Math.js API error:", error);
-        throw error;
+      } catch (apiError) {
+        console.warn("API failed, trying local Math.js:", apiError);
+        // Fallback to local Math.js
+        try {
+          const result = math.evaluate(expression);
+          return result.toString();
+        } catch (localError) {
+          console.error("Local Math.js error:", localError);
+          throw new Error(`Invalid expression: ${localError.message}`);
+        }
       }
     }
 
     async function handleSubmit(event) {
       event.preventDefault();
-      console.log("handleSubmit called"); // Debug log
+      console.log("handleSubmit called with expression:", messageInput.value); // Debug log
       const expression = messageInput.value.trim();
       if (!expression) {
         showAlert("Please enter a math expression.", false);
@@ -590,6 +592,7 @@
 
         showAlert("Expression evaluated successfully!", true);
       } catch (error) {
+        console.error("Error in handleSubmit:", error);
         addMessage("Sorry, I couldn't evaluate the expression. Try a simpler format (e.g., '2 + 2').", true);
         showAlert(error.message, false);
       } finally {
