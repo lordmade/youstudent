@@ -42,6 +42,7 @@
 
     body.fade-out {
       opacity: 0;
+      transition: opacity 0.5s ease;
     }
 
     .container {
@@ -52,6 +53,11 @@
       flex-direction: column;
       min-height: 100vh;
       position: relative;
+      visibility: hidden; /* Hidden until auth is confirmed */
+    }
+
+    .container.authenticated {
+      visibility: visible;
     }
 
     .top-buttons {
@@ -388,7 +394,11 @@
   </style>
 </head>
 <body>
-  <div class="container">
+  <div class="loading-overlay active" id="loading-overlay">
+    <div class="spinner"></div>
+    <span class="spinner-text">Authenticating...</span>
+  </div>
+  <div class="container" id="container">
     <div class="top-buttons">
       <button class="settings-btn" aria-label="Toggle settings" onclick="toggleTheme()">
         <svg viewBox="0 0 24 24">
@@ -403,10 +413,6 @@
           <path d="M6 18L18 6M6 6l12 12"/>
         </svg>
       </button>
-    </div>
-    <div class="loading-overlay" id="loading-overlay">
-      <div class="spinner"></div>
-      <span class="spinner-text">Processing...</span>
     </div>
     <div class="chat-header">
       <div class="user-avatar">MT</div>
@@ -452,10 +458,12 @@
     const alert = document.getElementById("alert");
     const alertMessage = document.getElementById("alert-message");
     const sendButton = document.querySelector(".send-button");
+    const container = document.getElementById("container");
 
     let isInitialMessageAdded = false;
 
-    function showLoading() {
+    function showLoading(message = "Authenticating...") {
+      loadingOverlay.querySelector(".spinner-text").textContent = message;
       loadingOverlay.classList.add("active");
     }
 
@@ -497,7 +505,7 @@
         <div class="message-content">${content}</div>
       `;
       chatContainer.prepend(messageDiv);
-      chatContainer.scrollTo({ top: chatContainer.scrollHeight, behavior: 'smooth' });
+      chatContainer.scrollTo({ top: chatContainer.scrollHeight, behavior: "smooth" });
     }
 
     function toggleTheme() {
@@ -507,26 +515,47 @@
       localStorage.setItem("theme", newTheme);
     }
 
-    onAuthStateChanged(auth, (user) => {
+    // Enhanced authentication
+    async function fetchUserProfile(user) {
+      const userRef = ref(db, `users/${user.uid}`);
+      try {
+        const snapshot = await get(userRef);
+        return snapshot.val() || { username: "User" };
+      } catch (error) {
+        console.error("Error fetching user profile:", error);
+        // Retry once
+        try {
+          const retrySnapshot = await get(userRef);
+          return retrySnapshot.val() || { username: "User" };
+        } catch (retryError) {
+          console.error("Retry failed:", retryError);
+          showAlert("Failed to load user profile. Using default username.", false);
+          return { username: "User" };
+        }
+      }
+    }
+
+    onAuthStateChanged(auth, async (user) => {
       if (!user) {
         document.body.classList.add("fade-out");
-        setTimeout(() => {
-          window.location.href = "signup.html";
-        }, 1500);
+        window.location.href = "signup.html?redirect=math-tutor";
         return;
       }
+      showLoading("Loading profile...");
       window.currentUser = user;
-      const userRef = ref(db, `users/${user.uid}`);
-      get(userRef).then((snapshot) => {
-        window.currentUserProfile = snapshot.val() || { username: "User" };
+      try {
+        window.currentUserProfile = await fetchUserProfile(user);
+        container.classList.add("authenticated");
         if (!isInitialMessageAdded) {
           addMessage("Hello! Type a math expression (e.g., '2 + 2' or 'sin(45 deg)') to solve. I'll provide a step-by-step explanation.", true);
           isInitialMessageAdded = true;
         }
-      }).catch((error) => {
-        console.error("Error fetching user profile:", error);
-        showAlert("Failed to load user profile.", false);
-      });
+      } catch (error) {
+        console.error("Authentication setup error:", error);
+        showAlert("Error setting up profile. Please try again.", false);
+      } finally {
+        hideLoading();
+      }
     });
 
     document.querySelector(".custom-alert .close-btn").addEventListener("click", () => {
@@ -538,7 +567,6 @@
     });
 
     async function evaluateMathExpression(expression) {
-      // Input sanitization: Allow numbers, operators, math functions, and parentheses
       if (!expression.match(/^[0-9+\-*/^()\s.,a-zA-Z]+$/)) {
         throw new Error("Invalid characters in expression. Use numbers, operators (+, -, *, /, ^), or functions (e.g., sin, sqrt).");
       }
@@ -591,11 +619,9 @@
         const result = await evaluateMathExpression(expression);
         addMessage(result, true);
 
-        // Extract final answer for Firebase storage
         const finalAnswerMatch = result.match(/Final Answer:\s*(.+)$/m);
         const finalAnswer = finalAnswerMatch ? finalAnswerMatch[1] : "N/A";
 
-        // Save to Firebase
         const exprRef = ref(db, `math_expressions/${window.currentUser.uid}/${Date.now()}`);
         await set(exprRef, {
           expression,
