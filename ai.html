@@ -340,6 +340,7 @@
     let currentUser = null;
     let model = null;
     let tokenizer = {};
+    let bigrams = {};
     let isModelTrained = false;
     let chatHistory = [];
 
@@ -385,28 +386,34 @@
     function showNoContentPrompt() {
       chatContainer.innerHTML = `
         <div class="no-content-prompt">
-          I'm just getting to know you! Keep chatting to spark some fun ideas!
+          I'm just getting to know the BanterBox vibe! Keep chatting or <a href="home.html">share something on BanterBox</a> to spark some fun ideas!
         </div>
       `;
     }
 
-    async function fetchContent(userId) {
+    async function fetchContent() {
       try {
         const allContent = [];
 
-        // Fetch user chats only (AI-user interactions)
-        if (userId) {
-          const chatRef = ref(db, `chats/${userId}`);
-          const chatSnapshot = await get(chatRef);
-          const chats = chatSnapshot.val() || {};
-          console.log(`Fetching chats for user: ${userId}`);
-          Object.values(chats).forEach(message => {
-            if (message.text && message.text.trim() && message.isUser) {
-              allContent.push({ type: "chat", content: message.text, createdAt: message.createdAt });
-              console.log(`Found chat message: ${message.text}`);
-            }
-          });
-        }
+        // Fetch all users' posts and comments from tweets
+        const tweetsRef = ref(db, "tweets");
+        const tweetsSnapshot = await get(tweetsRef);
+        const tweets = tweetsSnapshot.val() || {};
+        console.log("Fetching community content from tweets...");
+        Object.entries(tweets).forEach(([tweetId, tweet]) => {
+          if (tweet.text && tweet.text.trim()) {
+            allContent.push({ type: "post", content: tweet.text, createdAt: tweet.createdAt });
+            console.log(`Found post [${tweetId}]: ${tweet.text}`);
+          }
+          if (tweet.comments) {
+            Object.entries(tweet.comments).forEach(([commentId, comment]) => {
+              if (comment.text && comment.text.trim()) {
+                allContent.push({ type: "comment", content: comment.text, createdAt: comment.createdAt });
+                console.log(`Found comment [${commentId}]: ${comment.text}`);
+              }
+            });
+          }
+        });
 
         const sortedContent = allContent
           .sort((a, b) => b.createdAt - a.createdAt)
@@ -422,13 +429,22 @@
       }
     }
 
-    function createTokenizer(texts) {
+    function createTokenizerAndBigrams(texts) {
+      tokenizer = {};
+      bigrams = {};
       const wordCounts = {};
+
       texts.forEach(text => {
         const words = text.toLowerCase().split(/\s+/).filter(word => word.length > 0);
+        // Count words
         words.forEach(word => {
           wordCounts[word] = (wordCounts[word] || 0) + 1;
         });
+        // Create bigrams
+        for (let i = 0; i < words.length - 1; i++) {
+          const bigram = `${words[i]} ${words[i + 1]}`;
+          bigrams[bigram] = (bigrams[bigram] || 0) + 1;
+        }
       });
 
       const sortedWords = Object.keys(wordCounts)
@@ -437,7 +453,9 @@
       sortedWords.forEach((word, index) => {
         tokenizer[word] = index + 1;
       });
+
       console.log("Tokenizer created with vocabulary size:", Object.keys(tokenizer).length);
+      console.log("Bigrams created with count:", Object.keys(bigrams).length);
     }
 
     function tokenizeText(text) {
@@ -469,7 +487,7 @@
         return;
       }
 
-      createTokenizer(texts);
+      createTokenizerAndBigrams(texts);
       await initializeModel();
 
       const tokenized = texts.map(text => tokenizeText(text));
@@ -503,7 +521,7 @@
     }
 
     async function initializeDefaultModel() {
-      createTokenizer(["welcome", "to", "vynix", "ai"]);
+      createTokenizerAndBigrams(["welcome to vynix ai"]);
       await initializeModel();
       const weights = model.getWeights().map(w => tf.randomNormal(w.shape));
       model.setWeights(weights);
@@ -530,12 +548,63 @@
       return score;
     }
 
-    async function generateResponse(userInput, sentimentScore) {
-      if (!isModelTrained || sentimentScore >= 0.4 && sentimentScore <= 0.6) {
-        return `That sounds interesting! Tell me more about "${userInput}"—what's got you thinking about it?`;
+    function getBigramsBySentiment(sentimentScore, userInput) {
+      const inputWords = userInput.toLowerCase().split(/\s+/).filter(word => word.length > 0);
+      const relevantBigrams = Object.keys(bigrams).filter(bigram => 
+        inputWords.some(word => bigram.includes(word)) || bigrams[bigram] > 1
+      );
+
+      // Sentiment-based bigram filtering
+      const positiveBigrams = ["love gaming", "epic moment", "dope game", "awesome vibe"];
+      const cautiousBigrams = ["feeling down", "tough day", "bit stressed"];
+      const neutralBigrams = ["pretty cool", "nice work", "good stuff"];
+
+      let toneBigrams = neutralBigrams;
+      if (sentimentScore > 0.7) {
+        toneBigrams = positiveBigrams;
+      } else if (sentimentScore < 0.3) {
+        toneBigrams = cautiousBigrams;
       }
 
-      // Check chat history for context
+      const filteredBigrams = relevantBigrams.filter(bigram => 
+        toneBigrams.includes(bigram) || bigrams[bigram] > 2
+      );
+      return filteredBigrams.length > 0 ? filteredBigrams : toneBigrams;
+    }
+
+    function generateText(sentimentScore, userInput, context) {
+      const bigramsToUse = getBigramsBySentiment(sentimentScore, userInput);
+      const inputWords = userInput.toLowerCase().split(/\s+/).filter(word => word.length > 0);
+      const mainTopic = inputWords[0] || "it";
+
+      // Select a bigram and build a sentence
+      const selectedBigram = bigramsToUse[Math.floor(Math.random() * bigramsToUse.length)];
+      const [firstWord, secondWord] = selectedBigram.split(" ");
+
+      const tone = sentimentScore > 0.7 ? "positive" : sentimentScore < 0.3 ? "cautious" : "neutral";
+      if (!isModelTrained || sentimentScore >= 0.4 && sentimentScore <= 0.6) {
+        return `Hey, ${mainTopic} sounds pretty cool! What's the story behind it?`;
+      }
+
+      const templates = {
+        positive: [
+          `${context}${firstWord.charAt(0).toUpperCase() + firstWord.slice(1)} ${secondWord} with ${mainTopic}! What's got you so hyped?`,
+          `${context}Yo, ${mainTopic} is ${selectedBigram}! Tell me about your favorite moment!`
+        ],
+        neutral: [
+          `${context}${mainTopic} feels ${selectedBigram}. What's up with that?`,
+          `${context}Hey, ${selectedBigram} around ${mainTopic}! What's the vibe?`
+        ],
+        cautious: [
+          `${context}Seems like ${mainTopic} is a bit ${selectedBigram}. Wanna share more?`,
+          `${context}${firstWord.charAt(0).toUpperCase() + firstWord.slice(1)} ${secondWord} about ${mainTopic}? What's going on?`
+        ]
+      };
+
+      return templates[tone][Math.floor(Math.random() * templates[tone].length)];
+    }
+
+    async function generateResponse(userInput, sentimentScore) {
       const relevantHistory = chatHistory
         .filter(msg => msg.isUser && msg.text.toLowerCase().includes(userInput.toLowerCase().split(/\s+/)[0]))
         .slice(-2); // Last 2 relevant messages
@@ -544,13 +613,7 @@
         context = `I remember you mentioned "${relevantHistory[relevantHistory.length - 1].text}". `;
       }
 
-      const tone = sentimentScore > 0.7 ? "positive" : sentimentScore < 0.3 ? "cautious" : "neutral";
-      const responses = {
-        positive: `${context}You're totally vibing with "${userInput}"! What's got you so pumped?`,
-        neutral: `${context}Cool, "${userInput}" sounds fun! What's the story behind it?`,
-        cautious: `${context}Sounds like "${userInput}" is on your mind. Want to share a bit more?`
-      };
-      return responses[tone] || responses.neutral;
+      return generateText(sentimentScore, userInput, context);
     }
 
     async function clearChats(userId) {
@@ -560,7 +623,6 @@
         console.log(`Chats cleared for user: ${userId}`);
         chatContainer.innerHTML = "";
         chatHistory = [];
-        await initializeAI(userId);
         showAlert("Chat history cleared!", true);
       } catch (error) {
         console.error("Error clearing chats:", error);
@@ -568,10 +630,10 @@
       }
     }
 
-    async function initializeAI(userId) {
+    async function initializeAI() {
       showLoading();
       try {
-        const allContent = await fetchContent(userId);
+        const allContent = await fetchContent();
         if (allContent.length > 0) {
           await trainModel(allContent);
         } else {
@@ -690,7 +752,7 @@
         currentUser = user;
         signInBtn.textContent = "Sign Out";
         clearChatsBtn.style.display = "inline-block";
-        await initializeAI(user.uid);
+        await initializeAI();
         loadChatHistory(user.uid);
         sendBtn.disabled = chatInput.value.trim() === "";
       } else {
