@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>AI Chat - Vynix</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.17.0/dist/tf.min.js"></script>
   <style>
     :root {
       --banter-blue: #1DA1F2;
@@ -20,7 +19,7 @@
       --dark-border: #2D3748;
       --dark-text: #E2E8F0;
       --input-bg-light: linear-gradient(180deg, #FFFFFF 0%, #F1F5F9 100%);
-      --input-bg-dark: linear-gradient(180deg, #2D3748 0%, #1A202C 100%);
+      --input-bg-dark: linear-gradient(180deg, #2D3748 0DB, #1A202C 100%);
       --modal-bg: linear-gradient(135deg, var(--banter-blue) 0%, var(--banter-purple) 100%);
     }
 
@@ -300,31 +299,6 @@
       transform: scale(1);
     }
 
-    .suggestions {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.5rem;
-      margin-bottom: 1rem;
-      padding: 0 1rem;
-    }
-
-    .suggestion-btn {
-      background: var(--white);
-      border: 1px solid var(--border);
-      border-radius: 20px;
-      padding: 0.5rem 1rem;
-      font-size: 0.9rem;
-      color: var(--text-dark);
-      cursor: pointer;
-      transition: background 0.2s ease, transform 0.2s ease;
-    }
-
-    .suggestion-btn:hover {
-      background: var(--banter-blue);
-      color: var(--white);
-      transform: translateY(-2px);
-    }
-
     .custom-alert {
       display: none;
       position: fixed;
@@ -493,11 +467,6 @@
         height: 22px;
       }
 
-      .suggestion-btn {
-        font-size: 0.85rem;
-        padding: 0.4rem 0.8rem;
-      }
-
       .modal {
         width: 300px;
         padding: 1rem;
@@ -547,7 +516,6 @@
       <div class="spinner"></div>
       <span class="spinner-text">Vynix is thinking...</span>
     </div>
-    
     <div class="ai-chat" id="ai-chat"></div>
     <div class="ai-compose">
       <input type="text" class="message-input" id="message-input" placeholder="Type a message..." aria-label="Type a message" />
@@ -563,7 +531,6 @@
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
     import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
     import { getDatabase, ref, push, get, set } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js';
-    import * as tf from 'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.17.0/dist/tf.min.js';
 
     const firebaseConfig = {
       apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
@@ -591,274 +558,88 @@
     const confirmBtn = document.querySelector(".modal-btn.confirm");
     const cancelBtn = document.querySelector(".modal-btn.cancel");
     let currentUser = null;
-
-    // LSTM model parameters
-    let model = null;
-    const vocab = "abcdefghijklmnopqrstuvwxyz .,!?";
-    const vocabSize = vocab.length;
-    const charToIndex = Object.fromEntries([...vocab].map((char, i) => [char, i]));
-    const indexToChar = Object.fromEntries([...vocab].map((char, i) => [i, char]));
-    const sequenceLength = 40;
-    const hiddenSize = 128;
     let chatHistory = [];
 
-    // Initial corpus for pre-training
-    const initialCorpus = [
-      "Hey there! I'm Vynix, your go-to AI for witty banter and spicy answers!",
-      "What's the vibe today? Ask me something fun, and I'll keep it lively!",
-      "Why did the computer go to art school? It wanted to draw a better 'byte'!",
-      "Got a question? I'm all code and no nonsense, with a dash of humor!",
-      "Life’s too short for dull chats. Hit me with your spiciest question!",
-      "Why is Vynix awesome? Because I mix brains with a pinch of sass!",
-      "Fun fact: The shortest war in history lasted 38 minutes. Bet I can answer faster!",
-      "Want a joke? Why did the scarecrow become a motivational speaker? He was outstanding in his field!",
-      "Vynix here, ready to serve answers with a side of wit. What's up?",
-      "Ask me anything, and I’ll make sure it’s a conversation worth screenshotting!"
-    ];
+    // Google AI Gemini API key (replace with your key from Google AI Studio)
+    const GEMINI_API_KEY = "AIzaSyCMi7_kbWW1OobwnIC-dPFzdNnRmZGHJdM"; // Securely store this in production
 
-    // Scroll to the bottom of the chat
+    // Generate response using Gemini API
+    async function generateResponse(prompt) {
+      console.log("Generating response for prompt:", maxLength(prompt, 50));
+      try {
+        const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=' + GEMINI_API_KEY, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            contents: [{
+              parts: [{
+                text: `You are Vynix, a witty AI with a dash of humor. Respond to: "${prompt}"`
+              }]
+            }],
+            generationConfig: {
+              temperature: 0.7,
+              maxOutputTokens: 100
+            }
+          })
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error?.message || 'API request failed');
+        }
+        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        return text || "Vynix says: Let's spice things up!";
+      } catch (error) {
+        console.error("Gemini API error:", error);
+        return `Vynix says: Oops, something went wrong! ${error.message}`;
+      }
+    }
+
+    // Scroll to bottom of chat
     function scrollToBottom() {
       console.log("Scrolling to bottom of ai-chat");
       aiChat.scrollTo({ top: aiChat.scrollHeight, behavior: 'smooth' });
     }
 
-    // Show custom delete confirmation modal
+    // Show/hide delete confirmation modal
     function showDeleteModal() {
       console.log("Showing delete confirmation modal");
       deleteConfirmModal.classList.add("active");
     }
 
-    // Hide custom delete confirmation modal
     function hideDeleteModal() {
       console.log("Hiding delete confirmation modal");
       deleteConfirmModal.classList.remove("active");
-    }
-
-    // Confirm deletion
-    async function confirmDelete() {
-      console.log("Confirm button clicked");
-      hideDeleteModal();
-      await performDelete();
-    }
-
-    // Cancel deletion
-    function cancelDelete() {
-      console.log("Cancel button clicked");
-      hideDeleteModal();
-      showAlert("Chat deletion cancelled.", false);
     }
 
     // Perform chat deletion
     async function performDelete() {
       if (!currentUser) {
         showAlert("Please sign in to delete chat history.", false);
-        console.log("Delete attempt blocked: No authenticated user");
         return;
       }
       if (currentUser.isGuest) {
         showAlert("Guests can't delete chat history.", false);
-        console.log("Delete attempt blocked: User is guest");
         return;
       }
 
       showLoading();
       try {
         const chatRef = ref(db, `users/${currentUser.uid}/ai_chat`);
-        console.log("Checking chat history at:", chatRef.toString());
-        const snapshot = await get(chatRef);
-        if (!snapshot.exists()) {
-          console.log("No chat history found in Firebase");
-          showAlert("No chat history to delete.", false);
-          aiChat.innerHTML = "";
-          chatHistory = [];
-          if (model) {
-            model.dispose();
-            model = createModel();
-            await trainModel(initialCorpus);
-          }
-          hideLoading();
-          return;
-        }
-
-        console.log("Deleting chat history from Firebase at:", chatRef.toString());
-        await set(chatRef, null); // Clear chat history in Firebase
-        aiChat.innerHTML = ""; // Clear UI
-        chatHistory = []; // Clear local chat history
-        if (model) {
-          model.dispose(); // Dispose existing model
-        }
-        model = createModel(); // Reset model
-        await trainModel(initialCorpus); // Retrain with initial corpus
+        await set(chatRef, null);
+        aiChat.innerHTML = "";
+        chatHistory = [];
         showAlert("Chat history deleted!", true);
-        console.log("Chat history deleted successfully from Firebase");
       } catch (error) {
-        console.error("Error deleting chat history from Firebase:", error);
+        console.error("Error deleting chat history:", error);
         showAlert(`Failed to delete chat history: ${error.message}`, false);
       } finally {
         hideLoading();
       }
     }
 
-    // Create LSTM model
-    function createModel() {
-      const model = tf.sequential();
-      model.add(tf.layers.lstm({
-        units: hiddenSize,
-        inputShape: [sequenceLength, vocabSize],
-        returnSequences: false
-      }));
-      model.add(tf.layers.dense({ units: vocabSize, activation: 'softmax' }));
-      model.compile({
-        optimizer: tf.train.adam(0.01),
-        loss: 'categoricalCrossentropy'
-      });
-      console.log("LSTM model created");
-      return model;
-    }
-
-    // Convert text to sequences for training
-    function textToSequences(text) {
-      const sequences = [];
-      const nextChars = [];
-      text = text.toLowerCase();
-      for (let i = 0; i < text.length - sequenceLength; i++) {
-        const seq = text.slice(i, i + sequenceLength);
-        const nextChar = text[i + sequenceLength] || ' ';
-        if (seq.length === sequenceLength && vocab.includes(nextChar)) {
-          const inputSeq = Array(sequenceLength).fill(0).map((_, j) => {
-            const char = seq[j] || ' ';
-            return charToIndex[char] !== undefined ? charToIndex[char] : charToIndex[' '];
-          });
-          const outputChar = charToIndex[nextChar] !== undefined ? charToIndex[nextChar] : charToIndex[' '];
-          sequences.push(inputSeq);
-          nextChars.push(outputChar);
-        }
-      }
-      return [sequences, nextChars];
-    }
-
-    // One-hot encode sequences
-    function oneHotEncode(sequences, nextChars) {
-      const xs = tf.tensor3d(sequences.map(seq =>
-        seq.map(idx => Array(vocabSize).fill(0).map((_, i) => i === idx ? 1 : 0))
-      ), [sequences.length, sequenceLength, vocabSize]);
-      const ys = tf.tensor2d(nextChars.map(idx =>
-        Array(vocabSize).fill(0).map((_, i) => i === idx ? 1 : 0)
-      ), [nextChars.length, vocabSize]);
-      return [xs, ys];
-    }
-
-    // Train LSTM model
-    async function trainModel(texts) {
-      console.log("Training LSTM model...");
-      showLoading();
-      try {
-        const allText = texts.join(' ');
-        const [sequences, nextChars] = textToSequences(allText);
-        if (sequences.length === 0) {
-          console.log("No valid sequences for training");
-          return;
-        }
-        const [xs, ys] = oneHotEncode(sequences, nextChars);
-        await model.fit(xs, ys, {
-          epochs: 10,
-          batchSize: 32,
-          callbacks: {
-            onEpochEnd: (epoch, logs) => console.log(`Epoch ${epoch + 1}: loss = ${logs.loss}`)
-          }
-        });
-        xs.dispose();
-        ys.dispose();
-        console.log("Model training complete");
-      } catch (error) {
-        console.error("Training error:", error);
-        showAlert(`Failed to train Vynix: ${error.message}`, false);
-      } finally {
-        hideLoading();
-      }
-    }
-
-    // Generate response using LSTM
-    async function generateResponse(prompt) {
-      console.log("Generating response for prompt:", prompt);
-      if (!model) {
-        return "Vynix says: I'm still warming up! Try again soon.";
-      }
-      let inputText = prompt.toLowerCase().slice(-sequenceLength);
-      let response = [];
-      const temperature = 0.7; // Controls randomness
-
-      for (let i = 0; i < 50; i++) {
-        const inputSeq = Array(sequenceLength).fill(0).map((_, j) => {
-          const char = inputText[j] || ' ';
-          return charToIndex[char] !== undefined ? charToIndex[char] : charToIndex[' '];
-        });
-        const inputTensor = tf.tensor3d([inputSeq.map(idx =>
-          Array(vocabSize).fill(0).map((_, i) => i === idx ? 1 : 0)
-        )], [1, sequenceLength, vocabSize]);
-        const prediction = model.predict(inputTensor);
-        const probs = prediction.dataSync();
-        prediction.dispose();
-        inputTensor.dispose();
-
-        // Sample next character with temperature
-        let sum = 0;
-        const scaledProbs = probs.map(p => Math.exp(Math.log(p) / temperature));
-        const probSum = scaledProbs.reduce((a, b) => a + b, 0);
-        const normalizedProbs = scaledProbs.map(p => p / probSum);
-        const rand = Math.random();
-        let nextCharIndex = 0;
-        for (let j = 0; j < normalizedProbs.length; j++) {
-          sum += normalizedProbs[j];
-          if (rand <= sum) {
-            nextCharIndex = j;
-            break;
-          }
-        }
-
-        const nextChar = indexToChar[nextCharIndex];
-        response.push(nextChar);
-        inputText = inputText.slice(1) + nextChar;
-
-        if (nextChar === '.' || nextChar === '!') break;
-      }
-
-      const generated = response.join('').trim() || "Vynix says: Let's spice things up!";
-      return generated.charAt(0).toUpperCase() + generated.slice(1) + "!";
-    }
-
-    // Initialize model with Firebase data or initial corpus
-    async function initializeModel() {
-      if (!currentUser) {
-        console.log("No user for model initialization");
-        return;
-      }
-      showLoading();
-      try {
-        model = createModel();
-        const chatRef = ref(db, `users/${currentUser.uid}/ai_chat`);
-        const snapshot = await get(chatRef);
-        const messages = snapshot.val();
-        let texts = initialCorpus;
-        chatHistory = [];
-
-        if (messages) {
-          const sortedMessages = Object.values(messages).sort((a, b) => a.createdAt - b.createdAt);
-          texts = texts.concat(sortedMessages.map(msg => msg.text));
-          chatHistory = sortedMessages;
-        }
-
-        await trainModel(texts);
-        showAlert("Vynix is ready to chat!", true);
-      } catch (error) {
-        console.error("Error initializing model:", error);
-        showAlert(`Failed to initialize Vynix: ${error.message}`, false);
-        await trainModel(initialCorpus);
-      } finally {
-        hideLoading();
-      }
-    }
-
+    // Show loading overlay
     function showLoading() {
       console.log("Showing loading overlay");
       loadingOverlay.classList.add("active");
@@ -869,6 +650,7 @@
       loadingOverlay.classList.remove("active");
     }
 
+    // Show alert
     function showAlert(message, isSuccess) {
       console.log("Showing alert:", message);
       alertMessage.textContent = message;
@@ -877,6 +659,7 @@
       setTimeout(() => alert.classList.remove("active"), 3000);
     }
 
+    // Format timestamp
     function formatTimestamp(timestamp) {
       const now = Date.now();
       const diff = now - timestamp;
@@ -890,12 +673,14 @@
       return `${seconds}s`;
     }
 
+    // Get avatar initials
     function getAvatarInitials(username) {
       return username ? username.charAt(0).toUpperCase() : "V";
     }
 
+    // Render message
     function renderMessage(messageData, isUser, userData = null) {
-      console.log("Rendering message:", messageData);
+      console.log("Rendering message:", maxLength(messageData.text, 50));
       const messageDiv = document.createElement("div");
       messageDiv.className = `chat-message ${isUser ? "user" : "ai"}`;
       messageDiv.tabIndex = 0;
@@ -910,9 +695,10 @@
         <div class="chat-content">${messageData.text}</div>
       `;
       aiChat.prepend(messageDiv);
-      scrollToBottom(); // Scroll to bottom after rendering
+      scrollToBottom();
     }
 
+    // Send message
     async function sendMessage() {
       const inputText = messageInput.value.trim();
       if (!inputText) {
@@ -935,26 +721,21 @@
           createdAt: Date.now(),
           isUser: true
         };
-        console.log("Saving user message to Firebase:", userMessage);
+        console.log("Saving user message to Firebase:", maxLength(userMessage.text, 50));
         await push(ref(db, `users/${auth.currentUser.uid}/ai_chat`), userMessage);
         renderMessage(userMessage, true, userData);
         chatHistory.push(userMessage);
 
-        // Generate AI response
         const aiResponseText = await generateResponse(inputText);
         const aiMessage = {
           text: aiResponseText,
           createdAt: Date.now(),
           isUser: false
         };
-        console.log("Saving AI message to Firebase:", aiMessage);
+        console.log("Saving AI message to Firebase:", maxLength(aiMessage.text, 50));
         await push(ref(db, `users/${auth.currentUser.uid}/ai_chat`), aiMessage);
         renderMessage(aiMessage, false);
         chatHistory.push(aiMessage);
-
-        // Retrain model with new messages (limited to last 5 for performance)
-        const recentMessages = chatHistory.slice(-5).map(msg => msg.text);
-        await trainModel(recentMessages);
 
         messageInput.value = "";
         sendButton.classList.remove("active");
@@ -968,12 +749,14 @@
       }
     }
 
+    // Toggle theme
     function toggleTheme() {
       const isDark = document.documentElement.getAttribute("data-theme") === "dark";
       document.documentElement.setAttribute("data-theme", isDark ? "light" : "dark");
       console.log("Toggled theme to:", isDark ? "light" : "dark");
     }
 
+    // Set prompt
     function setPrompt(prompt) {
       messageInput.value = prompt;
       sendButton.disabled = !prompt.trim() || (currentUser && currentUser.isGuest);
@@ -981,6 +764,7 @@
       messageInput.focus();
     }
 
+    // Authentication state listener
     onAuthStateChanged(auth, (user) => {
       if (!user) {
         console.log("No user authenticated, redirecting to signup");
@@ -1003,7 +787,6 @@
         messageInput.placeholder = isGuest ? "Guests can't chat with Vynix." : "Type a message...";
         console.log("User data loaded:", userData, "Is guest:", isGuest);
 
-        // Load chat history and initialize model
         const chatRef = ref(db, `users/${user.uid}/ai_chat`);
         get(chatRef).then((snapshot) => {
           aiChat.innerHTML = "";
@@ -1014,23 +797,24 @@
               renderMessage(message, message.isUser, userData);
             });
             chatHistory = sortedMessages;
-            scrollToBottom(); // Scroll to bottom after loading history
+            scrollToBottom();
           }
-          initializeModel();
         }).catch((error) => {
           console.error("Error loading chat history:", error);
           showAlert(`Failed to load chat history: ${error.message}`, false);
-          initializeModel();
+        }).finally(() => {
+          hideLoading();
         });
       }).catch((error) => {
         console.error("Error loading user data:", error);
         showAlert(`Failed to load user data: ${error.message}`, false);
-        initializeModel();
+        hideLoading();
       });
     });
 
+    // Event listeners
     messageInput.addEventListener("input", () => {
-      console.log("Input event triggered, text:", messageInput.value);
+      console.log("Input event triggered, text:", maxLength(messageInput.value, 50));
       sendButton.disabled = !messageInput.value.trim() || (currentUser && currentUser.isGuest);
       sendButton.classList.toggle("active", messageInput.value.trim() && !(currentUser && currentUser.isGuest));
     });
@@ -1048,22 +832,26 @@
       await sendMessage();
     });
 
-    // Modal button event listeners
     confirmBtn.addEventListener("click", () => {
       console.log("Confirm button clicked");
-      confirmDelete();
+      performDelete();
     });
 
     cancelBtn.addEventListener("click", () => {
       console.log("Cancel button clicked");
-      cancelDelete();
+      hideDeleteModal();
+      showAlert("Chat deletion cancelled.", false);
     });
 
-    // Delete chat button event listener
     deleteChatBtn.addEventListener("click", () => {
       console.log("Delete chat button clicked");
       showDeleteModal();
     });
+
+    // Utility function to truncate logs
+    function maxLength(str, length) {
+      return str.length > length ? str.slice(0, length) + '...' : str;
+    }
   </script>
 </body>
 </html>
