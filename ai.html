@@ -341,6 +341,7 @@
     let model = null;
     let tokenizer = {};
     let isModelTrained = false;
+    let chatHistory = [];
 
     function showLoading() {
       loadingOverlay.classList.add("active");
@@ -384,19 +385,20 @@
     function showNoContentPrompt() {
       chatContainer.innerHTML = `
         <div class="no-content-prompt">
-          No posts or comments found on BanterBox yet. <a href="home.html">Share something</a> to help Vynix AI learn the community's style!
+          No posts, comments, or chats found yet. <a href="home.html">Share something on BanterBox</a> or chat here to help Vynix AI learn!
         </div>
       `;
     }
 
-    async function fetchUserContent() {
+    async function fetchContent(userId) {
       try {
+        const allContent = [];
+
+        // Fetch community posts and comments
         const tweetsRef = ref(db, "tweets");
         const tweetsSnapshot = await get(tweetsRef);
         const tweets = tweetsSnapshot.val() || {};
-        const allContent = [];
-
-        console.log("Fetching all content from tweets...");
+        console.log("Fetching community content from tweets...");
         Object.entries(tweets).forEach(([tweetId, tweet]) => {
           if (tweet.text && tweet.text.trim()) {
             allContent.push({ type: "post", content: tweet.text, createdAt: tweet.createdAt });
@@ -411,6 +413,20 @@
             });
           }
         });
+
+        // Fetch user chats
+        if (userId) {
+          const chatRef = ref(db, `chats/${userId}`);
+          const chatSnapshot = await get(chatRef);
+          const chats = chatSnapshot.val() || {};
+          console.log(`Fetching chats for user: ${userId}`);
+          Object.values(chats).forEach(message => {
+            if (message.text && message.text.trim() && message.isUser) {
+              allContent.push({ type: "chat", content: message.text, createdAt: message.createdAt });
+              console.log(`Found chat message: ${message.text}`);
+            }
+          });
+        }
 
         const sortedContent = allContent
           .sort((a, b) => b.createdAt - a.createdAt)
@@ -535,14 +551,24 @@
     }
 
     async function generateResponse(userInput, sentimentScore) {
-      if (!isModelTrained) {
-        return `Hey there! Not much community content yet. <a href="home.html">Share something on BanterBox</a> to help me learn the vibe. How can I assist with "${userInput}"?`;
+      if (!isModelTrained || sentimentScore >= 0.4 && sentimentScore <= 0.6) {
+        return `I'm not quite sure about "${userInput}" yet. <a href="home.html">Share more on BanterBox</a> or keep chatting to help me learn your style! What's next?`;
       }
+
+      // Check chat history for context
+      const relevantHistory = chatHistory
+        .filter(msg => msg.isUser && msg.text.toLowerCase().includes(userInput.toLowerCase().split(/\s+/)[0]))
+        .slice(-2); // Last 2 relevant messages
+      let context = "";
+      if (relevantHistory.length > 0) {
+        context = `You previously mentioned "${relevantHistory[relevantHistory.length - 1].text}". `;
+      }
+
       const tone = sentimentScore > 0.7 ? "positive" : sentimentScore < 0.3 ? "cautious" : "neutral";
       const responses = {
-        positive: `You're bringing good vibes! Let's dive into "${userInput}". What's up?`,
-        neutral: `Cool, let's talk about "${userInput}". What do you need help with?`,
-        cautious: `Hmm, sounds like you're feeling "${userInput}". Want to share more?`
+        positive: `${context}You're bringing good vibes! Let's dive into "${userInput}". What's up?`,
+        neutral: `${context}Cool, let's talk about "${userInput}". What do you need help with?`,
+        cautious: `${context}Hmm, sounds like you're feeling "${userInput}". Want to share more?`
       };
       return responses[tone] || responses.neutral;
     }
@@ -553,7 +579,8 @@
         await remove(chatRef);
         console.log(`Chats cleared for user: ${userId}`);
         chatContainer.innerHTML = "";
-        await initializeAI(); // Reinitialize AI
+        chatHistory = [];
+        await initializeAI(userId);
         showAlert("Chat history cleared successfully!", true);
       } catch (error) {
         console.error("Error clearing chats:", error);
@@ -561,17 +588,17 @@
       }
     }
 
-    async function initializeAI() {
+    async function initializeAI(userId) {
       showLoading();
       try {
-        const allContent = await fetchUserContent();
+        const allContent = await fetchContent(userId);
         if (allContent.length > 0) {
           await trainModel(allContent);
-          showAlert(`Vynix AI trained on ${allContent.length} post${allContent.length > 1 ? 's' : ''} from the community!`, true);
+          showAlert(`Vynix AI trained on ${allContent.length} post${allContent.length > 1 ? 's and chats' : ' or chat'}!`, true);
         } else {
           await initializeDefaultModel();
           showNoContentPrompt();
-          showAlert("No community content found. Using default responses.", false);
+          showAlert("No posts, comments, or chats found. Using default responses.", false);
         }
       } catch (error) {
         console.error("Error initializing AI:", error);
@@ -596,6 +623,7 @@
       };
 
       await push(ref(db, `chats/${currentUser.uid}`), userMessage);
+      chatHistory.push(userMessage);
       const sentiment = await predictSentiment(userInput);
       const aiResponse = await generateResponse(userInput, sentiment);
       const aiMessage = {
@@ -604,6 +632,7 @@
         createdAt: Date.now()
       };
       await push(ref(db, `chats/${currentUser.uid}`), aiMessage);
+      chatHistory.push(aiMessage);
     }
 
     function loadChatHistory(userId) {
@@ -611,6 +640,7 @@
       onValue(chatRef, (snapshot) => {
         chatContainer.innerHTML = "";
         const messages = snapshot.val();
+        chatHistory = messages ? Object.values(messages) : [];
         if (messages) {
           Object.values(messages).forEach(message => {
             renderMessage(message, message.isUser);
@@ -682,7 +712,7 @@
         currentUser = user;
         signInBtn.textContent = "Sign Out";
         clearChatsBtn.style.display = "inline-block";
-        await initializeAI();
+        await initializeAI(user.uid);
         loadChatHistory(user.uid);
         sendBtn.disabled = chatInput.value.trim() === "";
       } else {
