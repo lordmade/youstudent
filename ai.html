@@ -519,7 +519,6 @@
       console.log("Bigrams created with count:", Object.keys(bigrams).length);
     }
 
-    // Fallback keyword-based sentiment analysis
     function fallbackSentimentAnalysis(text) {
       const positiveKeywords = ['love', 'awesome', 'great', 'amazing', 'happy', 'epic', 'fantastic'];
       const negativeKeywords = ['sad', 'bad', 'terrible', 'awful', 'hate', 'sucks', 'disappointed'];
@@ -543,12 +542,10 @@
     async function initializeAI() {
       showLoading();
       try {
-        // Check for WebAssembly support
         if (!window.WebAssembly) {
           throw new Error("WebAssembly is not supported in this browser. Please use a modern browser like Chrome or Firefox.");
         }
 
-        // Retry model loading up to 3 times
         let attempts = 0;
         const maxAttempts = 3;
         while (attempts < maxAttempts) {
@@ -563,11 +560,10 @@
             if (attempts === maxAttempts) {
               throw new Error("Failed to load AI model after multiple attempts.");
             }
-            await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds before retrying
+            await new Promise(resolve => setTimeout(resolve, 2000));
           }
         }
 
-        // Fetch content for tokenizer and bigrams
         const allContent = await fetchContent();
         if (allContent.length > 0) {
           createTokenizerAndBigrams(allContent);
@@ -728,9 +724,12 @@
       });
     }
 
-    chatInput.addEventListener("input", () => {
-      sendBtn.disabled = chatInput.value.trim() === "" || !currentUser;
-    });
+    function updateSendButtonState() {
+      sendBtn.disabled = !currentUser || chatInput.value.trim() === "";
+      console.log(`Send button state: disabled=${sendBtn.disabled}, currentUser=${!!currentUser}, input="${chatInput.value.trim()}"`);
+    }
+
+    chatInput.addEventListener("input", updateSendButtonState);
 
     chatInput.addEventListener("keydown", (event) => {
       if (event.key === "Enter" && !event.shiftKey && !sendBtn.disabled) {
@@ -741,13 +740,16 @@
 
     sendBtn.addEventListener("click", async () => {
       const userInput = chatInput.value.trim();
-      if (!userInput) return;
+      if (!userInput) {
+        showAlert("Please enter a message to send.", false);
+        return;
+      }
 
       showLoading();
       try {
         await handleChat(userInput);
         chatInput.value = "";
-        sendBtn.disabled = true;
+        updateSendButtonState();
       } catch (error) {
         console.error("Error processing chat:", error);
         showAlert("Something went wrong. Try chatting again?", false);
@@ -759,7 +761,14 @@
     signInBtn.addEventListener("click", () => {
       if (currentUser) {
         showLoading();
-        signOut(auth).finally(() => hideLoading());
+        signOut(auth).then(() => {
+          console.log("User signed out successfully");
+          hideLoading();
+        }).catch(error => {
+          console.error("Error signing out:", error);
+          showAlert("Failed to sign out. Try again?", false);
+          hideLoading();
+        });
       } else {
         window.location.href = "signup.html";
       }
@@ -785,25 +794,30 @@
     });
 
     onAuthStateChanged(auth, async (user) => {
+      console.log("Auth state changed:", user ? `User signed in: ${user.uid}` : "No user signed in");
       if (user) {
         currentUser = user;
         signInBtn.textContent = "Sign Out";
         clearChatsBtn.style.display = "inline-block";
         await initializeAI();
         loadChatHistory(user.uid);
-        sendBtn.disabled = chatInput.value.trim() === "";
+        updateSendButtonState();
       } else {
         currentUser = null;
         signInBtn.textContent = "Sign In";
         clearChatsBtn.style.display = "none";
         chatContainer.innerHTML = "<p>Please sign in to chat with me!</p>";
         sendBtn.disabled = true;
+        console.log("Send button disabled due to no user");
       }
     });
 
     document.querySelector(".custom-alert .close-btn").addEventListener("click", () => {
       alert.classList.remove("active");
     });
+
+    // Initial button state check
+    updateSendButtonState();
   </script>
 </body>
 </html>
