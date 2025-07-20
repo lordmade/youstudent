@@ -49,7 +49,7 @@
       margin-right: 0.5rem;
     }
 
-    .sign-in-btn {
+    .header-btn {
       background: var(--white);
       color: var(--dark-bg);
       border: none;
@@ -57,6 +57,12 @@
       border-radius: 1rem;
       cursor: pointer;
       font-weight: bold;
+      margin-left: 0.5rem;
+    }
+
+    .clear-chats-btn {
+      background: linear-gradient(45deg, #ff4d4d, #ff8080);
+      color: var(--white);
     }
 
     .chat-container {
@@ -186,6 +192,48 @@
       margin-left: 1rem;
     }
 
+    .confirm-dialog {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: var(--dark-bg);
+      padding: 1.5rem;
+      border-radius: 8px;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+      display: none;
+      z-index: 2000;
+      max-width: 90%;
+      text-align: center;
+    }
+
+    .confirm-dialog.active {
+      display: block;
+    }
+
+    .confirm-dialog p {
+      margin-bottom: 1rem;
+      font-size: 1rem;
+    }
+
+    .confirm-dialog button {
+      padding: 0.5rem 1rem;
+      border: none;
+      border-radius: 1rem;
+      cursor: pointer;
+      margin: 0 0.5rem;
+    }
+
+    .confirm-dialog .confirm-btn {
+      background: linear-gradient(45deg, #ff4d4d, #ff8080);
+      color: var(--white);
+    }
+
+    .confirm-dialog .cancel-btn {
+      background: var(--text-light);
+      color: var(--white);
+    }
+
     .no-content-prompt {
       text-align: center;
       padding: 1rem;
@@ -233,7 +281,10 @@
       </svg>
       Vynix AI
     </h1>
-    <button class="sign-in-btn" id="sign-in-btn">Sign In</button>
+    <div>
+      <button class="header-btn clear-chats-btn" id="clear-chats-btn">Clear Chats</button>
+      <button class="header-btn sign-in-btn" id="sign-in-btn">Sign In</button>
+    </div>
   </div>
   <div class="chat-container" id="chat-container"></div>
   <div class="chat-input-area">
@@ -247,12 +298,17 @@
     <span id="alert-message"></span>
     <button class="close-btn" aria-label="Close alert">✕</button>
   </div>
+  <div class="confirm-dialog" id="confirm-clear-dialog">
+    <p>Are you sure you want to delete all your chats with Vynix AI? This action cannot be undone.</p>
+    <button class="confirm-btn" id="confirm-clear-btn">Confirm</button>
+    <button class="cancel-btn" id="cancel-clear-btn">Cancel</button>
+  </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
   <script type="module">
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
     import { getAuth, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
-    import { getDatabase, ref, push, onValue, get } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js';
+    import { getDatabase, ref, push, onValue, get, remove } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js';
 
     const firebaseConfig = {
       apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
@@ -276,6 +332,10 @@
     const alert = document.getElementById("alert");
     const alertMessage = document.getElementById("alert-message");
     const signInBtn = document.getElementById("sign-in-btn");
+    const clearChatsBtn = document.getElementById("clear-chats-btn");
+    const confirmClearDialog = document.getElementById("confirm-clear-dialog");
+    const confirmClearBtn = document.getElementById("confirm-clear-btn");
+    const cancelClearBtn = document.getElementById("cancel-clear-btn");
 
     let currentUser = null;
     let model = null;
@@ -297,6 +357,14 @@
       setTimeout(() => alert.classList.remove("active"), 3000);
     }
 
+    function showConfirmDialog() {
+      confirmClearDialog.classList.add("active");
+    }
+
+    function hideConfirmDialog() {
+      confirmClearDialog.classList.remove("active");
+    }
+
     function formatTimestamp(timestamp) {
       const date = new Date(timestamp);
       return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -316,35 +384,35 @@
     function showNoContentPrompt() {
       chatContainer.innerHTML = `
         <div class="no-content-prompt">
-          No posts or comments found yet. <a href="home.html">Share something on BanterBox</a> to help Vynix AI learn your style!
+          No posts or comments found on BanterBox yet. <a href="home.html">Share something</a> to help Vynix AI learn the community's style!
         </div>
       `;
     }
 
-    async function fetchUserContent(userId) {
+    async function fetchUserContent() {
       try {
         const tweetsRef = ref(db, "tweets");
         const tweetsSnapshot = await get(tweetsRef);
         const tweets = tweetsSnapshot.val() || {};
-        const userContent = [];
+        const allContent = [];
 
-        console.log(`Fetching content for user: ${userId}`);
+        console.log("Fetching all content from tweets...");
         Object.entries(tweets).forEach(([tweetId, tweet]) => {
-          if (tweet.userId === userId && tweet.text && tweet.text.trim()) {
-            userContent.push({ type: "post", content: tweet.text, createdAt: tweet.createdAt });
+          if (tweet.text && tweet.text.trim()) {
+            allContent.push({ type: "post", content: tweet.text, createdAt: tweet.createdAt });
             console.log(`Found post [${tweetId}]: ${tweet.text}`);
           }
           if (tweet.comments) {
             Object.entries(tweet.comments).forEach(([commentId, comment]) => {
-              if (comment.userId === userId && comment.text && comment.text.trim()) {
-                userContent.push({ type: "comment", content: comment.text, createdAt: comment.createdAt });
+              if (comment.text && comment.text.trim()) {
+                allContent.push({ type: "comment", content: comment.text, createdAt: comment.createdAt });
                 console.log(`Found comment [${commentId}]: ${comment.text}`);
               }
             });
           }
         });
 
-        const sortedContent = userContent
+        const sortedContent = allContent
           .sort((a, b) => b.createdAt - a.createdAt)
           .map(item => item.content)
           .filter(text => text && text.trim());
@@ -352,8 +420,8 @@
         console.log(`Processed content (${sortedContent.length} items):`, sortedContent);
         return sortedContent;
       } catch (error) {
-        console.error("Error fetching user content:", error);
-        showAlert("Failed to fetch user content. Using default responses.", false);
+        console.error("Error fetching content:", error);
+        showAlert("Failed to fetch content. Using default responses.", false);
         return [];
       }
     }
@@ -384,7 +452,7 @@
     async function initializeModel() {
       model = tf.sequential();
       model.add(tf.layers.embedding({
-        inputDim: Object.keys(tokenizer).length + 1 || 1000, // Fallback vocab size
+        inputDim: Object.keys(tokenizer).length + 1 || 1000,
         outputDim: 16,
         inputLength: 50
       }));
@@ -417,7 +485,7 @@
         return paddedSeq;
       });
 
-      const labels = new Array(texts.length).fill(1); // Dummy labels (positive sentiment)
+      const labels = new Array(texts.length).fill(1); // Dummy labels
       const xs = tf.tensor2d(padded, [padded.length, 50]);
       const ys = tf.tensor2d(labels, [texts.length, 1]);
 
@@ -439,7 +507,7 @@
     }
 
     async function initializeDefaultModel() {
-      createTokenizer(["welcome", "to", "vynix", "ai"]); // Minimal tokenizer
+      createTokenizer(["welcome", "to", "vynix", "ai"]);
       await initializeModel();
       const weights = model.getWeights().map(w => tf.randomNormal(w.shape));
       model.setWeights(weights);
@@ -468,28 +536,42 @@
 
     async function generateResponse(userInput, sentimentScore) {
       if (!isModelTrained) {
-        return `Hey there! I don't have enough of your posts to know your style yet. <a href="home.html">Share something on BanterBox</a> and I'll tailor my responses. For now, how can I help with "${userInput}"?`;
+        return `Hey there! Not much community content yet. <a href="home.html">Share something on BanterBox</a> to help me learn the vibe. How can I assist with "${userInput}"?`;
       }
       const tone = sentimentScore > 0.7 ? "positive" : sentimentScore < 0.3 ? "cautious" : "neutral";
       const responses = {
-        positive: `You're sounding upbeat! Let's dive into "${userInput}". What's up?`,
-        neutral: `Got it! How can Vynix AI assist with "${userInput}"?`,
-        cautious: `Hmm, sounds serious. Tell me more about "${userInput}"—I'm all ears!`
+        positive: `You're bringing good vibes! Let's dive into "${userInput}". What's up?`,
+        neutral: `Cool, let's talk about "${userInput}". What do you need help with?`,
+        cautious: `Hmm, sounds like you're feeling "${userInput}". Want to share more?`
       };
       return responses[tone] || responses.neutral;
     }
 
-    async function initializeAI(userId) {
+    async function clearChats(userId) {
+      try {
+        const chatRef = ref(db, `chats/${userId}`);
+        await remove(chatRef);
+        console.log(`Chats cleared for user: ${userId}`);
+        chatContainer.innerHTML = "";
+        await initializeAI(); // Reinitialize AI
+        showAlert("Chat history cleared successfully!", true);
+      } catch (error) {
+        console.error("Error clearing chats:", error);
+        showAlert("Failed to clear chats. Please try again.", false);
+      }
+    }
+
+    async function initializeAI() {
       showLoading();
       try {
-        const userContent = await fetchUserContent(userId);
-        if (userContent.length > 0) {
-          await trainModel(userContent);
-          showAlert(`Vynix AI trained on ${userContent.length} post${userContent.length > 1 ? 's' : ''}!`, true);
+        const allContent = await fetchUserContent();
+        if (allContent.length > 0) {
+          await trainModel(allContent);
+          showAlert(`Vynix AI trained on ${allContent.length} post${allContent.length > 1 ? 's' : ''} from the community!`, true);
         } else {
           await initializeDefaultModel();
           showNoContentPrompt();
-          showAlert("No content found. Using default responses.", false);
+          showAlert("No community content found. Using default responses.", false);
         }
       } catch (error) {
         console.error("Error initializing AI:", error);
@@ -576,16 +658,37 @@
       }
     });
 
+    clearChatsBtn.addEventListener("click", () => {
+      if (!currentUser) {
+        showAlert("Please sign in to clear chats.", false);
+        return;
+      }
+      showConfirmDialog();
+    });
+
+    confirmClearBtn.addEventListener("click", async () => {
+      showLoading();
+      hideConfirmDialog();
+      await clearChats(currentUser.uid);
+      hideLoading();
+    });
+
+    cancelClearBtn.addEventListener("click", () => {
+      hideConfirmDialog();
+    });
+
     onAuthStateChanged(auth, async (user) => {
       if (user) {
         currentUser = user;
         signInBtn.textContent = "Sign Out";
-        await initializeAI(user.uid);
+        clearChatsBtn.style.display = "inline-block";
+        await initializeAI();
         loadChatHistory(user.uid);
         sendBtn.disabled = chatInput.value.trim() === "";
       } else {
         currentUser = null;
         signInBtn.textContent = "Sign In";
+        clearChatsBtn.style.display = "none";
         chatContainer.innerHTML = "<p>Please sign in to chat with Vynix AI.</p>";
         sendBtn.disabled = true;
       }
