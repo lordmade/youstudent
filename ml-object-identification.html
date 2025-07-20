@@ -3,10 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Object Identification | X Friends</title>
+  <title>Math Tutor | X Friends</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js"></script>
   <style>
     :root {
       --twitter-blue: #1DA1F2;
@@ -323,6 +321,16 @@
       stroke-width: 2;
     }
 
+    .message-input {
+      flex: 1;
+      border: none;
+      outline: none;
+      padding: 0.75rem 1rem;
+      font-size: 1rem;
+      background: transparent;
+      color: var(--text-dark);
+    }
+
     @keyframes slideIn {
       from { opacity: 0; transform: translateY(15px); }
       to { opacity: 1; transform: translateY(0); }
@@ -379,6 +387,11 @@
         width: 22px;
         height: 22px;
       }
+
+      .message-input {
+        padding: 0.5rem 0.75rem;
+        font-size: 0.95rem;
+      }
     }
   </style>
 </head>
@@ -404,23 +417,24 @@
       <span class="spinner-text">Processing...</span>
     </div>
     <div class="chat-header">
-      <div class="user-avatar">ML</div>
+      <div class="user-avatar">MT</div>
       <div class="user-info">
-        <span class="user-username">Machine Learning Bot</span>
-        <span class="user-handle">@MLBot</span>
+        <span class="user-username">Math Tutor Bot</span>
+        <span class="user-handle">@MathTutor</span>
       </div>
     </div>
     <div class="chat-container" id="chat-container">
       <div class="message received">
         <div class="message-header">
-          <div class="user-avatar">ML</div>
-          <div class="user-username">Machine Learning Bot</div>
+          <div class="user-avatar">MT</div>
+          <div class="user-username">Math Tutor Bot</div>
           <span class="message-timestamp">Just now</span>
         </div>
-        <div class="message-content">Hello! Upload an image, and I'll identify objects in it for you.</div>
+        <div class="message-content">Hello! Type a math expression (e.g., '2 + 2') or upload an image of a math problem, and I'll solve it for you.</div>
       </div>
     </div>
-    <form class="message-form" id="message-form">
+    <form class="message-form" id="message-form" onsubmit="handleSubmit(event)">
+      <input type="text" class="message-input" id="message-input" placeholder="Type a math expression..." />
       <input type="file" class="image-upload" id="image-upload" accept="image/*" />
       <label for="image-upload" class="image-upload-label">
         <svg viewBox="0 0 24 24">
@@ -433,7 +447,6 @@
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
     import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
     import { getDatabase, ref, get, set } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js';
-    import * as cocoSsd from 'https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js';
 
     const firebaseConfig = {
       apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
@@ -455,42 +468,13 @@
     const auth = getAuth(app);
     const db = getDatabase(app);
 
+    const messageInput = document.getElementById("message-input");
     const imageUpload = document.getElementById("image-upload");
+    const messageForm = document.getElementById("message-form");
     const chatContainer = document.getElementById("chat-container");
     const loadingOverlay = document.getElementById("loading-overlay");
     const alert = document.getElementById("alert");
     const alertMessage = document.getElementById("alert-message");
-
-    let model = null;
-
-    // Retry loading model with delay
-    async function loadModelWithRetry(attempts = 3, delayMs = 2000) {
-      for (let i = 0; i < attempts; i++) {
-        try {
-          model = await cocoSsd.load();
-          addMessage("Model loaded! Ready to identify objects.", true);
-          return true;
-        } catch (error) {
-          console.error(`Attempt ${i + 1} failed:`, error);
-          if (i < attempts - 1) {
-            await new Promise(resolve => setTimeout(resolve, delayMs));
-          }
-        }
-      }
-      showAlert("Failed to load object detection model after retries.", false);
-      addMessage("Sorry, I couldn't load the object detection model. Using fallback results.", true);
-      return false;
-    }
-
-    // Load COCO-SSD model on page load
-    (async () => {
-      showLoading();
-      try {
-        await loadModelWithRetry();
-      } finally {
-        hideLoading();
-      }
-    })();
 
     function showLoading() {
       loadingOverlay.classList.add("active");
@@ -520,14 +504,14 @@
       return `${seconds}s`;
     }
 
-    function addMessage(content, isBot = false, imageSrc = null, user = { username: "Machine Learning Bot" }) {
+    function addMessage(content, isBot = false, imageSrc = null, user = { username: "Math Tutor Bot" }) {
       const messageDiv = document.createElement("div");
       messageDiv.className = `message ${isBot ? "received" : "sent"}`;
       messageDiv.tabIndex = 0;
-      const avatarInitial = user.username ? user.username.charAt(0).toUpperCase() : "ML";
+      const avatarInitial = user.username ? user.username.charAt(0).toUpperCase() : "MT";
       messageDiv.innerHTML = `
         <div class="message-header">
-          <div class="user-avatar">${isBot ? "ML" : avatarInitial}</div>
+          <div class="user-avatar">${isBot ? "MT" : avatarInitial}</div>
           <div class="user-username">${user.username}</div>
           <span class="message-timestamp">${formatTimestamp(Date.now())}</span>
         </div>
@@ -553,7 +537,6 @@
         return;
       }
       window.currentUser = user;
-      // Load user profile for avatar and username
       const userRef = ref(db, `users/${user.uid}`);
       get(userRef).then((snapshot) => {
         window.currentUserProfile = snapshot.val() || { username: "User" };
@@ -563,6 +546,51 @@
     document.querySelector(".custom-alert .close-btn").addEventListener("click", () => {
       alert.classList.remove("active");
     });
+
+    async function evaluateMathExpression(expression) {
+      try {
+        const response = await fetch(`https://api.mathjs.org/v4/?expr=${encodeURIComponent(expression)}`);
+        if (!response.ok) {
+          throw new Error(`Math.js API error: ${response.statusText}`);
+        }
+        const result = await response.text();
+        return result;
+      } catch (error) {
+        throw new Error(`Failed to evaluate expression: ${error.message}`);
+      }
+    }
+
+    async function handleSubmit(event) {
+      event.preventDefault();
+      const expression = messageInput.value.trim();
+      if (!expression) {
+        showAlert("Please enter a math expression.", false);
+        return;
+      }
+
+      showLoading();
+      try {
+        addMessage(expression, false, null, window.currentUserProfile || { username: "User" });
+        const result = await evaluateMathExpression(expression);
+        addMessage(`Result: ${result}`, true);
+
+        // Save to Firebase
+        const exprRef = ref(db, `math_expressions/${window.currentUser.uid}/${Date.now()}`);
+        await set(exprRef, {
+          expression,
+          result,
+          timestamp: Date.now()
+        });
+
+        showAlert("Expression evaluated successfully!", true);
+      } catch (error) {
+        addMessage("Sorry, I couldn't evaluate the expression. Please try again.", true);
+        showAlert(error.message, false);
+      } finally {
+        hideLoading();
+        messageInput.value = "";
+      }
+    }
 
     imageUpload.addEventListener("change", async (event) => {
       const file = event.target.files[0];
@@ -576,7 +604,7 @@
         // Display user message with image
         const reader = new FileReader();
         reader.onload = (e) => {
-          addMessage("", false, e.target.result, window.currentUserProfile || { username: "User" });
+          addMessage("Image uploaded (OCR simulation: enter expression manually)", false, e.target.result, window.currentUserProfile || { username: "User" });
         };
         reader.readAsDataURL(file);
 
@@ -597,7 +625,7 @@
 
         const imageUrl = cloudinaryData.secure_url;
 
-        // Save the URL to Firebase Realtime Database
+        // Save the URL to Firebase
         const imageRef = ref(db, `image_urls/${window.currentUser.uid}/${Date.now()}`);
         await set(imageRef, {
           url: imageUrl,
@@ -605,44 +633,14 @@
           filename: file.name
         });
 
-        // Display bot processing message
-        addMessage("Image received, processing...", true);
-
-        // Perform object detection with TensorFlow.js COCO-SSD
-        let resultsHtml = "Identified objects:<br>";
-        if (model) {
-          const imgElement = new Image();
-          imgElement.src = imageUrl;
-          imgElement.crossOrigin = "anonymous"; // Required for cross-origin images
-          await new Promise((resolve) => { imgElement.onload = resolve; });
-          const predictions = await model.detect(imgElement);
-          if (predictions.length === 0) {
-            resultsHtml = "No objects detected in the image.";
-          } else {
-            predictions.forEach(prediction => {
-              resultsHtml += `<span class="font-bold">${prediction.class}</span>: ${(prediction.score * 100).toFixed(2)}% confidence<br>`;
-            });
-          }
-        } else {
-          // Fallback to mock results if model failed to load
-          const mockResults = [
-            { class: "Dog", score: 0.95 },
-            { class: "Cat", score: 0.03 },
-            { class: "Tree", score: 0.02 }
-          ];
-          mockResults.forEach(result => {
-            resultsHtml += `<span class="font-bold">${result.class}</span>: ${(result.score * 100).toFixed(2)}% confidence<br>`;
-          });
-        }
-        addMessage(resultsHtml, true);
-
-        showAlert("Objects identified successfully! Image URL saved.", true);
+        addMessage("Please type the math expression from the image for evaluation.", true);
+        showAlert("Image uploaded successfully! Enter the expression manually.", true);
       } catch (error) {
         addMessage("Sorry, I couldn't process the image. Please try again.", true);
         showAlert(`Failed to process image: ${error.message}`, false);
       } finally {
         hideLoading();
-        imageUpload.value = ""; // Clear the input
+        imageUpload.value = "";
       }
     });
   </script>
