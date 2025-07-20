@@ -622,13 +622,29 @@
         return;
       }
 
+      if (!confirm("Are you sure you want to delete your chat history? This cannot be undone.")) {
+        console.log("Chat deletion cancelled by user");
+        return;
+      }
+
       showLoading();
       try {
         const chatRef = ref(db, `users/${currentUser.uid}/ai_chat`);
-        await set(chatRef, null); // Clear chat history
+        // Check if chat history exists
+        const snapshot = await get(chatRef);
+        if (!snapshot.exists()) {
+          showAlert("No chat history to delete.", false);
+          aiChat.innerHTML = "";
+          buildBigramModel(initialCorpus);
+          hideLoading();
+          return;
+        }
+
+        await set(chatRef, null); // Clear chat history in Firebase
         aiChat.innerHTML = ""; // Clear UI
         buildBigramModel(initialCorpus); // Rebuild model with initial corpus
         showAlert("Chat history deleted!", true);
+        console.log("Chat history deleted successfully");
       } catch (error) {
         console.error("Error deleting chat history:", error);
         showAlert("Failed to delete chat history. Try again.", false);
