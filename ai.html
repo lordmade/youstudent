@@ -680,6 +680,7 @@
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
     import { getAuth, onAuthStateChanged, signOut as firebaseSignOut } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
     import { getDatabase, ref, push, get, set } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js';
+    import { getRemoteConfig, fetchAndActivate, getString } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-remote-config.js';
 
     const firebaseConfig = {
       apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
@@ -695,6 +696,8 @@
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const db = getDatabase(app);
+    const remoteConfig = getRemoteConfig(app);
+    remoteConfig.settings.minimumFetchIntervalMillis = 3600000; // Fetch every hour
 
     const messageInput = document.getElementById("message-input");
     const sendButton = document.getElementById("send-button");
@@ -712,41 +715,35 @@
     let currentUser = null;
     let chatHistory = [];
 
-    // OpenAI API key (replace with your key from OpenAI)
-    const OPENAI_API_KEY = "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"; // Securely store this in production
-
-    // Generate response using OpenAI ChatGPT API
+    // Generate response using OpenAI ChatGPT API with Remote Config
     async function generateResponse(prompt) {
       console.log("Generating response for prompt:", maxLength(prompt, 50));
       try {
+        await fetchAndActivate(remoteConfig);
+        const apiKey = getString(remoteConfig, 'openai_api_key');
+        if (!apiKey) {
+          throw new Error('API key not found in Remote Config');
+        }
         const response = await fetch('https://api.openai.com/v1/chat/completions', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${OPENAI_API_KEY}`,
+            'Authorization': `Bearer ${apiKey}`
           },
           body: JSON.stringify({
             model: 'gpt-3.5-turbo',
             messages: [
-              {
-                role: 'system',
-                content: 'You are Vynix, a witty AI with a dash of humor.'
-              },
-              {
-                role: 'user',
-                content: prompt
-              }
+              { role: 'system', content: 'You are Vynix, a witty AI with a dash of humor.' },
+              { role: 'user', content: prompt }
             ],
             temperature: 0.7,
             max_tokens: 100
           })
         });
-
         const data = await response.json();
         if (!response.ok) {
           throw new Error(data.error?.message || 'OpenAI API request failed');
         }
-
         const text = data.choices?.[0]?.message?.content;
         return text || "Vynix says: Let's spice things up!";
       } catch (error) {
