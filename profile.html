@@ -27,7 +27,7 @@
     }
 
     body {
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       background: var(--white);
       color: var(--text-dark);
       min-height: 100vh;
@@ -402,6 +402,96 @@
       opacity: 0.5;
     }
 
+    .media-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1rem;
+      margin-top: 1.5rem;
+    }
+
+    .media-item {
+      position: relative;
+      aspect-ratio: 1;
+      border-radius: 8px;
+      overflow: hidden;
+      cursor: pointer;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      transition: transform 0.2s ease;
+    }
+
+    .media-item:hover {
+      transform: scale(1.05);
+    }
+
+    .media-item img, .media-item video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .media-item.shimmer::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+      animation: shimmer 1.5s infinite;
+    }
+
+    .media-preview-modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.8);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 2000;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease;
+    }
+
+    .media-preview-modal.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .media-preview-content {
+      position: relative;
+      max-width: 90%;
+      max-height: 90%;
+      background: var(--white);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    .media-preview-content img, .media-preview-content video {
+      width: 100%;
+      height: auto;
+      max-height: 80vh;
+      object-fit: contain;
+    }
+
+    .media-preview-close {
+      position: absolute;
+      top: 0.5rem;
+      right: 0.5rem;
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 0.5rem;
+    }
+
+    .media-preview-close svg {
+      width: 24px;
+      height: 24px;
+      fill: none;
+      stroke: var(--white);
+      stroke-width: 2;
+    }
+
     .custom-alert {
       position: fixed;
       top: 1rem;
@@ -541,6 +631,10 @@
       .profile-form button {
         font-size: 0.95rem;
       }
+
+      .media-grid {
+        grid-template-columns: 1fr; /* 1 column on mobile */
+      }
     }
   </style>
 </head>
@@ -569,6 +663,15 @@
         <path d="M6 18L18 6M6 6l12 12"/>
       </svg>
     </button>
+  </div>
+  <div class="media-preview-modal" id="media-preview-modal">
+    <div class="media-preview-content" id="media-preview-content">
+      <button class="media-preview-close" aria-label="Close media preview">
+        <svg viewBox="0 0 24 24">
+          <path d="M6 18L18 6M6 6l12 12"/>
+        </svg>
+      </button>
+    </div>
   </div>
   <div class="profile-header-image shimmer" id="profile-header-image"></div>
   <div class="container">
@@ -614,17 +717,23 @@
           <input type="file" id="media-file" class="form-input" accept="image/*,video/*" aria-label="Profile picture"/>
           <button type="button" id="choose-image-btn" class="choose-image-btn" disabled aria-label="Choose profile picture">Choose Profile Picture</button>
         </div>
+        <div>
+          <label for="grid-media-file">Upload to Gallery</label>
+          <input type="file" id="grid-media-file" class="form-input" accept="image/*,video/*" aria-label="Upload to gallery"/>
+          <button type="button" id="choose-grid-media-btn" class="choose-image-btn" disabled aria-label="Choose gallery media">Upload Media</button>
+        </div>
         <div class="progress-bar" id="progress-bar">
           <div id="progress"></div>
         </div>
         <button type="submit" id="save-profile-btn" disabled aria-label="Save profile">Save Changes</button>
       </form>
+      <div class="media-grid" id="media-grid"></div>
     </div>
   </div>
   <script type="module">
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
     import { getAuth, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
-    import { getDatabase, ref, set, get, onValue } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js';
+    import { getDatabase, ref, set, get, onValue, push, query, orderByChild, equalTo } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js';
 
     const firebaseConfig = {
       apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
@@ -646,8 +755,10 @@
     const profileHeaderImage = document.getElementById("profile-header-image");
     const mediaFile = document.getElementById("media-file");
     const headerFile = document.getElementById("header-file");
+    const gridMediaFile = document.getElementById("grid-media-file");
     const chooseImageBtn = document.getElementById("choose-image-btn");
     const chooseHeaderBtn = document.getElementById("choose-header-btn");
+    const chooseGridMediaBtn = document.getElementById("choose-grid-media-btn");
     const profileUsername = document.getElementById("profile-username");
     const profileHandle = document.getElementById("profile-handle");
     const profileBio = document.getElementById("profile-bio");
@@ -669,6 +780,9 @@
     const progress = document.getElementById("progress");
     const loadingOverlay = document.getElementById("loading-overlay");
     const profileContainer = document.getElementById("profile-container");
+    const mediaGrid = document.getElementById("media-grid");
+    const mediaPreviewModal = document.getElementById("media-preview-modal");
+    const mediaPreviewContent = document.getElementById("media-preview-content");
 
     const CLOUDINARY_CLOUD_NAME = "dqkujefxj";
     const CLOUDINARY_UPLOAD_PRESET = "banter_box";
@@ -681,6 +795,7 @@
       profileHandle.classList.add("shimmer-text");
       followStats.classList.add("shimmer-text");
       profileBio.classList.add("shimmer-text");
+      mediaGrid.querySelectorAll(".media-item").forEach(item => item.classList.add("shimmer"));
     }
 
     function hideLoading() {
@@ -691,6 +806,7 @@
       profileHandle.classList.remove("shimmer-text");
       followStats.classList.remove("shimmer-text");
       profileBio.classList.remove("shimmer-text");
+      mediaGrid.querySelectorAll(".media-item").forEach(item => item.classList.remove("shimmer"));
     }
 
     function getAvatarInitials(username) {
@@ -698,12 +814,11 @@
     }
 
     function showAlert(message, isSuccess) {
+      console.log("Showing alert:", message);
       alertMessage.textContent = message;
       alert.style.background = isSuccess ? "rgba(29, 161, 242, 0.1)" : "rgba(255, 0, 0, 0.1)";
       alert.classList.add("active");
-      setTimeout(() => {
-        alert.classList.remove("active");
-      }, 3000);
+      setTimeout(() => alert.classList.remove("active"), 3000);
     }
 
     function validateUsername(username) {
@@ -729,11 +844,12 @@
       const handleValid = validateHandle(handleInput.value.trim());
       const bioValid = validateBio(bioInput.value.trim());
       saveProfileBtn.disabled = !(usernameValid && handleValid && bioValid);
+      chooseGridMediaBtn.disabled = !auth.currentUser;
     }
 
-    async function uploadMedia(file, isHeader = false) {
+    async function uploadMedia(file, isHeader = false, isGridMedia = false) {
       if (!auth.currentUser) {
-        showAlert(`You must be logged in to upload a ${isHeader ? "cover photo" : "profile picture"}.`, false);
+        showAlert(`You must be logged in to upload a ${isHeader ? "cover photo" : isGridMedia ? "gallery media" : "profile picture"}.`, false);
         return null;
       }
 
@@ -807,7 +923,7 @@
       }
     }
 
-    async function updateProfileMedia(mediaUrl, isVideo, isHeader = false) {
+    async function updateProfileMedia(mediaUrl, isVideo, isHeader = false, isGridMedia = false) {
       showLoading();
       try {
         const userRef = ref(db, `users/${auth.currentUser.uid}`);
@@ -823,11 +939,15 @@
           isHeaderVideo: userData.isHeaderVideo || false,
           isGuest: userData.isGuest || false,
           followers: userData.followers || {},
-          following: userData.following || {}
+          following: userData.following || {},
+          media: userData.media || {}
         };
         if (isHeader) {
           updateData.headerMedia = mediaUrl;
           updateData.isHeaderVideo = isVideo;
+        } else if (isGridMedia) {
+          const mediaRef = push(ref(db, `users/${auth.currentUser.uid}/media`));
+          updateData.media[mediaRef.key] = { url: mediaUrl, isVideo, timestamp: Date.now() };
         } else {
           updateData.profilePicture = mediaUrl;
           updateData.isVideo = isVideo;
@@ -837,17 +957,57 @@
           profileHeaderImage.innerHTML = isVideo
             ? `<video src="${mediaUrl}" alt="Cover photo video" autoplay loop muted playsinline style="width: 100%; height: 100%; object-fit: cover;"></video>`
             : `<img src="${mediaUrl}" alt="Cover photo" />`;
-        } else {
+        } else if (!isGridMedia) {
           profileAvatar.innerHTML = isVideo
             ? `<video src="${mediaUrl}" alt="Profile video" autoplay loop muted playsinline style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover;"></video>`
             : `<img src="${mediaUrl}" alt="Profile picture" />`;
         }
-        showAlert(`${isHeader ? "Cover photo" : "Profile picture"} updated successfully!`, true);
+        showAlert(`${isHeader ? "Cover photo" : isGridMedia ? "Gallery media" : "Profile picture"} updated successfully!`, true);
       } catch (error) {
-        showAlert(`Failed to update ${isHeader ? "cover photo" : "profile picture"}: ${error.message}`, false);
+        showAlert(`Failed to update ${isHeader ? "cover photo" : isGridMedia ? "gallery media" : "profile picture"}: ${error.message}`, false);
       } finally {
         hideLoading();
       }
+    }
+
+    async function loadMediaGrid(profileUid, isOwner) {
+      const mediaRef = ref(db, `users/${profileUid}/media`);
+      onValue(mediaRef, (snapshot) => {
+        mediaGrid.innerHTML = "";
+        const mediaData = snapshot.val();
+        if (mediaData) {
+          const mediaArray = Object.entries(mediaData)
+            .map(([id, data]) => ({ id, ...data }))
+            .sort((a, b) => b.timestamp - a.timestamp); // Sort by newest first
+          mediaArray.forEach((media) => {
+            const mediaItem = document.createElement("div");
+            mediaItem.className = "media-item shimmer";
+            const thumbnailUrl = media.isVideo
+              ? `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/video/upload/so_0/${media.url.split('/').pop().split('.')[0]}.jpg` // Cloudinary thumbnail
+              : media.url;
+            mediaItem.innerHTML = `<img src="${thumbnailUrl}" alt="User media" onerror="this.src='https://via.placeholder.com/150?text=Media+Loading'"/>`;
+            mediaItem.addEventListener("click", () => {
+              mediaPreviewContent.innerHTML = media.isVideo
+                ? `<video src="${media.url}" alt="Media preview" controls style="width: 100%; height: auto; max-height: 80vh; object-fit: contain;"></video>`
+                : `<img src="${media.url}" alt="Media preview" />`;
+              mediaPreviewModal.classList.add("active");
+            });
+            mediaGrid.appendChild(mediaItem);
+            // Remove shimmer once loaded
+            if (media.isVideo) {
+              const video = document.createElement("video");
+              video.src = media.url;
+              video.onloadeddata = () => mediaItem.classList.remove("shimmer");
+            } else {
+              const img = new Image();
+              img.src = thumbnailUrl;
+              img.onload = () => mediaItem.classList.remove("shimmer");
+            }
+          });
+        } else if (isOwner) {
+          mediaGrid.innerHTML = '<p class="text-center text-gray-500">No media uploaded yet.</p>';
+        }
+      });
     }
 
     async function followUser(followedUserId) {
@@ -883,7 +1043,37 @@
       }
     }
 
-    function startConversation(userId) {
+    async function findOrCreateConversation(currentUserId, otherUserId) {
+      if (currentUserId === otherUserId) {
+        showAlert("You cannot message yourself.", false);
+        return null;
+      }
+      if (auth.currentUser.isGuest) {
+        showAlert("Guests cannot send messages.", false);
+        return null;
+      }
+
+      const convoRef = ref(db, "conversations");
+      const userConvoQuery = query(
+        convoRef,
+        orderByChild("users"),
+        equalTo([currentUserId, otherUserId].sort().join(","))
+      );
+      const snapshot = await get(userConvoQuery);
+      if (snapshot.exists()) {
+        const convo = Object.entries(snapshot.val())[0];
+        return convo[0];
+      }
+
+      const newConvoRef = push(convoRef);
+      await set(newConvoRef, {
+        users: [currentUserId, otherUserId].sort(),
+        lastMessageAt: Date.now()
+      });
+      return newConvoRef.key;
+    }
+
+    async function startConversation(userId) {
       if (!auth.currentUser) {
         showAlert("You must be logged in to send messages.", false);
         return;
@@ -896,7 +1086,10 @@
         showAlert("You cannot message yourself.", false);
         return;
       }
-      window.location.href = `messages.html?uid=${userId}`;
+      const convoId = await findOrCreateConversation(auth.currentUser.uid, userId);
+      if (convoId) {
+        window.location.href = `messages.html?convoId=${convoId}`;
+      }
     }
 
     function getProfileUid() {
@@ -916,24 +1109,26 @@
       const profileUid = getProfileUid();
       const isOwner = user.uid === profileUid;
 
-      // Store user as guest or not
       const userRef = ref(db, `users/${user.uid}`);
       const userSnapshot = await get(userRef);
       const userData = userSnapshot.val() || {};
       user.isGuest = userData.isGuest || false;
 
-      // Enable/disable editing based on ownership
       if (isOwner) {
         mediaFile.disabled = false;
         chooseImageBtn.disabled = false;
         headerFile.disabled = false;
         chooseHeaderBtn.disabled = false;
+        gridMediaFile.disabled = false;
+        chooseGridMediaBtn.disabled = false;
         profileForm.classList.remove("hidden");
       } else {
         mediaFile.disabled = true;
         chooseImageBtn.disabled = true;
         headerFile.disabled = true;
         chooseHeaderBtn.disabled = true;
+        gridMediaFile.disabled = true;
+        chooseGridMediaBtn.disabled = true;
         profileForm.classList.add("hidden");
       }
 
@@ -967,7 +1162,6 @@
             profileHeaderImage.innerHTML = "";
           }
 
-          // Follow and Message buttons for non-owner profiles
           followButtonContainer.innerHTML = "";
           if (!isOwner) {
             const messageButton = document.createElement("button");
@@ -1000,7 +1194,6 @@
                 `;
                 followButton.addEventListener("click", async () => {
                   await followUser(profileUid);
-                  // Refresh follow button and counts
                   const updatedSnapshot = await get(profileRef);
                   const updatedData = updatedSnapshot.val() || {};
                   followersCount.textContent = Object.keys(updatedData.followers || {}).length;
@@ -1015,6 +1208,7 @@
             }
           }
 
+          loadMediaGrid(profileUid, isOwner);
           if (isOwner) {
             checkFormValidity();
           }
@@ -1028,9 +1222,10 @@
           avatarInitials.textContent = "A";
           profileHeaderImage.innerHTML = "";
           followButtonContainer.innerHTML = "";
+          mediaGrid.innerHTML = isOwner ? '<p class="text-center text-gray-500">No media uploaded yet.</p>' : "";
         }
         hideLoading();
-      }, { onlyOnce: true });
+      }, { onlyOnce: false });
     });
 
     chooseImageBtn.addEventListener("click", () => {
@@ -1047,6 +1242,14 @@
         return;
       }
       headerFile.click();
+    });
+
+    chooseGridMediaBtn.addEventListener("click", () => {
+      if (!auth.currentUser) {
+        showAlert("You must be logged in to upload gallery media.", false);
+        return;
+      }
+      gridMediaFile.click();
     });
 
     mediaFile.addEventListener("change", async () => {
@@ -1085,6 +1288,24 @@
       }
     });
 
+    gridMediaFile.addEventListener("change", async () => {
+      if (!auth.currentUser) {
+        showAlert("You must be logged in to upload gallery media.", false);
+        return;
+      }
+      if (gridMediaFile.files[0]) {
+        try {
+          const file = gridMediaFile.files[0];
+          const isVideo = file.type.startsWith("video/");
+          const mediaUrl = await uploadMedia(file, false, true);
+          if (!mediaUrl) return;
+          await updateProfileMedia(mediaUrl, isVideo, false, true);
+        } catch (error) {
+          showAlert(`Failed to upload gallery media: ${error.message}`, false);
+        }
+      }
+    });
+
     profileForm.addEventListener("submit", async (event) => {
       event.preventDefault();
       if (saveProfileBtn.disabled) return;
@@ -1107,7 +1328,8 @@
           isHeaderVideo: userData.isHeaderVideo || false,
           isGuest: userData.isGuest || false,
           followers: userData.followers || {},
-          following: userData.following || {}
+          following: userData.following || {},
+          media: userData.media || {}
         });
         showAlert("Profile updated successfully!", true);
         profileUsername.textContent = usernameInput.value.trim();
@@ -1129,6 +1351,11 @@
       alert.classList.remove("active");
     });
 
+    document.querySelector(".media-preview-close").addEventListener("click", () => {
+      mediaPreviewModal.classList.remove("active");
+      mediaPreviewContent.innerHTML = "";
+    });
+
     document.querySelector(".theme-toggle").addEventListener("click", () => {
       const theme = document.body.dataset.theme === "dark" ? "light" : "dark";
       document.body.dataset.theme = theme;
@@ -1138,7 +1365,6 @@
     const savedTheme = localStorage.getItem("theme") || "light";
     document.body.dataset.theme = savedTheme;
 
-    // Input validation on change
     usernameInput.addEventListener("input", checkFormValidity);
     handleInput.addEventListener("input", checkFormValidity);
     bioInput.addEventListener("input", checkFormValidity);
