@@ -573,9 +573,10 @@
     let currentUser = null;
     let chatHistory = [];
     let voiceResponseEnabled = false;
+    let isSpeechSupported = 'speechSynthesis' in window && 'SpeechSynthesisUtterance' in window;
 
     // Google AI Gemini API key (replace with your key from Google AI Studio)
-    const GEMINI_API_KEY = "AIzaSyCMi7_kbWW1OobwnIC-dPFzdNnRmZGHJdM"; // Securely store this in production
+    const GEMINER_API_KEY = "AIzaSyCMi7_kbWW1OobwnIC-dPFzdNnRmZGHJdM"; // Securely store this in production
 
     // Generate response using Gemini API
     async function generateResponse(prompt) {
@@ -701,15 +702,20 @@
       const username = isUser ? (userData?.username || "Anonymous") : "Vynix";
       const profilePicture = isUser ? userData?.profilePicture : null;
       
-      // Play voice response for new AI messages if voice is enabled
-      if (!isUser && messageData.voiceEnabled && !messageData.isRendered) {
-        const utterance = new SpeechSynthesisUtterance(messageData.text);
-        utterance.lang = 'en-US';
-        utterance.volume = 1;
-        utterance.rate = 1;
-        utterance.pitch = 1;
-        window.speechSynthesis.speak(utterance);
-        messageData.isRendered = true; // Prevent replaying on re-render
+      // Play voice response for new AI messages if voice is enabled and supported
+      if (!isUser && messageData.voiceEnabled && !messageData.isRendered && isSpeechSupported) {
+        try {
+          const utterance = new SpeechSynthesisUtterance(messageData.text);
+          utterance.lang = 'en-US';
+          utterance.volume = 1;
+          utterance.rate = 1;
+          utterance.pitch = 1;
+          window.speechSynthesis.speak(utterance);
+          messageData.isRendered = true; // Prevent replaying on re-render
+        } catch (error) {
+          console.error("Speech synthesis error:", error);
+          showAlert("Voice response failed. Please try again.", false);
+        }
       }
 
       messageDiv.innerHTML = `
@@ -785,6 +791,11 @@
 
     // Toggle voice response
     voiceToggleBtn.addEventListener("click", () => {
+      if (!isSpeechSupported) {
+        showAlert("Voice responses are not supported in this browser.", false);
+        voiceToggleBtn.disabled = true;
+        return;
+      }
       voiceResponseEnabled = !voiceResponseEnabled;
       voiceToggleBtn.classList.toggle("active", voiceResponseEnabled);
       voiceToggleBtn.setAttribute("aria-pressed", voiceResponseEnabled);
@@ -820,7 +831,7 @@
         user.isGuest = isGuest;
         messageInput.disabled = isGuest;
         sendButton.disabled = isGuest || !messageInput.value.trim();
-        voiceToggleBtn.disabled = isGuest;
+        voiceToggleBtn.disabled = isGuest || !isSpeechSupported;
         messageInput.placeholder = isGuest ? "Guests can't chat with Vynix." : "Type a message...";
         console.log("User data loaded:", userData, "Is guest:", isGuest);
 
@@ -848,6 +859,13 @@
         showAlert(`Failed to load user data: ${error.message}`, false);
         hideLoading();
       });
+
+      // Check speech synthesis support and update UI
+      if (!isSpeechSupported) {
+        voiceToggleBtn.disabled = true;
+        voiceToggleBtn.title = "Voice responses not supported in this browser";
+        showAlert("Voice responses are not supported in this browser.", false);
+      }
     });
 
     // Event listeners
