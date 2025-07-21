@@ -170,6 +170,7 @@
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
       animation: slideIn 0.4s ease-out;
       transition: transform 0.2s ease, box-shadow 0.2s ease;
+      position: relative;
     }
 
     .chat-message.user {
@@ -231,6 +232,35 @@
       line-height: 1.5;
       word-break: break-word;
       white-space: pre-wrap;
+    }
+
+    .tts-button, .tts-stop-button {
+      position: absolute;
+      top: 0.5rem;
+      right: 0.5rem;
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 0.3rem;
+      opacity: 0.7;
+      transition: opacity 0.2s ease, transform 0.2s ease;
+    }
+
+    .tts-button:hover, .tts-stop-button:hover {
+      opacity: 1;
+      transform: scale(1.1);
+    }
+
+    .tts-button svg, .tts-stop-button svg {
+      width: 20px;
+      height: 20px;
+      stroke: var(--white);
+      stroke-width: 2;
+    }
+
+    .tts-button:disabled, .tts-stop-button:disabled {
+      cursor: not-allowed;
+      opacity: 0.5;
     }
 
     .ai-compose {
@@ -464,6 +494,17 @@
         font-size: 0.95rem;
       }
 
+      .tts-button, .tts-stop-button {
+        top: 0.4rem;
+        right: 0.4rem;
+        padding: 0.2rem;
+      }
+
+      .tts-button svg, .tts-stop-button svg {
+        width: 18px;
+        height: 18px;
+      }
+
       .ai-compose {
         margin: 0 0.75rem;
         padding: 0.25rem;
@@ -584,6 +625,7 @@
     let currentUser = null;
     let chatHistory = [];
     let isInitialMessageAdded = false;
+    let currentUtterance = null;
 
     const GEMINI_API_KEY = "AIzaSyCMi7_kbWW1OobwnIC-dPFzdNnRmZGHJdM";
 
@@ -622,6 +664,50 @@
       } catch (error) {
         console.error("Gemini API error:", error);
         throw new Error(`Failed to process query: ${error.message}`);
+      }
+    }
+
+    function speakText(text, messageElement) {
+      console.log("Starting text-to-speech for:", maxLength(text, 50));
+      if (currentUtterance) {
+        window.speechSynthesis.cancel();
+        currentUtterance = null;
+        updateTTSButtons(messageElement, false);
+      }
+      currentUtterance = new SpeechSynthesisUtterance(text);
+      currentUtterance.lang = 'en-US';
+      currentUtterance.rate = 1;
+      currentUtterance.pitch = 1;
+      currentUtterance.onend = () => {
+        console.log("Text-to-speech ended");
+        currentUtterance = null;
+        updateTTSButtons(messageElement, false);
+      };
+      currentUtterance.onerror = (event) => {
+        console.error("Text-to-speech error:", event.error);
+        currentUtterance = null;
+        updateTTSButtons(messageElement, false);
+        showAlert("Failed to play audio: " + event.error, false);
+      };
+      window.speechSynthesis.speak(currentUtterance);
+      updateTTSButtons(messageElement, true);
+    }
+
+    function stopSpeech(messageElement) {
+      console.log("Stopping text-to-speech");
+      if (currentUtterance) {
+        window.speechSynthesis.cancel();
+        currentUtterance = null;
+        updateTTSButtons(messageElement, false);
+      }
+    }
+
+    function updateTTSButtons(messageElement, isSpeaking) {
+      const playButton = messageElement.querySelector('.tts-button');
+      const stopButton = messageElement.querySelector('.tts-stop-button');
+      if (playButton && stopButton) {
+        playButton.style.display = isSpeaking ? 'none' : 'block';
+        stopButton.style.display = isSpeaking ? 'block' : 'none';
       }
     }
 
@@ -728,8 +814,26 @@
           <span class="chat-timestamp">${formatTimestamp(messageData.createdAt)}</span>
         </div>
         <div class="chat-content">${messageData.text}</div>
+        ${!isUser ? `
+          <button class="tts-button" aria-label="Play text-to-speech">
+            <svg viewBox="0 0 24 24">
+              <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0014 7.97v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
+            </svg>
+          </button>
+          <button class="tts-stop-button" aria-label="Stop text-to-speech" style="display: none;">
+            <svg viewBox="0 0 24 24">
+              <path d="M6 6h12v12H6z"/>
+            </svg>
+          </button>
+        ` : ''}
       `;
       aiChat.prepend(messageDiv);
+      if (!isUser) {
+        const playButton = messageDiv.querySelector('.tts-button');
+        const stopButton = messageDiv.querySelector('.tts-stop-button');
+        playButton.addEventListener('click', () => speakText(messageData.text, messageDiv));
+        stopButton.addEventListener('click', () => stopSpeech(messageDiv));
+      }
       scrollToBottom();
     }
 
@@ -849,7 +953,7 @@
 
         if (!isInitialMessageAdded) {
           const initialMessage = {
-            text: "Hello! I'm Math Vynix. Type a statistics problem (e.g., 'mean of 2, 4, 6' or 'probability of 3 successes in 5 trials with p=0.4') or an equation (e.g., '2x + 3 = 7') to solve. I'll provide a step-by-step explanation.",
+            text: "Hello! I'm Math Vynix. Type a statistics problem (e.g., 'mean of 2, 4, 6' or 'probability of 3 successes in 5 trials with p=0.4') or an equation (e.g., '2x + 3 = 7') to solve. I'll provide a step-by-step explanation. Click the speaker icon to hear my responses!",
             createdAt: Date.now(),
             isUser: false
           };
