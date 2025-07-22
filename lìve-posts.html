@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Banter Box - Live Streams</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root {
+      --twitter-blue: #1DA1F2;
+      --twitter-purple: #8A3FFC;
+      --text-dark: #0F1419;
+      --text-light: #536471;
+      --border: #D8D9DB;
+      --white: #FFFFFF;
+      --background: #F5F8FA;
+      --dark-bg: #15202B;
+      --dark-border: #2F3B43;
+      --dark-text: #FFFFFF;
+    }
+
+    [data-theme="dark"] {
+      --text-dark: var(--dark-text);
+      --border: var(--dark-border);
+      --white: var(--dark-bg);
+      --background: #1E2A3C;
+    }
+
+    * {
+      -webkit-user-select: none;
+      -moz-user-select: none;
+      -ms-user-select: none;
+      user-select: none;
+      -webkit-touch-callout: none;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+      background: var(--white);
+      color: var(--text-dark);
+      min-height: 100vh;
+      margin: 0;
+      padding: 0;
+      transition: background 0.3s ease, color 0.3s ease;
+    }
+
+    .container {
+      max-width: 600px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 1rem;
+    }
+
+    .live-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+
+    .live-post {
+      padding: 1rem;
+      border-bottom: 1px solid var(--border);
+      background: var(--white);
+      transition: background 0.2s ease;
+      cursor: pointer;
+    }
+
+    .live-post:hover {
+      background: var(--background);
+    }
+
+    .live-post .verified-badge {
+      width: 18px;
+      height: 18px;
+      margin-left: 0.25rem;
+    }
+
+    .live-badge {
+      background: var(--twitter-blue);
+      color: var(--white);
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 0.25rem 0.5rem;
+      border-radius: 9999px;
+    }
+
+    .loading-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 2000;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease;
+    }
+
+    .loading-overlay.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .spinner {
+      width: 48px;
+      height: 48px;
+      border: 4px solid transparent;
+      border-top-color: var(--twitter-blue);
+      border-right-color: var(--twitter-purple);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    .spinner-text {
+      color: var(--white);
+      font-size: 0.9rem;
+      font-weight: 500;
+      margin-top: 0.5rem;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    .custom-alert {
+      display: none;
+      position: fixed;
+      top: 1rem;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--white);
+      padding: 1rem 2rem;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      z-index: 1001;
+      color: var(--text-dark);
+      font-weight: 500;
+      text-align: center;
+      max-width: 90%;
+      width: 320px;
+      animation: fadeIn 0.3s ease-out forwards;
+      border: 1px solid var(--border);
+    }
+
+    .custom-alert.active {
+      display: block;
+    }
+
+    .custom-alert .close-btn {
+      position: absolute;
+      top: 0.75rem;
+      right: 0.75rem;
+      width: 24px;
+      height: 24px;
+      background: none;
+      border: none;
+      color: var(--text-dark);
+      cursor: pointer;
+      transition: transform 0.2s ease;
+    }
+
+    .custom-alert .close-btn:hover {
+      transform: scale(1.2);
+    }
+
+    .custom-alert .close-btn svg {
+      width: 100%;
+      height: 100%;
+      fill: none;
+      stroke: var(--text-dark);
+      stroke-width: 2;
+    }
+
+    @keyframes fadeIn {
+      0% { opacity: 0; transform: translateX(-50%) translateY(-10px); }
+      100% { opacity: 1; transform: translateX(-50%) translateY(0); }
+    }
+
+    @media (max-width: 640px) {
+      .container {
+        padding: 0.75rem;
+      }
+
+      .live-post {
+        padding: 0.75rem;
+      }
+
+      .live-badge {
+        font-size: 0.7rem;
+        padding: 0.2rem 0.4rem;
+      }
+
+      .live-post .verified-badge {
+        width: 16px;
+        height: 16px;
+      }
+
+      .spinner {
+        width: 40px;
+        height: 40px;
+      }
+
+      .spinner-text {
+        font-size: 0.8rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="custom-alert" id="alert">
+      <span id="alert-message"></span>
+      <button class="close-btn" aria-label="Close alert">
+        <svg viewBox="0 0 24 24">
+          <path d="M6 18L18 6M6 6l12 12"/>
+        </svg>
+      </button>
+    </div>
+    <div class="loading-overlay" id="loading-overlay">
+      <div class="spinner"></div>
+      <span class="spinner-text">Loading...</span>
+    </div>
+    <ul class="live-list" id="live-list" aria-live="polite"></ul>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+    import { getDatabase, ref, onValue, get } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
+      authDomain: "fire-b-a8878.firebaseapp.com",
+      databaseURL: "https://fire-b-a8878.firebaseio.com",
+      projectId: "fire-b-a8878",
+      storageBucket: "fire-b-a8878.firebasestorage.app",
+      messagingSenderId: "658673187627",
+      appId: "1:658673187627:web:6e4c29af661785f0afa36e",
+      measurementId: "G-V4W97VMSKL"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getDatabase(app);
+
+    const liveList = document.getElementById("live-list");
+    const loadingOverlay = document.getElementById("loading-overlay");
+    const alert = document.getElementById("alert");
+    const alertMessage = document.getElementById("alert-message");
+
+    function showAlert(message, isSuccess) {
+      alertMessage.textContent = message;
+      alert.style.background = isSuccess ? "rgba(29, 161, 242, 0.1)" : "rgba(255, 0, 0, 0.1)";
+      alert.classList.add("active");
+      setTimeout(() => alert.classList.remove("active"), 3000);
+    }
+
+    function showLoading() {
+      loadingOverlay.classList.add("active");
+    }
+
+    function hideLoading() {
+      loadingOverlay.classList.remove("active");
+    }
+
+    const verifiedBadge = `
+      <svg class="verified-badge" viewBox="0 0 24 24" fill="none" stroke="#1DA1F2" stroke-width="2">
+        <path d="M22 12a10 10 0 11-20 0 10 10 0 0120 0zM9 12l2 2 4-4"/>
+      </svg>
+    `;
+
+    async function renderLivePost(stream, userProfiles, streamId) {
+      const { userId, username, handle, timestamp } = stream;
+      const isVerified = userProfiles[userId]?.verified || false;
+      const li = document.createElement("li");
+      li.className = "live-post";
+      const formattedDate = new Date(timestamp).toLocaleString("en-US", {
+        month: "short",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      });
+
+      li.innerHTML = `
+        <div class="flex gap-3">
+          <div class="w-12 h-12 bg-gray-300 rounded-full"></div>
+          <div class="flex-1">
+            <div class="flex items-center gap-1">
+              <span class="font-bold text-[var(--text-dark)]">${username}</span>
+              ${isVerified ? verifiedBadge : ""}
+              <span class="text-[var(--text-light)]">@${handle}</span>
+              <span class="text-[var(--text-light)]">· ${formattedDate}</span>
+            </div>
+            <div class="flex items-center gap-2 mt-1">
+              <span class="live-badge">LIVE</span>
+              <p class="text-[var(--text-dark)]">is live now!</p>
+            </div>
+          </div>
+        </div>
+      `;
+      li.dataset.streamId = streamId;
+      li.dataset.userId = userId;
+      li.setAttribute("aria-label", `${username} is live`);
+      return li;
+    }
+
+    function refreshLivePosts(user, userProfiles, following) {
+      const liveStreamsRef = ref(db, "liveStreams");
+      liveList.innerHTML = "";
+      showLoading();
+
+      onValue(liveStreamsRef, (snapshot) => {
+        liveList.innerHTML = "";
+        const liveStreams = snapshot.val() || {};
+        const liveStreamPromises = Object.entries(liveStreams)
+          .filter(([userId, stream]) => stream.isLive && (userId === user.uid || following[userId]))
+          .sort(([, a], [, b]) => b.timestamp - a.timestamp)
+          .map(async ([streamId, stream]) => {
+            const userProfile = userProfiles[streamId] || {};
+            return renderLivePost(
+              { ...stream, userId: streamId, handle: userProfile.handle || "unknown" },
+              userProfiles,
+              streamId
+            );
+          });
+
+        Promise.all(liveStreamPromises).then((items) => {
+          items.forEach((item) => {
+            liveList.appendChild(item);
+            item.addEventListener("click", () => {
+              const streamId = item.dataset.streamId;
+              const userId = item.dataset.userId;
+              window.location.href = `view-live.html?streamId=${streamId}&userId=${userId}`;
+            });
+          });
+          hideLoading();
+          if (items.length === 0) {
+            liveList.innerHTML = `<p class="text-[var(--text-light)] text-center p-4">No live streams available.</p>`;
+          }
+        }).catch(() => {
+          showAlert("Failed to load live streams.", false);
+          hideLoading();
+        });
+      }, (error) => {
+        showAlert("Failed to load live streams.", false);
+        hideLoading();
+      });
+    }
+
+    onAuthStateChanged(auth, (user) => {
+      if (!user) {
+        document.body.classList.add("fade-out");
+        setTimeout(() => {
+          window.location.href = "signup.html";
+        }, 1500);
+        return;
+      }
+
+      if (user.isGuest) {
+        showAlert("Guests cannot view live streams.", false);
+        setTimeout(() => {
+          window.location.href = "home.html";
+        }, 2000);
+        return;
+      }
+
+      showLoading();
+      const userRef = ref(db, `users/${user.uid}`);
+      get(userRef).then((snapshot) => {
+        const userData = snapshot.val();
+        const isGuest = userData && userData.isGuest;
+        user.isGuest = isGuest;
+
+        const usersRef = ref(db, "users");
+        get(usersRef).then((usersSnapshot) => {
+          const userProfiles = usersSnapshot.val() || {};
+
+          const followingRef = ref(db, `users/${user.uid}/following`);
+          get(followingRef).then((followingSnapshot) => {
+            const following = followingSnapshot.val() || {};
+            refreshLivePosts(user, userProfiles, following);
+          }).catch(() => {
+            showAlert("Failed to load following data.", false);
+            refreshLivePosts(user, userProfiles, {});
+            hideLoading();
+          });
+        }).catch(() => {
+          showAlert("Failed to load user profiles.", false);
+          hideLoading();
+        });
+      }).catch(() => {
+        showAlert("Failed to load user data.", false);
+        hideLoading();
+      });
+    });
+
+    document.querySelector(".custom-alert .close-btn").addEventListener("click", () => {
+      alert.classList.remove("active");
+    });
+
+    const savedTheme = localStorage.getItem("theme") || "light";
+    document.body.dataset.theme = savedTheme;
+  </script>
+</body>
+</html>
