@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Banter Box - View Live Stream</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://webrtc.github.io/adapter/adapter-latest.js"></script>
+  <style>
+    :root {
+      --twitter-blue: #1DA1F2;
+      --twitter-purple: #8A3FFC;
+      --text-dark: #0F1419;
+      --text-light: #536471;
+      --border: #D8D9DB;
+      --white: #FFFFFF;
+      --background: #F5F8FA;
+      --dark-bg: #15202B;
+      --dark-border: #2F3B43;
+      --dark-text: #FFFFFF;
+    }
+
+    [data-theme="dark"] {
+      --text-dark: var(--dark-text);
+      --border: var(--dark-border);
+      --white: var(--dark-bg);
+      --background: #1E2A3C;
+    }
+
+    * {
+      -webkit-user-select: none;
+      -moz-user-select: none;
+      -ms-user-select: none;
+      user-select: none;
+      -webkit-touch-callout: none;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+      background: var(--white);
+      color: var(--text-dark);
+      min-height: 100vh;
+      margin: 0;
+      padding: 0;
+      transition: background 0.3s ease, color 0.3s ease;
+    }
+
+    .navbar {
+      position: sticky;
+      top: 0;
+      left: 0;
+      right: 0;
+      background: var(--white);
+      border-bottom: 1px solid var(--border);
+      padding: 0.75rem 1rem;
+      z-index: 1000;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .navbar-links {
+      display: flex;
+      gap: 2rem;
+      align-items: center;
+      max-width: 600px;
+      width: 100%;
+    }
+
+    .navbar-links a, .navbar-links button {
+      color: var(--text-dark);
+      font-size: 1rem;
+      font-weight: 600;
+      text-decoration: none;
+      transition: color 0.2s ease;
+    }
+
+    .navbar-links a:hover, .navbar-links button:hover {
+      color: var(--twitter-blue);
+    }
+
+    .navbar-links a.active {
+      color: var(--twitter-blue);
+      border-bottom: 2px solid var(--twitter-blue);
+    }
+
+    .theme-toggle {
+      background: none;
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+    }
+
+    .theme-toggle svg {
+      width: 24px;
+      height: 24px;
+      fill: none;
+      stroke: var(--text-dark);
+      stroke-width: 2;
+    }
+
+    .live-container {
+      max-width: 600px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      background: var(--white);
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .live-preview {
+      width: 100%;
+      max-height: 70vh;
+      border-radius: 8px;
+      background: var(--background);
+      object-fit: cover;
+    }
+
+    .live-info {
+      width: 100%;
+      padding: 1rem 0;
+      text-align: center;
+    }
+
+    .live-info h1 {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--text-dark);
+      margin-bottom: 0.5rem;
+    }
+
+    .live-info p {
+      color: var(--text-light);
+      font-size: 0.95rem;
+    }
+
+    .loading-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 2000;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease;
+    }
+
+    .loading-overlay.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .spinner {
+      width: 48px;
+      height: 48px;
+      border: 4px solid transparent;
+      border-top-color: var(--twitter-blue);
+      border-right-color: var(--twitter-purple);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    .spinner-text {
+      color: var(--white);
+      font-size: 0.9rem;
+      font-weight: 500;
+      margin-top: 0.5rem;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    .custom-alert {
+      display: none;
+      position: fixed;
+      top: 1rem;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--white);
+      padding: 1rem 2rem;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      z-index: 1001;
+      color: var(--text-dark);
+      font-weight: 500;
+      text-align: center;
+      max-width: 90%;
+      width: 320px;
+      animation: fadeIn 0.3s ease-out forwards;
+      border: 1px solid var(--border);
+    }
+
+    .custom-alert.active {
+      display: block;
+    }
+
+    .custom-alert .close-btn {
+      position: absolute;
+      top: 0.75rem;
+      right: 0.75rem;
+      width: 24px;
+      height: 24px;
+      background: none;
+      border: none;
+      color: var(--text-dark);
+      cursor: pointer;
+      transition: transform 0.2s ease;
+    }
+
+    .custom-alert .close-btn:hover {
+      transform: scale(1.2);
+    }
+
+    .custom-alert .close-btn svg {
+      width: 100%;
+      height: 100%;
+      fill: none;
+      stroke: var(--text-dark);
+      stroke-width: 2;
+    }
+
+    @keyframes fadeIn {
+      0% { opacity: 0; transform: translateX(-50%) translateY(-10px); }
+      100% { opacity: 1; transform: translateX(-50%) translateY(0); }
+    }
+
+    @media (max-width: 640px) {
+      .live-container {
+        padding: 0.75rem;
+        border-radius: 0;
+      }
+
+      .live-preview {
+        max-height: 60vh;
+      }
+
+      .live-info h1 {
+        font-size: 1.1rem;
+      }
+
+      .live-info p {
+        font-size: 0.9rem;
+      }
+
+      .spinner {
+        width: 40px;
+        height: 40px;
+      }
+
+      .spinner-text {
+        font-size: 0.8rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <nav class="navbar">
+    <div class="navbar-links">
+      <a href="home.html">Home</a>
+      <a href="friends.html">Friends</a>
+      <a href="profile.html">Profile</a>
+      <button class="logout-btn" aria-label="Log out">Logout</button>
+      <button class="theme-toggle" aria-label="Toggle dark mode">
+        <svg viewBox="0 0 24 24">
+          <path d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
+        </svg>
+      </button>
+    </div>
+  </nav>
+  <div class="container">
+    <div class="custom-alert" id="alert">
+      <span id="alert-message"></span>
+      <button class="close-btn" aria-label="Close alert">
+        <svg viewBox="0 0 24 24">
+          <path d="M6 18L18 6M6 6l12 12"/>
+        </svg>
+      </button>
+    </div>
+    <div class="loading-overlay" id="loading-overlay">
+      <div class="spinner"></div>
+      <span class="spinner-text">Connecting...</span>
+    </div>
+    <div class="live-container">
+      <div class="live-info">
+        <h1 id="stream-username">Loading...</h1>
+        <p id="stream-handle">@unknown</p>
+      </div>
+      <video id="live-preview" class="live-preview" autoplay playsinline aria-label="Live stream"></video>
+    </div>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+    import { getDatabase, ref, onValue, set } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
+      authDomain: "fire-b-a8878.firebaseapp.com",
+      databaseURL: "https://fire-b-a8878.firebaseio.com",
+      projectId: "fire-b-a8878",
+      storageBucket: "fire-b-a8878.firebasestorage.app",
+      messagingSenderId: "658673187627",
+      appId: "1:658673187627:web:6e4c29af661785f0afa36e",
+      measurementId: "G-V4W97VMSKL"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getDatabase(app);
+
+    const livePreview = document.getElementById("live-preview");
+    const loadingOverlay = document.getElementById("loading-overlay");
+    const alert = document.getElementById("alert");
+    const alertMessage = document.getElementById("alert-message");
+    const streamUsername = document.getElementById("stream-username");
+    const streamHandle = document.getElementById("stream-handle");
+
+    let viewerPeerConnection = null;
+
+    function showAlert(message, isSuccess) {
+      alertMessage.textContent = message;
+      alert.style.background = isSuccess ? "rgba(29, 161, 242, 0.1)" : "rgba(255, 0, 0, 0.1)";
+      alert.classList.add("active");
+      setTimeout(() => alert.classList.remove("active"), 3000);
+    }
+
+    async function setupWebRTCViewer(streamId, broadcasterId) {
+      try {
+        loadingOverlay.classList.add("active");
+
+        // Fetch stream data
+        const streamRef = ref(db, `liveStreams/${broadcasterId}`);
+        const snapshot = await new Promise((resolve) => onValue(streamRef, resolve, { onlyOnce: true }));
+        const streamData = snapshot.val();
+        if (!streamData || !streamData.isLive) {
+          showAlert("This live stream has ended.", false);
+          setTimeout(() => window.location.href = "home.html", 2000);
+          return;
+        }
+
+        // Update UI with stream info
+        streamUsername.textContent = streamData.username || "Anonymous";
+        streamHandle.textContent = `@${streamData.handle || "unknown"}`;
+
+        const configuration = {
+          iceServers: [
+            { urls: "stun:stun.l.google.com:19302" },
+            // Add TURN server if needed
+          ]
+        };
+        viewerPeerConnection = new RTCPeerConnection(configuration);
+
+        viewerPeerConnection.ontrack = (event) => {
+          livePreview.srcObject = event.streams[0];
+          livePreview.play().catch(() => {
+            showAlert("Error playing live stream.", false);
+          });
+        };
+
+        viewerPeerConnection.onicecandidate = (event) => {
+          if (event.candidate) {
+            set(ref(db, `liveStreams/${broadcasterId}/answers/${auth.currentUser.uid}/iceCandidates/${Date.now()}`), event.candidate.toJSON());
+          }
+        };
+
+        // Add ICE candidates from broadcaster
+        onValue(ref(db, `liveStreams/${broadcasterId}/iceCandidates`), (snapshot) => {
+          const candidates = snapshot.val();
+          if (candidates) {
+            Object.values(candidates).forEach(candidate => {
+              viewerPeerConnection.addIceCandidate(new RTCIceCandidate(candidate)).catch(e => console.error("Error adding ICE candidate:", e));
+            });
+          }
+        });
+
+        // Set broadcaster's offer and create answer
+        await viewerPeerConnection.setRemoteDescription(new RTCSessionDescription(streamData.offer));
+        const answer = await viewerPeerConnection.createAnswer();
+        await viewerPeerConnection.setLocalDescription(answer);
+        await set(ref(db, `liveStreams/${broadcasterId}/answers/${auth.currentUser.uid}`), answer);
+
+        showAlert("Connected to live stream!", true);
+      } catch (error) {
+        console.error("Error joining live stream:", error);
+        showAlert("Error joining live stream: " + error.message, false);
+      } finally {
+        loadingOverlay.classList.remove("active");
+      }
+    }
+
+    onAuthStateChanged(auth, (user) => {
+      if (!user) {
+        window.location.href = "signup.html";
+        return;
+      }
+      if (user.isGuest) {
+        showAlert("Guests cannot view live streams.", false);
+        setTimeout(() => window.location.href = "home.html", 2000);
+        return;
+      }
+
+      // Get streamId and userId from URL
+      const urlParams = new URLSearchParams(window.location.search);
+      const streamId = urlParams.get("streamId");
+      const userId = urlParams.get("userId");
+
+      if (!streamId || !userId) {
+        showAlert("Invalid stream URL.", false);
+        setTimeout(() => window.location.href = "home.html", 2000);
+        return;
+      }
+
+      setupWebRTCViewer(streamId, userId);
+    });
+
+    document.querySelector(".logout-btn").addEventListener("click", () => {
+      loadingOverlay.classList.add("active");
+      signOut(auth).finally(() => {
+        loadingOverlay.classList.remove("active");
+      });
+    });
+
+    document.querySelector(".theme-toggle").addEventListener("click", () => {
+      const theme = document.body.dataset.theme === "dark" ? "light" : "dark";
+      document.body.dataset.theme = theme;
+      localStorage.setItem("theme", theme);
+    });
+
+    document.querySelector(".custom-alert .close-btn").addEventListener("click", () => {
+      alert.classList.remove("active");
+    });
+
+    const savedTheme = localStorage.getItem("theme") || "light";
+    document.body.dataset.theme = savedTheme;
+
+    // Clean up WebRTC connection on page unload
+    window.addEventListener("beforeunload", () => {
+      if (viewerPeerConnection) {
+        viewerPeerConnection.close();
+        viewerPeerConnection = null;
+      }
+    });
+  </script>
+</body>
+</html>
