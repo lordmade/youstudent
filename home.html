@@ -1007,6 +1007,67 @@
     box-shadow: 0 0 8px rgba(29, 161, 242, 0.6); /* Enhanced glow in dark mode */
   }
 }
+    .go-live-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  cursor: pointer;
+  color: var(--twitter-blue);
+  font-size: 0.9rem;
+  font-weight: 600;
+  background: none;
+  border: none;
+  transition: transform 0.2s ease, color 0.2s ease;
+}
+
+.go-live-btn:hover:not(:disabled) {
+  transform: scale(1.05);
+  color: var(--twitter-purple);
+}
+
+.go-live-btn:disabled {
+  color: var(--text-light);
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.go-live-btn svg {
+  width: 16px;
+  height: 16px;
+  fill: var(--twitter-blue);
+  transition: fill 0.2s ease;
+}
+
+.go-live-btn:hover:not(:disabled) svg {
+  fill: var(--twitter-purple);
+}
+
+[data-theme="dark"] .go-live-btn {
+  color: var(--dark-text);
+}
+
+[data-theme="dark"] .go-live-btn svg {
+  fill: var(--dark-text);
+}
+
+[data-theme="dark"] .go-live-btn:hover:not(:disabled) {
+  color: var(--twitter-blue);
+}
+
+[data-theme="dark"] .go-live-btn:hover:not(:disabled) svg {
+  fill: var(--twitter-blue);
+}
+
+@media (max-width: 640px) {
+  .go-live-btn {
+    font-size: 0.85rem;
+  }
+
+  .go-live-btn svg {
+    width: 14px;
+    height: 14px;
+  }
+}
   </style>
 </head>
 <body>
@@ -1056,6 +1117,13 @@
             Video
           </label>
           <input type="file" id="video-upload" accept="video/*">
+      <button class="go-live-btn" id="go-live-btn" aria-label="Go Live">
+        <svg viewBox="0 0 24 24" class="go-live-icon">
+          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/>
+        </svg>
+        Go Live
+      </button>
+          
         </div>
         <div class="progress-bar" id="progress-bar">
           <div id="progress"></div>
@@ -2084,6 +2152,78 @@
 
 document.querySelector(".floating-ai-btn").addEventListener("click", () => {
   window.location.href = "ai.html";
+});
+
+  // Select the Go Live button
+const goLiveBtn = document.getElementById("go-live-btn");
+
+// Disable Go Live button for guest users
+onAuthStateChanged(auth, (user) => {
+  if (!user) {
+    document.body.classList.add("fade-out");
+    setTimeout(() => {
+      window.location.href = "signup.html";
+    }, 1500);
+    return;
+  }
+
+  currentUser = user;
+  showLoading();
+  const userRef = ref(db, `users/${user.uid}`);
+  get(userRef).then((snapshot) => {
+    const userData = snapshot.val();
+    const isGuest = userData && userData.isGuest;
+    user.isGuest = isGuest;
+    tweetInput.disabled = isGuest;
+    tweetBtn.disabled = isGuest;
+    imageUpload.disabled = isGuest;
+    videoUpload.disabled = isGuest;
+    goLiveBtn.disabled = isGuest; // Disable Go Live for guests
+    imageLabel.style.pointerEvents = isGuest ? "none" : "auto";
+    videoLabel.style.pointerEvents = isGuest ? "none" : "auto";
+    goLiveBtn.style.pointerEvents = isGuest ? "none" : "auto"; // Disable pointer events
+    imageLabel.style.opacity = isGuest ? 0.5 : 1;
+    videoLabel.style.opacity = isGuest ? 0.5 : 1;
+    goLiveBtn.style.opacity = isGuest ? 0.5 : 1; // Match disabled opacity
+    tweetInput.placeholder = isGuest ? "Guests cannot post or upload media." : "What's happening?";
+
+    const usersRef = ref(db, "users");
+    get(usersRef).then((usersSnapshot) => {
+      const userProfiles = usersSnapshot.val() || {};
+      userHandles = {};
+      Object.entries(userProfiles).forEach(([uid, profile]) => {
+        if (profile.handle) {
+          userHandles[profile.handle.toLowerCase()] = uid;
+        }
+      });
+
+      const followingRef = ref(db, `users/${user.uid}/following`);
+      get(followingRef).then((followingSnapshot) => {
+        const following = followingSnapshot.val() || {};
+        refreshTweets(user, userProfiles, following);
+      }).catch(() => {
+        showAlert("Failed to load following data. Please try again.", false);
+        refreshTweets(user, userProfiles, {});
+        hideLoading();
+      });
+    }).catch(() => {
+      showAlert("Failed to load user profiles. Please try again.", false);
+      hideLoading();
+    });
+  }).catch(() => {
+    showAlert("Failed to load user data. Please try again.", false);
+    hideLoading();
+  });
+});
+
+// Go Live button redirects to go-live.html
+goLiveBtn.addEventListener("click", () => {
+  if (currentUser && currentUser.isGuest) {
+    showAlert("Guests cannot go live.", false);
+    return;
+  }
+  // Redirect to the go live page
+  window.location.href = "go-live.html";
 });
   
 </script>
