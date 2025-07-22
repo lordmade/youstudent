@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>AI Chat - Vynix</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
   <style>
     :root {
       --banter-blue: #1DA1F2;
@@ -14,6 +15,7 @@
       --text-light: #718096;
       --border: #E2E8F0;
       --white: #FFFFFF;
+      --black: #000000;
       --background: #F7FAFC;
       --dark-bg: #1A202C;
       --dark-border: #2D3748;
@@ -27,6 +29,7 @@
       --text-dark: var(--dark-text);
       --border: var(--dark-border);
       --white: var(--dark-bg);
+      --black: #000000;
       --background: #2D3748;
       --modal-bg: linear-gradient(135deg, #4da8f7 0%, #a675fc 100%);
     }
@@ -48,137 +51,31 @@
     .container {
       max-width: 800px;
       margin: 0 auto;
-      padding: 1rem;
+      padding: 4rem 1rem 1rem;
       display: flex;
       flex-direction: column;
       min-height: 100vh;
       position: relative;
     }
 
-    /* Pill-shaped More Options Button */
-    .more-options-btn {
+    .header {
       position: fixed;
-      top: 1rem;
-      left: 1rem;
-      z-index: 1000;
-      background: var(--banter-blue);
-      border: none;
-      border-radius: 24px;
-      padding: 0.5rem 1rem;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-      transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.3s ease;
-      font-size: 0.9rem;
-      font-weight: 500;
-      color: var(--white);
-    }
-
-    .more-options-btn:hover {
-      transform: scale(1.05);
-      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
-      background: linear-gradient(135deg, var(--banter-blue), var(--banter-purple));
-    }
-
-    .more-options-btn svg {
-      width: 20px;
-      height: 20px;
-      stroke: var(--white);
-      stroke-width: 2;
-      margin-right: 0.5rem;
-    }
-
-    [data-theme="dark"] .more-options-btn {
-      background: var(--banter-purple);
-    }
-
-    [data-theme="dark"] .more-options-btn:hover {
-      background: linear-gradient(135deg, var(--banter-purple), var(--banter-blue));
-    }
-
-    /* Bottom Sheet */
-    .bottom-sheet {
-      display: none;
-      position: fixed;
-      bottom: 0;
+      top: 0;
       left: 0;
       right: 0;
       background: var(--white);
-      border-top-left-radius: 16px;
-      border-top-right-radius: 16px;
-      box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.2);
-      z-index: 1002;
-      padding: 1.5rem;
-      max-height: 50vh;
-      overflow-y: auto;
-      transform: translateY(100%);
-      transition: transform 0.3s ease-out;
-    }
-
-    .bottom-sheet.active {
-      display: block;
-      transform: translateY(0);
-    }
-
-    [data-theme="dark"] .bottom-sheet {
-      background: var(--dark-bg);
-    }
-
-    .bottom-sheet-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 1rem;
-    }
-
-    .bottom-sheet-title {
-      font-size: 1.2rem;
+      padding: 0.75rem 1rem;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      z-index: 1000;
+      text-align: center;
+      font-size: 1rem;
       font-weight: 600;
       color: var(--text-dark);
     }
 
-    .bottom-sheet-close {
-      background: none;
-      border: none;
-      cursor: pointer;
-      padding: 0.5rem;
-    }
-
-    .bottom-sheet-close svg {
-      width: 24px;
-      height: 24px;
-      stroke: var(--text-dark);
-      stroke-width: 2;
-    }
-
-    .bottom-sheet-options {
-      display: flex;
-      flex-direction: column;
-      gap: 0.75rem;
-    }
-
-    .bottom-sheet-option {
-      padding: 0.75rem;
-      border-radius: 8px;
-      background: var(--input-bg-light);
-      color: var(--text-dark);
-      font-size: 1rem;
-      font-weight: 500;
-      cursor: pointer;
-      transition: background 0.2s ease, transform 0.2s ease;
-      text-align: left;
-    }
-
-    .bottom-sheet-option:hover {
-      background: linear-gradient(135deg, var(--banter-blue), var(--banter-purple));
-      color: var(--white);
-      transform: translateX(5px);
-    }
-
-    [data-theme="dark"] .bottom-sheet-option {
-      background: var(--input-bg-dark);
+    [data-theme="dark"] .header {
+      background: var(--dark-bg);
+      color: var(--dark-text);
     }
 
     .loading-overlay {
@@ -239,7 +136,6 @@
       max-width: 85%;
       padding: 1rem 1.25rem;
       border-radius: 20px;
-      background: var(--white);
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
       animation: slideIn 0.4s ease-out;
       transition: transform 0.2s ease, box-shadow 0.2s ease;
@@ -247,14 +143,14 @@
 
     .chat-message.user {
       align-self: flex-end;
-      background: linear-gradient(135deg, var(--banter-blue) 0%, #4da8f7 100%);
+      background: var(--black);
       color: var(--white);
     }
 
     .chat-message.ai {
       align-self: flex-start;
-      background: linear-gradient(135deg, var(--banter-purple) 0%, #a675fc 100%);
-      color: var(--white);
+      background: var(--white);
+      color: var(--black);
     }
 
     .chat-message:hover {
@@ -360,7 +256,7 @@
     }
 
     .send-button {
-      background: linear-gradient(135deg, var(--banter-blue) 0%, var(--banter-purple) 100%);
+      background: var(--black);
       border: none;
       padding: 0.85rem;
       cursor: pointer;
@@ -505,12 +401,6 @@
       box-shadow: 0 0 8px rgba(29, 161, 242, 0.3);
     }
 
-    .modal-btn.close:disabled {
-      background: var(--text-light);
-      cursor: not-allowed;
-      opacity: 0.5;
-    }
-
     .profile-modal-content {
       display: flex;
       flex-direction: column;
@@ -543,38 +433,16 @@
       font-weight: 600;
     }
 
-    #rate-limit-modal {
-      display: none;
-      position: fixed;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      background: var(--modal-bg);
-      padding: 1.5rem;
-      border-radius: 12px;
-      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
-      z-index: 1002;
-      color: var(--white);
-      font-weight: 500;
+    .powered-by {
       text-align: center;
-      max-width: 90%;
-      width: 360px;
-      animation: fadeIn 0.3s ease-out forwards;
+      margin: 0.5rem 1rem;
+      font-size: 0.8rem;
+      color: var(--text-light);
+      font-weight: 500;
     }
 
-    #rate-limit-modal.active {
-      display: block;
-    }
-
-    #rate-limit-modal p {
-      margin: 0 0 1.5rem;
-      font-size: 1.1rem;
-      line-height: 1.5;
-    }
-
-    #rate-limit-modal #time-remaining {
-      font-weight: 700;
-      color: var(--banter-accent);
+    [data-theme="dark"] .powered-by {
+      color: var(--dark-text);
     }
 
     @keyframes slideIn {
@@ -589,7 +457,12 @@
 
     @media (max-width: 640px) {
       .container {
-        padding: 0.75rem;
+        padding: 3.5rem 0.75rem 0.75rem;
+      }
+
+      .header {
+        padding: 0.5rem 0.75rem;
+        font-size: 0.9rem;
       }
 
       .chat-message {
@@ -653,32 +526,6 @@
         font-size: 0.9rem;
       }
 
-      .more-options-btn {
-        top: 0.75rem;
-        left: 0.75rem;
-        padding: 0.4rem 0.8rem;
-        font-size: 0.8rem;
-      }
-
-      .more-options-btn svg {
-        width: 18px;
-        height: 18px;
-      }
-
-      .bottom-sheet {
-        padding: 1rem;
-        max-height: 60vh;
-      }
-
-      .bottom-sheet-title {
-        font-size: 1rem;
-      }
-
-      .bottom-sheet-option {
-        font-size: 0.9rem;
-        padding: 0.5rem;
-      }
-
       .profile-avatar {
         width: 60px;
         height: 60px;
@@ -689,42 +536,19 @@
         font-size: 1rem;
       }
 
-      #rate-limit-modal {
-        width: 300px;
-        padding: 1rem;
-      }
-
-      #rate-limit-modal p {
-        font-size: 1rem;
+      .powered-by {
+        font-size: 0.75rem;
+        margin: 0.25rem 0.75rem;
       }
     }
   </style>
 </head>
 <body>
+  <div class="header">Vynix version 1.0</div>
   <div class="container">
-    <button class="more-options-btn" aria-label="More options" onclick="showBottomSheet()">
-      <svg viewBox="0 0 24 24">
-        <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/>
-      </svg>
-      More
-    </button>
-    <div class="bottom-sheet" id="bottom-sheet">
-      <div class="bottom-sheet-header">
-        <span class="bottom-sheet-title">Options</span>
-        <button class="bottom-sheet-close" aria-label="Close bottom sheet" onclick="hideBottomSheet()">
-          <svg viewBox="0 0 24 24">
-            <path d="M6 18L18 6M6 6l12 12"/>
-          </svg>
-        </button>
-      </div>
-      <div class="bottom-sheet-options">
-        <button class="bottom-sheet-option" onclick="showDeleteModal()">Delete Chat History</button>
-        <button class="bottom-sheet-option" onclick="upgradeModel()">Upgrade Model</button>
-      </div>
-    </div>
     <div class="custom-alert" id="alert">
       <span id="alert-message"></span>
-      <button class="close-btn" aria-label="Close alert">
+      <button class="close-btn" aria-label="Close alert" onclick="hideAlert()">
         <svg viewBox="0 0 24 24">
           <path d="M6 18L18 6M6 6l12 12"/>
         </svg>
@@ -733,8 +557,8 @@
     <div class="modal" id="delete-confirm">
       <p>Are you sure you want to delete your chat history? This cannot be undone.</p>
       <div class="modal-buttons">
-        <button class="modal-btn confirm">Yes</button>
-        <button class="modal-btn cancel">No</button>
+        <button class="modal-btn confirm" onclick="performDelete()">Yes</button>
+        <button class="modal-btn cancel" onclick="hideDeleteModal()">No</button>
       </div>
     </div>
     <div class="modal" id="profile-modal">
@@ -744,12 +568,6 @@
       </div>
       <div class="modal-buttons">
         <button class="modal-btn close" onclick="hideProfileModal()">Close</button>
-      </div>
-    </div>
-    <div class="modal" id="rate-limit-modal">
-      <p>You've reached the limit of 5 AI responses per hour. Please wait <span id="time-remaining">60:00</span> to continue chatting with Vynix.</p>
-      <div class="modal-buttons">
-        <button class="modal-btn close" id="rate-limit-close" disabled>Close</button>
       </div>
     </div>
     <div class="loading-overlay" id="loading-overlay">
@@ -765,13 +583,13 @@
         </svg>
       </button>
     </div>
+    <div class="powered-by">Powered by Vynix</div>
   </div>
 
   <script type="module">
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
     import { getAuth, onAuthStateChanged, signOut as firebaseSignOut } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
     import { getDatabase, ref, push, get, set } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js';
-    import { getRemoteConfig, fetchAndActivate, getString } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-remote-config.js';
 
     const firebaseConfig = {
       apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
@@ -787,8 +605,6 @@
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const db = getDatabase(app);
-    const remoteConfig = getRemoteConfig(app);
-    remoteConfig.settings.minimumFetchIntervalMillis = 3600000;
 
     const messageInput = document.getElementById("message-input");
     const sendButton = document.getElementById("send-button");
@@ -800,147 +616,158 @@
     const profileModal = document.getElementById("profile-modal");
     const profileAvatar = document.getElementById("profile-avatar");
     const profileUsername = document.getElementById("profile-username");
-    const rateLimitModal = document.getElementById("rate-limit-modal");
-    const timeRemainingSpan = document.getElementById("time-remaining");
-    const rateLimitCloseBtn = document.getElementById("rate-limit-close");
-    const bottomSheet = document.getElementById("bottom-sheet");
-    const confirmBtn = document.querySelector(".modal-btn.confirm");
-    const cancelBtn = document.querySelector(".modal-btn.cancel");
     let currentUser = null;
     let chatHistory = [];
-    const RESPONSE_LIMIT = 5;
-    const HOUR_IN_MS = 3600000;
+    let model = null;
+    let charToIdx = null;
+    let idxToChar = null;
 
-    // Initialize Remote Config
-    async function initializeRemoteConfig() {
+    // TensorFlow.js Model Functions
+    async function createModel(vocabSize, hiddenSize = 128, sequenceLength = 50) {
+      const model = tf.sequential();
+      model.add(tf.layers.embedding({ inputDim: vocabSize, outputDim: 64, inputLength: sequenceLength }));
+      model.add(tf.layers.lstm({ units: hiddenSize, returnSequences: true }));
+      model.add(tf.layers.lstm({ units: hiddenSize }));
+      model.add(tf.layers.dense({ units: vocabSize, activation: 'softmax' }));
+      model.compile({
+        optimizer: 'adam',
+        loss: 'categoricalCrossentropy',
+        metrics: ['accuracy']
+      });
+      return model;
+    }
+
+    async function loadInitialData() {
       try {
-        await fetchAndActivate(remoteConfig);
-        console.log("Remote Config fetched and activated");
+        const response = await fetch('/data/initial_dialogues.json');
+        const data = await response.json();
+        const text = data.map(d => `${d.prompt}|||${d.response}`).join('\n');
+        const chars = [...new Set(text.split(''))];
+        const charToIdx = chars.reduce((acc, c, i) => ({ ...acc, [c]: i }), {});
+        const idxToChar = chars;
+        return { text, chars, charToIdx, idxToChar };
       } catch (error) {
-        console.error("Error fetching Remote Config:", error);
-        showAlert("Failed to initialize Remote Config.", false);
+        console.error('Error loading initial data:', error);
+        throw error;
       }
     }
 
-    // Show/hide bottom sheet
-    function showBottomSheet() {
-      console.log("Showing bottom sheet");
-      bottomSheet.classList.add("active");
+    function textToSequence(text, charToIdx, maxLen = 50) {
+      return text.split('').map(c => charToIdx[c] || 0).slice(-maxLen);
     }
 
-    function hideBottomSheet() {
-      console.log("Hiding bottom sheet");
-      bottomSheet.classList.remove("active");
-    }
-
-    // Check response limit
-    async function checkResponseLimit() {
-      if (!currentUser || currentUser.isGuest) return false;
-      const responseRef = ref(db, `users/${currentUser.uid}/ai_usage/responses`);
+    async function trainInitialModel(model, text, charToIdx, idxToChar, maxLen = 50) {
       try {
-        const snapshot = await get(responseRef);
-        const responses = snapshot.val() || {};
-        const now = Date.now();
-        const oneHourAgo = now - HOUR_IN_MS;
-        const recentResponses = Object.values(responses).filter(r => r.timestamp > oneHourAgo);
-        
-        // Clean up old responses
-        const oldResponseKeys = Object.keys(responses).filter(key => responses[key].timestamp <= oneHourAgo);
-        for (const key of oldResponseKeys) {
-          await set(ref(db, `users/${currentUser.uid}/ai_usage/responses/${key}`), null);
-        }
+        const sequences = text.split('\n').filter(line => line).map(line => textToSequence(line, charToIdx, maxLen));
+        const xs = sequences.map(seq => seq.slice(0, -1));
+        const ys = sequences.map(seq => seq.slice(1));
+        const xsTensor = tf.tensor2d(xs, [xs.length, maxLen - 1]);
+        const ysTensor = tf.oneHot(tf.tensor2d(ys, [xs.length, maxLen - 1], 'int32'), idxToChar.length);
 
-        if (recentResponses.length >= RESPONSE_LIMIT) {
-          const earliestResponse = Math.min(...recentResponses.map(r => r.timestamp));
-          const timeUntilReset = earliestResponse + HOUR_IN_MS - now;
-          showRateLimitModal(timeUntilReset);
-          return false;
-        }
-        return true;
+        await model.fit(xsTensor, ysTensor, {
+          epochs: 10,
+          batchSize: 16,
+          callbacks: {
+            onEpochEnd: (epoch, logs) => console.log(`Initial training epoch ${epoch}: Loss = ${logs.loss}`)
+          }
+        });
+
+        tf.dispose([xsTensor, ysTensor]);
+        await model.save('localstorage://vynix-model');
+        console.log('Initial model saved');
       } catch (error) {
-        console.error("Error checking response limit:", error);
-        showAlert("Failed to check usage limit.", false);
-        return false;
+        console.error('Error training initial model:', error);
+        throw error;
       }
     }
 
-    // Show rate limit modal with countdown
-    function showRateLimitModal(timeUntilReset) {
-      console.log("Showing rate limit modal, time until reset:", timeUntilReset);
-      rateLimitModal.classList.add("active");
-      rateLimitCloseBtn.disabled = true;
-      
-      const updateTimer = () => {
-        const now = Date.now();
-        const remaining = Math.max(0, timeUntilReset - (now - Date.now()));
-        const minutes = Math.floor(remaining / 60000);
-        const seconds = Math.floor((remaining % 60000) / 1000);
-        timeRemainingSpan.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-        
-        if (remaining <= 0) {
-          rateLimitModal.classList.remove("active");
-          rateLimitCloseBtn.disabled = false;
-          clearInterval(timer);
+    async function getNewConversations(userId) {
+      try {
+        const chatRef = ref(db, `users/${userId}/ai_chat`);
+        const snapshot = await get(chatRef);
+        const messages = snapshot.val() || {};
+        const sortedMessages = Object.values(messages).sort((a, b) => a.createdAt - b.createdAt);
+        const pairs = [];
+        for (let i = 0; i < sortedMessages.length - 1; i++) {
+          if (sortedMessages[i].isUser && !sortedMessages[i + 1].isUser) {
+            pairs.push({
+              prompt: sortedMessages[i].text,
+              response: sortedMessages[i + 1].text
+            });
+          }
         }
-      };
-      
-      updateTimer();
-      const timer = setInterval(updateTimer, 1000);
-      
-      rateLimitCloseBtn.onclick = () => {
-        if (!rateLimitCloseBtn.disabled) {
-          rateLimitModal.classList.remove("active");
-          clearInterval(timer);
-        }
-      };
+        return pairs;
+      } catch (error) {
+        console.error('Error fetching conversations:', error);
+        return [];
+      }
     }
 
-    // Generate response using Gemini API
+    async function fineTuneModel(model, newPairs, charToIdx, idxToChar, maxLen = 50) {
+      try {
+        const text = newPairs.map(p => `${p.prompt}|||${p.response}`).join('\n');
+        const sequences = text.split('\n').filter(line => line).map(line => textToSequence(line, charToIdx, maxLen));
+        if (sequences.length === 0) return;
+        const xs = sequences.map(seq => seq.slice(0, -1));
+        const ys = sequences.map(seq => seq.slice(1));
+        const xsTensor = tf.tensor2d(xs, [xs.length, maxLen - 1]);
+        const ysTensor = tf.oneHot(tf.tensor2d(ys, [xs.length, maxLen - 1], 'int32'), idxToChar.length);
+
+        await model.fit(xsTensor, ysTensor, {
+          epochs: 1,
+          batchSize: 8,
+          callbacks: {
+            onEpochEnd: () => console.log('Fine-tuning complete')
+          }
+        });
+
+        tf.dispose([xsTensor, ysTensor]);
+        await model.save('localstorage://vynix-model');
+        console.log('Model fine-tuned and saved');
+      } catch (error) {
+        console.error('Error fine-tuning model:', error);
+      }
+    }
+
+    async function initializeModel() {
+      try {
+        const { text, chars, charToIdx: cti, idxToChar: itc } = await loadInitialData();
+        charToIdx = cti;
+        idxToChar = itc;
+        model = await tf.loadLayersModel('localstorage://vynix-model').catch(() => createModel(chars.length));
+        await trainInitialModel(model, text, charToIdx, idxToChar);
+        console.log('Model initialized');
+      } catch (error) {
+        console.error('Model initialization error:', error);
+        showAlert('Failed to initialize Vynix model.', false);
+      }
+    }
+
+    // Generate response using TensorFlow.js model
     async function generateResponse(prompt) {
       console.log("Generating response for prompt:", maxLength(prompt, 50));
+      showLoading();
       try {
-        // Check response limit before proceeding
-        const canGenerate = await checkResponseLimit();
-        if (!canGenerate) {
-          throw new Error("Response limit exceeded");
+        const inputText = `You are Vynix, a witty AI. Respond to: "${prompt}"|||`;
+        const inputSeq = textToSequence(inputText, charToIdx, 50);
+        const inputTensor = tf.tensor2d([inputSeq], [1, inputSeq.length]);
+
+        const output = await model.predict(inputTensor);
+        const predictedIdx = tf.argMax(output, -1).dataSync();
+        const responseText = predictedIdx.map(idx => idxToChar[idx]).join('').split('|||')[1] || "Vynix says: Let's spice things up!";
+
+        const newPairs = await getNewConversations(currentUser.uid);
+        if (newPairs.length >= 10) {
+          await fineTuneModel(model, newPairs.slice(-10), charToIdx, idxToChar);
         }
 
-        const GEMINI_API_KEY = getString(remoteConfig, 'gemini_api_key');
-        if (!GEMINI_API_KEY) {
-          throw new Error('Gemini API key not found in Remote Config');
-        }
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            contents: [{
-              parts: [{
-                text: `You are Vynix, a witty AI with a dash of humor. Respond to: "${prompt}"`
-              }]
-            }],
-            generationConfig: {
-              temperature: 0.7,
-              maxOutputTokens: 100
-            }
-          })
-        });
-        const data = await response.json();
-        if (!response.ok) {
-          throw new Error(data.error?.message || 'API request failed');
-        }
-        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-        
-        // Record response in Firebase
-        await push(ref(db, `users/${currentUser.uid}/ai_usage/responses`), {
-          timestamp: Date.now()
-        });
-        
-        return text || "Vynix says: Let's spice things up!";
+        tf.dispose([inputTensor, output]);
+        return responseText;
       } catch (error) {
-        console.error("Gemini API error:", error);
+        console.error("Model inference error:", error);
         return `Vynix says: Oops, something went wrong! ${error.message}`;
+      } finally {
+        hideLoading();
       }
     }
 
@@ -954,7 +781,6 @@
     function showDeleteModal() {
       console.log("Showing delete confirmation modal");
       deleteConfirmModal.classList.add("active");
-      hideBottomSheet();
     }
 
     function hideDeleteModal() {
@@ -992,13 +818,11 @@
       profileModal.classList.remove("active");
     }
 
-    // Upgrade model (placeholder)
-    function upgradeModel() {
-      console.log("Upgrade model clicked");
-      hideBottomSheet();
-      showAlert("Upgrade functionality coming soon! Visit https://x.ai/grok for details.", true);
-      // Optionally redirect to a subscription page:
-      // window.location.href = "https://x.ai/grok";
+    // Toggle theme
+    function toggleTheme() {
+      const isDark = document.documentElement.getAttribute("data-theme") === "dark";
+      document.documentElement.setAttribute("data-theme", isDark ? "light" : "dark");
+      console.log("Toggled theme to:", isDark ? "light" : "dark");
     }
 
     // Sign out function
@@ -1031,9 +855,7 @@
       showLoading();
       try {
         const chatRef = ref(db, `users/${currentUser.uid}/ai_chat`);
-        const usageRef = ref(db, `users/${currentUser.uid}/ai_usage`);
         await set(chatRef, null);
-        await set(usageRef, null);
         aiChat.innerHTML = "";
         chatHistory = [];
         showAlert("Chat history deleted!", true);
@@ -1064,6 +886,10 @@
       alert.style.background = isSuccess ? "rgba(29, 161, 242, 0.1)" : "rgba(255, 0, 0, 0.1)";
       alert.classList.add("active");
       setTimeout(() => alert.classList.remove("active"), 3000);
+    }
+
+    function hideAlert() {
+      alert.classList.remove("active");
     }
 
     // Format timestamp
@@ -1134,9 +960,6 @@
         chatHistory.push(userMessage);
 
         const aiResponseText = await generateResponse(inputText);
-        if (aiResponseText.includes("Response limit exceeded")) {
-          return;
-        }
         const aiMessage = {
           text: aiResponseText,
           createdAt: Date.now(),
@@ -1159,19 +982,17 @@
       }
     }
 
-    // Toggle theme
-    function toggleTheme() {
-      const isDark = document.documentElement.getAttribute("data-theme") === "dark";
-      document.documentElement.setAttribute("data-theme", isDark ? "light" : "dark");
-      console.log("Toggled theme to:", isDark ? "light" : "dark");
-    }
-
     // Set prompt
     function setPrompt(prompt) {
       messageInput.value = prompt;
       sendButton.disabled = !prompt.trim() || (currentUser && currentUser.isGuest);
       sendButton.classList.toggle("active", prompt.trim() && !(currentUser && currentUser.isGuest));
       messageInput.focus();
+    }
+
+    // Utility function to truncate logs
+    function maxLength(str, length) {
+      return str.length > length ? str.slice(0, length) + '...' : str;
     }
 
     // Authentication state listener
@@ -1187,7 +1008,7 @@
 
       currentUser = user;
       showLoading();
-      initializeRemoteConfig().then(() => {
+      initializeModel().then(() => {
         const userRef = ref(db, `users/${user.uid}`);
         get(userRef).then((snapshot) => {
           const userData = snapshot.val() || {};
@@ -1243,22 +1064,6 @@
       console.log("Send button clicked");
       await sendMessage();
     });
-
-    confirmBtn.addEventListener("click", () => {
-      console.log("Confirm button clicked");
-      performDelete();
-    });
-
-    cancelBtn.addEventListener("click", () => {
-      console.log("Cancel button clicked");
-      hideDeleteModal();
-      showAlert("Chat deletion cancelled.", false);
-    });
-
-    // Utility function to truncate logs
-    function maxLength(str, length) {
-      return str.length > length ? str.slice(0, length) + '...' : str;
-    }
   </script>
 </body>
 </html>
