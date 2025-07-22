@@ -43,6 +43,7 @@
       margin: 0;
       padding: 0;
       transition: background 0.3s ease, color 0.3s ease;
+      overflow: hidden;
     }
 
     .navbar {
@@ -101,30 +102,31 @@
     }
 
     .live-container {
-      max-width: 600px;
-      width: 100%;
-      margin: 0 auto;
-      padding: 1rem;
+      width: 100vw;
+      height: calc(100vh - 56px); /* Subtract navbar height */
       display: flex;
       flex-direction: column;
-      align-items: center;
-      background: var(--white);
-      border-radius: 12px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      position: relative;
+      overflow: hidden;
     }
 
     .live-preview {
       width: 100%;
-      max-height: 70vh;
-      border-radius: 8px;
-      background: var(--background);
+      height: 100%;
       object-fit: cover;
+      background: var(--background);
+      transform: scaleX(-1); /* Flip the video horizontally for broadcaster */
     }
 
     .live-controls {
+      position: absolute;
+      bottom: 1rem;
+      left: 1rem;
+      right: 1rem;
       display: flex;
+      flex-direction: column;
       gap: 1rem;
-      margin-top: 1rem;
+      z-index: 10;
     }
 
     .stop-live-btn {
@@ -147,6 +149,103 @@
     .stop-live-btn:disabled {
       background: #66b0ff;
       cursor: not-allowed;
+    }
+
+    .viewer-count {
+      position: absolute;
+      top: 1rem;
+      left: 1rem;
+      background: rgba(0, 0, 0, 0.7);
+      color: var(--white);
+      font-size: 0.9rem;
+      font-weight: 600;
+      padding: 0.5rem 1rem;
+      border-radius: 9999px;
+      z-index: 10;
+    }
+
+    .comment-input-container {
+      display: flex;
+      gap: 0.5rem;
+      width: 100%;
+      max-width: 400px;
+    }
+
+    .comment-input {
+      flex: 1;
+      padding: 0.5rem 1rem;
+      background: var(--white);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      color: var(--text-dark);
+      font-size: 0.95rem;
+      outline: none;
+      user-select: auto;
+      -webkit-user-select: auto;
+      -moz-user-select: auto;
+      -ms-user-select: auto;
+    }
+
+    .comment-input:focus {
+      border-color: var(--twitter-blue);
+    }
+
+    .comment-btn {
+      padding: 0.5rem 1rem;
+      background: linear-gradient(45deg, var(--twitter-blue), var(--twitter-purple));
+      color: var(--white);
+      border: none;
+      border-radius: 20px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .comment-btn:hover {
+      transform: scale(1.02);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    }
+
+    .comment-btn:disabled {
+      background: #66b0ff;
+      cursor: not-allowed;
+    }
+
+    .comments-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      pointer-events: none;
+      z-index: 5;
+    }
+
+    .comment-popup {
+      position: absolute;
+      background: rgba(0, 0, 0, 0.7);
+      color: var(--white);
+      padding: 0.5rem 1rem;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      font-weight: 500;
+      animation: commentFloat 5s ease-out forwards;
+      max-width: 80%;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    @keyframes commentFloat {
+      0% {
+        transform: translateY(0) translateX(0);
+        opacity: 1;
+      }
+      100% {
+        transform: translateY(-100px) translateX(20px);
+        opacity: 0;
+      }
     }
 
     .loading-overlay {
@@ -246,17 +345,32 @@
 
     @media (max-width: 640px) {
       .live-container {
-        padding: 0.75rem;
-        border-radius: 0;
+        height: calc(100vh - 48px); /* Adjust for smaller navbar */
       }
 
       .live-preview {
-        max-height: 60vh;
+        max-height: 100%;
       }
 
-      .stop-live-btn {
+      .stop-live-btn, .comment-btn {
         padding: 0.4rem 1.2rem;
         font-size: 0.95rem;
+      }
+
+      .viewer-count {
+        font-size: 0.8rem;
+        padding: 0.4rem 0.8rem;
+      }
+
+      .comment-input {
+        font-size: 0.9rem;
+        padding: 0.4rem 0.8rem;
+      }
+
+      .comment-popup {
+        font-size: 0.8rem;
+        padding: 0.4rem 0.8rem;
+        max-width: 90%;
       }
 
       .spinner {
@@ -274,6 +388,7 @@
   <nav class="navbar">
     <div class="navbar-links">
       <a href="home.html">Home</a>
+      <a href="live-posts.html">Live</a>
       <a href="friends.html">Friends</a>
       <a href="profile.html">Profile</a>
       <button class="logout-btn" aria-label="Log out">Logout</button>
@@ -284,24 +399,28 @@
       </button>
     </div>
   </nav>
-  <div class="container">
-    <div class="custom-alert" id="alert">
-      <span id="alert-message"></span>
-      <button class="close-btn" aria-label="Close alert">
-        <svg viewBox="0 0 24 24">
-          <path d="M6 18L18 6M6 6l12 12"/>
-        </svg>
-      </button>
-    </div>
-    <div class="loading-overlay" id="loading-overlay">
-      <div class="spinner"></div>
-      <span class="spinner-text">Loading...</span>
-    </div>
-    <div class="live-container">
-      <video id="live-preview" class="live-preview" autoplay playsinline muted aria-label="Live stream preview"></video>
-      <div class="live-controls">
-        <button type="button" class="stop-live-btn" id="stop-live-btn" aria-label="Stop Live Stream">Stop Live</button>
+  <div class="custom-alert" id="alert">
+    <span id="alert-message"></span>
+    <button class="close-btn" aria-label="Close alert">
+      <svg viewBox="0 0 24 24">
+        <path d="M6 18L18 6M6 6l12 12"/>
+      </svg>
+    </button>
+  </div>
+  <div class="loading-overlay" id="loading-overlay">
+    <div class="spinner"></div>
+    <span class="spinner-text">Loading...</span>
+  </div>
+  <div class="live-container">
+    <video id="live-preview" class="live-preview" autoplay playsinline muted aria-label="Live stream preview"></video>
+    <div class="viewer-count" id="viewer-count">0 viewers</div>
+    <div class="comments-overlay" id="comments-overlay"></div>
+    <div class="live-controls">
+      <div class="comment-input-container">
+        <input type="text" class="comment-input" id="comment-input" placeholder="Add a comment..." aria-label="Comment input" maxlength="140">
+        <button type="button" class="comment-btn" id="comment-btn" aria-label="Post comment">Comment</button>
       </div>
+      <button type="button" class="stop-live-btn" id="stop-live-btn" aria-label="Stop Live Stream">Stop Live</button>
     </div>
   </div>
 
@@ -327,18 +446,31 @@
 
     const livePreview = document.getElementById("live-preview");
     const stopLiveBtn = document.getElementById("stop-live-btn");
+    const commentInput = document.getElementById("comment-input");
+    const commentBtn = document.getElementById("comment-btn");
+    const viewerCount = document.getElementById("viewer-count");
+    const commentsOverlay = document.getElementById("comments-overlay");
     const loadingOverlay = document.getElementById("loading-overlay");
     const alert = document.getElementById("alert");
     const alertMessage = document.getElementById("alert-message");
 
     let localStream = null;
     let broadcasterPeerConnection = null;
+    let streamId = null;
 
     function showAlert(message, isSuccess) {
       alertMessage.textContent = message;
       alert.style.background = isSuccess ? "rgba(29, 161, 242, 0.1)" : "rgba(255, 0, 0, 0.1)";
       alert.classList.add("active");
       setTimeout(() => alert.classList.remove("active"), 3000);
+    }
+
+    function showLoading() {
+      loadingOverlay.classList.add("active");
+    }
+
+    function hideLoading() {
+      loadingOverlay.classList.remove("active");
     }
 
     async function getUsername(userId) {
@@ -353,10 +485,20 @@
       }
     }
 
+    function displayComment(comment, username) {
+      const popup = document.createElement("div");
+      popup.className = "comment-popup";
+      popup.textContent = `${username}: ${comment}`;
+      popup.style.left = `${Math.random() * 80}%`; // Random horizontal position
+      popup.style.top = `${Math.random() * 50 + 20}%`; // Random vertical position within middle 50%
+      commentsOverlay.appendChild(popup);
+      setTimeout(() => popup.remove(), 5000); // Remove after animation
+    }
+
     async function setupWebRTCBroadcaster() {
       try {
-        loadingOverlay.classList.add("active");
-        const streamId = Date.now().toString();
+        showLoading();
+        streamId = Date.now().toString();
         const userId = auth.currentUser.uid;
         const username = await getUsername(userId);
 
@@ -401,6 +543,8 @@
         onValue(ref(db, `liveStreams/${userId}/answers`), async (snapshot) => {
           const answers = snapshot.val();
           if (answers) {
+            const viewerCountValue = Object.keys(answers).length;
+            viewerCount.textContent = `${viewerCountValue} viewer${viewerCountValue !== 1 ? "s" : ""}`;
             for (const [viewerId, answer] of Object.entries(answers)) {
               try {
                 await broadcasterPeerConnection.setRemoteDescription(new RTCSessionDescription(answer));
@@ -408,6 +552,8 @@
                 console.error(`Error setting answer for viewer ${viewerId}:`, error);
               }
             }
+          } else {
+            viewerCount.textContent = "0 viewers";
           }
         });
 
@@ -420,18 +566,29 @@
           }
         });
 
+        // Listen for comments
+        onValue(ref(db, `liveStreamComments/${streamId}`), async (snapshot) => {
+          const comments = snapshot.val();
+          if (comments) {
+            for (const [commentId, commentData] of Object.entries(comments)) {
+              const username = await getUsername(commentData.userId);
+              displayComment(commentData.content, username);
+            }
+          }
+        });
+
         showAlert("You are now live!", true);
       } catch (error) {
         console.error("Error starting live stream:", error);
         showAlert("Error starting live stream: " + error.message, false);
       } finally {
-        loadingOverlay.classList.remove("active");
+        hideLoading();
       }
     }
 
     async function stopLiveStream() {
       try {
-        loadingOverlay.classList.add("active");
+        showLoading();
         if (localStream) {
           localStream.getTracks().forEach(track => track.stop());
           localStream = null;
@@ -441,6 +598,7 @@
           broadcasterPeerConnection = null;
         }
         await remove(ref(db, `liveStreams/${auth.currentUser.uid}`));
+        await remove(ref(db, `liveStreamComments/${streamId}`));
         showAlert("Live stream ended.", true);
         setTimeout(() => {
           window.location.href = "home.html";
@@ -449,7 +607,32 @@
         console.error("Error stopping live stream:", error);
         showAlert("Error stopping live stream: " + error.message, false);
       } finally {
-        loadingOverlay.classList.remove("active");
+        hideLoading();
+      }
+    }
+
+    async function postComment() {
+      if (!auth.currentUser || auth.currentUser.isGuest) {
+        showAlert("Guests cannot post comments.", false);
+        return;
+      }
+      const content = commentInput.value.trim();
+      if (!content) {
+        showAlert("Please enter a comment.", false);
+        return;
+      }
+      try {
+        const commentRef = ref(db, `liveStreamComments/${streamId}`);
+        await push(commentRef, {
+          userId: auth.currentUser.uid,
+          content,
+          timestamp: Date.now()
+        });
+        commentInput.value = "";
+        showAlert("Comment posted!", true);
+      } catch (error) {
+        console.error("Error posting comment:", error);
+        showAlert("Failed to post comment.", false);
       }
     }
 
@@ -463,15 +646,26 @@
         }, 2000);
       } else {
         setupWebRTCBroadcaster();
+        commentInput.disabled = false;
+        commentBtn.disabled = false;
+        commentInput.style.opacity = 1;
+        commentBtn.style.opacity = 1;
       }
     });
 
     stopLiveBtn.addEventListener("click", stopLiveStream);
 
+    commentBtn.addEventListener("click", postComment);
+    commentInput.addEventListener("keypress", (e) => {
+      if (e.key === "Enter") {
+        postComment();
+      }
+    });
+
     document.querySelector(".logout-btn").addEventListener("click", () => {
-      loadingOverlay.classList.add("active");
+      showLoading();
       signOut(auth).finally(() => {
-        loadingOverlay.classList.remove("active");
+        hideLoading();
       });
     });
 
