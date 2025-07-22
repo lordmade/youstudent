@@ -2149,22 +2149,23 @@ const reportDetails = document.getElementById("report-details");
 const submitReport = document.getElementById("submit-report");
 const cancelReport = document.getElementById("cancel-report");
 
-async function submitReportToFirebase(tweetId, reason, details) {
+
+      async function submitReportToFirebase(tweetId, reason, details) {
   if (!currentUser) {
     showAlert("You must be logged in to report posts.", false);
-    hideLoading(); // Ensure loader is hidden if user is not logged in
+    hideLoading();
     return;
   }
   if (currentUser.isGuest) {
     showAlert("Guests cannot report posts.", false);
-    hideLoading(); // Ensure loader is hidden for guests
+    hideLoading();
     return;
   }
 
   showLoading();
   try {
     // Validate tweetId
-    if (!tweetId) {
+    if (!tweetId || typeof tweetId !== "string") {
       throw new Error("Invalid tweet ID");
     }
 
@@ -2176,6 +2177,7 @@ async function submitReportToFirebase(tweetId, reason, details) {
 
     if (reportSnapshot.exists()) {
       showAlert("You have already reported this post.", false);
+      hideLoading();
       return;
     }
 
@@ -2192,21 +2194,30 @@ async function submitReportToFirebase(tweetId, reason, details) {
       throw new Error(`Failed to submit report: ${error.message}`);
     });
 
+    console.log("Report submitted successfully, refreshing tweets"); // Debugging log
     showAlert("Report submitted successfully!", true);
     reportModal.classList.remove("active");
     reportReason.value = "";
     reportDetails.value = "";
-    // Reload the page after a short delay to allow the alert to be visible
-    setTimeout(() => {
-      location.reload();
-    }, 1000); // 1-second delay for user to see the success alert
+
+    // Refresh tweet feed
+    const usersRef = ref(db, "users");
+    const usersSnapshot = await get(usersRef);
+    const userProfiles = usersSnapshot.val() || {};
+    const followingRef = ref(db, `users/${currentUser.uid}/following`);
+    const followingSnapshot = await get(followingRef);
+    const following = followingSnapshot.val() || {};
+    await refreshTweets(currentUser, userProfiles, following);
   } catch (error) {
     console.error("Report submission error:", error.message);
     showAlert(`Failed to submit report: ${error.message}`, false);
+    hideLoading();
   } finally {
-    hideLoading(); // Always hide the loader, even on error
+    console.log("Hiding loader in finally block"); // Debugging log
+    hideLoading(); // Ensure loader is always hidden
   }
 }
+      
 
 submitReport.addEventListener("click", async () => {
   if (!reportReason.value) {
