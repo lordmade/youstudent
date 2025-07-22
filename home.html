@@ -2152,18 +2152,28 @@ const cancelReport = document.getElementById("cancel-report");
 async function submitReportToFirebase(tweetId, reason, details) {
   if (!currentUser) {
     showAlert("You must be logged in to report posts.", false);
+    hideLoading(); // Ensure loader is hidden if user is not logged in
     return;
   }
   if (currentUser.isGuest) {
     showAlert("Guests cannot report posts.", false);
+    hideLoading(); // Ensure loader is hidden for guests
     return;
   }
 
   showLoading();
   try {
+    // Validate tweetId
+    if (!tweetId) {
+      throw new Error("Invalid tweet ID");
+    }
+
     // Check if user has already reported this tweet
     const reportRef = ref(db, `reports/${tweetId}/${currentUser.uid}`);
-    const reportSnapshot = await get(reportRef);
+    const reportSnapshot = await get(reportRef).catch(error => {
+      throw new Error(`Failed to check existing report: ${error.message}`);
+    });
+
     if (reportSnapshot.exists()) {
       showAlert("You have already reported this post.", false);
       return;
@@ -2177,15 +2187,24 @@ async function submitReportToFirebase(tweetId, reason, details) {
       details: details || "",
       createdAt: Date.now(),
     };
-    await set(reportRef, reportData);
+
+    await set(reportRef, reportData).catch(error => {
+      throw new Error(`Failed to submit report: ${error.message}`);
+    });
+
     showAlert("Report submitted successfully!", true);
     reportModal.classList.remove("active");
     reportReason.value = "";
     reportDetails.value = "";
+    // Reload the page after a short delay to allow the alert to be visible
+    setTimeout(() => {
+      location.reload();
+    }, 1000); // 1-second delay for user to see the success alert
   } catch (error) {
-    showAlert("Failed to submit report. Please try again.", false);
+    console.error("Report submission error:", error.message);
+    showAlert(`Failed to submit report: ${error.message}`, false);
   } finally {
-    hideLoading();
+    hideLoading(); // Always hide the loader, even on error
   }
 }
 
