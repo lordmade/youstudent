@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Banter Box - Go Live</title>
+  <title>Banter Box - View Live Stream</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://webrtc.github.io/adapter/adapter-latest.js"></script>
   <style>
@@ -115,7 +115,29 @@
       height: 100%;
       object-fit: cover;
       background: var(--background);
-      transform: scaleX(-1); /* Flip the video horizontally for broadcaster */
+    }
+
+    .live-info {
+      position: absolute;
+      top: 1rem;
+      left: 1rem;
+      background: rgba(0, 0, 0, 0.7);
+      color: var(--white);
+      padding: 0.5rem 1rem;
+      border-radius: 8px;
+      z-index: 10;
+    }
+
+    .live-info h1 {
+      font-size: 1.25rem;
+      font-weight: 700;
+      margin: 0;
+    }
+
+    .live-info p {
+      color: var(--white);
+      font-size: 0.95rem;
+      margin: 0;
     }
 
     .live-controls {
@@ -126,41 +148,6 @@
       display: flex;
       flex-direction: column;
       gap: 1rem;
-      z-index: 10;
-    }
-
-    .stop-live-btn {
-      padding: 0.5rem 1.5rem;
-      background: linear-gradient(45deg, var(--twitter-blue), var(--twitter-purple));
-      color: var(--white);
-      border: none;
-      border-radius: 20px;
-      font-size: 1rem;
-      font-weight: 600;
-      cursor: pointer;
-      transition: transform 0.2s ease, box-shadow 0.2s ease;
-    }
-
-    .stop-live-btn:hover {
-      transform: scale(1.02);
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-    }
-
-    .stop-live-btn:disabled {
-      background: #66b0ff;
-      cursor: not-allowed;
-    }
-
-    .viewer-count {
-      position: absolute;
-      top: 1rem;
-      left: 1rem;
-      background: rgba(0, 0, 0, 0.7);
-      color: var(--white);
-      font-size: 0.9rem;
-      font-weight: 600;
-      padding: 0.5rem 1rem;
-      border-radius: 9999px;
       z-index: 10;
     }
 
@@ -365,19 +352,22 @@
         max-height: 100%;
       }
 
-      .stop-live-btn, .comment-btn {
-        padding: 0.4rem 1.2rem;
-        font-size: 0.95rem;
+      .live-info h1 {
+        font-size: 1.1rem;
       }
 
-      .viewer-count {
-        font-size: 0.8rem;
-        padding: 0.4rem 0.8rem;
+      .live-info p {
+        font-size: 0.9rem;
       }
 
       .comment-input {
         font-size: 0.9rem;
         padding: 0.4rem 0.8rem;
+      }
+
+      .comment-btn {
+        padding: 0.4rem 1.2rem;
+        font-size: 0.95rem;
       }
 
       .comments-overlay {
@@ -427,25 +417,27 @@
   </div>
   <div class="loading-overlay" id="loading-overlay">
     <div class="spinner"></div>
-    <span class="spinner-text">Loading...</span>
+    <span class="spinner-text">Connecting...</span>
   </div>
   <div class="live-container">
-    <video id="live-preview" class="live-preview" autoplay playsinline muted aria-label="Live stream preview"></video>
-    <div class="viewer-count" id="viewer-count">0 viewers</div>
+    <div class="live-info">
+      <h1 id="stream-username">Loading...</h1>
+      <p id="stream-handle">@unknown</p>
+    </div>
+    <video id="live-preview" class="live-preview" autoplay playsinline aria-label="Live stream"></video>
     <div class="comments-overlay" id="comments-overlay"></div>
     <div class="live-controls">
       <div class="comment-input-container">
         <input type="text" class="comment-input" id="comment-input" placeholder="Add a comment..." aria-label="Comment input" maxlength="140">
         <button type="button" class="comment-btn" id="comment-btn" aria-label="Post comment">Comment</button>
       </div>
-      <button type="button" class="stop-live-btn" id="stop-live-btn" aria-label="Stop Live Stream">Stop Live</button>
     </div>
   </div>
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
     import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-    import { getDatabase, ref, onValue, remove, set, push } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+    import { getDatabase, ref, onValue, set, push } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
@@ -463,18 +455,16 @@
     const db = getDatabase(app);
 
     const livePreview = document.getElementById("live-preview");
-    const stopLiveBtn = document.getElementById("stop-live-btn");
     const commentInput = document.getElementById("comment-input");
     const commentBtn = document.getElementById("comment-btn");
-    const viewerCount = document.getElementById("viewer-count");
     const commentsOverlay = document.getElementById("comments-overlay");
     const loadingOverlay = document.getElementById("loading-overlay");
     const alert = document.getElementById("alert");
     const alertMessage = document.getElementById("alert-message");
+    const streamUsername = document.getElementById("stream-username");
+    const streamHandle = document.getElementById("stream-handle");
 
-    let localStream = null;
-    let broadcasterPeerConnection = null;
-    let streamId = null;
+    let viewerPeerConnection = null;
     let commentIndex = 0; // Track position for vertical alignment
 
     function showAlert(message, isSuccess) {
@@ -514,122 +504,6 @@
       setTimeout(() => popup.remove(), 5000); // Remove after animation
     }
 
-    async function setupWebRTCBroadcaster() {
-      try {
-        showLoading();
-        streamId = Date.now().toString();
-        const userId = auth.currentUser.uid;
-        const username = await getUsername(userId);
-
-        localStream = await navigator.mediaDevices.getUserMedia({
-          video: true,
-          audio: true
-        });
-
-        livePreview.srcObject = localStream;
-        livePreview.play().catch(() => {
-          showAlert("Error playing live stream preview.", false);
-        });
-
-        const configuration = {
-          iceServers: [
-            { urls: "stun:stun.l.google.com:19302" },
-            // Add TURN server if needed
-          ]
-        };
-        broadcasterPeerConnection = new RTCPeerConnection(configuration);
-
-        localStream.getTracks().forEach(track => {
-          broadcasterPeerConnection.addTrack(track, localStream);
-        });
-
-        broadcasterPeerConnection.onicecandidate = (event) => {
-          if (event.candidate) {
-            push(ref(db, `liveStreams/${userId}/iceCandidates`), event.candidate.toJSON());
-          }
-        };
-
-        const offer = await broadcasterPeerConnection.createOffer();
-        await broadcasterPeerConnection.setLocalDescription(offer);
-        await set(ref(db, `liveStreams/${userId}`), {
-          streamId,
-          username,
-          isLive: true,
-          timestamp: Date.now(),
-          offer
-        });
-
-        onValue(ref(db, `liveStreams/${userId}/answers`), async (snapshot) => {
-          const answers = snapshot.val();
-          if (answers) {
-            const viewerCountValue = Object.keys(answers).length;
-            viewerCount.textContent = `${viewerCountValue} viewer${viewerCountValue !== 1 ? "s" : ""}`;
-            for (const [viewerId, answer] of Object.entries(answers)) {
-              try {
-                await broadcasterPeerConnection.setRemoteDescription(new RTCSessionDescription(answer));
-              } catch (error) {
-                console.error(`Error setting answer for viewer ${viewerId}:`, error);
-              }
-            }
-          } else {
-            viewerCount.textContent = "0 viewers";
-          }
-        });
-
-        onValue(ref(db, `liveStreams/${userId}/iceCandidates`), (snapshot) => {
-          const candidates = snapshot.val();
-          if (candidates) {
-            Object.values(candidates).forEach(candidate => {
-              broadcasterPeerConnection.addIceCandidate(new RTCIceCandidate(candidate)).catch(e => console.error("Error adding ICE candidate:", e));
-            });
-          }
-        });
-
-        // Listen for comments
-        onValue(ref(db, `liveStreamComments/${streamId}`), async (snapshot) => {
-          const comments = snapshot.val();
-          if (comments) {
-            for (const [commentId, commentData] of Object.entries(comments)) {
-              const username = await getUsername(commentData.userId);
-              displayComment(commentData.content, username);
-            }
-          }
-        });
-
-        showAlert("You are now live!", true);
-      } catch (error) {
-        console.error("Error starting live stream:", error);
-        showAlert("Error starting live stream: " + error.message, false);
-      } finally {
-        hideLoading();
-      }
-    }
-
-    async function stopLiveStream() {
-      try {
-        showLoading();
-        if (localStream) {
-          localStream.getTracks().forEach(track => track.stop());
-          localStream = null;
-        }
-        if (broadcasterPeerConnection) {
-          broadcasterPeerConnection.close();
-          broadcasterPeerConnection = null;
-        }
-        await remove(ref(db, `liveStreams/${auth.currentUser.uid}`));
-        await remove(ref(db, `liveStreamComments/${streamId}`));
-        showAlert("Live stream ended.", true);
-        setTimeout(() => {
-          window.location.href = "home.html";
-        }, 2000);
-      } catch (error) {
-        console.error("Error stopping live stream:", error);
-        showAlert("Error stopping live stream: " + error.message, false);
-      } finally {
-        hideLoading();
-      }
-    }
-
     async function postComment() {
       if (!auth.currentUser || auth.currentUser.isGuest) {
         showAlert("Guests cannot post comments.", false);
@@ -655,24 +529,109 @@
       }
     }
 
+    async function setupWebRTCViewer(streamId, broadcasterId) {
+      try {
+        showLoading();
+
+        // Fetch stream data
+        const streamRef = ref(db, `liveStreams/${broadcasterId}`);
+        const snapshot = await new Promise((resolve) => onValue(streamRef, resolve, { onlyOnce: true }));
+        const streamData = snapshot.val();
+        if (!streamData || !streamData.isLive) {
+          showAlert("This live stream has ended.", false);
+          setTimeout(() => window.location.href = "home.html", 2000);
+          return;
+        }
+
+        // Update UI with stream info
+        streamUsername.textContent = streamData.username || "Anonymous";
+        streamHandle.textContent = `@${streamData.handle || "unknown"}`;
+
+        const configuration = {
+          iceServers: [
+            { urls: "stun:stun.l.google.com:19302" },
+            // Add TURN server if needed
+          ]
+        };
+        viewerPeerConnection = new RTCPeerConnection(configuration);
+
+        viewerPeerConnection.ontrack = (event) => {
+          livePreview.srcObject = event.streams[0];
+          livePreview.play().catch(() => {
+            showAlert("Error playing live stream.", false);
+          });
+        };
+
+        viewerPeerConnection.onicecandidate = (event) => {
+          if (event.candidate) {
+            set(ref(db, `liveStreams/${broadcasterId}/answers/${auth.currentUser.uid}/iceCandidates/${Date.now()}`), event.candidate.toJSON());
+          }
+        };
+
+        // Add ICE candidates from broadcaster
+        onValue(ref(db, `liveStreams/${broadcasterId}/iceCandidates`), (snapshot) => {
+          const candidates = snapshot.val();
+          if (candidates) {
+            Object.values(candidates).forEach(candidate => {
+              viewerPeerConnection.addIceCandidate(new RTCIceCandidate(candidate)).catch(e => console.error("Error adding ICE candidate:", e));
+            });
+          }
+        });
+
+        // Set broadcaster's offer and create answer
+        await viewerPeerConnection.setRemoteDescription(new RTCSessionDescription(streamData.offer));
+        const answer = await viewerPeerConnection.createAnswer();
+        await viewerPeerConnection.setLocalDescription(answer);
+        await set(ref(db, `liveStreams/${broadcasterId}/answers/${auth.currentUser.uid}`), answer);
+
+        // Listen for comments
+        onValue(ref(db, `liveStreamComments/${streamId}`), async (snapshot) => {
+          const comments = snapshot.val();
+          if (comments) {
+            for (const [commentId, commentData] of Object.entries(comments)) {
+              const username = await getUsername(commentData.userId);
+              displayComment(commentData.content, username);
+            }
+          }
+        });
+
+        showAlert("Connected to live stream!", true);
+      } catch (error) {
+        console.error("Error joining live stream:", error);
+        showAlert("Error joining live stream: " + error.message, false);
+      } finally {
+        hideLoading();
+      }
+    }
+
     onAuthStateChanged(auth, (user) => {
       if (!user) {
         window.location.href = "signup.html";
-      } else if (user.isGuest) {
-        showAlert("Guests cannot go live.", false);
-        setTimeout(() => {
-          window.location.href = "home.html";
-        }, 2000);
-      } else {
-        setupWebRTCBroadcaster();
-        commentInput.disabled = false;
-        commentBtn.disabled = false;
-        commentInput.style.opacity = 1;
-        commentBtn.style.opacity = 1;
+        return;
       }
-    });
+      if (user.isGuest) {
+        showAlert("Guests cannot view live streams.", false);
+        setTimeout(() => window.location.href = "home.html", 2000);
+        return;
+      }
 
-    stopLiveBtn.addEventListener("click", stopLiveStream);
+      const urlParams = new URLSearchParams(window.location.search);
+      const streamId = urlParams.get("streamId");
+      const userId = urlParams.get("userId");
+
+      if (!streamId || !userId) {
+        showAlert("Invalid stream URL.", false);
+        setTimeout(() => window.location.href = "home.html", 2000);
+        return;
+      }
+
+      commentInput.disabled = false;
+      commentBtn.disabled = false;
+      commentInput.style.opacity = 1;
+      commentBtn.style.opacity = 1;
+
+      setupWebRTCViewer(streamId, userId);
+    });
 
     commentBtn.addEventListener("click", postComment);
     commentInput.addEventListener("keypress", (e) => {
@@ -700,6 +659,13 @@
 
     const savedTheme = localStorage.getItem("theme") || "light";
     document.body.dataset.theme = savedTheme;
+
+    window.addEventListener("beforeunload", () => {
+      if (viewerPeerConnection) {
+        viewerPeerConnection.close();
+        viewerPeerConnection = null;
+      }
+    });
   </script>
 </body>
 </html>
