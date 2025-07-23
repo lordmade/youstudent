@@ -208,7 +208,7 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      background: var(--input	bg-light);
+      background: var(--input-bg-light);
       border-radius: 30px;
       box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
       transition: box-shadow 0.3s ease, transform 0.3s ease;
@@ -519,7 +519,7 @@
 
       .modal p {
         font-size: 1rem;
-      }
+    }
 
       .modal-btn {
         padding: 0.5rem 1rem;
@@ -742,6 +742,19 @@
 
     async function loadInitialData() {
       try {
+        // Check localStorage cache
+        const cachedData = localStorage.getItem('vynix_initial_dialogues');
+        if (cachedData) {
+          console.log('Loading initial dialogues from localStorage');
+          const data = JSON.parse(cachedData);
+          const text = data.map(d => `${d.prompt}|||${d.response}`).join('\n');
+          const chars = [...new Set(text.split(''))];
+          const charToIdx = chars.reduce((acc, c, i) => ({ ...acc, [c]: i }), {});
+          const idxToChar = chars;
+          return { text, chars, charToIdx, idxToChar };
+        }
+
+        // Fetch from Firebase
         const dialoguesRef = ref(db, 'public_data/initial_dialogues');
         const snapshot = await get(dialoguesRef);
         let data = snapshot.val();
@@ -752,6 +765,9 @@
           await set(dialoguesRef, data);
           console.log('Default dialogues saved to Firebase');
         }
+
+        // Cache in localStorage
+        localStorage.setItem('vynix_initial_dialogues', JSON.stringify(data));
 
         const text = data.map(d => `${d.prompt}|||${d.response}`).join('\n');
         const chars = [...new Set(text.split(''))];
@@ -764,60 +780,32 @@
       }
     }
 
-    function textToSequence(text, charToIdx, maxLen = 50) {
-      return text.split('').map(c => charToIdx[c] || 0).slice(-maxLen);
-    }
-
-    async function trainInitialModel(model, text, charToIdx, idxToChar, maxLen = 50) {
+    async function loadAdditionalSources() {
       try {
-        const sequences = text.split('\n').filter(line => line).map(line => textToSequence(line, charToIdx, maxLen));
-        const xs = sequences.map(seq => seq.slice(0, -1));
-        const ys = sequences.map(seq => seq.slice(1));
-        const xsTensor = tf.tensor2d(xs, [xs.length, maxLen - 1]);
-        const ysTensor = tf.oneHot(tf.tensor2d(ys, [xs.length, maxLen - 1], 'int32'), idxToChar.length);
-
-        await model.fit(xsTensor, ysTensor, {
-          epochs: 10,
-          batchSize: 16,
-          callbacks: {
-            onEpochEnd: (epoch, logs) => console.log(`Initial training epoch ${epoch}: Loss = ${logs.loss}`)
-          }
-        });
-
-        tf.dispose([xsTensor, ysTensor]);
-        await model.save('localstorage://vynix-model');
-        console.log('Initial model saved');
-      } catch (error) {
-        console.error('Error training initial model:', error);
-        throw error;
-      }
-    }
-
-    async function getNewConversations(userId) {
-      try {
-        const chatRef = ref(db, `users/${userId}/ai_chat`);
-        const snapshot = await get(chatRef);
-        const messages = snapshot.val() || {};
-        const sortedMessages = Object.values(messages).sort((a, b) => a.createdAt - b.createdAt);
-        const pairs = [];
-        for (let i = 0; i < sortedMessages.length - 1; i++) {
-          if (sortedMessages[i].isUser && !sortedMessages[i + 1].isUser) {
-            pairs.push({
-              prompt: sortedMessages[i].text,
-              response: sortedMessages[i + 1].text
-            });
+        const sources = ['public_data/curated_dialogues', 'public_data/user_contributions'];
+        const allPairs = [];
+        for (const path of sources) {
+          const refPath = ref(db, path);
+          const snapshot = await get(refPath);
+          const data = snapshot.val();
+          if (data) {
+            allPairs.push(...Object.values(data));
           }
         }
-        return pairs;
+        return allPairs;
       } catch (error) {
-        console.error('Error fetching conversations:', error);
+        console.error('Error loading additional sources:', error);
         return [];
       }
     }
 
-    async function fineTuneModel(model, newPairs, charToIdx, idxToChar, maxLen = 50) {
+    function textToSequence(text, charToIdx, maxLen = 50) {
+      return text.split('').map(c => charToIdx[c] || 0).slice(-maxLen);
+    }
+
+    async function fineTuneModel(model, pairs, charToIdx, idxToChar, maxLen = 50) {
       try {
-        const text = newPairs.map(p => `${p.prompt}|||${p.response}`).join('\n');
+        const text = pairs.map(p => `${p.prompt}|||${p.response}`).join('\n');
         const sequences = text.split('\n').filter(line => line).map(line => textToSequence(line, charToIdx, maxLen));
         if (sequences.length === 0) return;
         const xs = sequences.map(seq => seq.slice(0, -1));
@@ -843,19 +831,30 @@
 
     async function initializeModel() {
       try {
-        const { text, chars, charToIdx: cti, idxToChar: itc } = await loadInitialData();
+        // Load character mappings
+        const mappingsResponse = await fetch('/data/vynix-model-tfjs/char_mappings.json');
+        const { charToIdx: cti, idxToChar: itc } = await mappingsResponse.json();
         charToIdx = cti;
         idxToChar = itc;
-        model = await tf.loadLayersModel('localstorage://vynix-model').catch(() => createModel(chars.length));
-        await trainInitialModel(model, text, charToIdx, idxToChar);
-        console.log('Model initialized');
+
+        // Load pre-trained model
+        model = await tf.loadLayersModel('/data/vynix-model-tfjs/model.json');
+        console.log('Pre-trained model loaded');
+
+        // Periodic fine-tuning from additional sources
+        setInterval(async () => {
+          const additionalPairs = await loadAdditionalSources();
+          if (additionalPairs.length > 0) {
+            console.log('Fine-tuning with additional sources');
+            await fineTuneModel(model, additionalPairs.slice(-50), charToIdx, idxToChar); // Limit to 50 pairs
+          }
+        }, 24 * 60 * 60 * 1000); // Daily fine-tuning
       } catch (error) {
         console.error('Model initialization error:', error);
         showAlert('Failed to initialize Vynix model.', false);
       }
     }
 
-    // Generate response using TensorFlow.js model
     async function generateResponse(prompt) {
       console.log("Generating response for prompt:", maxLength(prompt, 50));
       showLoading();
@@ -880,6 +879,28 @@
         return `Vynix says: Oops, something went wrong! ${error.message}`;
       } finally {
         hideLoading();
+      }
+    }
+
+    async function getNewConversations(userId) {
+      try {
+        const chatRef = ref(db, `users/${userId}/ai_chat`);
+        const snapshot = await get(chatRef);
+        const messages = snapshot.val() || {};
+        const sortedMessages = Object.values(messages).sort((a, b) => a.createdAt - b.createdAt);
+        const pairs = [];
+        for (let i = 0; i < sortedMessages.length - 1; i++) {
+          if (sortedMessages[i].isUser && !sortedMessages[i + 1].isUser) {
+            pairs.push({
+              prompt: sortedMessages[i].text,
+              response: sortedMessages[i + 1].text
+            });
+          }
+        }
+        return pairs;
+      } catch (error) {
+        console.error('Error fetching conversations:', error);
+        return [];
       }
     }
 
