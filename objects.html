@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Live Object Detection | X Vision</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
+  <style>
+    :root {
+      --twitter-blue: #1DA1F2;
+      --twitter-purple: #8A3FFC;
+      --twitter-accent: #FF2D55;
+      --text-dark: #0F1419;
+      --text-light: #536471;
+      --border: #D8D9DB;
+      --white: #FFFFFF;
+      --background: #F5F8FA;
+      --dark-bg: #15202B;
+      --dark-border: #2F3B43;
+      --dark-text: #FFFFFF;
+      --grey-bubble: #E2E8F0;
+    }
+
+    [data-theme="dark"] {
+      --text-dark: var(--dark-text);
+      --border: var(--dark-border);
+      --white: var(--dark-bg);
+      --background: #1E2A3C;
+      --grey-bubble: #2D3748;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--background);
+      color: var(--text-dark);
+      margin: 0;
+      padding: 0;
+      transition: background 0.3s ease, color 0.3s ease;
+      overflow: hidden;
+    }
+
+    body.fade-out {
+      opacity: 0;
+    }
+
+    .container {
+      width: 100vw;
+      height: 100vh;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .top-buttons {
+      position: absolute;
+      top: 1rem;
+      right: 1rem;
+      display: flex;
+      gap: 0.5rem;
+      z-index: 1000;
+    }
+
+    .settings-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 0.5rem;
+    }
+
+    .settings-btn svg {
+      width: 24px;
+      height: 24px;
+      stroke: var(--text-light);
+      transition: stroke 0.2s ease;
+    }
+
+    .settings-btn:hover svg {
+      stroke: var(--twitter-purple);
+    }
+
+    .loading-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.7);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 2000;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease;
+    }
+
+    .loading-overlay.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .spinner {
+      width: 48px;
+      height: 48px;
+      border: 4px solid transparent;
+      border-top-color: var(--twitter-blue);
+      border-right-color: var(--twitter-purple);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    .spinner-text {
+      color: var(--white);
+      font-size: 0.9rem;
+      font-weight: 500;
+      margin-top: 0.75rem;
+      letter-spacing: 0.05em;
+    }
+
+    .custom-alert {
+      display: none;
+      position: fixed;
+      top: 1rem;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--white);
+      padding: 0.75rem 1.5rem;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      z-index: 1001;
+      color: var(--text-dark);
+      font-weight: 500;
+      text-align: center;
+      max-width: 90%;
+      width: 320px;
+      animation: fadeIn 0.3s ease-out forwards;
+    }
+
+    .custom-alert.active {
+      display: block;
+    }
+
+    .custom-alert .close-btn {
+      position: absolute;
+      top: 0.5rem;
+      right: 0.5rem;
+      width: 20px;
+      height: 20px;
+      background: none;
+      border: none;
+      cursor: pointer;
+    }
+
+    .custom-alert .close-btn svg {
+      width: 100%;
+      height: 100%;
+      stroke: var(--text-dark);
+      stroke-width: 2;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translate(-50%, -60%); }
+      to { opacity: 1; transform: translate(-50%, -50%); }
+    }
+
+    #video-container {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      max-width: 100vw;
+      max-height: 100vh;
+      overflow: hidden;
+    }
+
+    #webcam {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    #canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+    }
+
+    #start-detection {
+      position: absolute;
+      bottom: 1rem;
+      left: 50%;
+      transform: translateX(-50%);
+      background: linear-gradient(135deg, var(--twitter-blue) 0%, var(--twitter-purple) 100%);
+      color: var(--white);
+      padding: 0.75rem 1.5rem;
+      border-radius: 30px;
+      font-size: 1rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    #start-detection:hover {
+      transform: translateX(-50%) scale(1.05);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="top-buttons">
+      <button class="settings-btn" aria-label="Toggle theme" onclick="toggleTheme()">
+        <svg viewBox="0 0 24 24">
+          <path d="M19.14 12.94c.04-.3.06-.61.06-.94s-.02-.64-.06-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.49.49 0 0 0-.48-.41h-3.84a.49.49 0 0 0-.48.41l-.36 2.54c-.59.24-1.13-.56-1.62.94l-2.39-.96a.49.49 0 0 0-.59.22L2.86 9.41a.49.49 0 0 0 .12.61l2.03 1.58a2.66 2.66 0 0 0 0 1.88l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32a.49.49 0 0 0 .59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54a.49.49 0 0 0 .48.41h3.84a.49.49 0 0 0 .48-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96a.49.49 0 0 0 .59-.22l1.92-3.32a.49.49 0 0 0-.12-.61l-2.03-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
+        </svg>
+      </button>
+    </div>
+    <div class="custom-alert" id="alert">
+      <span id="alert-message"></span>
+      <button class="close-btn" aria-label="Close alert">
+        <svg viewBox="0 0 24 24">
+          <path d="M6 18L18 6M6 6l12 12"/>
+        </svg>
+      </button>
+    </div>
+    <div class="loading-overlay" id="loading-overlay">
+      <div class="spinner"></div>
+      <span class="spinner-text">Loading...</span>
+    </div>
+    <div id="video-container">
+      <video id="webcam" autoplay playsinline></video>
+      <canvas id="canvas"></canvas>
+      <button id="start-detection">Start Object Detection</button>
+    </div>
+  </div>
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+    import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
+      authDomain: "fire-b-a8878.firebaseapp.com",
+      databaseURL: "https://fire-b-a8878.firebaseio.com",
+      projectId: "fire-b-a8878",
+      storageBucket: "fire-b-a8878.firebasestorage.app",
+      messagingSenderId: "658673187627",
+      appId: "1:658673187627:web:6e4c29af661785f0afa36e",
+      measurementId: "G-V4W97VMSKL"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+
+    const alert = document.getElementById("alert");
+    const alertMessage = document.getElementById("alert-message");
+    const loadingOverlay = document.getElementById("loading-overlay");
+    const webcam = document.getElementById("webcam");
+    const canvas = document.getElementById("canvas");
+    const startDetectionButton = document.getElementById("start-detection");
+    let model = null;
+    let isDetecting = false;
+    let lastDetectedObjects = new Set(); // Track detected objects to avoid spamming
+
+    function showLoading() {
+      console.log("Showing loading overlay");
+      loadingOverlay.classList.add("active");
+    }
+
+    function hideLoading() {
+      console.log("Hiding loading overlay");
+      loadingOverlay.classList.remove("active");
+    }
+
+    function showAlert(message, isSuccess) {
+      console.log("Showing alert:", message);
+      alertMessage.textContent = message;
+      alert.style.background = isSuccess ? "rgba(29, 161, 242, 0.1)" : "rgba(255, 0, 0, 0.1)";
+      alert.classList.add("active");
+      setTimeout(() => alert.classList.remove("active"), 3000);
+    }
+
+    async function setupWebcam() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720 } });
+        webcam.srcObject = stream;
+        return new Promise((resolve) => {
+          webcam.onloadedmetadata = () => {
+            // Adjust canvas size to match video
+            canvas.width = webcam.videoWidth;
+            canvas.height = webcam.videoHeight;
+            resolve();
+          };
+        });
+      } catch (error) {
+        console.error('Error accessing webcam:', error);
+        showAlert('Failed to access webcam: ' + error.message, false);
+        return false;
+      }
+    }
+
+    async function loadModel() {
+      try {
+        showLoading();
+        model = await cocoSsd.load();
+        console.log('COCO-SSD model loaded');
+        hideLoading();
+      } catch (error) {
+        console.error('Error loading model:', error);
+        showAlert('Failed to load object detection model.', false);
+        hideLoading();
+      }
+    }
+
+    async function detectObjects() {
+      if (!model || !isDetecting) return;
+
+      try {
+        const predictions = await model.detect(webcam);
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        predictions.forEach(prediction => {
+          if (prediction.score < 0.7) return; // Filter low-confidence detections
+          const [x, y, width, height] = prediction.bbox;
+          ctx.strokeStyle = 'red';
+          ctx.lineWidth = 2;
+          ctx.strokeRect(x, y, width, height);
+          ctx.font = '18px Arial';
+          ctx.fillStyle = 'red';
+          ctx.fillText(`${prediction.class} (${Math.round(prediction.score * 100)}%)`, x, y > 10 ? y - 5 : y + 15);
+
+          // Show pop-up for new objects
+          if (!lastDetectedObjects.has(prediction.class)) {
+            showAlert(`Detected a ${prediction.class}!`, true);
+            lastDetectedObjects.add(prediction.class);
+          }
+        });
+
+        // Clear objects that are no longer detected
+        const currentObjects = new Set(predictions.map(p => p.class));
+        lastDetectedObjects.forEach(obj => {
+          if (!currentObjects.has(obj)) {
+            lastDetectedObjects.delete(obj);
+          }
+        });
+
+        if (isDetecting) {
+          requestAnimationFrame(detectObjects);
+        }
+      } catch (error) {
+        console.error('Error during object detection:', error);
+        showAlert('Object detection failed.', false);
+      }
+    }
+
+    startDetectionButton.addEventListener('click', async () => {
+      if (!isDetecting) {
+        if (!model) await loadModel();
+        if (!webcam.srcObject) {
+          const webcamReady = await setupWebcam();
+          if (!webcamReady) return;
+        }
+        isDetecting = true;
+        startDetectionButton.textContent = 'Stop Object Detection';
+        detectObjects();
+      } else {
+        isDetecting = false;
+        startDetectionButton.textContent = 'Start Object Detection';
+        webcam.srcObject?.getTracks().forEach(track => track.stop());
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        lastDetectedObjects.clear();
+      }
+    });
+
+    function toggleTheme() {
+      const isDark = document.documentElement.getAttribute("data-theme") === "dark";
+      const newTheme = isDark ? "light" : "dark";
+      document.documentElement.setAttribute("data-theme", newTheme);
+      localStorage.setItem("theme", newTheme);
+      console.log("Toggled theme to:", newTheme);
+    }
+
+    onAuthStateChanged(auth, (user) => {
+      if (!user) {
+        console.log("No user authenticated, redirecting to signup");
+        document.body.classList.add("fade-out");
+        setTimeout(() => {
+          window.location.href = "signup.html";
+        }, 1500);
+        return;
+      }
+      console.log("User authenticated:", user.uid);
+    });
+
+    document.querySelector(".custom-alert .close-btn").addEventListener("click", () => {
+      console.log("Close alert clicked");
+      alert.classList.remove("active");
+    });
+  </script>
+</body>
+</html>
