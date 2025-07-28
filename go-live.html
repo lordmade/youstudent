@@ -6,6 +6,7 @@
   <title>Banter Box - Go Live</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://webrtc.github.io/adapter/adapter-latest.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/onnxjs@0.1.11/dist/onnx.min.js"></script>
   <style>
     :root {
       --twitter-blue: #1DA1F2;
@@ -103,7 +104,7 @@
 
     .live-container {
       width: 100vw;
-      height: calc(100vh - 56px); /* Subtract navbar height */
+      height: calc(100vh - 56px);
       display: flex;
       flex-direction: column;
       position: relative;
@@ -115,7 +116,7 @@
       height: 100%;
       object-fit: cover;
       background: var(--background);
-      transform: scaleX(-1); /* Flip the video horizontally for broadcaster */
+      transform: scaleX(-1);
     }
 
     .live-controls {
@@ -216,7 +217,7 @@
       position: absolute;
       top: 0;
       left: 0;
-      width: 200px; /* Fixed width for vertical comment column */
+      width: 200px;
       bottom: 0;
       pointer-events: none;
       z-index: 5;
@@ -243,22 +244,10 @@
     }
 
     @keyframes commentSlide {
-      0% {
-        transform: translateX(-100%);
-        opacity: 0;
-      }
-      20% {
-        transform: translateX(0);
-        opacity: 1;
-      }
-      80% {
-        transform: translateX(0);
-        opacity: 1;
-      }
-      100% {
-        transform: translateY(-20px);
-        opacity: 0;
-      }
+      0% { transform: translateX(-100%); opacity: 0; }
+      20% { transform: translateX(0); opacity: 1; }
+      80% { transform: translateX(0); opacity: 1; }
+      100% { transform: translateY(-20px); opacity: 0; }
     }
 
     .loading-overlay {
@@ -358,7 +347,7 @@
 
     @media (max-width: 640px) {
       .live-container {
-        height: calc(100vh - 48px); /* Adjust for smaller navbar */
+        height: calc(100vh - 48px);
       }
 
       .live-preview {
@@ -431,6 +420,7 @@
   </div>
   <div class="live-container">
     <video id="live-preview" class="live-preview" autoplay playsinline muted aria-label="Live stream preview"></video>
+    <canvas id="detection-canvas" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10;"></canvas>
     <div class="viewer-count" id="viewer-count">0 viewers</div>
     <div class="comments-overlay" id="comments-overlay"></div>
     <div class="live-controls">
@@ -446,6 +436,7 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
     import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
     import { getDatabase, ref, onValue, remove, set, push } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+    import { InferenceSession, Tensor } from 'https://cdn.jsdelivr.net/npm/onnxjs@0.1.11/dist/onnx.min.js';
 
     const firebaseConfig = {
       apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
@@ -463,6 +454,8 @@
     const db = getDatabase(app);
 
     const livePreview = document.getElementById("live-preview");
+    const detectionCanvas = document.getElementById('detection-canvas');
+    const detectionCtx = detectionCanvas.getContext('2d');
     const stopLiveBtn = document.getElementById("stop-live-btn");
     const commentInput = document.getElementById("comment-input");
     const commentBtn = document.getElementById("comment-btn");
@@ -475,7 +468,9 @@
     let localStream = null;
     let broadcasterPeerConnection = null;
     let streamId = null;
-    let commentIndex = 0; // Track position for vertical alignment
+    let commentIndex = 0;
+    let yoloSession = null;
+    let isProcessing = false;
 
     function showAlert(message, isSuccess) {
       alertMessage.textContent = message;
@@ -508,10 +503,10 @@
       const popup = document.createElement("div");
       popup.className = "comment-popup";
       popup.textContent = `${username}: ${comment}`;
-      popup.style.top = `${60 + commentIndex * 40}px`; // Stack vertically, 40px gap, starting 60px from top
+      popup.style.top = `${60 + commentIndex * 40}px`;
       commentsOverlay.appendChild(popup);
-      commentIndex = (commentIndex + 1) % 10; // Limit to 10 comments to prevent overflow
-      setTimeout(() => popup.remove(), 5000); // Remove after animation
+      commentIndex = (commentIndex + 1) % 10;
+      setTimeout(() => popup.remove(), 5000);
     }
 
     async function setupWebRTCBroadcaster() {
@@ -534,7 +529,6 @@
         const configuration = {
           iceServers: [
             { urls: "stun:stun.l.google.com:19302" },
-            // Add TURN server if needed
           ]
         };
         broadcasterPeerConnection = new RTCPeerConnection(configuration);
@@ -585,7 +579,6 @@
           }
         });
 
-        // Listen for comments
         onValue(ref(db, `liveStreamComments/${streamId}`), async (snapshot) => {
           const comments = snapshot.val();
           if (comments) {
@@ -655,6 +648,103 @@
       }
     }
 
+    // YOLO Integration
+    function resizeCanvas() {
+      detectionCanvas.width = livePreview.videoWidth;
+      detectionCanvas.height = livePreview.videoHeight;
+    }
+
+    async function initYOLO() {
+      try {
+        showLoading();
+        // Replace with actual path to YOLOv8 ONNX model
+        yoloSession = await InferenceSession.create('https://example.com/yolov8n.onnx');
+        console.log('YOLOv8 model loaded');
+        showAlert('Object detection initialized!', true);
+      } catch (error) {
+        console.error('Error loading YOLO model:', error);
+        showAlert('Failed to load object detection model.', false);
+      } finally {
+        hideLoading();
+      }
+    }
+
+    function preprocessFrame(imageData) {
+      const targetSize = 640;
+      const canvas = document.createElement('canvas');
+      canvas.width = targetSize;
+      canvas.height = targetSize;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(livePreview, 0, 0, targetSize, targetSize);
+      const resizedData = ctx.getImageData(0, 0, targetSize, targetSize);
+      
+      const data = resizedData.data;
+      const floatData = new Float32Array(targetSize * targetSize * 3);
+      for (let i = 0, j = 0; i < data.length; i += 4, j += 3) {
+        floatData[j] = data[i] / 255;
+        floatData[j + 1] = data[i + 1] / 255;
+        floatData[j + 2] = data[i + 2] / 255;
+      }
+      return floatData;
+    }
+
+    function postProcessYOLO(output, canvasWidth, canvasHeight) {
+      const detections = [];
+      const numDetections = output.length / 6;
+      const classNames = ['person', 'car', 'dog', 'laptop', 'chair', /* Add COCO classes */];
+      
+      for (let i = 0; i < numDetections; i++) {
+        const offset = i * 6;
+        const confidence = output[offset + 4];
+        if (confidence > 0.5) {
+          const x = output[offset] * canvasWidth;
+          const y = output[offset + 1] * canvasHeight;
+          const width = output[offset + 2] * canvasWidth;
+          const height = output[offset + 3] * canvasHeight;
+          const classId = Math.round(output[offset + 5]);
+          const label = classNames[classId] || 'Unknown';
+          detections.push({ x, y, width, height, label, confidence });
+        }
+      }
+      return detections;
+    }
+
+    async function processFrame() {
+      if (!yoloSession || !livePreview.srcObject || isProcessing) {
+        requestAnimationFrame(processFrame);
+        return;
+      }
+
+      isProcessing = true;
+      try {
+        resizeCanvas();
+        detectionCtx.drawImage(livePreview, 0, 0, detectionCanvas.width, detectionCanvas.height);
+        const imageData = detectionCtx.getImageData(0, 0, detectionCanvas.width, detectionCanvas.height);
+        const inputData = preprocessFrame(imageData);
+        const tensor = new Tensor(inputData, 'float32', [1, 3, 640, 640]);
+        const outputMap = await yoloSession.run([tensor]);
+        const output = outputMap.values().next().value.data;
+        const detections = postProcessYOLO(output, detectionCanvas.width, detectionCanvas.height);
+
+        detectionCtx.strokeStyle = 'red';
+        detectionCtx.lineWidth = 2;
+        detectionCtx.font = '16px Arial';
+        detectionCtx.fillStyle = 'red';
+
+        detections.forEach(detection => {
+          const { x, y, width, height, label, confidence } = detection;
+          detectionCtx.strokeRect(x, y, width, height);
+          detectionCtx.fillText(`${label} (${(confidence * 100).toFixed(1)}%)`, x, y - 10);
+        });
+      } catch (error) {
+        console.error('Error processing frame:', error);
+      } finally {
+        isProcessing = false;
+      }
+
+      requestAnimationFrame(processFrame);
+    }
+
     onAuthStateChanged(auth, (user) => {
       if (!user) {
         window.location.href = "signup.html";
@@ -669,6 +759,12 @@
         commentBtn.disabled = false;
         commentInput.style.opacity = 1;
         commentBtn.style.opacity = 1;
+        initYOLO().then(() => {
+          livePreview.addEventListener('play', () => {
+            resizeCanvas();
+            requestAnimationFrame(processFrame);
+          });
+        });
       }
     });
 
