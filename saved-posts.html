@@ -1,0 +1,278 @@
+<!-- saved.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Saved Posts</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    /* Reuse existing styles from main page */
+    :root {
+      --twitter-blue: #1DA1F2;
+      --twitter-purple: #8A3FFC;
+      --text-dark: #0F1419;
+      --text-light: #536471;
+      --border: #D8D9DB;
+      --white: #FFFFFF;
+      --background: #F5F8FA;
+      --dark-bg: #15202B;
+      --dark-border: #2F3B43;
+      --dark-text: #FFFFFF;
+    }
+    [data-theme="dark"] {
+      --text-dark: var(--dark-text);
+      --border: var(--dark-border);
+      --white: var(--dark-bg);
+      --background: #1E2A3C;
+    }
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+      background: var(--white);
+      color: var(--text-dark);
+      min-height: 100vh;
+      margin: 0;
+      padding: 0;
+      transition: background 0.3s ease, color 0.3s ease;
+    }
+    .navbar {
+      position: sticky;
+      top: 0;
+      left: 0;
+      right: 0;
+      background: var(--white);
+      border-bottom: 1px solid var(--border);
+      padding: 0.75rem 1rem;
+      z-index: 1000;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    .navbar-links {
+      display: flex;
+      gap: 2rem;
+      align-items: center;
+      max-width: 600px;
+      width: 100%;
+    }
+    .navbar-links a, .navbar-links button {
+      color: var(--text-dark);
+      font-size: 1rem;
+      font-weight: 600;
+      text-decoration: none;
+      transition: color 0.2s ease;
+    }
+    .navbar-links a:hover, .navbar-links button:hover {
+      color: var(--twitter-blue);
+    }
+    .navbar-links a.active {
+      color: var(--twitter-blue);
+      border-bottom: 2px solid var(--twitter-blue);
+    }
+    .theme-toggle {
+      background: none;
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+    }
+    .theme-toggle svg {
+      width: 24px;
+      height: 24px;
+      fill: none;
+      stroke: var(--text-dark);
+      stroke-width: 2;
+    }
+    .container {
+      max-width: 600px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 0.75rem 0;
+    }
+    .tweet-feed {
+      margin-top: 1rem;
+    }
+    /* Reuse tweet styles from main page */
+    .tweet {
+      width: 100%;
+      margin: 0;
+      padding: 1rem;
+      border-bottom: 1px solid var(--border);
+      background: var(--white);
+      border-radius: 0;
+      box-shadow: none;
+      animation: fadeIn 0.5s ease-out;
+    }
+    /* ... include other necessary tweet-related styles ... */
+  </style>
+</head>
+<body>
+  <nav class="navbar">
+    <div class="navbar-links">
+      <a href="home.html">Home</a>
+      <a href="live-posts.html">Live</a>
+      <a href="friends.html">Friends</a>
+      <a href="profile.html">Profile</a>
+      <a href="saved.html" class="active">Saved</a>
+      <button class="logout-btn" aria-label="Log out">Logout</button>
+      <button class="theme-toggle" aria-label="Toggle dark mode">
+        <svg viewBox="0 0 24 24">
+          <path d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
+        </svg>
+      </button>
+    </div>
+  </nav>
+  <div class="container">
+    <div class="tweet-feed" id="tweet-feed"></div>
+  </div>
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+    import { getAuth, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+    import { getDatabase, ref, get } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js';
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
+      authDomain: "fire-b-a8878.firebaseapp.com",
+      databaseURL: "https://fire-b-a8878.firebaseio.com",
+      projectId: "fire-b-a8878",
+      storageBucket: "fire-b-a8878.firebasestorage.app",
+      messagingSenderId: "658673187627",
+      appId: "1:658673187627:web:6e4c29af661785f0afa36e",
+      measurementId: "G-V4W97VMSKL"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getDatabase(app);
+
+    const tweetFeed = document.getElementById("tweet-feed");
+
+    function formatTimestamp(timestamp) {
+      const now = Date.now();
+      const diff = now - timestamp;
+      const seconds = Math.floor(diff / 1000);
+      const minutes = Math.floor(seconds / 60);
+      const hours = Math.floor(minutes / 60);
+      const days = Math.floor(hours / 24);
+      if (days > 0) return `${days}d ago`;
+      if (hours > 0) return `${hours}h ago`;
+      if (minutes > 0) return `${minutes}m ago`;
+      return `${seconds}s ago`;
+    }
+
+    function getAvatarInitials(username) {
+      if (!username) return "A";
+      const initials = username.split(" ").map(word => word[0]).join("").toUpperCase();
+      return initials.slice(0, 2);
+    }
+
+    function formatContentWithTags(content) {
+      const urlRegex = /(https?:\/\/[^\s]+)/g;
+      const hashtagRegex = /#(\w+)/g;
+      const mentionRegex = /@(\w+)/g;
+      return content
+        .replace(urlRegex, '<a href="$1" target="_blank" rel="noopener">$1</a>')
+        .replace(hashtagRegex, '<a href="hashtag.html?tag=$1" style="color: var(--twitter-blue);">#$1</a>')
+        .replace(mentionRegex, '<a href="profile.html?handle=$1" style="color: var(--twitter-blue);">@$1</a>');
+    }
+
+    function renderTweet(tweetData, tweetId, user, userProfiles) {
+      const tweetDiv = document.createElement("div");
+      tweetDiv.className = "tweet";
+      tweetDiv.dataset.tweetId = tweetId;
+      tweetDiv.tabIndex = 0;
+
+      let mediaHtml = "";
+      if (tweetData.mediaUrl && tweetData.mediaType) {
+        if (tweetData.mediaType === "image") {
+          mediaHtml = `<div class="tweet-media"><img src="${tweetData.mediaUrl}" alt="Post media" /></div>`;
+        } else if (tweetData.mediaType === "video") {
+          const posterUrl = tweetData.mediaUrl.replace(/\.mp4$|\.webm$/, '.jpg');
+          mediaHtml = `<div class="tweet-media"><video loop playsinline src="${tweetData.mediaUrl}" poster="${posterUrl}" class="tweet-video"></video></div>`;
+        }
+      }
+      const username = tweetData.username || "Anonymous";
+      const handle = tweetData.handle ? `@${tweetData.handle}` : "";
+      const profilePicture = userProfiles[tweetData.userId]?.profilePicture;
+      const isVerified = userProfiles[tweetData.userId]?.verified || false;
+
+      tweetDiv.innerHTML = `
+        <div class="tweet-header">
+          <div class="tweet-avatar">${profilePicture ? `<img src="${profilePicture}" alt="${username}'s profile picture" />` : getAvatarInitials(username)}</div>
+          <div class="tweet-user-info">
+            <span class="tweet-username">
+              <a href="profile.html?uid=${tweetData.userId}" style="color: inherit; text-decoration: none;">
+                ${username}
+                ${isVerified ? `
+                  <svg class="verified-badge" viewBox="0 0 24 24" aria-label="Verified account">
+                    <path d="M22.5 12.5c0-1.58-.875-2.95-2.148-3.6.154-.757.062-1.58-.318-2.3-.35-.633-1.05-1.067-1.8-1.067-.933 0-1.733.467-2.1 1.2-.583.933-1.567 1.533-2.633 1.533-1.067 0-2.05-.6-2.633-1.533-.367-.733-1.167-1.2-2.1-1.2-.75 0-1.45.433-1.8 1.067-.38-.72-.472-1.543-.318-2.3-1.273.65-2.148 2.017-2.148 3.6 0 1.58.875 2.95 2.148 3.6-.154.757-.062 1.58.318 2.3.35.633 1.05 1.067 1.8 1.067.933 0 1.733-.467 2.1-1.2.583-.933 1.567-1.533 2.633-1.533 1.067 0 2.05.6 2.633 1.533.367.733 1.167 1.2 2.1 1.2.75 0 1.45-.433 1.8-1.067.38-.72.472-1.543.318-2.3 1.273-.65 2.148-2.017 2.148-3.6zM9.9 14.9l-2.3-2.3 1.4-1.4 2.3 2.3 4.7-4.7 1.4 1.4-6.1 6.1z"/>
+                  </svg>
+                ` : ''}
+              </a>
+              <span class="handle">${handle}</span>
+            </span>
+            <span class="tweet-timestamp">${formatTimestamp(tweetData.createdAt)}</span>
+          </div>
+        </div>
+        <div class="tweet-content">${formatContentWithTags(tweetData.text || "")}</div>
+        ${mediaHtml}
+      `;
+      tweetFeed.appendChild(tweetDiv);
+    }
+
+    onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        const userRef = ref(db, `users/${user.uid}`);
+        const userSnapshot = await get(userRef);
+        const userData = userSnapshot.val();
+        const isGuest = userData?.isGuest || false;
+
+        if (isGuest) {
+          window.location.href = "login.html";
+          return;
+        }
+
+        const savedTweetsRef = ref(db, `users/${user.uid}/savedTweets`);
+        const savedTweetsSnapshot = await get(savedTweetsRef);
+        const savedTweets = savedTweetsSnapshot.val() || {};
+
+        const usersRef = ref(db, "users");
+        const usersSnapshot = await get(usersRef);
+        const userProfiles = usersSnapshot.val() || {};
+
+        const tweetsRef = ref(db, "tweets");
+        const tweetsSnapshot = await get(tweetsRef);
+        const tweets = tweetsSnapshot.val() || {};
+
+        tweetFeed.innerHTML = "";
+        Object.keys(savedTweets).forEach(tweetId => {
+          if (tweets[tweetId]) {
+            renderTweet(tweets[tweetId], tweetId, user, userProfiles);
+          }
+        });
+      } else {
+        window.location.href = "login.html";
+      }
+    });
+
+    document.querySelector(".logout-btn").addEventListener("click", async () => {
+      try {
+        await signOut(auth);
+        window.location.href = "login.html";
+      } catch (error) {
+        alert("Failed to log out. Please try again.");
+      }
+    });
+
+    document.querySelector(".theme-toggle").addEventListener("click", () => {
+      const currentTheme = document.documentElement.getAttribute("data-theme") || "light";
+      const newTheme = currentTheme === "light" ? "dark" : "light";
+      document.documentElement.setAttribute("data-theme", newTheme);
+      localStorage.setItem("theme", newTheme);
+    });
+
+    const savedTheme = localStorage.getItem("theme") || "light";
+    document.documentElement.setAttribute("data-theme", savedTheme);
+  </script>
+</body>
+</html>
