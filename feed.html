@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Feed - Vinda</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database.js"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer" />
   <style>
     :root {
@@ -26,6 +29,7 @@
       margin: 0;
       background: linear-gradient(135deg, #f0f4ff 0%, #e0eaff 100%);
       color: var(--text-dark);
+      padding-bottom: 80px; /* Space for bottom nav */
     }
 
     .navbar {
@@ -39,6 +43,28 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
+    }
+
+    .progress-bar {
+      position: sticky;
+      top: 60px;
+      z-index: 999;
+      width: 100%;
+      height: 4px;
+      background: rgba(0, 0, 0, 0.1);
+      overflow: hidden;
+    }
+
+    .progress-bar.active .progress-fill {
+      width: 100%;
+      transition: width 1s linear;
+    }
+
+    .progress-fill {
+      width: 0;
+      height: 100%;
+      background: var(--accent-blue);
+      transition: width 0.3s ease;
     }
 
     .navbar h1 {
@@ -95,59 +121,95 @@
       transform: scale(1.1);
     }
 
-    .main-content {
+    .bottom-nav {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      background: var(--glass-bg);
+      backdrop-filter: blur(10px);
+      border-top: 1px solid var(--border);
+      padding: 0.75rem;
       display: flex;
-      max-width: 1200px;
-      margin: 2rem auto;
-      gap: 2rem;
+      justify-content: space-around;
+      align-items: center;
+      z-index: 1000;
     }
 
-    .sidebar {
-      width: 300px;
+    .bottom-nav-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.25rem;
+      color: var(--text-dark);
+      cursor: pointer;
+      transition: color 0.3s ease, transform 0.3s ease;
+    }
+
+    .bottom-nav-item:hover {
+      color: var(--accent-blue);
+      transform: translateY(-2px);
+    }
+
+    .bottom-nav-item i {
+      font-size: 1.5rem;
+    }
+
+    .bottom-nav-item span {
+      font-size: 0.8rem;
+      font-weight: 500;
+    }
+
+    .feed {
+      max-width: 600px;
+      margin: 2rem auto;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+
+    .create-post {
       background: var(--glass-bg);
       backdrop-filter: blur(10px);
       border-radius: 16px;
       padding: 1.5rem;
       box-shadow: var(--card-shadow);
-      position: sticky;
-      top: 80px;
-      height: fit-content;
     }
 
-    .sidebar h2 {
-      font-size: 1.25rem;
-      margin-bottom: 1rem;
-    }
-
-    .sidebar ul {
-      list-style: none;
-      padding: 0;
-    }
-
-    .sidebar li {
-      display: flex;
-      align-items: center;
-      gap: 1rem;
+    .create-post textarea {
+      width: 100%;
       padding: 0.75rem;
+      border: 1px solid var(--border);
       border-radius: 12px;
-      transition: background 0.3s ease;
+      background: var(--white);
+      resize: none;
+      outline: none;
+      transition: border-color 0.3s ease;
+    }
+
+    .create-post textarea:focus {
+      border-color: var(--accent-blue);
+    }
+
+    .create-post .media-upload {
+      margin: 1rem 0;
+    }
+
+    .create-post .auth-btn {
+      width: 100%;
+      padding: 0.75rem;
+      background: linear-gradient(to right, var(--primary-black), var(--secondary-black));
+      color: var(--white);
+      border: none;
+      border-radius: 9999px;
+      font-size: 1rem;
+      font-weight: 600;
       cursor: pointer;
+      transition: background 0.3s ease, transform 0.3s ease;
     }
 
-    .sidebar li:hover {
-      background: rgba(59, 130, 246, 0.1);
-    }
-
-    .sidebar i {
-      font-size: 1.25rem;
-      color: var(--accent-blue);
-    }
-
-    .feed {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      gap: 1.5rem;
+    .create-post .auth-btn:hover {
+      transform: scale(1.05);
     }
 
     .post-card {
@@ -202,14 +264,16 @@
       margin-bottom: 1rem;
     }
 
-    .post-image {
+    .post-media {
       width: 100%;
       border-radius: 12px;
       margin-bottom: 1rem;
+      max-height: 400px;
+      object-fit: cover;
       transition: transform 0.3s ease;
     }
 
-    .post-image:hover {
+    .post-media:hover {
       transform: scale(1.02);
     }
 
@@ -236,16 +300,6 @@
       font-size: 1.25rem;
     }
 
-    @media (max-width: 1024px) {
-      .main-content {
-        flex-direction: column;
-      }
-      .sidebar {
-        width: 100%;
-        position: static;
-      }
-    }
-
     @media (max-width: 767px) {
       .navbar {
         padding: 0.75rem;
@@ -261,6 +315,12 @@
       }
       .search-bar i {
         left: 0.75rem;
+      }
+      .bottom-nav-item i {
+        font-size: 1.25rem;
+      }
+      .bottom-nav-item span {
+        font-size: 0.75rem;
       }
       .post-card {
         padding: 1rem;
@@ -286,7 +346,7 @@
     <h1>Vinda</h1>
     <div class="search-bar">
       <i class="fas fa-search"></i>
-      <input type="text" placeholder="Search Vinda...">
+      <input type="text" placeholder="Search Vinda..." aria-label="Search posts">
     </div>
     <div class="nav-icons">
       <i class="fas fa-home" title="Home"></i>
@@ -296,86 +356,288 @@
     </div>
   </nav>
 
-  <div class="main-content">
-    <aside class="sidebar">
-      <h2>Explore</h2>
-      <ul>
-        <li><i class="fas fa-users"></i> Friends</li>
-        <li><i class="fas fa-bookmark"></i> Saved</li>
-        <li><i class="fas fa-calendar-alt"></i> Events</li>
-        <li><i class="fas fa-store"></i> Marketplace</li>
-        <li><i class="fas fa-cog"></i> Settings</li>
-      </ul>
-    </aside>
-
-    <main class="feed">
-      <div class="post-card">
-        <div class="post-header">
-          <div class="avatar">A</div>
-          <div class="post-info">
-            <h3>Alice Johnson</h3>
-            <p>2 hours ago</p>
-          </div>
-          <i class="fas fa-ellipsis-h"></i>
-        </div>
-        <div class="post-content">
-          <p>Just had an amazing hike! Nature is breathtaking. 🌿🏞️</p>
-        </div>
-        <img class="post-image" src="https://source.unsplash.com/random/600x400/?nature" alt="Nature scene">
-        <div class="post-actions">
-          <div class="action-btn"><i class="far fa-heart"></i> Like (12)</div>
-          <div class="action-btn"><i class="far fa-comment"></i> Comment (5)</div>
-          <div class="action-btn"><i class="fas fa-share"></i> Share (3)</div>
-        </div>
-      </div>
-
-      <div class="post-card">
-        <div class="post-header">
-          <div class="avatar">B</div>
-          <div class="post-info">
-            <h3>Bob Smith</h3>
-            <p>5 hours ago</p>
-          </div>
-          <i class="fas fa-ellipsis-h"></i>
-        </div>
-        <div class="post-content">
-          <p>Excited about the new tech conference! Who's joining? 🚀</p>
-        </div>
-        <div class="post-actions">
-          <div class="action-btn"><i class="far fa-heart"></i> Like (28)</div>
-          <div class="action-btn"><i class="far fa-comment"></i> Comment (14)</div>
-          <div class="action-btn"><i class="fas fa-share"></i> Share (7)</div>
-        </div>
-      </div>
-
-      <div class="post-card">
-        <div class="post-header">
-          <div class="avatar">C</div>
-          <div class="post-info">
-            <h3>Carol Davis</h3>
-            <p>1 day ago</p>
-          </div>
-          <i class="fas fa-ellipsis-h"></i>
-        </div>
-        <div class="post-content">
-          <p>Baking some delicious cookies today! Recipe in comments. 🍪</p>
-        </div>
-        <img class="post-image" src="https://source.unsplash.com/random/600x400/?food" alt="Cookies">
-        <div class="post-actions">
-          <div class="action-btn"><i class="far fa-heart"></i> Like (45)</div>
-          <div class="action-btn"><i class="far fa-comment"></i> Comment (22)</div>
-          <div class="action-btn"><i class="fas fa-share"></i> Share (10)</div>
-        </div>
-      </div>
-    </main>
+  <div class="progress-bar" id="progress-bar">
+    <div class="progress-fill" id="progress-fill"></div>
   </div>
 
-  <script>
-    function logout() {
-      // Add Firebase logout logic here
-      alert('Logging out...');
-      window.location.href = 'index.html';
+  <main class="feed">
+    <div class="create-post">
+      <textarea id="post-content" rows="3" placeholder="What's on your mind?"></textarea>
+      <div class="media-upload">
+        <input type="file" id="media-input" accept="image/*,video/*" aria-label="Upload image or video">
+      </div>
+      <button class="auth-btn" id="post-btn">Post</button>
+    </div>
+    <div id="feed-posts"></div>
+  </main>
+
+  <nav class="bottom-nav">
+    <div class="bottom-nav-item" data-section="friends">
+      <i class="fas fa-users"></i>
+      <span>Friends</span>
+    </div>
+    <div class="bottom-nav-item" data-section="saved">
+      <i class="fas fa-bookmark"></i>
+      <span>Saved</span>
+    </div>
+    <div class="bottom-nav-item" data-section="events">
+      <i class="fas fa-calendar-alt"></i>
+      <span>Events</span>
+    </div>
+    <div class="bottom-nav-item" data-section="marketplace">
+      <i class="fas fa-store"></i>
+      <span>Marketplace</span>
+    </div>
+    <div class="bottom-nav-item" data-section="settings">
+      <i class="fas fa-cog"></i>
+      <span>Settings</span>
+    </div>
+  </nav>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
+    import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+    import { getDatabase, ref, push, onValue, update } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-database.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
+      authDomain: "fire-b-a8878.firebaseapp.com",
+      databaseURL: "https://fire-b-a8878.firebaseio.com",
+      projectId: "fire-b-a8878",
+      storageBucket: "fire-b-a8878.firebasestorage.app",
+      messagingSenderId: "658673187627",
+      appId: "1:658673187627:web:6e4c29af661785f0afa36e",
+      measurementId: "G-V4W97VMSKL"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getDatabase(app);
+
+    const postContent = document.getElementById("post-content");
+    const mediaInput = document.getElementById("media-input");
+    const postBtn = document.getElementById("post-btn");
+    const feedPosts = document.getElementById("feed-posts");
+    const progressBar = document.getElementById("progress-bar");
+    const progressFill = document.getElementById("progress-fill");
+
+    function showProgress() {
+      progressBar.classList.add("active");
+      progressFill.style.width = "100%";
     }
+
+    function hideProgress() {
+      progressFill.style.width = "0";
+      setTimeout(() => progressBar.classList.remove("active"), 300);
+    }
+
+    function logout() {
+      showProgress();
+      signOut(auth)
+        .then(() => {
+          document.body.classList.add("fade-out");
+          setTimeout(() => window.location.href = "index.html", 500);
+        })
+        .catch(error => {
+          console.error("Logout failed:", error);
+          alert("Failed to log out. Please try again.");
+        })
+        .finally(() => hideProgress());
+    }
+
+    async function checkAuthState() {
+      showProgress();
+      try {
+        await new Promise((resolve, reject) => {
+          onAuthStateChanged(auth, (user) => {
+            if (!user) {
+              console.log("No authenticated user, redirecting to login");
+              document.body.classList.add("fade-out");
+              setTimeout(() => window.location.href = "index.html", 500);
+              reject(new Error("User not authenticated"));
+            } else {
+              resolve(user);
+            }
+          });
+        });
+      } catch (error) {
+        console.error("Auth check failed:", error);
+      } finally {
+        hideProgress();
+      }
+    }
+
+    async function uploadToCloudinary(file) {
+      const CLOUDINARY_UPLOAD_URL = "https://api.cloudinary.com/v1_1/YOUR_CLOUD_NAME/upload";
+      const CLOUDINARY_UPLOAD_PRESET = "YOUR_UPLOAD_PRESET";
+
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
+
+      showProgress();
+      try {
+        const response = await fetch(CLOUDINARY_UPLOAD_URL, {
+          method: "POST",
+          body: formData
+        });
+        const data = await response.json();
+        if (data.secure_url) {
+          return { url: data.secure_url, type: data.resource_type };
+        } else {
+          throw new Error("Upload failed");
+        }
+      } catch (error) {
+        console.error("Cloudinary upload failed:", error);
+        alert("Failed to upload media. Please try again.");
+        throw error;
+      } finally {
+        hideProgress();
+      }
+    }
+
+    async function createPost() {
+      const content = postContent.value.trim();
+      if (!content) {
+        alert("Please enter some content for your post.");
+        return;
+      }
+
+      const user = auth.currentUser;
+      if (!user) {
+        alert("You must be logged in to post.");
+        window.location.href = "index.html";
+        return;
+      }
+
+      showProgress();
+      try {
+        let media = null;
+        if (mediaInput.files[0]) {
+          const { url, type } = await uploadToCloudinary(mediaInput.files[0]);
+          media = { url, type };
+        }
+
+        const postsRef = ref(db, "posts");
+        const newPostRef = push(postsRef);
+        await set(newPostRef, {
+          userId: user.uid,
+          displayName: (await getUserData(user.uid)).displayName || "Anonymous",
+          content,
+          media,
+          createdAt: Date.now(),
+          likes: 0,
+          comments: 0,
+          shares: 0
+        });
+
+        postContent.value = "";
+        mediaInput.value = "";
+        alert("Post created successfully!");
+      } catch (error) {
+        console.error("Post creation failed:", error);
+        alert("Failed to create post. Please try again.");
+      } finally {
+        hideProgress();
+      }
+    }
+
+    async function getUserData(userId) {
+      const userRef = ref(db, `users/${userId}`);
+      const snapshot = await get(userRef);
+      return snapshot.exists() ? snapshot.val() : {};
+    }
+
+    function formatDate(timestamp) {
+      const date = new Date(timestamp);
+      const now = new Date();
+      const diff = (now - date) / 1000; // seconds
+      if (diff < 60) return "Just now";
+      if (diff < 3600) return `${Math.floor(diff / 60)} minutes ago`;
+      if (diff < 86400) return `${Math.floor(diff / 3600)} hours ago`;
+      return `${Math.floor(diff / 86400)} days ago`;
+    }
+
+    function renderPosts(snapshot) {
+      feedPosts.innerHTML = "";
+      const posts = [];
+      snapshot.forEach(child => {
+        posts.push({ id: child.key, ...child.val() });
+      });
+
+      posts.sort((a, b) => b.createdAt - a.createdAt);
+
+      posts.forEach(post => {
+        const postElement = document.createElement("div");
+        postElement.className = "post-card";
+        postElement.innerHTML = `
+          <div class="post-header">
+            <div class="avatar">${post.displayName[0].toUpperCase()}</div>
+            <div class="post-info">
+              <h3>${post.displayName}</h3>
+              <p>${formatDate(post.createdAt)}</p>
+            </div>
+            <i class="fas fa-ellipsis-h"></i>
+          </div>
+          <div class="post-content">
+            <p>${post.content}</p>
+          </div>
+          ${post.media ? (
+            post.media.type === "image" ?
+            `<img class="post-media" src="${post.media.url}" alt="Post media">` :
+            `<video class="post-media" controls src="${post.media.url}"></video>`
+          ) : ""}
+          <div class="post-actions">
+            <div class="action-btn"><i class="far fa-heart"></i> Like (${post.likes || 0})</div>
+            <div class="action-btn"><i class="far fa-comment"></i> Comment (${post.comments || 0})</div>
+            <div class="action-btn"><i class="fas fa-share"></i> Share (${post.shares || 0})</div>
+          </div>
+        `;
+        feedPosts.appendChild(postElement);
+      });
+    }
+
+    async function fetchPosts() {
+      showProgress();
+      try {
+        const postsRef = ref(db, "posts");
+        onValue(postsRef, (snapshot) => {
+          renderPosts(snapshot);
+          hideProgress();
+        }, {
+          onlyOnce: false
+        });
+      } catch (error) {
+        console.error("Fetch posts failed:", error);
+        alert("Failed to load posts. Please try again.");
+        hideProgress();
+      }
+    }
+
+    document.addEventListener("DOMContentLoaded", async () => {
+      try {
+        await checkAuthState();
+        await fetchPosts();
+
+        postBtn.addEventListener("click", createPost);
+        postContent.addEventListener("keypress", (e) => {
+          if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            createPost();
+          }
+        });
+
+        document.querySelectorAll(".bottom-nav-item").forEach(item => {
+          item.addEventListener("click", () => {
+            alert(`Navigating to ${item.dataset.section} (placeholder)`);
+          });
+        });
+      } catch (error) {
+        console.error("Initialization failed:", error);
+        alert("Failed to initialize feed. Please try again.");
+        hideProgress();
+      }
+    });
   </script>
 </body>
 </html>
