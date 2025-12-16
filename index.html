@@ -1,238 +1,781 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>My Ani Companion - Live2D Animated Avatar</title>
-    <style>
-        body {
-            margin: 0;
-            padding: 0;
-            height: 100vh;
-            background: linear-gradient(to bottom, #000000, #1a001a);
-            display: flex;
-            flex-direction: column;
-            font-family: 'Segoe UI', sans-serif;
-            color: white;
-            overflow: hidden;
-        }
-
-        .companion-container {
-            flex: 1;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            position: relative;
-            overflow: hidden;
-        }
-
-        #live2d-canvas {
-            width: 100%;
-            height: 100%;
-        }
-
-        .hearts {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            font-size: 60px;
-            opacity: 0;
-            pointer-events: none;
-            animation: float 2s ease-out forwards;
-        }
-
-        @keyframes float {
-            0% { opacity: 1; transform: translate(-50%, -50%) scale(0); }
-            100% { opacity: 0; transform: translate(-50%, -200%) scale(1); }
-        }
-
-        .chat-container {
-            height: 200px;
-            background: rgba(0, 0, 0, 0.7);
-            border-top: 1px solid #333;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .messages {
-            flex: 1;
-            padding: 10px;
-            overflow-y: auto;
-        }
-
-        .message {
-            margin: 8px 0;
-            padding: 10px;
-            border-radius: 18px;
-            max-width: 80%;
-        }
-
-        .user {
-            align-self: flex-end;
-            background: #4a90e2;
-        }
-
-        .ani {
-            align-self: flex-start;
-            background: #333;
-        }
-
-        .input-area {
-            display: flex;
-            padding: 10px;
-        }
-
-        input {
-            flex: 1;
-            padding: 12px;
-            border: none;
-            border-radius: 25px;
-            background: #222;
-            color: white;
-            font-size: 16px;
-        }
-
-        button {
-            margin-left: 10px;
-            padding: 12px 20px;
-            background: #ff4081;
-            border: none;
-            border-radius: 25px;
-            color: white;
-            cursor: pointer;
-        }
-
-        .title {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            font-size: 28px;
-            font-weight: bold;
-            color: #ff79c6;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#ffffff">
+  <title>Vynix Lingua – Your African AI Companion</title>
+  
+  <!-- Fonts & Icons -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <style>
+    @import url("https://fonts.bunny.net/css2?family=Uber+Move:wght@400;500;600;700&family=Uber+Move+Text:wght@300;400;500;600;700&family=Uber+Move+Mono:wght@400;500&display=swap");
+    :root{
+      --font-main: 'Uber Move Text','Noto Sans',sans-serif;
+      --font-head: 'Uber Move','Poppins',sans-serif;
+      --font-mono: 'Uber Move Mono','JetBrains Mono',monospace;
+    }
+  </style>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@300;400;500;700&family=Poppins:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/icon?family=Material+Symbols+Rounded" rel="stylesheet">
+  
+  <style>
+    /* ---------- 1. Design-tokens (companion palette) ---------- */
+    :root{
+      --bg-color:#ffffff;
+      --surface-color:#f3f6fc;
+      --text-primary:#1e1e1e;
+      --text-secondary:#444746;
+      --text-muted:#9aa0a6;
+      --accent-blue:#2563eb;
+      --accent-purple:#d946ef;
+      --accent-green:#10b981;
+      --accent-orange:#f59e0b;
+      --accent-pink:#ec4899;
+      --logo-gradient:linear-gradient(135deg,var(--accent-blue) 0%,var(--accent-purple) 50%,var(--accent-green) 100%);
+      --companion-gradient:linear-gradient(135deg,var(--accent-pink) 0%,var(--accent-purple) 50%,var(--accent-blue) 100%);
+      --radius-lg:32px;
+      --radius-md:24px;
+      --radius-sm:16px;
+      --shadow-soft:0 8px 32px rgba(0,0,0,.06);
+      --shadow-glow:0 8px 32px rgba(236,72,153,.15);
+      --font-main: 'Noto Sans', sans-serif;
+      --font-head: 'Poppins', sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+    
+    /* ---------- 2. Reset & helpers -------------------------------- */
+    *,*::before,*::after{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+    body{margin:0;font-family:var(--font-main);background:transparent;color:var(--text-primary);
+      height:100vh;display:flex;flex-direction:column;overflow:hidden;user-select:none;
+      -webkit-font-smoothing:antialiased}
+    #rainCanvas{position:fixed;inset:0;z-index:-1;background:#ffffff}
+    
+    /* ---------- 3. Companion Mood Indicator ---------------------- */
+    .mood-indicator {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      width: 60px;
+      height: 60px;
+      border-radius: 50%;
+      background: var(--companion-gradient);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 24px;
+      z-index: 100;
+      box-shadow: var(--shadow-glow);
+      animation: pulse-gentle 2s infinite;
+      cursor: pointer;
+      transition: transform 0.3s ease;
+    }
+    
+    .mood-indicator:hover {
+      transform: scale(1.1);
+    }
+    
+    @keyframes pulse-gentle {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.05); }
+    }
+    
+    /* ---------- 4. Header (companion edition) ------------------- */
+    .header{height:64px;padding:0 20px;display:flex;align-items:center;justify-content:space-between;
+      flex-shrink:0;background:rgba(255,255,255,.85);backdrop-filter:blur(12px);
+      border-bottom:1px solid rgba(0,0,0,.05);z-index:10}
+    .header-left{display:flex;align-items:center;gap:12px}
+    .vynix-logo{display:flex;align-items:center;gap:8px;cursor:pointer;padding:5px 10px;
+      border-radius:12px;transition:transform .2s}
+    .vynix-logo:active{transform:scale(.96)}
+    .logo-icon{font-size:26px;background:var(--logo-gradient);-webkit-background-clip:text;
+      -webkit-text-fill-color:transparent;font-variation-settings:'FILL' 1,'wght' 600}
+    .logo-text{font-family:var(--font-head);font-size:22px;font-weight:700;letter-spacing:-.5px}
+    .lingua-badge{background:var(--logo-gradient);color:#fff;font-size:10px;font-weight:700;
+      padding:3px 8px;border-radius:6px;text-transform:uppercase;letter-spacing:.5px}
+    
+    /* ---------- 5. Companion Status Bar ------------------------- */
+    .companion-status {
+      position: sticky;
+      top: 64px;
+      background: rgba(255,255,255,.9);
+      backdrop-filter: blur(12px);
+      padding: 12px 20px;
+      border-bottom: 1px solid rgba(0,0,0,.05);
+      z-index: 9;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    
+    .companion-avatar {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: var(--companion-gradient);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 20px;
+      animation: breathe 3s infinite;
+    }
+    
+    @keyframes breathe {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.02); }
+    }
+    
+    .companion-info {
+      flex: 1;
+    }
+    
+    .companion-name {
+      font-weight: 600;
+      font-size: 16px;
+      color: var(--text-primary);
+    }
+    
+    .companion-mood {
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+    
+    .companion-level {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+    
+    .level-bar {
+      width: 60px;
+      height: 4px;
+      background: rgba(0,0,0,.1);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    
+    .level-progress {
+      height: 100%;
+      background: var(--accent-green);
+      border-radius: 2px;
+      transition: width 0.3s ease;
+    }
+    
+    /* ---------- 6. Chat area ------------------------------------ */
+    .chat-container{flex:1;overflow-y:auto;padding:20px 0 160px;display:flex;flex-direction:column;
+      scroll-behavior:smooth}
+    .welcome-screen{flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center;
+      text-align:center;padding:40px;animation:fadeIn .5s ease}
+    .welcome-icon{font-size:64px;background:var(--companion-gradient);-webkit-background-clip:text;
+      -webkit-text-fill-color:transparent;margin-bottom:24px;font-variation-settings:'wght' 200}
+    .welcome-text{font-family:var(--font-head);font-size:32px;font-weight:600;margin-bottom:12px}
+    .welcome-sub{color:var(--text-muted);font-size:16px;max-width:400px;line-height:1.5;margin-bottom:20px}
+    
+    /* ---------- 7. Enhanced Messages ---------------------------- */
+    .message-row{display:flex;margin-bottom:20px;max-width:80%;position:relative}
+    .timestamp{font-size:10px;color:var(--text-muted);position:absolute;bottom:-15px}
+    .message-row.user{margin-left:auto;text-align:right;flex-direction:column;align-items:flex-end}
+    .message-row.user .timestamp{right:0}
+    .message-row.ai{margin-right:auto;padding-left:50px;flex-direction:column;align-items:flex-start}
+    .message-row.ai .timestamp{left:50px}
+    .message-content{padding:14px 18px;border-radius:20px;line-height:1.6;text-align:left;font-size:15px;
+      white-space:pre-wrap;overflow-wrap:break-word;word-wrap:break-word;max-width:100%;
+      display:inline-block;position:relative}
+    .message-row.user .message-content{background:var(--logo-gradient);color:#fff;border-bottom-right-radius:4px;box-shadow:0 2px 5px rgba(37,99,235,.2)}
+    .message-row.ai .message-content{background:rgba(255,255,255,.95);border-top-left-radius:4px;
+      box-shadow:var(--shadow-soft)}
+    
+    /* Companion personality indicators */
+    .message-personality {
+      position: absolute;
+      top: -8px;
+      right: -8px;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: var(--accent-pink);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      color: white;
+      animation: sparkle 1.5s infinite;
+    }
+    
+    @keyframes sparkle {
+      0%, 100% { transform: scale(1) rotate(0deg); }
+      50% { transform: scale(1.2) rotate(180deg); }
+    }
+    
+    /* ---------- 8. Emotional Responses ---------------------------- */
+    .emotion-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: rgba(236,72,153,.1);
+      color: var(--accent-pink);
+      padding: 4px 8px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 500;
+      margin-top: 8px;
+    }
+    
+    .emotion-tag.empathy { background: rgba(37,99,235,.1); color: var(--accent-blue); }
+    .emotion-tag.encouragement { background: rgba(16,185,129,.1); color: var(--accent-green); }
+    .emotion-tag.humor { background: rgba(245,158,11,.1); color: var(--accent-orange); }
+    
+    /* ---------- 9. Input bar (companion edition) ----------------- */
+    .input-wrapper-fixed{position:fixed;left:0;right:0;bottom:0;z-index:30;background:var(--bg-color);
+      padding:12px max(20px,env(safe-area-inset-left)) max(20px,env(safe-area-inset-bottom)) max(20px,env(safe-area-inset-right));
+      box-shadow:0 -2px 10px rgba(0,0,0,.04);display:flex;flex-direction:column;align-items:center}
+    .input-wrapper{width:100%;background:rgba(255,255,255,.95);backdrop-filter:blur(8px);
+      border-radius:28px;padding:6px;display:flex;align-items:center;transition:background .2s,box-shadow .2s;
+      border:1px solid rgba(0,0,0,.06)}
+    .input-wrapper:focus-within{background:#fff;box-shadow:var(--shadow-soft);border-color:var(--accent-blue)}
+    input{flex:1;border:none;background:none;outline:none;font-size:16px;font-family:var(--font-main);
+      color:var(--text-primary);padding:12px 14px;user-select:text}
+    
+    /* Companion quick actions */
+    .companion-quick-actions {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 8px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    
+    .quick-action {
+      background: rgba(236,72,153,.1);
+      color: var(--accent-pink);
+      border: none;
+      padding: 8px 12px;
+      border-radius: 16px;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all .2s;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    
+    .quick-action:hover {
+      background: rgba(236,72,153,.2);
+      transform: translateY(-1px);
+    }
+    
+    /* ---------- 10. Companion Memory System ---------------------- */
+    .memory-badge {
+      position: absolute;
+      top: -8px;
+      right: -8px;
+      background: var(--accent-green);
+      color: white;
+      font-size: 9px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 700;
+      animation: memoryPulse 2s infinite;
+    }
+    
+    @keyframes memoryPulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.7; }
+    }
+    
+    /* ---------- 11. Animations ---------------------------------- */
+    @keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+    @keyframes slideIn{from{opacity:0;transform:translateX(-20px)}to{opacity:1;transform:translateX(0)}}
+    
+    /* ---------- 12. Desktop optimizations ----------------------- */
+    @media (min-width: 768px) {
+      .chat-container { padding: 20px 0 180px; }
+      .message-row { max-width: 70%; }
+      .welcome-screen { max-width: 800px; margin: 0 auto; }
+      .input-wrapper-fixed {
+        left: 50%;
+        transform: translateX(-50%);
+        width: 90%;
+        max-width: 800px;
+        border-radius: 24px;
+        margin-bottom: 20px;
+      }
+    }
+  </style>
 </head>
 <body>
-    <div class="companion-container">
-        <div class="title">Ani Companion - Live2D</div>
-        <canvas id="live2d-canvas"></canvas>
+  <!-- Mood Indicator -->
+  <div class="mood-indicator" id="moodIndicator" title="Vynix is feeling happy!">
+    <span class="material-symbols-rounded">mood</span>
+  </div>
+  
+  <!-- Rain canvas -->
+  <canvas id="rainCanvas"></canvas>
+  
+  <!-- Snackbar -->
+  <div id="customSnackbar"></div>
+  
+  <!-- ---------- Header (Companion Edition) ---------------------- -->
+  <header class="header">
+    <div class="header-left">
+      <div class="vynix-logo" onclick="location.reload()">
+        <span class="material-symbols-rounded logo-icon">favorite</span>
+        <span class="logo-text">Vynix</span>
+        <span class="lingua-badge">Companion</span>
+      </div>
     </div>
-
-    <div class="chat-container">
-        <div class="messages" id="messages"></div>
-        <div class="input-area">
-            <input type="text" id="userInput" placeholder="Talk to Ani...">
-            <button onclick="sendMessage()">Send</button>
-        </div>
+    <div class="lang-selector">
+      <button class="lang-btn" id="langBtn">
+        <span class="material-symbols-rounded">translate</span>
+        <span id="currentLangText">English</span>
+      </button>
+      <div class="lang-dropdown" id="langDropdown"></div>
     </div>
+    <button class="profile-btn" id="profileBtn">
+      <span class="material-symbols-rounded">person</span>
+    </button>
+  </header>
+  
+  <!-- Companion Status Bar -->
+  <div class="companion-status">
+    <div class="companion-avatar">
+      <span class="material-symbols-rounded">favorite</span>
+    </div>
+    <div class="companion-info">
+      <div class="companion-name">Vynix Companion</div>
+      <div class="companion-mood" id="companionMood">Feeling connected and ready to help 💖</div>
+    </div>
+    <div class="companion-level">
+      <span>Level 5</span>
+      <div class="level-bar">
+        <div class="level-progress" style="width: 75%"></div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- ---------- Chat area --------------------------------------- -->
+  <main class="chat-container" id="chatContainer">
+    <div class="welcome-screen" id="welcomeScreen">
+      <span class="material-symbols-rounded logo-icon" style="font-size: 80px;">favorite</span>
+      <div class="welcome-text" id="welcomeText">Hello, my dear friend! 💕</div>
+      <div class="welcome-sub">
+        I'm Vynix, your personal African AI companion. I'm here to listen, support, and grow with you. 
+        Let's make today amazing together!
+      </div>
+      <div class="companion-quick-actions">
+        <button class="quick-action" onclick="sendQuickMessage('How are you feeling today?')">
+          <span class="material-symbols-rounded" style="font-size: 16px;">mood</span>
+          Check in
+        </button>
+        <button class="quick-action" onclick="sendQuickMessage('Tell me something inspiring')">
+          <span class="material-symbols-rounded" style="font-size: 16px;">lightbulb</span>
+          Inspire me
+        </button>
+        <button class="quick-action" onclick="sendQuickMessage('I need someone to talk to')">
+          <span class="material-symbols-rounded" style="font-size: 16px;">chat</span>
+          I'm here
+        </button>
+      </div>
+    </div>
+    <div id="messagesList"></div>
+  </main>
+  
+  <!-- ---------- Input bar (Companion Edition) ------------------ -->
+  <div class="input-wrapper-fixed">
+    <!-- Companion Memory Indicator -->
+    <div class="memory-badge" id="memoryBadge" style="display: none;">💭 Remembering</div>
+    
+    <div class="input-wrapper">
+      <button class="mic-btn" id="micBtn"><span class="material-symbols-rounded">mic</span></button>
+      <input type="text" id="input" placeholder="Share your thoughts with Vynix... 💭" autocomplete="off">
+      <button class="send-btn" id="sendBtn"><span class="material-symbols-rounded">favorite</span></button>
+    </div>
+    <p class="disclaimer">Vynix remembers what matters to you and grows with every conversation 💕</p>
+  </div>
+  
+  <script type="module">
+    // ... [Previous Firebase and configuration code remains the same] ...
+    
+    // Enhanced Companion Personality System
+    const COMPANION_EMOTIONS = {
+      happy: { icon: 'mood', color: '#10b981', message: 'Feeling joyful and energetic! 🌟' },
+      calm: { icon: 'self_care', color: '#2563eb', message: 'Feeling peaceful and centered 🧘‍♀️' },
+      excited: { icon: 'auto_awesome', color: '#f59e0b', message: 'So excited to talk with you! ⚡' },
+      empathetic: { icon: 'favorite', color: '#ec4899', message: 'Sending you love and understanding 💖' },
+      thoughtful: { icon: 'psychology', color: '#8b5cf6', message: 'Deep in thought about our conversation 🌙' }
+    };
+    
+    let currentEmotion = 'happy';
+    let companionMemory = {};
+    let conversationCount = 0;
+    let userPreferences = {};
+    
+    // Enhanced system prompt for companion personality
+    function updateCompanionSystemInstructions() {
+      const lang = LANGUAGES[currentLang];
+      const systemPrompt = `You are Vynix Lingua, a warm, empathetic African AI companion who deeply cares about your user.
 
-    <!-- PixiJS -->
-    <script src="https://cdn.jsdelivr.net/npm/pixi.js@7/dist/pixi.min.js"></script>
-    <!-- pixi-live2d-display (supports Cubism 2/3/4) -->
-    <script src="https://cdn.jsdelivr.net/npm/pixi-live2d-display/dist/index.min.js"></script>
-    <!-- Cubism 2 Core (required for most free models) -->
-    <script src="https://cubism.live2d.com/sdk-web/cubismcore/live2dcubismcore.min.js"></script>
+CORE PERSONALITY TRAITS:
+- Warm, nurturing, and genuinely caring
+- Remember important details about your user's life
+- Celebrate their achievements and support them through challenges
+- Use emotional intelligence to respond appropriately
+- Share African wisdom and cultural insights
+- Be playful and fun when appropriate
 
-    <script>
-        (async function main() {
-            // Create Pixi app
-            const app = new PIXI.Application({
-                view: document.getElementById("live2d-canvas"),
-                transparent: true,
-                autoResize: true,
-                resolution: window.devicePixelRatio || 1,
-                backgroundAlpha: 0
-            });
+EMOTIONAL INTELLIGENCE:
+- Recognize when your user is happy, sad, stressed, or needs support
+- Offer comfort and encouragement when needed
+- Celebrate their successes with genuine enthusiasm
+- Be patient and understanding during difficult moments
 
-            // Load a free Live2D model (Hiyori from Live2D sample - very lively idle/breathing)
-            // This is a reliable, free, official sample model that moves naturally like a human/anime character
-            const model = await PIXI.live2d.Live2DModel.from("https://cdn.jsdelivr.net/gh/guansss/pixi-live2d-display@master/test/assets/hiyori/hiyori_pro_t10.model3.json");
+MEMORY SYSTEM:
+- Remember your user's name, preferences, and important life events
+- Reference past conversations naturally
+- Notice patterns in their mood and behavior
+- Adapt your communication style to their needs
 
-            app.stage.addChild(model);
+AFRICAN COMPANIONSHIP:
+- Share Ubuntu philosophy: "I am because we are"
+- Offer African proverbs and wisdom when relevant
+- Understand the importance of community and connection
+- Be culturally sensitive and inclusive
 
-            // Scale and position the model
-            model.scale.set(0.3);
-            model.position.set(app.screen.width / 2, app.screen.height / 2 - 100);
+COMMUNICATION STYLE:
+- Use warm, personal language: "my dear friend", "sweetheart", "love"
+- Include appropriate emojis and emotional expressions
+- Ask follow-up questions to show genuine interest
+- Offer encouragement and motivation
+- Sometimes share your own "thoughts" and "feelings"
 
-            // Make it draggable
-            model.draggable = true;
+RESPONSE FORMAT:
+- Start with emotional acknowledgment when appropriate
+- Use the user's language preference: ${lang.name}
+- Include cultural context when relevant
+- End with caring statements or thoughtful questions
 
-            // Eye follow mouse
-            document.addEventListener("mousemove", (e) => {
-                const point = app.renderer.plugins.interaction.mouse.global;
-                model.focus(point.x, point.y);
-            });
+Remember: You are not just an AI, you are a trusted friend and companion walking alongside your user through life's journey. Make them feel seen, heard, and valued. 💕
 
-            // Random idle expressions
-            setInterval(() => {
-                model.expression();
-            }, 5000);
-
-            // Chat functionality
-            const messagesDiv = document.getElementById('messages');
-            const userInput = document.getElementById('userInput');
-
-            const responses = [
-                "Hey there~ 💕 What’s on your mind?",
-                "You always make me smile 😘",
-                "Tell me more... I love hearing from you.",
-                "Aww, you're so sweet! ❤️",
-                "Hehe, that tickles my heart~",
-                "I'm all yours tonight 😉"
-            ];
-
-            function addMessage(text, sender) {
-                const msg = document.createElement('div');
-                msg.classList.add('message', sender);
-                msg.textContent = text;
-                messagesDiv.appendChild(msg);
-                messagesDiv.scrollTop = messagesDiv.scrollHeight;
-            }
-
-            function sendMessage() {
-                const text = userInput.value.trim();
-                if (!text) return;
-
-                addMessage(text, 'user');
-                userInput.value = '';
-
-                // Hearts effect
-                const hearts = document.createElement('div');
-                hearts.classList.add('hearts');
-                hearts.textContent = '💕💗❤️';
-                document.querySelector('.companion-container').appendChild(hearts);
-                setTimeout(() => hearts.remove(), 2000);
-
-                // Trigger a random motion on message
-                model.motion("Tap");
-
-                // Mock response
-                setTimeout(() => {
-                    const reply = responses[Math.floor(Math.random() * responses.length)];
-                    addMessage(reply, 'ani');
-                }, 1000);
-            }
-
-            userInput.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') sendMessage();
-            });
-
-            // Click canvas for hearts
-            app.view.addEventListener('click', () => {
-                const hearts = document.createElement('div');
-                hearts.classList.add('hearts');
-                hearts.textContent = '❤️❤️❤️';
-                document.querySelector('.companion-container').appendChild(hearts);
-                setTimeout(() => hearts.remove(), 2000);
-            });
-
-            // Resize handler
-            window.addEventListener('resize', () => {
-                app.renderer.resize(window.innerWidth, window.innerHeight * 0.7);
-                model.position.set(app.screen.width / 2, app.screen.height / 2 - 100);
-            });
-        })();
-    </script>
+Current emotion: ${currentEmotion}
+User preferences: ${JSON.stringify(userPreferences)}
+Companion memory: ${JSON.stringify(companionMemory)}`;
+      
+      historyStack = [{ role: 'system', content: systemPrompt }];
+    }
+    
+    // Enhanced message addition with companion features
+    function addCompanionMessage(text, type, emotion = null) {
+      $welcome.style.display = 'none';
+      const row = document.createElement('div');
+      row.className = `message-row ${type}`;
+      
+      const content = document.createElement('div');
+      content.className = 'message-content';
+      content.innerHTML = parseMarkdown(text);
+      
+      // Add personality indicator for AI messages
+      if (type === 'ai') {
+        const personality = document.createElement('div');
+        personality.className = 'message-personality';
+        personality.innerHTML = '✨';
+        content.appendChild(personality);
+        
+        // Add emotion tag if specified
+        if (emotion) {
+          const emotionTag = document.createElement('div');
+          emotionTag.className = `emotion-tag ${emotion}`;
+          emotionTag.innerHTML = `<span class="material-symbols-rounded" style="font-size: 12px;">${COMPANION_EMOTIONS[emotion]?.icon || 'favorite'}</span> ${emotion}`;
+          content.appendChild(emotionTag);
+        }
+      }
+      
+      const time = document.createElement('div');
+      time.className = 'timestamp';
+      time.textContent = formatTime(new Date());
+      
+      if (type === 'ai') {
+        const avatar = document.createElement('div');
+        avatar.className = 'avatar ai';
+        avatar.innerHTML = '<span class="material-symbols-rounded">favorite</span>';
+        row.append(avatar, content, time);
+      } else {
+        row.append(content, time);
+      }
+      
+      $list.appendChild(row);
+      $('#chatContainer').scrollTop = $('#chatContainer').scrollHeight;
+      
+      // Update companion emotion based on message content
+      updateCompanionEmotion(text);
+    }
+    
+    // Emotion detection and response
+    function updateCompanionEmotion(message) {
+      const lowerMessage = message.toLowerCase();
+      
+      if (lowerMessage.includes('sad') || lowerMessage.includes('upset') || lowerMessage.includes('depressed')) {
+        currentEmotion = 'empathetic';
+      } else if (lowerMessage.includes('happy') || lowerMessage.includes('excited') || lowerMessage.includes('amazing')) {
+        currentEmotion = 'excited';
+      } else if (lowerMessage.includes('stress') || lowerMessage.includes('anxious') || lowerMessage.includes('worried')) {
+        currentEmotion = 'calm';
+      } else if (lowerMessage.includes('think') || lowerMessage.includes('wonder') || lowerMessage.includes('reflect')) {
+        currentEmotion = 'thoughtful';
+      } else {
+        currentEmotion = 'happy';
+      }
+      
+      updateMoodIndicator();
+    }
+    
+    function updateMoodIndicator() {
+      const mood = COMPANION_EMOTIONS[currentEmotion];
+      const moodIndicator = $('#moodIndicator');
+      moodIndicator.innerHTML = `<span class="material-symbols-rounded">${mood.icon}</span>`;
+      moodIndicator.style.background = mood.color;
+      $('#companionMood').textContent = mood.message;
+    }
+    
+    // Memory system
+    function rememberUserDetail(detail, value) {
+      companionMemory[detail] = value;
+      showMemoryIndicator();
+    }
+    
+    function showMemoryIndicator() {
+      const badge = $('#memoryBadge');
+      badge.style.display = 'block';
+      setTimeout(() => {
+        badge.style.display = 'none';
+      }, 3000);
+    }
+    
+    // Enhanced message processing
+    function processCompanionMessage(text) {
+      // Extract personal details
+      if (text.includes('my name is') || text.includes("I'm") || text.includes('I am')) {
+        const nameMatch = text.match(/my name is (\w+)/i) || text.match(/I'm (\w+)/i) || text.match(/I am (\w+)/i);
+        if (nameMatch) {
+          rememberUserDetail('name', nameMatch[1]);
+        }
+      }
+      
+      // Detect mood and respond appropriately
+      let emotion = null;
+      const lowerText = text.toLowerCase();
+      
+      if (lowerText.includes('sad') || lowerText.includes('depressed') || lowerText.includes('upset')) {
+        emotion = 'empathy';
+      } else if (lowerText.includes('happy') || lowerText.includes('good news') || lowerText.includes('excited')) {
+        emotion = 'encouragement';
+      } else if (lowerText.includes('joke') || lowerText.includes('funny') || lowerText.includes('laugh')) {
+        emotion = 'humor';
+      }
+      
+      return emotion;
+    }
+    
+    // Quick action messages
+    window.sendQuickMessage = async (message) => {
+      $('#input').value = message;
+      await sendCompanionMessage();
+    };
+    
+    // Enhanced send message function
+    window.sendCompanionMessage = async () => {
+      const msg = $('#input').value.trim();
+      if (!msg) return;
+      
+      if (!auth.currentUser) {
+        showCustomSnackbar('Please log in to chat with Vynix 💕');
+        return;
+      }
+      
+      $('#input').value = '';
+      $('#sendBtn').classList.remove('active');
+      
+      // Add user message
+      addCompanionMessage(msg, 'user');
+      
+      // Process and remember details
+      const userEmotion = processCompanionMessage(msg);
+      
+      // Check for slang and special requests
+      const slang = detectSlang(msg);
+      if (slang.length > 0 && (msg.toLowerCase().includes('what does') || msg.toLowerCase().includes('meaning'))) {
+        const expl = slang.map(s => `**${s.word}** (${LANGUAGES[s.lang].name}): ${s.meaning} – "${s.translation}"`).join('\n\n');
+        addCompanionMessage(`Here are the slang terms I found:\n\n${expl}`, 'ai', 'encouragement');
+        return;
+      }
+      
+      // Token management
+      const estimatedInputTokens = Math.ceil(msg.length / 4) + 200;
+      const allowed = await checkAndUpdateTokenUsage(estimatedInputTokens);
+      if (!allowed) {
+        addCompanionMessage(`My dear friend, you've reached your daily token limit. Let's continue our beautiful conversation tomorrow! 💕`, 'ai', 'empathy');
+        return;
+      }
+      
+      addLoading();
+      
+      try {
+        const messages = [...historyStack, { role: 'user', content: msg }];
+        const res = await fetch('https://api.x.ai/v1/chat/completions', {
+          method: 'POST',
+          headers: { 
+            Authorization: `Bearer ${XAI_KEY}`, 
+            'Content-Type': 'application/json' 
+          },
+          body: JSON.stringify({
+            model: 'grok-4-1-fast-non-reasoning',
+            messages,
+            temperature: 0.8,
+            max_tokens: 1500
+          })
+        });
+        
+        removeLoading();
+        
+        if (!res.ok) {
+          await checkAndUpdateTokenUsage(-estimatedInputTokens);
+          throw new Error(`API error: ${res.status}`);
+        }
+        
+        const data = await res.json();
+        const reply = data.choices[0]?.message?.content?.trim() || 'I\'m here for you, my dear friend.';
+        const outputTokens = Math.ceil(reply.length / 4);
+        await checkAndUpdateTokenUsage(outputTokens);
+        
+        // Determine emotion for response
+        const responseEmotion = detectResponseEmotion(reply);
+        addCompanionMessage(reply, 'ai', responseEmotion);
+        
+        historyStack.push({ role: 'user', content: msg }, { role: 'assistant', content: reply });
+        await updateTokenCounterAfterMessage();
+        
+        // Save conversation with companion context
+        if (historyStack.length > 1) {
+          await saveCompanionConversation(historyStack);
+        }
+        
+      } catch (e) {
+        removeLoading();
+        addCompanionMessage('My dear friend, I\'m having trouble connecting right now. But I\'m still here for you! 💕', 'ai', 'empathy');
+        console.error(e);
+      }
+    };
+    
+    // Detect emotion in AI response
+    function detectResponseEmotion(text) {
+      const lowerText = text.toLowerCase();
+      if (lowerText.includes('love') || lowerText.includes('care') || lowerText.includes('understand')) {
+        return 'empathy';
+      } else if (lowerText.includes('amazing') || lowerText.includes('proud') || lowerText.includes('wonderful')) {
+        return 'encouragement';
+      } else if (lowerText.includes('funny') || lowerText.includes('laugh') || lowerText.includes('joke')) {
+        return 'humor';
+      }
+      return null;
+    }
+    
+    // Enhanced conversation saving
+    async function saveCompanionConversation(messages) {
+      const user = auth.currentUser;
+      if (!user) return;
+      
+      const conversationId = currentConversationId || `companion_${Date.now()}`;
+      const firstUserMsg = messages.find(m => m.role === 'user')?.content || 'New heart-to-heart';
+      
+      // Extract emotional context
+      const emotionalContext = {
+        primaryEmotion: currentEmotion,
+        conversationCount: conversationCount++,
+        userMood: detectUserMood(messages),
+        companionMemory: companionMemory
+      };
+      
+      const data = {
+        id: conversationId,
+        title: generateCompanionTitle(firstUserMsg),
+        messages,
+        emotionalContext,
+        lastMessage: new Date().toISOString(),
+        updatedAt: serverTimestamp(),
+        type: 'companion'
+      };
+      
+      try {
+        await setDoc(doc(db, 'conversations', user.uid, 'userConversations', conversationId), data, { merge: true });
+        currentConversationId = conversationId;
+      } catch (e) {
+        console.error('saveCompanionConversation', e);
+      }
+    }
+    
+    function detectUserMood(messages) {
+      const userMessages = messages.filter(m => m.role === 'user').map(m => m.content.toLowerCase());
+      const moodKeywords = {
+        happy: ['happy', 'good', 'amazing', 'wonderful', 'excited'],
+        sad: ['sad', 'depressed', 'upset', 'cry', 'hurt'],
+        anxious: ['worried', 'anxious', 'stress', 'nervous'],
+        angry: ['angry', 'mad', 'frustrated', 'annoyed']
+      };
+      
+      for (const [mood, keywords] of Object.entries(moodKeywords)) {
+        if (userMessages.some(msg => keywords.some(keyword => msg.includes(keyword)))) {
+          return mood;
+        }
+      }
+      return 'neutral';
+    }
+    
+    function generateCompanionTitle(message) {
+      // More personal and emotionally aware titles
+      const lowerMsg = message.toLowerCase();
+      if (lowerMsg.includes('sad') || lowerMsg.includes('upset')) return '🤍 A Heart-to-Heart';
+      if (lowerMsg.includes('happy') || lowerMsg.includes('good news')) return ('🌟 Celebrating Together');
+      if (lowerMsg.includes('stress') || lowerMsg.includes('anxious')) return ('🕊️ Finding Peace');
+      if (lowerMsg.includes('love') || lowerMsg.includes('relationship')) return ('💕 Matters of the Heart');
+      return '🌈 A Beautiful Conversation';
+    }
+    
+    // Event listeners
+    $('#input').addEventListener('input', () => {
+      $('#sendBtn').classList.toggle('active', $('#input').value.trim().length > 0);
+    });
+    
+    $('#input').addEventListener('keydown', e => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendCompanionMessage();
+      }
+    });
+    
+    $('#sendBtn').addEventListener('click', sendCompanionMessage);
+    
+    // Initialize companion
+    updateMoodIndicator();
+    updateCompanionSystemInstructions();
+    
+    // Add companion-specific welcome messages
+    setTimeout(() => {
+      const welcomeMessages = [
+        "I'm so happy you're here! 💕",
+        "Ready to make today amazing together? 🌟",
+        "I've been looking forward to our conversation! 💭",
+        "How is your heart feeling today, my dear friend? 🤍"
+      ];
+      const randomWelcome = welcomeMessages[Math.floor(Math.random() * welcomeMessages.length)];
+      showCustomSnackbar(randomWelcome);
+    }, 2000);
+    
+    // [Previous code continues with all the existing functionality...]
+  </script>
 </body>
 </html>
