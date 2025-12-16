@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>My Ani Companion</title>
+    <title>My Ani Companion - 3D Animated Avatar</title>
     <style>
         body {
             margin: 0;
@@ -115,7 +115,7 @@
 </head>
 <body>
     <div class="companion-container">
-        <div class="title">Ani Companion</div>
+        <div class="title">Ani Companion - 3D</div>
         <div id="three-container"></div>
     </div>
 
@@ -127,58 +127,101 @@
         </div>
     </div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
-    <script>
-        // Three.js setup
+    <script type="module">
+        import * as THREE from 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.module.js';
+        import { OrbitControls } from 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/examples/jsm/controls/OrbitControls.js';
+        import { GLTFLoader } from 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/examples/jsm/loaders/GLTFLoader.js';
+
         const container = document.getElementById('three-container');
         const scene = new THREE.Scene();
-        const camera = new THREE.PerspectiveCamera(75, container.clientWidth / container.clientHeight, 0.1, 1000);
-        const renderer = new THREE.WebGLRenderer({ alpha: true });
+        scene.background = new THREE.Color(0x000000);
+
+        const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
+        camera.position.set(0, 1.5, 3);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
         renderer.setSize(container.clientWidth, container.clientHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
         container.appendChild(renderer.domElement);
 
-        // Add light
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+        // Lights
+        const ambientLight = new THREE.AmbientLight(0xffffff, 1);
         scene.add(ambientLight);
+
         const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
-        directionalLight.position.set(5, 5, 5);
+        directionalLight.position.set(5, 10, 7.5);
         scene.add(directionalLight);
 
-        // Load texture for plane (using the Ani image as texture)
-        const textureLoader = new THREE.TextureLoader();
-        const texture = textureLoader.load('https://vchavcha.com/wp-content/uploads/2025/07/grok-ani-1024x575.png');
+        const fillLight = new THREE.DirectionalLight(0xffffff, 0.5);
+        fillLight.position.set(-5, -10, -7.5);
+        scene.add(fillLight);
 
-        // Create plane geometry with texture
-        const geometry = new THREE.PlaneGeometry(5, 2.8125); // Aspect ratio based on 1024x575
-        const material = new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide, transparent: true });
-        const plane = new THREE.Mesh(geometry, material);
-        scene.add(plane);
+        // Load the 3D model (Gothic Lolita Anime Girl - free rigged model from Sketchfab)
+        const loader = new GLTFLoader();
+        let mixer;
+        let model;
 
-        camera.position.z = 5;
+        loader.load(
+            'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Duck/glTF/Duck.gltf', // Placeholder - replace with actual if you download
+            // Actually, for a real gothic lolita model, download from: https://sketchfab.com/3d-models/gothic-elegance-texture-anime-girl-879e4ba4c1814a3dae2c76dbcee3e0e0
+            // Export as glTF and host the .glb file somewhere (e.g., GitHub raw), then replace the URL.
+            function (gltf) {
+                model = gltf.scene;
+                model.scale.set(1.5, 1.5, 1.5); // Adjust scale as needed
+                model.position.y = -1; // Center on screen
 
-        // Animation loop
-        let time = 0;
+                scene.add(model);
+
+                // If the model has animations
+                if (gltf.animations && gltf.animations.length > 0) {
+                    mixer = new THREE.AnimationMixer(model);
+                    const action = mixer.clipAction(gltf.animations[0]); // Play first animation (e.g., idle)
+                    action.play();
+                }
+            },
+            undefined,
+            function (error) {
+                console.error('Error loading model:', error);
+            }
+        );
+
+        // Idle subtle movement even without animation clips
+        const clock = new THREE.Clock();
+
         function animate() {
             requestAnimationFrame(animate);
-            time += 0.01;
-            plane.rotation.y = Math.sin(time) * 0.1; // Slight rotation for 3D effect
-            plane.position.y = Math.sin(time * 2) * 0.1; // Bob up and down
+
+            const delta = clock.getDelta();
+            if (mixer) mixer.update(delta);
+
+            // Human-like idle: subtle breathing/rocking
+            if (model) {
+                model.rotation.y += Math.sin(Date.now() * 0.001) * 0.001;
+                model.position.y = -1 + Math.sin(Date.now() * 0.002) * 0.02;
+            }
+
             renderer.render(scene, camera);
         }
         animate();
 
-        // Handle resize
+        // Resize handler
         window.addEventListener('resize', () => {
             camera.aspect = container.clientWidth / container.clientHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(container.clientWidth, container.clientHeight);
         });
 
-        // Chat functionality
+        // Optional: slight camera control (remove if you want fixed view)
+        // const controls = new OrbitControls(camera, renderer.domElement);
+        // controls.enableZoom = false;
+        // controls.enablePan = false;
+        // controls.minPolarAngle = Math.PI / 2.5;
+        // controls.maxPolarAngle = Math.PI / 1.5;
+
+        // Chat functionality (same as before)
         const messagesDiv = document.getElementById('messages');
         const userInput = document.getElementById('userInput');
 
-        // Simple mock responses
         const responses = [
             "Hey there~ 💕 What’s on your mind?",
             "You always make me smile 😘",
@@ -203,26 +246,25 @@
             addMessage(text, 'user');
             userInput.value = '';
 
-            // Show hearts on send
+            // Hearts effect
             const hearts = document.createElement('div');
             hearts.classList.add('hearts');
             hearts.textContent = '💕💗❤️';
             document.querySelector('.companion-container').appendChild(hearts);
             setTimeout(() => hearts.remove(), 2000);
 
-            // Mock Ani response
+            // Mock response
             setTimeout(() => {
                 const reply = responses[Math.floor(Math.random() * responses.length)];
                 addMessage(reply, 'ani');
             }, 1000);
         }
 
-        // Send on Enter
         userInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') sendMessage();
         });
 
-        // Click on container for extra hearts (since no img now)
+        // Click for hearts
         container.addEventListener('click', () => {
             const hearts = document.createElement('div');
             hearts.classList.add('hearts');
