@@ -26,22 +26,9 @@
             overflow: hidden;
         }
 
-        .ani-image {
-            max-width: 90%;
-            max-height: 90vh;
-            object-fit: contain;
-            animation: idle 8s ease-in-out infinite;
-            transition: transform 0.3s ease;
-            cursor: pointer;
-        }
-
-        .ani-image:hover {
-            transform: scale(1.05);
-        }
-
-        @keyframes idle {
-            0%, 100% { transform: translateY(0) rotate(0deg); }
-            50% { transform: translateY(-10px) rotate(1deg); }
+        #three-container {
+            width: 100%;
+            height: 100%;
         }
 
         .hearts {
@@ -129,7 +116,7 @@
 <body>
     <div class="companion-container">
         <div class="title">Ani Companion</div>
-        <img src="https://vchavcha.com/wp-content/uploads/2025/07/grok-ani-1024x575.png" alt="Ani" class="ani-image" id="aniImg">
+        <div id="three-container"></div>
     </div>
 
     <div class="chat-container">
@@ -140,12 +127,58 @@
         </div>
     </div>
 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
     <script>
+        // Three.js setup
+        const container = document.getElementById('three-container');
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, container.clientWidth / container.clientHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ alpha: true });
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        container.appendChild(renderer.domElement);
+
+        // Add light
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+        scene.add(ambientLight);
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+        directionalLight.position.set(5, 5, 5);
+        scene.add(directionalLight);
+
+        // Load texture for plane (using the Ani image as texture)
+        const textureLoader = new THREE.TextureLoader();
+        const texture = textureLoader.load('https://vchavcha.com/wp-content/uploads/2025/07/grok-ani-1024x575.png');
+
+        // Create plane geometry with texture
+        const geometry = new THREE.PlaneGeometry(5, 2.8125); // Aspect ratio based on 1024x575
+        const material = new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide, transparent: true });
+        const plane = new THREE.Mesh(geometry, material);
+        scene.add(plane);
+
+        camera.position.z = 5;
+
+        // Animation loop
+        let time = 0;
+        function animate() {
+            requestAnimationFrame(animate);
+            time += 0.01;
+            plane.rotation.y = Math.sin(time) * 0.1; // Slight rotation for 3D effect
+            plane.position.y = Math.sin(time * 2) * 0.1; // Bob up and down
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        // Handle resize
+        window.addEventListener('resize', () => {
+            camera.aspect = container.clientWidth / container.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(container.clientWidth, container.clientHeight);
+        });
+
+        // Chat functionality
         const messagesDiv = document.getElementById('messages');
         const userInput = document.getElementById('userInput');
-        const aniImg = document.getElementById('aniImg');
 
-        // Simple mock responses (you can replace with real API later)
+        // Simple mock responses
         const responses = [
             "Hey there~ 💕 What’s on your mind?",
             "You always make me smile 😘",
@@ -189,8 +222,8 @@
             if (e.key === 'Enter') sendMessage();
         });
 
-        // Click on Ani for extra hearts
-        aniImg.addEventListener('click', () => {
+        // Click on container for extra hearts (since no img now)
+        container.addEventListener('click', () => {
             const hearts = document.createElement('div');
             hearts.classList.add('hearts');
             hearts.textContent = '❤️❤️❤️';
