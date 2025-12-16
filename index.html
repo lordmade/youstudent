@@ -1,759 +1,202 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Sign Up / Sign In - Vinda</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database.js"></script>
-  <style>
-    :root {
-      --primary-black: #000000;
-      --secondary-black: #1F2937;
-      --accent-blue: #3B82F6;
-      --text-dark: #111827;
-      --text-light: #6B7280;
-      --border: #D1D5DB;
-      --white: #FFFFFF;
-      --glass-bg: rgba(255, 255, 255, 0.8);
-      --focus-ring: #3B82F6;
-    }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Ani Companion</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            background: linear-gradient(to bottom, #000000, #1a001a);
+            display: flex;
+            flex-direction: column;
+            font-family: 'Segoe UI', sans-serif;
+            color: white;
+            overflow: hidden;
+        }
 
-    body {
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      min-height: 100vh;
-      margin: 0;
-      padding: 0;
-      background: linear-gradient(135deg, #f0f4ff 0%, #e0eaff 100%);
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      transition: opacity 0.3s ease;
-      position: relative;
-      overflow: hidden;
-    }
+        .companion-container {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            overflow: hidden;
+        }
 
-    body::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: url('data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 320"%3E%3Cpath fill="%23a5b4fc" fill-opacity="0.2" d="M0,288L48,272C96,256,192,224,288,197.3C384,171,480,149,576,165.3C672,181,768,235,864,245.3C960,256,1056,224,1152,197.3C1248,171,1344,149,1392,138.7L1440,128L1440,320L1392,320C1344,320,1248,320,1152,320C1056,320,960,320,864,320C768,320,672,320,576,320C480,320,384,320,288,320C192,320,96,320,48,320L0,320Z"%3E%3C/path%3E%3C/svg%3E') no-repeat bottom;
-      z-index: -1;
-      animation: wave 10s ease-in-out infinite alternate;
-    }
+        .ani-image {
+            max-width: 90%;
+            max-height: 90vh;
+            object-fit: contain;
+            animation: idle 8s ease-in-out infinite;
+            transition: transform 0.3s ease;
+            cursor: pointer;
+        }
 
-    @keyframes wave {
-      0% { transform: translateX(0); }
-      100% { transform: translateX(-50px); }
-    }
+        .ani-image:hover {
+            transform: scale(1.05);
+        }
 
-    body.fade-out {
-      opacity: 0;
-    }
+        @keyframes idle {
+            0%, 100% { transform: translateY(0) rotate(0deg); }
+            50% { transform: translateY(-10px) rotate(1deg); }
+        }
 
-    .container {
-      width: 100%;
-      max-width: 420px;
-      padding: 2rem;
-      background: var(--glass-bg);
-      backdrop-filter: blur(10px);
-      border-radius: 24px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
-      transition: transform 0.3s ease, box-shadow 0.3s ease;
-    }
+        .hearts {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 60px;
+            opacity: 0;
+            pointer-events: none;
+            animation: float 2s ease-out forwards;
+        }
 
-    .container:hover {
-      transform: translateY(-5px);
-      box-shadow: 0 12px 48px rgba(0, 0, 0, 0.2);
-    }
+        @keyframes float {
+            0% { opacity: 1; transform: translate(-50%, -50%) scale(0); }
+            100% { opacity: 0; transform: translate(-50%, -200%) scale(1); }
+        }
 
-    .header {
-      text-align: center;
-      margin-bottom: 2rem;
-    }
+        .chat-container {
+            height: 200px;
+            background: rgba(0, 0, 0, 0.7);
+            border-top: 1px solid #333;
+            display: flex;
+            flex-direction: column;
+        }
 
-    .header h1 {
-      font-size: 2rem;
-      font-weight: 800;
-      color: var(--text-dark);
-      background: linear-gradient(to right, var(--accent-blue), var(--primary-black));
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-    }
+        .messages {
+            flex: 1;
+            padding: 10px;
+            overflow-y: auto;
+        }
 
-    .tabs {
-      display: flex;
-      justify-content: center;
-      margin-bottom: 1.5rem;
-      gap: 0.75rem;
-      background: rgba(255, 255, 255, 0.5);
-      padding: 0.5rem;
-      border-radius: 9999px;
-    }
+        .message {
+            margin: 8px 0;
+            padding: 10px;
+            border-radius: 18px;
+            max-width: 80%;
+        }
 
-    .tab-btn {
-      flex: 1;
-      padding: 0.75rem 1.5rem;
-      background: transparent;
-      border: none;
-      color: var(--text-dark);
-      font-size: 1rem;
-      font-weight: 600;
-      cursor: pointer;
-      border-radius: 9999px;
-      transition: background 0.3s ease, color 0.3s ease, transform 0.3s ease;
-      min-height: 44px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 0.5rem;
-    }
+        .user {
+            align-self: flex-end;
+            background: #4a90e2;
+        }
 
-    .tab-btn.active {
-      background: var(--white);
-      color: var(--primary-black);
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-      transform: scale(1.05);
-    }
+        .ani {
+            align-self: flex-start;
+            background: #333;
+        }
 
-    .tab-btn:hover,
-    .tab-btn:focus {
-      background: var(--white);
-      color: var(--primary-black);
-      outline: 2px solid var(--focus-ring);
-    }
+        .input-area {
+            display: flex;
+            padding: 10px;
+        }
 
-    .tab-btn svg {
-      width: 18px;
-      height: 18px;
-      transition: transform 0.3s ease;
-    }
+        input {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 25px;
+            background: #222;
+            color: white;
+            font-size: 16px;
+        }
 
-    .tab-btn:hover svg {
-      transform: rotate(10deg);
-    }
+        button {
+            margin-left: 10px;
+            padding: 12px 20px;
+            background: #ff4081;
+            border: none;
+            border-radius: 25px;
+            color: white;
+            cursor: pointer;
+        }
 
-    .tab-content {
-      display: none;
-      opacity: 0;
-      transition: opacity 0.3s ease, transform 0.3s ease;
-      transform: translateY(10px);
-    }
-
-    .tab-content.active {
-      display: block;
-      opacity: 1;
-      transform: translateY(0);
-    }
-
-    .input-group {
-      margin-bottom: 1.25rem;
-      position: relative;
-    }
-
-    .input-group input {
-      width: 100%;
-      padding: 0.85rem 0.85rem 0.85rem 2.75rem;
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      font-size: 0.95rem;
-      color: var(--text-dark);
-      background: rgba(255, 255, 255, 0.6);
-      outline: none;
-      transition: border-color 0.3s ease, box-shadow 0.3s ease, transform 0.3s ease;
-    }
-
-    .input-group input::placeholder {
-      color: var(--text-light);
-      font-weight: 400;
-    }
-
-    .input-group input:focus {
-      border-color: var(--accent-blue);
-      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
-      transform: translateY(-2px);
-    }
-
-    .input-group svg {
-      position: absolute;
-      left: 0.85rem;
-      top: 50%;
-      transform: translateY(-50%);
-      width: 20px;
-      height: 20px;
-      color: var(--text-light);
-      transition: color 0.3s ease;
-    }
-
-    .input-group input:focus + svg {
-      color: var(--accent-blue);
-    }
-
-    .auth-btn {
-      width: 100%;
-      padding: 0.85rem;
-      background: linear-gradient(to right, var(--primary-black), var(--secondary-black));
-      color: var(--white);
-      border: none;
-      border-radius: 9999px;
-      font-size: 1rem;
-      font-weight: 600;
-      cursor: pointer;
-      transition: background 0.3s ease, transform 0.3s ease, box-shadow 0.3s ease;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-      min-height: 48px;
-      margin-bottom: 1rem;
-      position: relative;
-      overflow: hidden;
-    }
-
-    .auth-btn::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: -100%;
-      width: 100%;
-      height: 100%;
-      background: linear-gradient(120deg, transparent, rgba(255, 255, 255, 0.2), transparent);
-      transition: left 0.7s ease;
-    }
-
-    .auth-btn:hover::before {
-      left: 100%;
-    }
-
-    .auth-btn:hover,
-    .auth-btn:focus {
-      transform: scale(1.05);
-      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.2);
-      outline: 2px solid var(--focus-ring);
-    }
-
-    .auth-btn:active {
-      transform: scale(0.98);
-    }
-
-    .forgot-password {
-      display: block;
-      text-align: right;
-      color: var(--accent-blue);
-      font-size: 0.9rem;
-      margin-top: 0.5rem;
-      margin-bottom: 1rem;
-      text-decoration: none;
-      cursor: pointer;
-      transition: color 0.3s ease;
-    }
-
-    .forgot-password:hover,
-    .forgot-password:focus {
-      color: var(--primary-black);
-      text-decoration: underline;
-    }
-
-    .custom-alert {
-      display: none;
-      position: fixed;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      background: var(--glass-bg);
-      padding: 1.25rem;
-      border-radius: 16px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
-      z-index: 1000;
-      color: var(--text-dark);
-      font-weight: 500;
-      text-align: center;
-      max-width: 90%;
-      width: 320px;
-      border: 1px solid rgba(255, 255, 255, 0.2);
-      backdrop-filter: blur(10px);
-    }
-
-    .custom-alert.active {
-      display: block;
-    }
-
-    .custom-alert .close-btn {
-      position: absolute;
-      top: 0.75rem;
-      right: 0.75rem;
-      width: 24px;
-      height: 24px;
-      background: none;
-      border: none;
-      color: var(--primary-black);
-      cursor: pointer;
-      transition: color 0.3s ease, transform 0.3s ease;
-    }
-
-    .custom-alert .close-btn:hover,
-    .custom-alert .close-btn:focus {
-      color: var(--accent-blue);
-      transform: scale(1.2);
-      outline: 2px solid var(--focus-ring);
-    }
-
-    .spinner-overlay {
-      display: none;
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0, 0, 0, 0.4);
-      z-index: 2000;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .spinner-overlay.active {
-      display: flex;
-    }
-
-    .spinner {
-      width: 48px;
-      height: 48px;
-      border: 4px solid transparent;
-      border-top: 4px solid var(--accent-blue);
-      border-right: 4px solid var(--primary-black);
-      border-radius: 50%;
-      animation: spin 1s linear infinite;
-    }
-
-    @keyframes spin {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
-    }
-
-    @media (max-width: 767px) {
-      .container {
-        padding: 1.5rem;
-        max-width: 340px;
-      }
-      .header h1 {
-        font-size: 1.75rem;
-      }
-      .tab-btn {
-        font-size: 0.95rem;
-        padding: 0.6rem 1.2rem;
-      }
-      .tab-btn svg {
-        width: 16px;
-        height: 16px;
-      }
-      .input-group input {
-        padding: 0.75rem 0.75rem 0.75rem 2.5rem;
-        font-size: 0.9rem;
-        border-radius: 12px;
-      }
-      .input-group svg {
-        width: 18px;
-        height: 18px;
-      }
-      .auth-btn {
-        padding: 0.75rem;
-        font-size: 0.95rem;
-        min-height: 44px;
-      }
-      .forgot-password {
-        font-size: 0.85rem;
-      }
-      .custom-alert {
-        width: 85%;
-        padding: 1rem;
-      }
-      .spinner {
-        width: 40px;
-        height: 40px;
-        border-width: 3px;
-      }
-    }
-  </style>
+        .title {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            font-size: 28px;
+            font-weight: bold;
+            color: #ff79c6;
+        }
+    </style>
 </head>
 <body>
-  <div class="container">
-    <div class="header">
-      <h1>Vinda</h1>
+    <div class="companion-container">
+        <div class="title">Ani Companion</div>
+        <img src="https://vchavcha.com/wp-content/uploads/2025/07/grok-ani-1024x575.png" alt="Ani" class="ani-image" id="aniImg">
     </div>
-    <div class="tabs">
-      <button class="tab-btn active" data-tab="signup" aria-label="Switch to Sign Up tab">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
-        </svg>
-        Sign Up
-      </button>
-      <button class="tab-btn" data-tab="signin" aria-label="Switch to Sign In tab">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zM9 6c0-1.66 1.34-3 3-3s3 1.34 3 3v2H9V6zm9 14H6V10h12v10z"/>
-        </svg>
-        Sign In
-      </button>
+
+    <div class="chat-container">
+        <div class="messages" id="messages"></div>
+        <div class="input-area">
+            <input type="text" id="userInput" placeholder="Talk to Ani...">
+            <button onclick="sendMessage()">Send</button>
+        </div>
     </div>
-    <div class="tab-content active" id="signup-tab">
-      <div class="input-group">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
-        </svg>
-        <input type="text" id="name-input" placeholder="Full Name" aria-label="Enter your full name" autocomplete="name" />
-      </div>
-      <div class="input-group">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M4 4h16v2H4V4zm16 4H4v12h16V8zm-2 4H6v2h12v-2z"/>
-        </svg>
-        <input type="email" id="email-input" placeholder="Email" aria-label="Enter your email" autocomplete="email" />
-      </div>
-      <div class="input-group">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm1-13h-2v6H9v2h2v2h2v-2h2v-2h-2V7z"/>
-        </svg>
-        <input type="password" id="password-input" placeholder="Password" aria-label="Enter your password" autocomplete="new-password" />
-      </div>
-      <div class="input-group">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/>
-        </svg>
-        <input type="date" id="dob-input" aria-label="Enter your date of birth" />
-      </div>
-      <button class="auth-btn" id="signup-btn" aria-label="Sign up">Create Account</button>
-    </div>
-    <div class="tab-content" id="signin-tab">
-      <div class="input-group">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M4 4h16v2H4V4zm16 4H4v12h16V8zm-2 4H6v2h12v-2z"/>
-        </svg>
-        <input type="email" id="signin-email-input" placeholder="Email" aria-label="Enter your email" autocomplete="email" />
-      </div>
-      <div class="input-group">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm1-13h-2v6H9v2h2v2h2v-2h2v-2h-2V7z"/>
-        </svg>
-        <input type="password" id="signin-password-input" placeholder="Password" aria-label="Enter your password" autocomplete="current-password" />
-      </div>
-      <a href="#" class="forgot-password" id="forgot-password-link">Forgot Password?</a>
-      <button class="auth-btn" id="signin-btn" aria-label="Sign in">Log In</button>
-    </div>
-  </div>
 
-  <div id="custom-alert" class="custom-alert" role="alert" aria-hidden="true">
-    <button class="close-btn" aria-label="Close alert">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <line x1="18" y1="6" x2="6" y2="18"></line>
-        <line x1="6" y1="6" x2="18" y2="18"></line>
-      </svg>
-    </button>
-    <p id="alert-message">An error occurred. Please try again.</p>
-  </div>
+    <script>
+        const messagesDiv = document.getElementById('messages');
+        const userInput = document.getElementById('userInput');
+        const aniImg = document.getElementById('aniImg');
 
-  <div class="spinner-overlay" id="spinner-overlay">
-    <div class="spinner"></div>
-  </div>
+        // Simple mock responses (you can replace with real API later)
+        const responses = [
+            "Hey there~ 💕 What’s on your mind?",
+            "You always make me smile 😘",
+            "Tell me more... I love hearing from you.",
+            "Aww, you're so sweet! ❤️",
+            "Hehe, that tickles my heart~",
+            "I'm all yours tonight 😉"
+        ];
 
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
-    import { 
-      getAuth, 
-      onAuthStateChanged, 
-      setPersistence, 
-      browserLocalPersistence, 
-      createUserWithEmailAndPassword, 
-      signInWithEmailAndPassword,
-      sendPasswordResetEmail
-    } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
-    import { getDatabase, ref, set, onDisconnect } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-database.js";
-
-    const firebaseConfig = {
-      apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
-      authDomain: "fire-b-a8878.firebaseapp.com",
-      databaseURL: "https://fire-b-a8878.firebaseio.com",
-      projectId: "fire-b-a8878",
-      storageBucket: "fire-b-a8878.firebasestorage.app",
-      messagingSenderId: "658673187627",
-      appId: "1:658673187627:web:6e4c29af661785f0afa36e",
-      measurementId: "G-V4W97VMSKL"
-    };
-
-    let app, auth, db;
-    try {
-      app = initializeApp(firebaseConfig);
-      auth = getAuth(app);
-      db = getDatabase(app);
-      console.log("Firebase initialized successfully at", new Date().toLocaleString());
-    } catch (error) {
-      console.error("Firebase initialization failed:", error.code, error.message);
-      showAlert("Failed to connect to Firebase. Please check your network.", false);
-    }
-
-    const signupBtn = document.getElementById("signup-btn");
-    const signinBtn = document.getElementById("signin-btn");
-    const forgotPasswordLink = document.getElementById("forgot-password-link");
-    const nameInput = document.getElementById("name-input");
-    const emailInput = document.getElementById("email-input");
-    const passwordInput = document.getElementById("password-input");
-    const dobInput = document.getElementById("dob-input");
-    const signinEmailInput = document.getElementById("signin-email-input");
-    const signinPasswordInput = document.getElementById("signin-password-input");
-    const customAlert = document.getElementById("custom-alert");
-    const alertMessage = document.getElementById("alert-message");
-    const spinnerOverlay = document.getElementById("spinner-overlay");
-    const tabButtons = document.querySelectorAll(".tab-btn");
-    const tabContents = document.querySelectorAll(".tab-content");
-
-    function showSpinner() {
-      spinnerOverlay.classList.add("active");
-      console.log("Spinner shown at", new Date().toLocaleString());
-    }
-
-    function hideSpinner() {
-      spinnerOverlay.classList.remove("active");
-      console.log("Spinner hidden at", new Date().toLocaleString());
-    }
-
-    function showAlert(message, autoHide = true) {
-      alertMessage.textContent = message;
-      customAlert.classList.add("active");
-      customAlert.setAttribute("aria-hidden", "false");
-      console.log("Alert shown:", message);
-      if (autoHide) {
-        setTimeout(() => {
-          hideAlert();
-        }, 5000);
-      }
-    }
-
-    function hideAlert() {
-      customAlert.classList.remove("active");
-      customAlert.setAttribute("aria-hidden", "true");
-      console.log("Alert hidden");
-    }
-
-    document.querySelector(".custom-alert .close-btn").addEventListener("click", hideAlert);
-
-    function getReturnUrl() {
-      const params = new URLSearchParams(window.location.search);
-      return params.get("returnUrl") || "feed.html";
-    }
-
-    async function checkAuthState() {
-      showSpinner();
-      try {
-        await setPersistence(auth, browserLocalPersistence);
-        console.log("Persistence set to browserLocalPersistence");
-        return await new Promise((resolve, reject) => {
-          const timeout = setTimeout(() => {
-            console.error("Authentication check timed out");
-            showAlert("Authentication timed out.", false);
-            reject(new Error("Authentication timed out"));
-          }, 10000);
-
-          onAuthStateChanged(auth, (user) => {
-            clearTimeout(timeout);
-            if (user) {
-              console.log("Authenticated user found, redirecting to", getReturnUrl());
-              document.body.classList.add("fade-out");
-              setTimeout(() => window.location.href = getReturnUrl(), 500);
-            } else {
-              console.log("No authenticated user, staying on auth page");
-              resolve();
-            }
-          }, (error) => {
-            clearTimeout(timeout);
-            console.error("Auth state error:", error.code, error.message);
-            showAlert(`Authentication failed: ${error.message}`, false);
-            reject(error);
-          });
-        });
-      } catch (error) {
-        console.error("Auth check failed:", error.code, error.message);
-        showAlert(`Failed to verify authentication: ${error.message}`, false);
-      } finally {
-        hideSpinner();
-      }
-    }
-
-    async function handleSignUp() {
-      const name = nameInput.value.trim();
-      const email = emailInput.value.trim();
-      const password = passwordInput.value.trim();
-      const dob = dobInput.value;
-
-      if (!name || !email || !password) {
-        showAlert("Please fill in all required fields.", true);
-        return;
-      }
-
-      showSpinner();
-      try {
-        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-        const user = userCredential.user;
-
-        const userRef = ref(db, `users/${user.uid}`);
-        await set(userRef, {
-          displayName: name,
-          email: user.email,
-          dob: dob || null,
-          online: true,
-          createdAt: Date.now()
-        });
-
-        await onDisconnect(userRef).update({ online: false });
-
-        showAlert("Account created successfully!", true);
-        document.body.classList.add("fade-out");
-        setTimeout(() => window.location.href = getReturnUrl(), 500);
-      } catch (error) {
-        console.error("Sign up failed:", error.code, error.message);
-        let errorMessage = "Failed to sign up. Please try again.";
-        if (error.code === "auth/email-already-in-use") {
-          errorMessage = "Email is already in use.";
-        } else if (error.code === "auth/invalid-email") {
-          errorMessage = "Invalid email format.";
-        } else if (error.code === "auth/weak-password") {
-          errorMessage = "Password is too weak. Use at least 6 characters.";
+        function addMessage(text, sender) {
+            const msg = document.createElement('div');
+            msg.classList.add('message', sender);
+            msg.textContent = text;
+            messagesDiv.appendChild(msg);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
         }
-        showAlert(errorMessage, true);
-      } finally {
-        hideSpinner();
-      }
-    }
 
-    async function handleSignIn() {
-      const email = signinEmailInput.value.trim();
-      const password = signinPasswordInput.value.trim();
+        function sendMessage() {
+            const text = userInput.value.trim();
+            if (!text) return;
 
-      if (!email || !password) {
-        showAlert("Please fill in all fields.", true);
-        return;
-      }
+            addMessage(text, 'user');
+            userInput.value = '';
 
-      showSpinner();
-      try {
-        const userCredential = await signInWithEmailAndPassword(auth, email, password);
-        const user = userCredential.user;
+            // Show hearts on send
+            const hearts = document.createElement('div');
+            hearts.classList.add('hearts');
+            hearts.textContent = '💕💗❤️';
+            document.querySelector('.companion-container').appendChild(hearts);
+            setTimeout(() => hearts.remove(), 2000);
 
-        const userRef = ref(db, `users/${user.uid}`);
-        await set(userRef, {
-          email: user.email,
-          online: true
-        });
-
-        await onDisconnect(userRef).update({ online: false });
-
-        showAlert("Signed in successfully!", true);
-        document.body.classList.add("fade-out");
-        setTimeout(() => window.location.href = getReturnUrl(), 500);
-      } catch (error) {
-        console.error("Sign in failed:", error.code, error.message);
-        let errorMessage = "Failed to sign in. Please try again.";
-        if (error.code === "auth/user-not-found" || error.code === "auth/wrong-password") {
-          errorMessage = "Invalid email or password.";
-        } else if (error.code === "auth/invalid-email") {
-          errorMessage = "Invalid email format.";
+            // Mock Ani response
+            setTimeout(() => {
+                const reply = responses[Math.floor(Math.random() * responses.length)];
+                addMessage(reply, 'ani');
+            }, 1000);
         }
-        showAlert(errorMessage, true);
-      } finally {
-        hideSpinner();
-      }
-    }
 
-    async function handlePasswordReset() {
-      const email = signinEmailInput.value.trim();
-      if (!email) {
-        showAlert("Please enter your email to reset your password.", true);
-        return;
-      }
-
-      showSpinner();
-      try {
-        await sendPasswordResetEmail(auth, email);
-        showAlert("Password reset email sent! Check your inbox.", true);
-      } catch (error) {
-        console.error("Password reset failed:", error.code, error.message);
-        let errorMessage = "Failed to send password reset email. Please try again.";
-        if (error.code === "auth/invalid-email") {
-          errorMessage = "Invalid email format.";
-        } else if (error.code === "auth/user-not-found") {
-          errorMessage = "No user found with this email.";
-        }
-        showAlert(errorMessage, true);
-      } finally {
-        hideSpinner();
-      }
-    }
-
-    function setupTabListeners() {
-      tabButtons.forEach(btn => {
-        btn.addEventListener("click", () => {
-          tabButtons.forEach(b => b.classList.remove("active"));
-          tabContents.forEach(c => c.classList.remove("active"));
-          btn.classList.add("active");
-          document.getElementById(`${btn.dataset.tab}-tab`).classList.add("active");
-          console.log(`Switched to ${btn.dataset.tab} tab`);
+        // Send on Enter
+        userInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') sendMessage();
         });
-        btn.addEventListener("keydown", (e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            btn.click();
-          }
+
+        // Click on Ani for extra hearts
+        aniImg.addEventListener('click', () => {
+            const hearts = document.createElement('div');
+            hearts.classList.add('hearts');
+            hearts.textContent = '❤️❤️❤️';
+            document.querySelector('.companion-container').appendChild(hearts);
+            setTimeout(() => hearts.remove(), 2000);
         });
-      });
-    }
-
-    function setupAuthListeners() {
-      signupBtn.addEventListener("click", () => {
-        handleSignUp();
-        signupBtn.classList.add("tap-active");
-        setTimeout(() => signupBtn.classList.remove("tap-active"), 100);
-      });
-      nameInput.addEventListener("keypress", (e) => {
-        if (e.key === "Enter") handleSignUp();
-      });
-      emailInput.addEventListener("keypress", (e) => {
-        if (e.key === "Enter") handleSignUp();
-      });
-      passwordInput.addEventListener("keypress", (e) => {
-        if (e.key === "Enter") handleSignUp();
-      });
-      dobInput.addEventListener("keypress", (e) => {
-        if (e.key === "Enter") handleSignUp();
-      });
-
-      signinBtn.addEventListener("click", () => {
-        handleSignIn();
-        signinBtn.classList.add("tap-active");
-        setTimeout(() => signinBtn.classList.remove("tap-active"), 100);
-      });
-      signinEmailInput.addEventListener("keypress", (e) => {
-        if (e.key === "Enter") handleSignIn();
-      });
-      signinPasswordInput.addEventListener("keypress", (e) => {
-        if (e.key === "Enter") handleSignIn();
-      });
-
-      forgotPasswordLink.addEventListener("click", (e) => {
-        e.preventDefault();
-        handlePasswordReset();
-      });
-    }
-
-    document.addEventListener("DOMContentLoaded", async () => {
-      console.log("DOMContentLoaded event fired at", new Date().toLocaleString());
-      try {
-        setupTabListeners();
-        setupAuthListeners();
-        await checkAuthState();
-      } catch (error) {
-        console.error("Error in DOMContentLoaded:", error);
-        showAlert("Failed to initialize app: " + error.message, false);
-        hideSpinner();
-      }
-    });
-  </script>
+    </script>
 </body>
 </html>
