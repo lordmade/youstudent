@@ -15,18 +15,18 @@
             --accent-green: #10b981;
             --logo-gradient: linear-gradient(135deg, #000000 0%, var(--accent-purple) 50%, var(--accent-green) 100%);
         }
-    
+   
         /* Prevent text selection and long-press context menu globally */
         * {
-            -webkit-user-select: none; /* Chrome/Safari */
-            -moz-user-select: none; /* Firefox */
-            -ms-user-select: none; /* IE/Edge */
-            user-select: none; /* Standard */
-        
-            -webkit-touch-callout: none; /* Disable long-press callout (iOS Safari) */
-            -webkit-tap-highlight-color: transparent; /* Remove tap highlight */
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+       
+            -webkit-touch-callout: none;
+            -webkit-tap-highlight-color: transparent;
         }
-    
+   
         body {
             font-family: 'Poppins', sans-serif;
             display: flex;
@@ -72,6 +72,25 @@
         .google-btn img {
             width: 20px;
             margin-right: 12px;
+        }
+        /* Guest Button Style */
+        .guest-btn {
+            margin-top: 20px;
+            background: transparent;
+            color: #666;
+            border: 1px solid #ddd;
+            padding: 12px 24px;
+            border-radius: 50px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+            max-width: 280px;
+            transition: all 0.2s;
+        }
+        .guest-btn:hover {
+            background: #f5f5f5;
+            border-color: #ccc;
         }
         #loader { display: none; margin-top: 20px; font-size: 14px; color: var(--accent-purple); }
         /* Custom Alert Modal */
@@ -120,6 +139,9 @@
     <button class="google-btn" onclick="signInWithGoogle()">
         <img src="https://www.gstatic.com/images/branding/product/1x/gsa_512dp.png" alt="Google Logo">
         Continue with Google
+    </button>
+    <button class="guest-btn" onclick="continueAsGuest()">
+        Continue as Guest
     </button>
     <div id="loader">Signing you in...</div>
 
@@ -175,7 +197,7 @@
                         return;
                     }
 
-                    // New user - create regular rider profile
+                    // New user - create regular profile
                     await db.ref(`users/${uid}/profile`).set({
                         name: user.displayName || "User",
                         email: user.email,
@@ -190,6 +212,33 @@
                     loader.style.display = "none";
                     showCustomAlert("Sign In Failed", error.message);
                 });
+        }
+
+        async function continueAsGuest() {
+            const loader = document.getElementById('loader');
+            loader.style.display = "block";
+            loader.textContent = "Entering as guest...";
+
+            try {
+                // Sign in anonymously
+                const result = await firebase.auth().signInAnonymously();
+                const user = result.user;
+                const uid = user.uid;
+
+                // Create a minimal guest profile
+                await db.ref(`users/${uid}/profile`).set({
+                    name: "Guest",
+                    photoUrl: "",
+                    role: 'guest',
+                    isGuest: true
+                });
+
+                loader.style.display = "none";
+                window.location.href = "community.html";
+            } catch (error) {
+                loader.style.display = "none";
+                showCustomAlert("Guest Access Failed", error.message);
+            }
         }
     </script>
 </body>
