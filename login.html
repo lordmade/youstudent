@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Vynix Login</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Symbols+Rounded" rel="stylesheet">
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+    <style>
+        :root {
+            --accent-purple: #d946ef;
+            --accent-green: #10b981;
+            --logo-gradient: linear-gradient(135deg, #000000 0%, var(--accent-purple) 50%, var(--accent-green) 100%);
+        }
+    
+        /* Prevent text selection and long-press context menu globally */
+        * {
+            -webkit-user-select: none; /* Chrome/Safari */
+            -moz-user-select: none; /* Firefox */
+            -ms-user-select: none; /* IE/Edge */
+            user-select: none; /* Standard */
+        
+            -webkit-touch-callout: none; /* Disable long-press callout (iOS Safari) */
+            -webkit-tap-highlight-color: transparent; /* Remove tap highlight */
+        }
+    
+        body {
+            font-family: 'Poppins', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            background: #ffffff;
+            position: relative;
+        }
+        .logo-icon {
+            font-size: 80px;
+            background: var(--logo-gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 10px;
+        }
+        h2 { font-weight: 700; margin: 0; font-size: 32px; }
+        p { color: #666; margin-bottom: 40px; }
+        /* Google Button Style */
+        .google-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #ffffff;
+            color: #1f1f1f;
+            border: 1px solid #dadce0;
+            padding: 12px 24px;
+            border-radius: 50px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+            max-width: 280px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            transition: background 0.2s, box-shadow 0.2s;
+        }
+        .google-btn:hover {
+            background: #f8f9fa;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        }
+        .google-btn img {
+            width: 20px;
+            margin-right: 12px;
+        }
+        #loader { display: none; margin-top: 20px; font-size: 14px; color: var(--accent-purple); }
+        /* Custom Alert Modal */
+        #customAlert {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 100;
+            display: none;
+            align-items: center;
+            justify-content: center;
+        }
+        .alert-box {
+            background: white;
+            border-radius: 20px;
+            padding: 24px;
+            width: 90%;
+            max-width: 320px;
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        .alert-box h4 {
+            font-size: 18px;
+            margin-bottom: 12px;
+        }
+        .alert-box p {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 24px;
+        }
+        .alert-btn {
+            background: var(--accent-purple);
+            color: white;
+            border: none;
+            padding: 12px 32px;
+            border-radius: 50px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <span class="material-symbols-rounded logo-icon">auto_awesome</span>
+    <h2>Vynix</h2>
+    <p>Sign in to start chatting</p>
+    <button class="google-btn" onclick="signInWithGoogle()">
+        <img src="https://www.gstatic.com/images/branding/product/1x/gsa_512dp.png" alt="Google Logo">
+        Continue with Google
+    </button>
+    <div id="loader">Signing you in...</div>
+
+    <!-- Custom Alert Modal -->
+    <div id="customAlert">
+        <div class="alert-box">
+            <h4 id="alertTitle">Title</h4>
+            <p id="alertMessage">Message</p>
+            <button class="alert-btn" onclick="closeCustomAlert()">OK</button>
+        </div>
+    </div>
+
+    <script>
+        const firebaseConfig = {
+          apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
+          authDomain: "fire-b-a8878.firebaseapp.com",
+          databaseURL: "https://fire-b-a8878.firebaseio.com",
+          projectId: "fire-b-a8878",
+          storageBucket: "fire-b-a8878.firebasestorage.app",
+          messagingSenderId: "658673187627",
+          appId: "1:658673187627:web:6e4c29af661785f0afa36e"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+
+        // Custom Alert
+        function showCustomAlert(title, message) {
+            document.getElementById('alertTitle').innerText = title;
+            document.getElementById('alertMessage').innerText = message;
+            document.getElementById('customAlert').style.display = 'flex';
+        }
+        function closeCustomAlert() {
+            document.getElementById('customAlert').style.display = 'none';
+        }
+
+        function signInWithGoogle() {
+            const provider = new firebase.auth.GoogleAuthProvider();
+            const loader = document.getElementById('loader');
+            loader.style.display = "block";
+
+            firebase.auth().signInWithPopup(provider)
+                .then(async (result) => {
+                    const user = result.user;
+                    const uid = user.uid;
+
+                    // Check if profile exists
+                    const snap = await db.ref(`users/${uid}/profile`).once('value');
+                    const profile = snap.val();
+
+                    if (profile) {
+                        // Existing user - just redirect
+                        window.location.href = "community.html";
+                        return;
+                    }
+
+                    // New user - create regular rider profile
+                    await db.ref(`users/${uid}/profile`).set({
+                        name: user.displayName || "User",
+                        email: user.email,
+                        photoUrl: user.photoURL || "",
+                        role: 'rider'
+                    });
+
+                    loader.style.display = "none";
+                    window.location.href = "community.html";
+                })
+                .catch((error) => {
+                    loader.style.display = "none";
+                    showCustomAlert("Sign In Failed", error.message);
+                });
+        }
+    </script>
+</body>
+</html>
