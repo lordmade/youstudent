@@ -44,16 +44,8 @@
             margin-bottom: 10px;
         }
         h2 { font-weight: 700; margin: 0; font-size: 32px; }
-        p { color: #666; margin-bottom: 20px; }
+        p { color: #666; margin-bottom: 40px; }
         
-        .form-container {
-            width: 100%;
-            max-width: 280px;
-            display: none;
-        }
-        .form-container.active {
-            display: block;
-        }
         input[type="email"],
         input[type="password"],
         input[type="text"] {
@@ -66,20 +58,6 @@
             background: #f9f9f9;
             -webkit-user-select: text;
             user-select: text;
-        }
-        .toggle-link {
-            text-align: center;
-            margin-top: 16px;
-            color: var(--accent-purple);
-            font-size: 14px;
-            cursor: pointer;
-        }
-        .forgot-link {
-            text-align: center;
-            margin-top: 8px;
-            color: var(--accent-purple);
-            font-size: 14px;
-            cursor: pointer;
         }
         
         /* Buttons */
@@ -110,7 +88,7 @@
             margin-right: 12px;
         }
         
-        .email-btn {
+        .email-btn-trigger {
             background: var(--accent-purple);
             color: white;
             border: none;
@@ -121,7 +99,7 @@
             cursor: pointer;
             width: 100%;
             max-width: 280px;
-            margin-top: 8px;
+            margin-bottom: 12px;
         }
         
         .guest-btn {
@@ -144,7 +122,83 @@
         }
         
         #loader { display: none; margin-top: 20px; font-size: 14px; color: var(--accent-purple); }
-        
+
+        /* Bottom Sheet */
+        #sheetOverlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 40;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.4s;
+        }
+        #sheetOverlay.open {
+            opacity: 1;
+            visibility: visible;
+        }
+        #emailSheet {
+            position: fixed;
+            bottom: -100%;
+            left: 0;
+            right: 0;
+            background: white;
+            border-top-left-radius: 28px;
+            border-top-right-radius: 28px;
+            padding: 30px 24px 40px;
+            box-shadow: 0 -10px 40px rgba(0,0,0,0.2);
+            transition: bottom 0.4s cubic-bezier(0.33, 1, 0.68, 1);
+            z-index: 50;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        #emailSheet.open {
+            bottom: 0;
+        }
+        .sheet-header {
+            text-align: center;
+            margin-bottom: 24px;
+        }
+        .sheet-header h3 {
+            font-size: 20px;
+            font-weight: 700;
+            margin: 0 0 8px 0;
+        }
+        .sheet-header p {
+            font-size: 14px;
+            color: #666;
+            margin: 0;
+        }
+        .form-group {
+            margin-bottom: 16px;
+        }
+        .action-btn {
+            width: 100%;
+            background: var(--accent-purple);
+            color: white;
+            border: none;
+            padding: 16px;
+            border-radius: 16px;
+            font-weight: 700;
+            font-size: 16px;
+            cursor: pointer;
+            margin-top: 8px;
+        }
+        .toggle-link {
+            text-align: center;
+            margin-top: 16px;
+            color: var(--accent-purple);
+            font-size: 14px;
+            cursor: pointer;
+        }
+        .forgot-link {
+            text-align: center;
+            margin-top: 8px;
+            color: var(--accent-purple);
+            font-size: 14px;
+            cursor: pointer;
+        }
+
         /* Custom Alert Modal */
         #customAlert {
             position: fixed;
@@ -187,7 +241,7 @@
 <body>
     <span class="material-symbols-rounded logo-icon">auto_awesome</span>
     <h2>Vynix</h2>
-    <p id="mainDesc">Sign in to start chatting</p>
+    <p>Sign in to start chatting</p>
 
     <!-- Google Sign In -->
     <button class="google-btn" onclick="signInWithGoogle()">
@@ -195,28 +249,10 @@
         Continue with Google
     </button>
 
-    <!-- Email/Password Forms -->
-    <div id="loginForm" class="form-container">
-        <input type="email" id="loginEmail" placeholder="Email" required>
-        <input type="password" id="loginPassword" placeholder="Password" required>
-        <button class="email-btn" onclick="loginWithEmail()">Log In</button>
-        <div class="toggle-link" onclick="switchToSignup()">Don't have an account? Sign up</div>
-        <div class="forgot-link" onclick="switchToReset()">Forgot password?</div>
-    </div>
-
-    <div id="signupForm" class="form-container">
-        <input type="text" id="signupName" placeholder="Full Name" required>
-        <input type="email" id="signupEmail" placeholder="Email" required>
-        <input type="password" id="signupPassword" placeholder="Password (6+ characters)" minlength="6" required>
-        <button class="email-btn" onclick="signupWithEmail()">Sign Up</button>
-        <div class="toggle-link" onclick="switchToLogin()">Already have an account? Log in</div>
-    </div>
-
-    <div id="resetForm" class="form-container">
-        <input type="email" id="resetEmail" placeholder="Enter your email" required>
-        <button class="email-btn" onclick="resetPassword()">Send Reset Link</button>
-        <div class="toggle-link" onclick="switchToLogin()">Back to Log in</div>
-    </div>
+    <!-- Trigger Email/Password Sheet -->
+    <button class="email-btn-trigger" onclick="openEmailSheet('login')">
+        Continue with Email
+    </button>
 
     <!-- Guest Button -->
     <button class="guest-btn" onclick="continueAsGuest()">
@@ -224,6 +260,54 @@
     </button>
 
     <div id="loader">Processing...</div>
+
+    <!-- Overlay -->
+    <div id="sheetOverlay" onclick="closeEmailSheet()"></div>
+
+    <!-- Email Bottom Sheet -->
+    <div id="emailSheet">
+        <div class="sheet-header">
+            <h3 id="sheetTitle">Welcome back!</h3>
+            <p id="sheetSubtitle">Log in with your email</p>
+        </div>
+
+        <!-- Login Form -->
+        <div id="loginFields">
+            <div class="form-group">
+                <input type="email" id="loginEmail" placeholder="Email">
+            </div>
+            <div class="form-group">
+                <input type="password" id="loginPassword" placeholder="Password">
+            </div>
+            <button class="action-btn" onclick="loginWithEmail()">Log In</button>
+            <div class="forgot-link" onclick="openEmailSheet('reset')">Forgot password?</div>
+            <div class="toggle-link" onclick="openEmailSheet('signup')">Don't have an account? Sign up</div>
+        </div>
+
+        <!-- Signup Form -->
+        <div id="signupFields" style="display:none;">
+            <div class="form-group">
+                <input type="text" id="signupName" placeholder="Full Name">
+            </div>
+            <div class="form-group">
+                <input type="email" id="signupEmail" placeholder="Email">
+            </div>
+            <div class="form-group">
+                <input type="password" id="signupPassword" placeholder="Password (6+ characters)" minlength="6">
+            </div>
+            <button class="action-btn" onclick="signupWithEmail()">Sign Up</button>
+            <div class="toggle-link" onclick="openEmailSheet('login')">Already have an account? Log in</div>
+        </div>
+
+        <!-- Reset Form -->
+        <div id="resetFields" style="display:none;">
+            <div class="form-group">
+                <input type="email" id="resetEmail" placeholder="Enter your email">
+            </div>
+            <button class="action-btn" onclick="resetPassword()">Send Reset Link</button>
+            <div class="toggle-link" onclick="openEmailSheet('login')">Back to Log in</div>
+        </div>
+    </div>
 
     <!-- Custom Alert Modal -->
     <div id="customAlert">
@@ -266,24 +350,37 @@
             document.getElementById('loader').style.display = "none";
         }
 
-        // Form switching functions
-        function switchToLogin() {
-            document.getElementById('mainDesc').textContent = "Welcome back!";
-            document.getElementById('loginForm').classList.add('active');
-            document.getElementById('signupForm').classList.remove('active');
-            document.getElementById('resetForm').classList.remove('active');
+        // Bottom Sheet Controls
+        function openEmailSheet(mode) {
+            const sheet = document.getElementById('emailSheet');
+            const overlay = document.getElementById('sheetOverlay');
+            const title = document.getElementById('sheetTitle');
+            const subtitle = document.getElementById('sheetSubtitle');
+
+            // Show/hide fields
+            document.getElementById('loginFields').style.display = mode === 'login' ? 'block' : 'none';
+            document.getElementById('signupFields').style.display = mode === 'signup' ? 'block' : 'none';
+            document.getElementById('resetFields').style.display = mode === 'reset' ? 'block' : 'none';
+
+            // Update header
+            if (mode === 'login') {
+                title.textContent = "Welcome back!";
+                subtitle.textContent = "Log in with your email";
+            } else if (mode === 'signup') {
+                title.textContent = "Create your account";
+                subtitle.textContent = "Sign up with email";
+            } else if (mode === 'reset') {
+                title.textContent = "Reset your password";
+                subtitle.textContent = "We'll send you a reset link";
+            }
+
+            sheet.classList.add('open');
+            overlay.classList.add('open');
         }
-        function switchToSignup() {
-            document.getElementById('mainDesc').textContent = "Create your account";
-            document.getElementById('signupForm').classList.add('active');
-            document.getElementById('loginForm').classList.remove('active');
-            document.getElementById('resetForm').classList.remove('active');
-        }
-        function switchToReset() {
-            document.getElementById('mainDesc').textContent = "Reset your password";
-            document.getElementById('resetForm').classList.add('active');
-            document.getElementById('loginForm').classList.remove('active');
-            document.getElementById('signupForm').classList.remove('active');
+
+        function closeEmailSheet() {
+            document.getElementById('emailSheet').classList.remove('open');
+            document.getElementById('sheetOverlay').classList.remove('open');
         }
 
         // Google Sign In
@@ -316,6 +413,7 @@
                 await user.updateProfile({ displayName: name });
                 await createUserProfile(user, name, user.photoURL || "");
                 hideLoader();
+                closeEmailSheet();
                 window.location.href = "community.html";
             } catch (error) {
                 hideLoader();
@@ -357,6 +455,7 @@
                 await auth.sendPasswordResetEmail(email);
                 hideLoader();
                 showCustomAlert("Reset Link Sent", "Check your email for instructions to reset your password.");
+                closeEmailSheet();
             } catch (error) {
                 hideLoader();
                 showCustomAlert("Reset Failed", error.message);
@@ -374,6 +473,7 @@
             }
 
             hideLoader();
+            closeEmailSheet();
             window.location.href = "community.html";
         }
 
