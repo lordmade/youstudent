@@ -2,181 +2,269 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Vynix Social</title>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Vynix Social 2.0</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/icon?family=Material+Symbols+Rounded" rel="stylesheet">
+    
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
 
     <style>
         :root {
-            --accent-purple: #d946ef;
-            --text-primary: #111827;
-            --text-secondary: #6b7280;
-            --bg-color: #f8f9fa;
-            --glass-white: rgba(255, 255, 255, 0.95);
-            --logo-gradient: linear-gradient(135deg, #000000 0%, var(--accent-purple) 50%, #10b981 100%);
-            --online-green: #10b981;
-            --msg-bubble-me: #000;
-            --msg-bubble-them: #f3f4f6;
+            /* Premium Dark Theme Palette */
+            --bg-body: #09090b;
+            --bg-card: #18181b;
+            --bg-input: #27272a;
+            --primary: #8b5cf6; /* Violet */
+            --primary-gradient: linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%);
+            --text-main: #ffffff;
+            --text-muted: #a1a1aa;
+            --border: #27272a;
+            
+            /* Chat Colors */
+            --bubble-me: #8b5cf6;
+            --bubble-them: #27272a;
+            
+            /* Layout */
+            --header-height: 70px;
+            --nav-height: 80px;
         }
-        * { -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none; box-sizing: border-box; outline: none; }
-        body { margin: 0; font-family: 'Poppins', sans-serif; background: var(--bg-color); color: var(--text-primary); overflow: hidden; height: 100vh; }
 
-        /* ─── Login Screen ─── */
+        * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; outline: none; }
+        
+        body { 
+            margin: 0; 
+            font-family: 'Outfit', sans-serif; 
+            background: var(--bg-body); 
+            color: var(--text-main); 
+            height: 100dvh; /* Dynamic Viewport Height for better mobile support */
+            overflow: hidden;
+        }
+
+        /* ─── Typography & Utilities ─── */
+        h1, h2, h3 { margin: 0; }
+        .hidden { display: none !important; }
+        .fade-in { animation: fadeIn 0.3s ease forwards; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* ─── Auth Screen ─── */
         #authScreen {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: #fff; z-index: 9000; display: flex; flex-direction: column;
+            position: fixed; inset: 0; z-index: 9999;
+            background: var(--bg-body);
+            display: flex; flex-direction: column; 
             align-items: center; justify-content: center; padding: 30px;
         }
-        .auth-logo { font-size: 40px; font-weight: 800; background: var(--logo-gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 40px; }
-
-        /* ─── Layout ─── */
-        header {
-            position: fixed; top: 0; left: 0; right: 0; height: 75px; background: var(--glass-white);
-            display: flex; align-items: center; justify-content: space-between;
-            padding: 0 20px; z-index: 1000; backdrop-filter: blur(12px); border-bottom: 1px solid #eee;
+        .logo-text {
+            font-size: 42px; font-weight: 800; letter-spacing: -1px; margin-bottom: 40px;
+            background: var(--primary-gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent;
         }
-        .user-profile { width: 42px; height: 42px; border-radius: 50%; object-fit: cover; border: 2px solid var(--accent-purple); cursor: pointer; }
-        .app-title { font-size: 24px; font-weight: 800; background: var(--logo-gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent; letter-spacing: -1px; }
 
-        /* ─── Main Areas ─── */
-        .tab-content { display: none; padding: 90px 16px 100px 16px; height: 100vh; overflow-y: auto; }
+        /* ─── Header ─── */
+        header {
+            position: fixed; top: 0; left: 0; right: 0; height: var(--header-height);
+            background: rgba(9, 9, 11, 0.85); backdrop-filter: blur(12px);
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 0 20px; z-index: 1000; border-bottom: 1px solid var(--border);
+        }
+        .header-title { font-size: 22px; font-weight: 700; letter-spacing: -0.5px; }
+        .user-avatar-sm { 
+            width: 40px; height: 40px; border-radius: 50%; object-fit: cover; 
+            border: 2px solid var(--primary); 
+        }
+
+        /* ─── Main Tabs ─── */
+        .tab-content {
+            display: none; 
+            height: 100dvh; 
+            overflow-y: auto; 
+            padding: calc(var(--header-height) + 10px) 15px calc(var(--nav-height) + 20px) 15px;
+        }
         .tab-content.active { display: block; }
 
         /* ─── Chat List ─── */
         .chat-card {
-            display: flex; align-items: center; padding: 15px; background: #fff;
-            margin-bottom: 12px; border-radius: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.02);
-            transition: 0.2s;
+            display: flex; align-items: center; padding: 16px; 
+            background: var(--bg-card); border-radius: 20px; margin-bottom: 12px;
+            border: 1px solid var(--border); transition: transform 0.2s;
         }
-        .chat-card:active { transform: scale(0.98); }
-        .avatar-box { position: relative; margin-right: 15px; }
-        .avatar { width: 55px; height: 55px; border-radius: 18px; object-fit: cover; background: #eee; }
-        .chat-info { flex: 1; }
-        .chat-name { font-weight: 700; font-size: 15px; color: #111; }
-        .chat-msg { font-size: 13px; color: var(--text-secondary); margin-top: 2px; }
-
-        /* ─── Moments Grid ─── */
-        .status-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
-        .status-card {
-            position: relative; height: 250px; border-radius: 25px; overflow: hidden;
-            background: #eee; cursor: pointer;
+        .chat-card:active { transform: scale(0.97); background: var(--bg-input); }
+        .chat-avatar-box { position: relative; margin-right: 15px; }
+        .chat-avatar { width: 52px; height: 52px; border-radius: 18px; object-fit: cover; background: #333; }
+        .online-dot {
+            position: absolute; bottom: -2px; right: -2px; width: 14px; height: 14px;
+            background: #10b981; border: 2px solid var(--bg-card); border-radius: 50%;
         }
-        .status-card img, .status-card video { width: 100%; height: 100%; object-fit: cover; }
-        .status-info {
-            position: absolute; bottom: 0; width: 100%; padding: 15px;
-            background: linear-gradient(transparent, rgba(0,0,0,0.8));
-            color: #fff; font-size: 13px; font-weight: 600;
+        .chat-meta { flex: 1; min-width: 0; }
+        .chat-name { font-weight: 600; font-size: 16px; margin-bottom: 2px; }
+        .chat-last-msg { 
+            font-size: 13px; color: var(--text-muted); 
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis; 
         }
 
-        /* ─── Chat Conversation Overlay ─── */
+        /* ─── Status/Moments ─── */
+        .upload-btn {
+            background: var(--bg-card); color: var(--text-main); border: 1px dashed var(--primary);
+            padding: 20px; border-radius: 20px; margin-bottom: 20px; text-align: center;
+            display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+            font-weight: 500; cursor: pointer;
+        }
+        .status-grid { 
+            display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; 
+        }
+        .moment-card {
+            position: relative; aspect-ratio: 9/16; border-radius: 20px; overflow: hidden;
+            background: #222; box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+        }
+        .moment-card img, .moment-card video { width: 100%; height: 100%; object-fit: cover; }
+        .moment-overlay {
+            position: absolute; bottom: 0; left: 0; right: 0; padding: 15px;
+            background: linear-gradient(transparent, rgba(0,0,0,0.9));
+        }
+        .moment-user { font-size: 12px; font-weight: 600; text-shadow: 0 1px 2px rgba(0,0,0,0.5); }
+
+        /* ─── Chat Conversation ─── */
         #chatView {
-            position: fixed; top: 0; right: -100%; width: 100%; height: 100%;
-            background: #fff; z-index: 3000; transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: fixed; top: 0; right: -100%; width: 100%; height: 100dvh;
+            background: var(--bg-body); z-index: 2000;
             display: flex; flex-direction: column;
+            transition: right 0.35s cubic-bezier(0.32, 0.72, 0, 1);
         }
         #chatView.active { right: 0; }
-        .chat-header {
-            padding: 15px 20px; border-bottom: 1px solid #eee; display: flex; align-items: center;
-            background: rgba(255,255,255,0.9); backdrop-filter: blur(10px);
+        
+        .chat-view-header {
+            padding: 10px 15px; height: var(--header-height); border-bottom: 1px solid var(--border);
+            display: flex; align-items: center; gap: 15px; background: rgba(9, 9, 11, 0.95);
         }
-        .chat-messages { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 15px; background: #fcfcfc; }
-        .message { max-width: 75%; padding: 12px 16px; border-radius: 20px; font-size: 14px; line-height: 1.4; position: relative; word-wrap: break-word; }
-        .msg-me { align-self: flex-end; background: var(--msg-bubble-me); color: #fff; border-bottom-right-radius: 4px; }
-        .msg-them { align-self: flex-start; background: var(--msg-bubble-them); color: #000; border-bottom-left-radius: 4px; }
+        .chat-messages {
+            flex: 1; overflow-y: scroll; padding: 20px; display: flex; flex-direction: column; gap: 8px;
+            background-image: radial-gradient(var(--bg-card) 1px, transparent 1px);
+            background-size: 20px 20px; /* Subtle pattern */
+        }
+        .msg {
+            max-width: 75%; padding: 12px 16px; font-size: 15px; line-height: 1.4;
+            position: relative; animation: slideUp 0.2s ease-out;
+        }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        
+        .msg.me {
+            align-self: flex-end; background: var(--bubble-me); color: white;
+            border-radius: 20px 20px 4px 20px;
+        }
+        .msg.them {
+            align-self: flex-start; background: var(--bubble-them); color: var(--text-main);
+            border-radius: 20px 20px 20px 4px;
+        }
+        .msg-time { font-size: 10px; opacity: 0.7; margin-top: 4px; display: block; text-align: right; }
         
         .chat-input-area {
-            padding: 15px; background: #fff; border-top: 1px solid #eee;
-            display: flex; align-items: center; gap: 10px; padding-bottom: max(15px, env(safe-area-inset-bottom));
-        }
-        .msg-input {
-            flex: 1; padding: 12px 18px; border-radius: 30px; border: 1px solid #eee;
-            background: #f8f9fa; font-family: inherit; font-size: 15px;
+            padding: 12px 16px; background: var(--bg-body); border-top: 1px solid var(--border);
+            display: flex; align-items: center; gap: 10px;
+            padding-bottom: max(12px, env(safe-area-inset-bottom));
         }
 
-        /* ─── Story Viewer (Overlay) ─── */
-        #storyViewer { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #000; z-index: 5000; display: none; }
-        .story-progress { position: absolute; top: 10px; left: 10px; right: 10px; display: flex; gap: 4px; z-index: 10; }
-        .progress-bar { height: 3px; background: rgba(255,255,255,0.3); flex: 1; border-radius: 2px; overflow: hidden; }
-        .progress-fill { height: 100%; background: #fff; width: 0%; }
-        #storyMedia { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
-        #storyMedia img, #storyMedia video { width: 100%; height: 100%; object-fit: contain; }
-        .story-overlay-details { position: absolute; top: 30px; left: 20px; color: white; z-index: 20; display: flex; align-items: center; gap: 10px; }
+        /* ─── Story Overlay ─── */
+        #storyViewer { 
+            position: fixed; inset: 0; background: #000; z-index: 5000; display: none; 
+        }
+        .story-bars {
+            position: absolute; top: 10px; left: 10px; right: 10px; display: flex; gap: 5px; z-index: 5010;
+        }
+        .bar { height: 3px; background: rgba(255,255,255,0.3); flex: 1; border-radius: 10px; overflow: hidden; }
+        .bar-fill { height: 100%; background: #fff; width: 0; }
+        .tap-zone { position: absolute; top: 0; height: 100%; width: 35%; z-index: 5005; }
+        .tap-left { left: 0; }
+        .tap-right { right: 0; width: 65%; } /* Larger area for next */
 
-        /* ─── Bottom Nav ─── */
-        .pill-nav {
+        /* ─── Navigation ─── */
+        .bottom-nav {
             position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
-            background: #111; width: 200px; height: 60px; border-radius: 35px;
-            display: flex; align-items: center; justify-content: space-around;
-            padding: 0 10px; z-index: 2000; box-shadow: 0 15px 35px rgba(0,0,0,0.3);
+            width: 220px; height: 65px; background: rgba(30,30,35,0.9);
+            backdrop-filter: blur(15px); border-radius: 35px;
+            display: flex; align-items: center; justify-content: space-evenly;
+            border: 1px solid rgba(255,255,255,0.1);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.5); z-index: 1000;
         }
-        .nav-item { color: #666; transition: 0.3s; cursor: pointer; display: flex; justify-content: center; width: 50%; }
-        .nav-item.active { color: #fff; }
+        .nav-item { 
+            color: #666; transition: 0.3s; width: 50px; height: 50px; 
+            display: flex; align-items: center; justify-content: center; border-radius: 50%; 
+        }
+        .nav-item.active { color: #fff; background: var(--primary); box-shadow: 0 0 15px rgba(139, 92, 246, 0.4); }
 
         /* ─── Components ─── */
-        .v-input { width: 100%; padding: 16px; border: 2px solid #eee; border-radius: 16px; margin-bottom: 15px; font-family: inherit; background: #f9f9f9; }
-        .btn-primary { width: 100%; background: #000; color: #fff; border: none; padding: 16px; border-radius: 16px; font-weight: 600; font-size: 15px; cursor: pointer; }
-        .btn-icon { background: none; border: none; cursor: pointer; color: #111; display: flex; align-items: center; }
-        
-        /* ─── Modals ─── */
-        .overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: none; z-index: 2500; backdrop-filter: blur(5px); }
+        .v-input {
+            width: 100%; padding: 18px; border-radius: 16px; border: 1px solid var(--border);
+            background: var(--bg-input); color: #fff; font-size: 16px; margin-bottom: 15px; font-family: inherit;
+        }
+        .v-btn {
+            width: 100%; padding: 18px; border-radius: 16px; border: none;
+            background: var(--primary); color: #fff; font-size: 16px; font-weight: 600;
+            cursor: pointer; transition: 0.2s;
+        }
+        .v-btn:active { transform: scale(0.98); opacity: 0.9; }
+
+        /* ─── Sheets/Modals ─── */
+        .overlay { 
+            position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: none; z-index: 2900; backdrop-filter: blur(4px); 
+        }
         .bottom-sheet {
-            position: fixed; bottom: -100%; left: 0; width: 100%; background: #fff;
-            border-radius: 30px 30px 0 0; padding: 30px 25px; transition: 0.4s cubic-bezier(0.19, 1, 0.22, 1);
-            z-index: 2600;
+            position: fixed; bottom: -100%; left: 0; width: 100%; background: #1c1c1e;
+            border-radius: 25px 25px 0 0; padding: 30px 25px 50px 25px; transition: 0.4s cubic-bezier(0.19, 1, 0.22, 1);
+            z-index: 3000; border-top: 1px solid var(--border);
         }
         .bottom-sheet.active { bottom: 0; }
         
-        #toast {
-            position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%);
-            background: rgba(0,0,0,0.8); color: #fff; padding: 10px 20px; border-radius: 30px;
-            font-size: 13px; display: none; z-index: 6000;
-        }
         .loading-spinner {
-            border: 3px solid rgba(0,0,0,0.1); border-left-color: var(--accent-purple);
-            border-radius: 50%; width: 24px; height: 24px; animation: spin 1s linear infinite; display: none;
+            width: 20px; height: 20px; border: 2px solid rgba(255,255,255,0.3);
+            border-top-color: #fff; border-radius: 50%; animation: spin 0.8s linear infinite;
         }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        
+        #toast {
+            position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+            background: #fff; color: #000; padding: 10px 20px; border-radius: 30px;
+            font-size: 14px; font-weight: 600; z-index: 9000; opacity: 0; pointer-events: none; transition: 0.3s;
+        }
     </style>
 </head>
 <body>
 
     <div id="authScreen">
-        <div class="auth-logo">Vynix</div>
+        <div class="logo-text">Vynix.</div>
+        <p style="color:var(--text-muted); margin-bottom:30px; text-align:center;">Connect closely, share freely.</p>
         <input type="email" id="emailInput" class="v-input" placeholder="Email Address">
         <input type="password" id="passInput" class="v-input" placeholder="Password">
-        <button class="btn-primary" onclick="handleAuth()">Enter Vynix</button>
-        <p style="margin-top:20px; font-size:13px; color:#666; cursor:pointer;" onclick="toggleAuthMode()">
-            <span id="authToggleText">No account? Sign Up</span>
+        <button class="v-btn" onclick="handleAuth()" id="authBtn">Enter Vynix</button>
+        <p style="margin-top:25px; color:var(--text-muted); font-size:14px;" onclick="toggleAuthMode()">
+            <span id="authToggleText">Create new account</span>
         </p>
     </div>
 
-    <div id="toast"></div>
+    <div id="toast">Notification</div>
 
     <header>
-        <div onclick="openSheet('settingsSheet')">
-            <img id="myAvatar" class="user-profile" src="https://via.placeholder.com/150" alt="Profile">
+        <div class="header-title">Vynix</div>
+        <div style="display:flex; gap:15px; align-items:center;">
+            <span class="material-symbols-rounded" style="color:var(--text-main); font-size:26px; cursor:pointer;" onclick="openSheet('addFriendSheet')">person_add</span>
+            <img id="myAvatar" class="user-avatar-sm" src="https://via.placeholder.com/150" onclick="openSheet('settingsSheet')">
         </div>
-        <div class="app-title">Vynix</div>
-        <span class="material-symbols-rounded" style="font-size:28px; cursor:pointer;" onclick="openSheet('addFriendSheet')">person_add</span>
     </header>
 
     <div id="chatsTab" class="tab-content active">
         <div id="chatList">
             </div>
-        <div id="emptyChats" style="text-align:center; color:#999; margin-top:50px; display:none;">
-            <span class="material-symbols-rounded" style="font-size:48px; color:#ddd;">chat_bubble_outline</span>
-            <p>No chats yet. Add a friend!</p>
+        <div id="emptyChats" class="hidden" style="text-align:center; margin-top:30vh; color:var(--text-muted);">
+            <span class="material-symbols-rounded" style="font-size:48px; opacity:0.5; margin-bottom:10px;">forum</span>
+            <p>No messages yet.<br>Add a friend to start.</p>
         </div>
     </div>
 
     <div id="statusTab" class="tab-content">
-        <div class="btn-primary" onclick="document.getElementById('momentUpload').click()" style="margin-bottom:20px; background:linear-gradient(45deg, #d946ef, #10b981); display:flex; justify-content:center; align-items:center; gap:8px;">
-            <span class="material-symbols-rounded">add_a_photo</span> Share a Moment
-            <div id="uploadSpinner" class="loading-spinner" style="border-left-color:white;"></div>
+        <div class="upload-btn" onclick="document.getElementById('momentUpload').click()">
+            <span class="material-symbols-rounded" style="font-size:32px; color:var(--primary);">add_circle</span>
+            <span>Share a Moment</span>
+            <div id="uploadSpinner" class="loading-spinner hidden" style="border-top-color:var(--primary);"></div>
         </div>
         <div class="status-grid" id="statusGrid">
             </div>
@@ -185,64 +273,79 @@
     <input type="file" id="momentUpload" hidden accept="image/*,video/*" onchange="uploadMoment(this.files[0])">
     <input type="file" id="profilePicUpload" hidden accept="image/*" onchange="uploadProfilePic(this.files[0])">
 
-    <div class="pill-nav">
+    <div class="bottom-nav">
         <div class="nav-item active" id="navChats" onclick="switchTab('chats')">
-            <span class="material-symbols-rounded" style="font-size:28px;">chat</span>
+            <span class="material-symbols-rounded">chat_bubble</span>
         </div>
         <div class="nav-item" id="navStatus" onclick="switchTab('status')">
-            <span class="material-symbols-rounded" style="font-size:28px;">amp_stories</span>
+            <span class="material-symbols-rounded">grid_view</span>
         </div>
     </div>
 
     <div id="chatView">
-        <div class="chat-header">
-            <span class="material-symbols-rounded" style="font-size:28px; cursor:pointer; margin-right:15px;" onclick="closeChat()">arrow_back</span>
-            <img id="currentChatAvatar" src="" class="user-profile" style="width:36px; height:36px; border:none; margin-right:10px;">
+        <div class="chat-view-header">
+            <span class="material-symbols-rounded" onclick="closeChat()" style="font-size:26px; padding:5px; cursor:pointer;">arrow_back_ios_new</span>
+            <img id="currentChatAvatar" src="" class="user-avatar-sm" style="border:none;">
             <div style="flex:1;">
-                <div id="currentChatName" style="font-weight:700; font-size:15px;">User</div>
+                <div id="currentChatName" style="font-weight:600; font-size:16px;">User</div>
+                <div style="font-size:12px; color:var(--primary); font-weight:500;">Online</div>
             </div>
         </div>
         <div class="chat-messages" id="messageList"></div>
         <div class="chat-input-area">
-            <input type="text" id="msgInput" class="msg-input" placeholder="Type a message..." autocomplete="off">
-            <button class="btn-icon" onclick="sendMessage()">
-                <span class="material-symbols-rounded" style="font-size:28px; color:var(--accent-purple);">send</span>
+            <input type="text" id="msgInput" class="v-input" style="margin:0; border-radius:30px; padding:12px 20px;" placeholder="Message..." autocomplete="off">
+            <button onclick="sendMessage()" style="background:var(--primary); border:none; width:45px; height:45px; border-radius:50%; color:white; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+                <span class="material-symbols-rounded">arrow_upward</span>
             </button>
         </div>
     </div>
 
-    <div id="storyViewer" onclick="nextStorySegment(event)">
-        <div class="story-progress" id="storyProgressBars"></div>
-        <div class="story-overlay-details">
-            <img id="storyUserAvatar" src="" style="width:32px; height:32px; border-radius:50%; border:2px solid #fff;">
-            <span id="storyUserName" style="font-weight:600; font-size:14px;"></span>
-            <span class="material-symbols-rounded" onclick="closeStory()" style="position:absolute; top:-5px; right:-20px; padding:20px;">close</span>
+    <div id="storyViewer">
+        <div class="story-bars" id="storyBars"></div>
+        <div class="tap-zone tap-left" onclick="storyNav(-1)"></div>
+        <div class="tap-zone tap-right" onclick="storyNav(1)"></div>
+        
+        <div style="position:absolute; top:20px; left:15px; z-index:5006; display:flex; align-items:center; gap:10px;">
+            <img id="storyUserAvatar" src="" style="width:36px; height:36px; border-radius:50%; border:1px solid #fff;">
+            <span id="storyUserName" style="color:white; font-weight:600; text-shadow:0 1px 3px rgba(0,0,0,0.8);"></span>
         </div>
-        <div id="storyMedia"></div>
+        <span class="material-symbols-rounded" onclick="closeStory()" style="position:absolute; top:20px; right:20px; z-index:5010; color:white; font-size:30px; padding:10px; cursor:pointer;">close</span>
+        
+        <div id="storyMediaContainer" style="width:100%; height:100%; display:flex; align-items:center; justify-content:center;"></div>
     </div>
 
     <div class="overlay" id="overlay" onclick="closeAllSheets()"></div>
 
     <div class="bottom-sheet" id="addFriendSheet">
-        <h2 style="margin:0 0 20px 0;">Add Friend</h2>
-        <p style="font-size:13px; color:#666; margin-bottom:15px;">Ask your friend for their Email address.</p>
-        <input type="email" id="friendEmail" class="v-input" placeholder="friend@email.com">
-        <button class="btn-primary" onclick="addFriend()">Add Friend</button>
+        <h2 style="margin-bottom:15px;">New Connection</h2>
+        <p style="color:var(--text-muted); margin-bottom:20px;">Enter your friend's email address to start chatting.</p>
+        <input type="email" id="friendEmail" class="v-input" placeholder="friend@example.com">
+        <button class="v-btn" onclick="addFriend()">Add Friend</button>
     </div>
 
     <div class="bottom-sheet" id="settingsSheet">
-        <h2 style="margin:0 0 20px 0;">Profile</h2>
-        <div style="text-align:center; margin-bottom:20px;">
-            <img id="settingsAvatar" class="user-profile" src="" style="width:80px; height:80px;" onclick="document.getElementById('profilePicUpload').click()">
-            <p style="font-size:12px; color:#888; margin-top:5px;">Tap to change photo</p>
+        <div style="text-align:center; margin-bottom:25px;">
+            <div style="position:relative; display:inline-block;">
+                <img id="settingsAvatar" src="" style="width:100px; height:100px; border-radius:50%; object-fit:cover; border:3px solid var(--border);">
+                <div onclick="document.getElementById('profilePicUpload').click()" style="position:absolute; bottom:0; right:0; background:var(--primary); padding:8px; border-radius:50%; cursor:pointer;">
+                    <span class="material-symbols-rounded" style="font-size:20px; color:white;">edit</span>
+                </div>
+            </div>
+            <h3 style="margin-top:10px;">Edit Profile</h3>
         </div>
         <input type="text" id="editDisplayName" class="v-input" placeholder="Display Name">
-        <button class="btn-primary" onclick="updateProfile()">Save Profile</button>
-        <button class="btn-primary" onclick="logout()" style="background:#ff3b30; margin-top:10px;">Log Out</button>
+        <button class="v-btn" onclick="updateProfile()" style="margin-bottom:10px;">Save Changes</button>
+        <button class="v-btn" onclick="logout()" style="background:#ef4444; color:white;">Log Out</button>
     </div>
 
     <script>
-        // 1. CONFIGURATION
+        /* ⚠️ IMPORTANT SECURITY NOTE: 
+           This code uses Client-Side API Keys. 
+           In a real production app, you should proxy these requests through a backend server 
+           to protect your Cloudinary and Firebase credentials.
+        */
+        
+        // 1. CONFIG
         const CLOUD_NAME = "dqkujefxj"; 
         const UPLOAD_PRESET = "banter_box"; 
         
@@ -264,37 +367,55 @@
         let isSignup = false;
         let activeChatId = null;
 
-        // 2. AUTHENTICATION
+        // 2. APP INITIALIZATION
         auth.onAuthStateChanged(user => {
             if (user) {
                 currentUser = user;
-                document.getElementById('authScreen').style.display = 'none';
+                document.getElementById('authScreen').classList.add('hidden');
                 initApp();
             } else {
                 currentUser = null;
-                document.getElementById('authScreen').style.display = 'flex';
+                document.getElementById('authScreen').classList.remove('hidden');
             }
         });
 
+        function initApp() {
+            // Load User Data
+            db.ref('users/' + currentUser.uid).on('value', snap => {
+                const data = snap.val();
+                if(data) {
+                    const avatar = data.avatar || "https://ui-avatars.com/api/?background=random&name=" + data.email;
+                    document.getElementById('myAvatar').src = avatar;
+                    document.getElementById('settingsAvatar').src = avatar;
+                    document.getElementById('editDisplayName').value = data.name;
+                }
+            });
+
+            loadChats();
+            loadMoments();
+        }
+
+        // 3. AUTH LOGIC
         function toggleAuthMode() {
             isSignup = !isSignup;
-            document.getElementById('authToggleText').innerText = isSignup ? "Have an account? Login" : "No account? Sign Up";
-            document.querySelector('#authScreen button').innerText = isSignup ? "Sign Up" : "Enter Vynix";
+            document.getElementById('authToggleText').innerText = isSignup ? "Already have an account? Login" : "Create new account";
+            document.getElementById('authBtn').innerText = isSignup ? "Sign Up & Join" : "Enter Vynix";
         }
 
         async function handleAuth() {
             const email = document.getElementById('emailInput').value;
             const pass = document.getElementById('passInput').value;
-            if(!email || !pass) return showToast("Please fill all fields");
+            
+            if(!email || !pass) return showToast("Please enter email and password");
 
             try {
                 if(isSignup) {
                     const cred = await auth.createUserWithEmailAndPassword(email, pass);
-                    // Create default profile
+                    // Create User Profile
                     await db.ref('users/' + cred.user.uid).set({
                         name: email.split('@')[0],
                         email: email,
-                        avatar: "https://ui-avatars.com/api/?background=random&name=" + email,
+                        avatar: "https://ui-avatars.com/api/?background=0D8ABC&color=fff&name=" + email,
                         uid: cred.user.uid
                     });
                 } else {
@@ -310,47 +431,45 @@
             window.location.reload();
         }
 
-        // 3. CLOUDINARY UPLOAD (API Method)
-        async function uploadToCloudinary(file) {
-            const formData = new FormData();
-            formData.append("file", file);
-            formData.append("upload_preset", UPLOAD_PRESET);
-            formData.append("cloud_name", CLOUD_NAME);
-
-            try {
-                const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/auto/upload`, {
-                    method: "POST",
-                    body: formData
-                });
-                const data = await res.json();
-                return { url: data.secure_url, type: data.resource_type };
-            } catch(e) {
-                console.error(e);
-                showToast("Upload failed");
-                return null;
-            }
-        }
-
-        // 4. MAIN APP LOGIC
-        function initApp() {
-            // Load My Profile
-            db.ref('users/' + currentUser.uid).on('value', snap => {
-                const data = snap.val();
-                if(data) {
-                    document.getElementById('myAvatar').src = data.avatar;
-                    document.getElementById('settingsAvatar').src = data.avatar;
-                    document.getElementById('editDisplayName').value = data.name;
+        // 4. CHAT LOGIC
+        function loadChats() {
+            db.ref(`user_chats/${currentUser.uid}`).on('value', snap => {
+                const list = document.getElementById('chatList');
+                list.innerHTML = "";
+                
+                if(!snap.exists()) {
+                    document.getElementById('emptyChats').classList.remove('hidden');
+                    return;
                 }
-            });
+                document.getElementById('emptyChats').classList.add('hidden');
+                
+                const chats = [];
+                snap.forEach(c => chats.push(c.val()));
+                chats.sort((a,b) => b.timestamp - a.timestamp); // Sort by newest
 
-            loadChats();
-            loadMoments();
+                chats.forEach(chat => {
+                    list.innerHTML += `
+                        <div class="chat-card fade-in" onclick="openChat('${chat.chatId}', '${chat.name}', '${chat.avatar}')">
+                            <div class="chat-avatar-box">
+                                <img src="${chat.avatar}" class="chat-avatar">
+                                <div class="online-dot"></div>
+                            </div>
+                            <div class="chat-meta">
+                                <div class="chat-name">${chat.name}</div>
+                                <div class="chat-last-msg">${chat.lastMsg}</div>
+                            </div>
+                            <div style="font-size:11px; color:var(--text-muted);">${formatTimeShort(chat.timestamp)}</div>
+                        </div>
+                    `;
+                });
+            });
         }
 
-        // ── Friend & Chats ──
         async function addFriend() {
-            const email = document.getElementById('friendEmail').value.toLowerCase();
-            // Find user by email (Inefficient in RTDB, but works for small apps. Ideally use an index)
+            const email = document.getElementById('friendEmail').value.toLowerCase().trim();
+            if(!email) return;
+
+            // Simple search (Note: Indexing recommended for production)
             const snap = await db.ref('users').orderByChild('email').equalTo(email).once('value');
             
             if(!snap.exists()) return showToast("User not found");
@@ -358,86 +477,51 @@
             const friendData = Object.values(snap.val())[0];
             if(friendData.uid === currentUser.uid) return showToast("You can't add yourself");
 
-            // Create Chat Link
             const chatId = [currentUser.uid, friendData.uid].sort().join('_');
+            const timestamp = Date.now();
+
+            // Update My Side
+            await db.ref(`user_chats/${currentUser.uid}/${chatId}`).set({
+                chatId, friendId: friendData.uid, name: friendData.name, avatar: friendData.avatar, lastMsg: "Start a conversation", timestamp
+            });
             
-            const chatMetaMe = {
-                chatId: chatId,
-                friendId: friendData.uid,
-                name: friendData.name,
-                avatar: friendData.avatar,
-                lastMsg: "Start chatting!",
-                timestamp: Date.now()
-            };
-            
-            // Just save to my side for demo
-            await db.ref(`user_chats/${currentUser.uid}/${chatId}`).set(chatMetaMe);
-            
-            // Save to their side
+            // Update Friend Side
             const mySnap = await db.ref(`users/${currentUser.uid}`).once('value');
             const myData = mySnap.val();
-             await db.ref(`user_chats/${friendData.uid}/${chatId}`).set({
-                chatId: chatId,
-                friendId: currentUser.uid,
-                name: myData.name,
-                avatar: myData.avatar,
-                lastMsg: "New friend!",
-                timestamp: Date.now()
+            await db.ref(`user_chats/${friendData.uid}/${chatId}`).set({
+                chatId, friendId: currentUser.uid, name: myData.name, avatar: myData.avatar, lastMsg: "New connection", timestamp
             });
 
             closeAllSheets();
-            showToast("Friend added!");
+            showToast("Friend Added!");
+            document.getElementById('friendEmail').value = '';
         }
 
-        function loadChats() {
-            db.ref(`user_chats/${currentUser.uid}`).on('value', snap => {
-                const list = document.getElementById('chatList');
-                list.innerHTML = "";
-                if(!snap.exists()) {
-                    document.getElementById('emptyChats').style.display = 'block';
-                    return;
-                }
-                document.getElementById('emptyChats').style.display = 'none';
-                
-                snap.forEach(child => {
-                    const chat = child.val();
-                    list.innerHTML += `
-                        <div class="chat-card" onclick="openChat('${chat.chatId}', '${chat.name}', '${chat.avatar}', '${chat.friendId}')">
-                            <div class="avatar-box">
-                                <img src="${chat.avatar}" class="avatar">
-                            </div>
-                            <div class="chat-info">
-                                <div class="chat-name">${chat.name}</div>
-                                <div class="chat-msg">${chat.lastMsg}</div>
-                            </div>
-                        </div>
-                    `;
-                });
-            });
-        }
+        let msgListener = null;
 
-        // ── Messaging ──
-        let messageListener = null;
-
-        function openChat(chatId, name, avatar, friendId) {
+        function openChat(chatId, name, avatar) {
             activeChatId = chatId;
             document.getElementById('currentChatName').innerText = name;
             document.getElementById('currentChatAvatar').src = avatar;
             document.getElementById('chatView').classList.add('active');
-
-            const msgList = document.getElementById('messageList');
-            msgList.innerHTML = "";
-
-            if(messageListener) db.ref(`chats/${activeChatId}`).off();
-
-            messageListener = db.ref(`chats/${activeChatId}`).limitToLast(50).on('child_added', snap => {
+            
+            const list = document.getElementById('messageList');
+            list.innerHTML = "";
+            
+            if(msgListener) db.ref(`chats/${chatId}`).off();
+            
+            msgListener = db.ref(`chats/${chatId}`).limitToLast(50).on('child_added', snap => {
                 const msg = snap.val();
                 const isMe = msg.sender === currentUser.uid;
+                
                 const div = document.createElement('div');
-                div.className = `message ${isMe ? 'msg-me' : 'msg-them'}`;
-                div.innerText = msg.text;
-                msgList.appendChild(div);
-                msgList.scrollTop = msgList.scrollHeight;
+                div.className = `msg ${isMe ? 'me' : 'them'}`;
+                div.innerHTML = `
+                    ${msg.text}
+                    <span class="msg-time">${formatTime(msg.timestamp)}</span>
+                `;
+                list.appendChild(div);
+                list.scrollTop = list.scrollHeight;
             });
         }
 
@@ -451,125 +535,165 @@
             const text = input.value.trim();
             if(!text || !activeChatId) return;
 
+            const now = Date.now();
             db.ref(`chats/${activeChatId}`).push({
-                text: text,
-                sender: currentUser.uid,
-                timestamp: Date.now()
+                text, sender: currentUser.uid, timestamp: now
             });
 
-            // Update Last Msg
-            db.ref(`user_chats/${currentUser.uid}/${activeChatId}`).update({ lastMsg: "You: " + text });
-            // Should update friend's side too in a real app
+            // Update Metadata
+            db.ref(`user_chats/${currentUser.uid}/${activeChatId}`).update({ lastMsg: "You: " + text, timestamp: now });
             
             input.value = "";
+            input.focus();
         }
 
-        // ── Moments (Stories) ──
+        // 5. MOMENTS / STORIES
         async function uploadMoment(file) {
             if(!file) return;
-            document.getElementById('uploadSpinner').style.display = 'block';
+            const spinner = document.getElementById('uploadSpinner');
+            spinner.classList.remove('hidden');
             
-            const result = await uploadToCloudinary(file);
-            if(result) {
-                const myProfile = (await db.ref('users/'+currentUser.uid).once('value')).val();
+            const res = await uploadToCloudinary(file);
+            if(res) {
+                const myData = (await db.ref('users/'+currentUser.uid).once('value')).val();
                 await db.ref('moments').push({
-                    uid: currentUser.uid,
-                    url: result.url,
-                    type: result.type,
-                    name: myProfile.name,
-                    avatar: myProfile.avatar,
-                    timestamp: Date.now()
+                    uid: currentUser.uid, url: res.url, type: res.type, 
+                    name: myData.name, avatar: myData.avatar, timestamp: Date.now()
                 });
-                showToast("Moment Posted!");
+                showToast("Moment Shared");
             }
-            document.getElementById('uploadSpinner').style.display = 'none';
+            spinner.classList.add('hidden');
         }
 
         function loadMoments() {
-            db.ref('moments').limitToLast(20).on('value', snap => {
+            db.ref('moments').limitToLast(30).on('value', snap => {
                 const grid = document.getElementById('statusGrid');
                 grid.innerHTML = "";
-                const moments = [];
-                snap.forEach(c => moments.push(c.val()));
-                moments.reverse(); // Newest first
+                const data = [];
+                snap.forEach(c => data.push(c.val()));
+                data.reverse();
 
-                moments.forEach(m => {
-                    const isVideo = m.type === 'video';
+                data.forEach(m => {
                     grid.innerHTML += `
-                        <div class="status-card" onclick="viewStory('${m.url}', '${m.type}', '${m.name}', '${m.avatar}')">
-                            ${isVideo ? `<video src="${m.url}#t=0.1" preload="metadata"></video>` : `<img src="${m.url}">`}
-                            <div class="status-info">${m.name}</div>
+                        <div class="moment-card fade-in" onclick="openStory('${m.url}', '${m.type}', '${m.name}', '${m.avatar}')">
+                            ${m.type === 'video' ? `<video src="${m.url}#t=0.1" preload="metadata"></video>` : `<img src="${m.url}" loading="lazy">`}
+                            <div class="moment-overlay">
+                                <div class="moment-user">${m.name}</div>
+                            </div>
                         </div>
                     `;
                 });
             });
         }
 
-        function viewStory(url, type, name, avatar) {
+        // Story Logic
+        let storyTimer;
+        let storyDuration = 5000;
+
+        function openStory(url, type, name, avatar) {
             const viewer = document.getElementById('storyViewer');
-            const mediaContainer = document.getElementById('storyMedia');
+            const container = document.getElementById('storyMediaContainer');
             
             document.getElementById('storyUserName').innerText = name;
             document.getElementById('storyUserAvatar').src = avatar;
-
+            
+            container.innerHTML = "";
+            
             if(type === 'video') {
-                mediaContainer.innerHTML = `<video src="${url}" autoplay playsinline></video>`;
+                const vid = document.createElement('video');
+                vid.src = url;
+                vid.autoplay = true;
+                vid.playsInline = true;
+                vid.style.width = "100%";
+                vid.style.height = "100%";
+                vid.style.objectFit = "contain";
+                container.appendChild(vid);
+                // Wait for metadata to know duration, or default 15s
+                vid.onloadedmetadata = () => startProgressBar(vid.duration * 1000);
             } else {
-                mediaContainer.innerHTML = `<img src="${url}">`;
+                const img = document.createElement('img');
+                img.src = url;
+                img.style.width = "100%";
+                img.style.height = "100%";
+                img.style.objectFit = "contain";
+                container.appendChild(img);
+                startProgressBar(5000);
             }
             
             viewer.style.display = 'block';
-            startStoryProgress();
         }
 
-        let storyTimer;
-        function startStoryProgress() {
-            const bar = document.createElement('div');
-            bar.className = 'progress-bar';
-            bar.innerHTML = '<div class="progress-fill"></div>';
-            document.getElementById('storyProgressBars').innerHTML = ''; // Clear prev
-            document.getElementById('storyProgressBars').appendChild(bar);
+        function startProgressBar(ms) {
+            const bars = document.getElementById('storyBars');
+            bars.innerHTML = `<div class="bar"><div class="bar-fill" id="fillAnim"></div></div>`;
             
             setTimeout(() => {
-                bar.querySelector('.progress-fill').style.width = '100%';
-                bar.querySelector('.progress-fill').style.transition = 'width 5s linear';
+                const fill = document.getElementById('fillAnim');
+                if(fill) {
+                    fill.style.width = '100%';
+                    fill.style.transition = `width ${ms}ms linear`;
+                }
             }, 50);
 
-            storyTimer = setTimeout(closeStory, 5000);
+            clearTimeout(storyTimer);
+            storyTimer = setTimeout(closeStory, ms);
         }
 
         function closeStory() {
             clearTimeout(storyTimer);
             document.getElementById('storyViewer').style.display = 'none';
-            document.getElementById('storyMedia').innerHTML = '';
+            document.getElementById('storyMediaContainer').innerHTML = ""; // Stop video
         }
 
-        // ── Profile Updates ──
+        function storyNav(dir) {
+            // For this simple version, tapping just closes. 
+            // In a full version, you would cycle through an array of story objects.
+            closeStory();
+        }
+
+        // 6. PROFILE & UTILS
         async function uploadProfilePic(file) {
             if(!file) return;
             showToast("Uploading...");
-            const result = await uploadToCloudinary(file);
-            if(result) {
-                await db.ref(`users/${currentUser.uid}`).update({ avatar: result.url });
-                showToast("Profile Picture Updated");
+            const res = await uploadToCloudinary(file);
+            if(res) {
+                await db.ref(`users/${currentUser.uid}`).update({ avatar: res.url });
+                showToast("Profile Updated");
             }
         }
 
         async function updateProfile() {
             const name = document.getElementById('editDisplayName').value;
             if(name) {
-                await db.ref(`users/${currentUser.uid}`).update({ name: name });
-                showToast("Profile Saved");
+                await db.ref(`users/${currentUser.uid}`).update({ name });
+                showToast("Saved");
                 closeAllSheets();
             }
         }
 
-        // ── UI Utils ──
-        function switchTab(tab) {
+        async function uploadToCloudinary(file) {
+            const formData = new FormData();
+            formData.append("file", file);
+            formData.append("upload_preset", UPLOAD_PRESET);
+            formData.append("cloud_name", CLOUD_NAME);
+            
+            try {
+                const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/auto/upload`, {
+                    method: "POST", body: formData
+                });
+                return await res.json();
+            } catch(e) {
+                showToast("Upload Failed");
+                return null;
+            }
+        }
+
+        // UI Helpers
+        function switchTab(tabId) {
             document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
             document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
             
-            if(tab === 'chats') {
+            if(tabId === 'chats') {
                 document.getElementById('chatsTab').classList.add('active');
                 document.getElementById('navChats').classList.add('active');
             } else {
@@ -580,20 +704,37 @@
 
         function openSheet(id) {
             document.getElementById('overlay').style.display = 'block';
-            document.getElementById(id).classList.add('active');
+            setTimeout(() => document.getElementById(id).classList.add('active'), 10);
         }
 
         function closeAllSheets() {
-            document.getElementById('overlay').style.display = 'none';
             document.querySelectorAll('.bottom-sheet').forEach(el => el.classList.remove('active'));
+            setTimeout(() => document.getElementById('overlay').style.display = 'none', 300);
         }
 
         function showToast(msg) {
             const t = document.getElementById('toast');
             t.textContent = msg;
-            t.style.display = 'block';
-            setTimeout(() => t.style.display = 'none', 3000);
+            t.style.opacity = '1';
+            t.style.top = '50px';
+            setTimeout(() => { t.style.opacity = '0'; t.style.top = '20px'; }, 3000);
         }
+
+        function formatTime(ms) {
+            const d = new Date(ms);
+            return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        }
+        
+        function formatTimeShort(ms) {
+            // Simple logic for list view
+            const d = new Date(ms);
+            return d.getHours() + ":" + String(d.getMinutes()).padStart(2, '0');
+        }
+
+        // Enter key to send
+        document.getElementById('msgInput').addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') sendMessage();
+        });
     </script>
 </body>
 </html>
