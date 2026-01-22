@@ -633,27 +633,43 @@ function loadMoments() {
     });
 }
 
+/* ----------  NEW  renderStatusCard  ---------- */
 function renderStatusCard(post) {
-    const card = document.createElement('div'); card.className = 'status-card-mobile fade-in';
+    const card = document.createElement('div');
+    card.className = 'status-card-mobile fade-in';
+
     const avatar = post.avatar || `https://ui-avatars.com/api/?background=007aff&name=${encodeURIComponent(post.name)}`;
     const time = formatTimeShort(post.timestamp);
+
     card.innerHTML = `
         <div class="status-header">
             <img src="${avatar}" class="status-avatar">
             <div class="status-name">${post.name}</div>
             <div class="status-time">${time}</div>
         </div>
+
         ${post.type === 'video'
             ? `<video class="status-media" src="${post.url}" preload="metadata" muted playsinline></video>`
             : `<img class="status-media" src="${post.url}" loading="lazy" alt="">`
         }
+
+        <!--  TIMESTAMP  +  LIKE  +  COMMENT  (ALWAYS  VISIBLE)  -->
         <div class="status-footer">
-            <span id="like-${post.id}" onclick="toggleLike('${post.id}')">favorite</span>
-            <span id="likeC-${post.id}">0</span>
-            <span onclick="openCommentSheet('${post.id}', '${post.name}')">comment</span>
-            <span id="commC-${post.id}">0</span>
+            <span style="font-size:12px;color:var(--text-muted)">${time}</span>
+
+            <span style="margin-left:auto;display:flex;align-items:center;gap:6px">
+                <!--  like  -->
+                <span id="like-${post.id}" onclick="toggleLike('${post.id}')" class="material-symbols-rounded" style="font-size:20px;cursor:pointer">favorite</span>
+                <span id="likeC-${post.id}" style="font-size:13px">0</span>
+
+                <!--  comment  -->
+                <span onclick="openCommentSheet('${post.id}', '${post.name}')" class="material-symbols-rounded" style="font-size:20px;cursor-pointer;margin-left:12px">comment</span>
+                <span id="commC-${post.id}" style="font-size:13px">0</span>
+            </span>
         </div>
     `;
+
+    // real-time counts
     db.ref(`moment_likes/${post.id}`).on('value', s => {
         document.getElementById(`likeC-${post.id}`).textContent = s.numChildren();
         document.getElementById(`like-${post.id}`).classList.toggle('liked', s.hasChild(currentUser.uid));
@@ -661,6 +677,7 @@ function renderStatusCard(post) {
     db.ref(`moment_comments/${post.id}`).on('value', s => {
         document.getElementById(`commC-${post.id}`).textContent = s.numChildren();
     });
+
     return card;
 }
 
