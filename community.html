@@ -13,30 +13,31 @@
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-  
+   
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 
   <style>
     :root {
-      --bg: #f8f9fa;
+      --bg: #f0f2f5;
       --bg-card: #ffffff;
-      --text: #0f172a;
-      --text-secondary: #64748b;
-      --border: #e2e8f0;
-      --accent: #3b82f6;
+      --text: #111b21;
+      --text-secondary: #667781;
+      --accent: #008069; /* WhatsApp Green-ish */
+      --accent-light: #25d366;
     }
     body { 
       font-family: 'Inter', sans-serif; 
       background: var(--bg); 
       color: var(--text);
       margin:0; 
+      -webkit-tap-highlight-color: transparent;
     }
     
     .app-container {
       width: 100vw; height: 100vh;
-      background: var(--bg);
+      background: #efeae2; /* Chat wallpaper color */
       display: flex; flex-direction: column; overflow: hidden;
     }
     @media (min-width: 768px) {
@@ -45,30 +46,23 @@
         border-radius: 32px;
         border: 12px solid #fff;
         box-shadow: 0 25px 70px rgba(0,0,0,0.12);
+        background: #fff;
       }
     }
 
-    .shimmer-bg {
-      background: linear-gradient(90deg, #f1f5f9 0%, #e2e8f0 50%, #f1f5f9 100%);
-      background-size: 200% 100%;
-      animation: shimmer 2.8s infinite linear;
-    }
-    @keyframes shimmer {
-      0% { background-position: 200% 0; }
-      100% { background-position: -200% 0; }
-    }
-
-    .bottom-sheet-enter { animation: sheetUp 0.4s cubic-bezier(0.34, 1.56, 0.64, 1); }
+    .bottom-sheet-enter { animation: sheetUp 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
     @keyframes sheetUp { from { transform: translateY(110%); } to { transform: translateY(0); } }
 
-    .fade-in { animation: fadeIn 0.5s ease-out; }
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
+    /* Hide scrollbar */
+    ::-webkit-scrollbar { width: 0px; background: transparent; }
 
     .tab-content { 
-      transition: transform 0.45s cubic-bezier(0.22, 0.61, 0.36, 1); 
+      transition: transform 0.3s ease-in-out; 
       width: 300%; display: flex; height: 100%; 
     }
-    .tab-pane { width: 33.33%; height: 100%; overflow-y: auto; flex-shrink: 0; }
+    .tab-pane { width: 33.33%; height: 100%; overflow-y: auto; flex-shrink: 0; background: #fff; }
+    
+    .settings-item:active { background-color: #f5f6f6; }
   </style>
 </head>
 <body>
@@ -96,41 +90,40 @@
     const db = firebase.database();
     const googleProvider = new firebase.auth.GoogleAuthProvider();
 
-    // ─── CUSTOM ALERT ───
+    // ─── COMPONENTS ───
+
     const CustomAlert = ({ message, isOpen, onClose, type = 'info' }) => {
       if (!isOpen) return null;
+      useEffect(() => {
+        const timer = setTimeout(onClose, 3000);
+        return () => clearTimeout(timer);
+      }, [isOpen]);
+      
       return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-[88%] max-w-sm p-6 text-center">
-            <div className={`mx-auto flex h-12 w-12 items-center justify-center rounded-full mb-4 ${type === 'error' ? 'bg-red-100' : 'bg-green-100'}`}>
-              <span className={`material-symbols-rounded text-2xl ${type === 'error' ? 'text-red-600' : 'text-green-600'}`}>
-                {type === 'error' ? 'priority_high' : 'check'}
-              </span>
-            </div>
-            <h3 className="text-lg font-semibold mb-2">{type === 'error' ? 'Error' : 'Success'}</h3>
-            <p className="text-gray-600 mb-6 text-sm">{message}</p>
-            <button onClick={onClose} className="w-full bg-black text-white py-3 rounded-xl font-medium hover:bg-gray-800">
-              Okay
-            </button>
+        <div className="fixed top-10 left-0 right-0 z-50 flex justify-center px-4 pointer-events-none">
+          <div className="bg-gray-800 text-white px-6 py-3 rounded-full shadow-lg flex items-center gap-3 animate-bounce-in pointer-events-auto">
+             <span className="material-symbols-rounded text-sm">
+                {type === 'error' ? 'error' : 'check_circle'}
+             </span>
+             <span className="text-sm font-medium">{message}</span>
           </div>
         </div>
       );
     };
 
-    // ─── BOTTOM SHEET ───
     const BottomSheet = ({ isOpen, onClose, title, children }) => {
       if (!isOpen) return null;
       return (
         <>
-          <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm" onClick={onClose}></div>
-          <div className={`fixed inset-x-0 bottom-0 z-50 bg-white rounded-t-3xl shadow-2xl max-h-[88vh] bottom-sheet-enter`}>
-            <div className="px-5 pt-5 pb-3 flex justify-between items-center border-b">
-              <h3 className="text-xl font-semibold">{title}</h3>
-              <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-100">
-                <span className="material-symbols-rounded text-gray-600">close</span>
+          <div className="fixed inset-0 z-40 bg-black/40 backdrop-blur-[2px] transition-opacity" onClick={onClose}></div>
+          <div className={`fixed inset-x-0 bottom-0 z-50 bg-white rounded-t-2xl shadow-2xl max-h-[90vh] bottom-sheet-enter flex flex-col`}>
+            <div className="px-4 py-3 flex justify-between items-center border-b border-gray-100">
+              <h3 className="text-lg font-semibold text-gray-800">{title}</h3>
+              <button onClick={onClose} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200">
+                <span className="material-symbols-rounded text-gray-600 text-xl block">close</span>
               </button>
             </div>
-            <div className="p-5 overflow-y-auto max-h-[75vh]">
+            <div className="p-4 overflow-y-auto">
               {children}
             </div>
           </div>
@@ -138,7 +131,7 @@
       );
     };
 
-    // ─── PROFILE SETUP (after Google sign-in) ───
+    // ─── PROFILE SETUP ───
     const ProfileSetup = ({ user, onComplete }) => {
       const [name, setName] = useState(user.displayName?.split(' ')[0] || "");
       const [loading, setLoading] = useState(false);
@@ -147,18 +140,21 @@
         if (!name.trim()) return;
         setLoading(true);
         try {
+          // FIX: Corrected Template Literal Syntax
           const randomCode = Math.floor(1000 + Math.random() * 9000);
-          const vynixId = `\( {name.replace(/\s/g, '').toLowerCase()}# \){randomCode}`;
+          const cleanName = name.replace(/\s/g, '').toLowerCase();
+          const vynixId = `${cleanName}#${randomCode}`;
 
           await db.ref(`users/${user.uid}`).set({
             name: name.trim(),
             vynixId,
             uid: user.uid,
             email: user.email,
-            photoURL: user.photoURL || null,
+            photoURL: user.photoURL || `https://ui-avatars.com/api/?name=${name}&background=random`,
             createdAt: firebase.database.ServerValue.TIMESTAMP
           });
 
+          // Create lookup for adding friends
           await db.ref(`vynix_lookup/${vynixId.replace('#', '_')}`).set(user.uid);
 
           onComplete();
@@ -170,68 +166,28 @@
       };
 
       return (
-        <div className="h-full flex flex-col bg-white">
-          <div className="flex-1 flex flex-col items-center justify-center p-8">
-            <div className="w-24 h-24 rounded-full overflow-hidden mb-6 shadow-lg">
-              <img 
-                src={user.photoURL || `https://ui-avatars.com/api/?name=${name}&background=3b82f6&color=fff`} 
-                alt="Profile" 
-                className="w-full h-full object-cover"
-              />
-            </div>
-            <h1 className="text-2xl font-bold mb-2">Welcome, {user.displayName?.split(' ')[0] || "there"}!</h1>
-            <p className="text-gray-500 text-center mb-8">Choose a display name to get your unique Vynix ID</p>
-
-            <div className="w-full max-w-xs space-y-5">
-              <div>
-                <label className="text-sm font-medium text-gray-700 block mb-1.5">Display Name</label>
-                <input 
-                  type="text" 
-                  value={name}
-                  onChange={e => setName(e.target.value)}
-                  placeholder="e.g. Katlego"
-                  className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
-                  autoFocus
-                />
-              </div>
-              <button 
-                onClick={handleCreateProfile}
-                disabled={loading || !name.trim()}
-                className="w-full bg-blue-600 text-white font-medium py-3.5 rounded-xl hover:bg-blue-700 disabled:opacity-60 transition-all flex items-center justify-center gap-2"
-              >
-                {loading ? (
-                  <>
-                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    <span>Creating...</span>
-                  </>
-                ) : "Continue"}
-              </button>
-            </div>
+        <div className="h-full flex flex-col bg-white p-8 items-center justify-center">
+          <div className="w-24 h-24 rounded-full bg-blue-100 flex items-center justify-center mb-6">
+            <span className="material-symbols-rounded text-4xl text-blue-600">person</span>
           </div>
-        </div>
-      );
-    };
-
-    // ─── AUTH SCREEN ───
-    const AuthScreen = ({ onGoogleSignIn }) => {
-      return (
-        <div className="h-full flex flex-col items-center justify-center bg-gradient-to-b from-blue-50 to-white p-8">
-          <div className="text-center mb-12">
-            <div className="w-20 h-20 bg-blue-600 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-xl">
-              <span className="material-symbols-rounded text-4xl text-white">chat_bubble</span>
-            </div>
-            <h1 className="text-4xl font-bold text-gray-900 mb-3">Vynix Chat</h1>
-            <p className="text-gray-600 max-w-xs mx-auto">Connect with friends using your unique Vynix ID</p>
-          </div>
-
+          <h1 className="text-2xl font-bold mb-2">Create Profile</h1>
+          <p className="text-gray-500 mb-8 text-center">Choose a display name for your friends to see.</p>
+          
+          <input 
+            type="text" 
+            value={name}
+            onChange={e => setName(e.target.value)}
+            placeholder="Your Name"
+            className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl mb-4 focus:ring-2 focus:ring-blue-500 outline-none transition"
+          />
+          
           <button 
-            onClick={onGoogleSignIn}
-            className="flex items-center justify-center gap-3 bg-white border border-gray-300 px-8 py-4 rounded-2xl shadow-md hover:shadow-lg transition-all w-full max-w-sm font-medium"
+            onClick={handleCreateProfile}
+            disabled={loading || !name.trim()}
+            className="w-full bg-blue-600 text-white font-semibold py-3.5 rounded-xl hover:bg-blue-700 transition flex justify-center"
           >
-            <img src="https://www.google.com/favicon.ico" alt="Google" className="w-6 h-6"/>
-            Sign in with Google
+            {loading ? "Setting up..." : "Start Chatting"}
           </button>
-          <p className="text-xs text-gray-500 mt-10">By signing in you agree to our Terms & Privacy</p>
         </div>
       );
     };
@@ -239,62 +195,64 @@
     // ─── MAIN APP ───
     const MainApp = ({ user, userData, profileComplete }) => {
       const [chats, setChats] = useState([]);
-      const [activeTab, setActiveTab] = useState(0);
-      const [isSearchOpen, setIsSearchOpen] = useState(false);
+      const [activeTab, setActiveTab] = useState(0); // 0=Chats, 1=Settings (Simplified)
+      const [sheetOpen, setSheetOpen] = useState(false); // Add Friend Sheet
+      const [profileSheetOpen, setProfileSheetOpen] = useState(false); // Edit Profile Sheet
+      
       const [searchQuery, setSearchQuery] = useState("");
-      const [sheetOpen, setSheetOpen] = useState(false);
       const [alert, setAlert] = useState({ open: false, msg: '', type: 'info' });
       const [addIdInput, setAddIdInput] = useState("");
       const [addLoading, setAddLoading] = useState(false);
+
+      // Edit Profile State
+      const [editName, setEditName] = useState(userData?.name || "");
+      const [editPhoto, setEditPhoto] = useState(userData?.photoURL || "");
+      const [saveLoading, setSaveLoading] = useState(false);
 
       const showAlert = (msg, type = 'info') => setAlert({ open: true, msg, type });
 
       useEffect(() => {
         if (!profileComplete) return;
-
         const contactsRef = db.ref(`users/${user.uid}/contacts`);
         contactsRef.on('value', snap => {
           const data = snap.val() || {};
-          setChats(Object.entries(data).map(([id, info]) => ({
-            id, ...info,
-            lastMessage: "Say hi!",
-            lastTime: "Now"
-          })));
+          setChats(Object.entries(data).map(([id, info]) => ({ id, ...info })));
         });
-
         return () => contactsRef.off();
       }, [user.uid, profileComplete]);
 
       const handleAddFriend = async () => {
         if (!addIdInput.trim()) return;
         setAddLoading(true);
+        // Replace # with _ for firebase key compatibility
         const key = addIdInput.trim().replace('#', '_');
 
         try {
           const snap = await db.ref(`vynix_lookup/${key}`).once('value');
-          if (!snap.exists()) throw new Error("Vynix ID not found");
+          if (!snap.exists()) throw new Error("ID not found. Check casing!");
 
           const friendUid = snap.val();
-          if (friendUid === user.uid) throw new Error("Can't add yourself");
-
-          if (chats.some(c => c.id === friendUid)) throw new Error("Already in contacts");
+          if (friendUid === user.uid) throw new Error("That's your own ID.");
+          if (chats.some(c => c.id === friendUid)) throw new Error("Already in contacts.");
 
           const friendSnap = await db.ref(`users/${friendUid}`).once('value');
           const friend = friendSnap.val();
 
-          await db.ref(`users/\( {user.uid}/contacts/ \){friendUid}`).set({
+          // Add to my contacts
+          await db.ref(`users/${user.uid}/contacts/${friendUid}`).set({
             name: friend.name,
             vynixId: friend.vynixId,
-            photoURL: friend.photoURL || null
+            photoURL: friend.photoURL
           });
 
-          await db.ref(`users/\( {friendUid}/contacts/ \){user.uid}`).set({
+          // Add me to their contacts (Auto-accept for demo simplicity)
+          await db.ref(`users/${friendUid}/contacts/${user.uid}`).set({
             name: userData.name,
             vynixId: userData.vynixId,
-            photoURL: user.photoURL || null
+            photoURL: userData.photoURL
           });
 
-          showAlert(`Added ${friend.name}!`, 'success');
+          showAlert(`Added ${friend.name}`, 'success');
           setSheetOpen(false);
           setAddIdInput("");
         } catch (err) {
@@ -304,194 +262,240 @@
         }
       };
 
-      const filteredChats = chats.filter(c => 
-        c.name.toLowerCase().includes(searchQuery.toLowerCase())
-      );
+      const handleSaveProfile = async () => {
+        setSaveLoading(true);
+        try {
+            await db.ref(`users/${user.uid}`).update({
+                name: editName,
+                photoURL: editPhoto
+            });
+            // Update local state is handled by parent re-render or we could force it, 
+            // but for now let's just close and show alert. Reload required to see changes everywhere perfectly in this simple structure.
+            showAlert("Profile updated!", 'success');
+            setProfileSheetOpen(false);
+            window.location.reload(); // Simple way to refresh all data refs
+        } catch(e) {
+            showAlert(e.message, 'error');
+        } finally {
+            setSaveLoading(false);
+        }
+      };
 
+      const filteredChats = chats.filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase()));
       const copyId = () => {
         navigator.clipboard.writeText(userData.vynixId);
-        showAlert("Vynix ID copied!", 'success');
+        showAlert("ID copied to clipboard", 'success');
+      };
+
+      // Generate a new random avatar
+      const randomizeAvatar = () => {
+        const seed = Math.floor(Math.random() * 10000);
+        setEditPhoto(`https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}`);
       };
 
       return (
         <div className="app-container">
           {/* HEADER */}
-          <div className="bg-white border-b border-gray-200 z-20 flex-shrink-0">
-            <div className="px-4 py-3.5 flex justify-between items-center">
-              {isSearchOpen ? (
-                <div className="flex-1 flex items-center gap-3">
-                  <span onClick={() => {setIsSearchOpen(false); setSearchQuery("");}} 
-                        className="material-symbols-rounded text-gray-600 cursor-pointer p-2 hover:bg-gray-100 rounded-full">
-                    arrow_back
-                  </span>
-                  <input 
-                    autoFocus
-                    value={searchQuery}
-                    onChange={e => setSearchQuery(e.target.value)}
-                    placeholder="Search friends..."
-                    className="flex-1 bg-gray-100 rounded-full px-5 py-2.5 outline-none text-gray-900 placeholder-gray-500"
-                  />
-                </div>
-              ) : (
-                <>
-                  <h1 className="text-2xl font-bold text-blue-600">Vynix</h1>
-                  <div className="flex gap-2">
-                    <button onClick={() => setIsSearchOpen(true)} className="p-2.5 hover:bg-gray-100 rounded-full">
-                      <span className="material-symbols-rounded text-gray-700">search</span>
-                    </button>
-                  </div>
-                </>
-              )}
+          <div className="bg-white z-20 flex-shrink-0 pt-safe">
+            <div className="px-4 py-3 flex justify-between items-center">
+               <h1 className="text-2xl font-bold text-blue-600 tracking-tight">Vynix</h1>
+               <div className="flex gap-4">
+                  <button className="p-2 hover:bg-gray-100 rounded-full transition">
+                     <span className="material-symbols-rounded text-gray-800">camera_alt</span>
+                  </button>
+                  <button onClick={() => setSheetOpen(true)} className="p-2 hover:bg-gray-100 rounded-full transition">
+                     <span className="material-symbols-rounded text-gray-800">add_circle</span>
+                  </button>
+               </div>
             </div>
 
-            {/* TABS */}
-            <div className="flex border-b border-gray-200">
-              {['Chats', 'Status', 'Settings'].map((tab, i) => (
+            {/* NAVIGATION TABS */}
+            <div className="flex">
+              {['Chats', 'Settings'].map((tab, i) => (
                 <button 
                   key={tab}
                   onClick={() => setActiveTab(i)}
-                  className={`flex-1 py-3 text-center font-medium transition-colors ${activeTab === i ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-600 hover:text-gray-800'}`}
+                  className={`flex-1 py-3 text-[15px] font-medium transition-all relative ${activeTab === i ? 'text-blue-600' : 'text-gray-500'}`}
                 >
                   {tab}
+                  {activeTab === i && <div className="absolute bottom-0 left-0 right-0 h-[3px] bg-blue-600 rounded-t-full mx-10"></div>}
                 </button>
               ))}
             </div>
           </div>
 
-          {/* CONTENT */}
-          <div className="flex-1 overflow-hidden relative">
-            <div className="tab-content h-full" style={{ transform: `translateX(-${activeTab * 33.33}%)` }}>
+          {/* MAIN CONTENT AREA */}
+          <div className="flex-1 overflow-hidden relative bg-gray-100">
+            <div className="tab-content h-full" style={{ transform: `translateX(-${activeTab * 50}%)`, width: '200%' }}>
               
-              {/* CHATS */}
-              <div className="tab-pane bg-gray-50">
+              {/* ─── TAB 1: CHATS ─── */}
+              <div className="tab-pane bg-white">
+                <div className="p-3 bg-white">
+                  <div className="bg-gray-100 rounded-xl flex items-center px-4 py-2">
+                     <span className="material-symbols-rounded text-gray-500 mr-2">search</span>
+                     <input 
+                        value={searchQuery}
+                        onChange={e => setSearchQuery(e.target.value)}
+                        placeholder="Search" 
+                        className="bg-transparent border-none outline-none w-full text-gray-800 placeholder-gray-500"
+                     />
+                  </div>
+                </div>
+
                 {filteredChats.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center h-full text-gray-500">
-                    <span className="material-symbols-rounded text-7xl mb-4 opacity-60">chat</span>
-                    <p className="text-lg font-medium">No chats yet</p>
-                    <p className="text-sm mt-2">Add friends to start chatting</p>
+                  <div className="flex flex-col items-center justify-center h-[60%] text-center px-8">
+                    <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mb-4">
+                        <span className="material-symbols-rounded text-gray-300 text-4xl">chat_bubble_outline</span>
+                    </div>
+                    <h3 className="text-gray-900 font-semibold text-lg">No chats yet</h3>
+                    <p className="text-gray-500 text-sm mt-1 mb-6">Connect with your friends by adding their Vynix ID.</p>
+                    <button onClick={() => setSheetOpen(true)} className="text-blue-600 font-medium text-sm hover:underline">
+                        Add a Friend
+                    </button>
                   </div>
                 ) : (
-                  filteredChats.map(chat => (
-                    <div key={chat.id} className="flex items-center px-4 py-3.5 bg-white border-b hover:bg-gray-50 active:bg-gray-100 cursor-pointer">
-                      <div className="relative">
-                        <img 
-                          src={chat.photoURL || `https://ui-avatars.com/api/?name=${chat.name}&background=random&color=fff`} 
-                          className="w-12 h-12 rounded-full object-cover"
-                          alt={chat.name}
-                        />
-                      </div>
-                      <div className="ml-4 flex-1 min-w-0">
-                        <div className="flex justify-between items-baseline">
-                          <h3 className="font-semibold text-gray-900 truncate">{chat.name}</h3>
-                          <span className="text-xs text-gray-500">{chat.lastTime}</span>
+                  <div className="pb-20">
+                    {filteredChats.map(chat => (
+                      <div key={chat.id} className="flex items-center px-4 py-3 hover:bg-gray-50 active:bg-gray-100 cursor-pointer transition">
+                        <img src={chat.photoURL || `https://ui-avatars.com/api/?name=${chat.name}`} className="w-12 h-12 rounded-full object-cover border border-gray-100" />
+                        <div className="ml-4 flex-1 border-b border-gray-100 pb-3 min-w-0">
+                          <div className="flex justify-between items-baseline mb-0.5">
+                            <h3 className="font-semibold text-gray-900 truncate text-[16px]">{chat.name}</h3>
+                            <span className="text-xs text-gray-400">Now</span>
+                          </div>
+                          <p className="text-sm text-gray-500 truncate">Hey! Let's chat on Vynix.</p>
                         </div>
-                        <p className="text-sm text-gray-600 truncate">{chat.lastMessage}</p>
                       </div>
-                    </div>
-                  ))
+                    ))}
+                  </div>
                 )}
               </div>
 
-              {/* STATUS (placeholder) */}
-              <div className="tab-pane flex items-center justify-center bg-white">
-                <div className="text-center text-gray-500">
-                  <span className="material-symbols-rounded text-7xl mb-4 opacity-60">donut_large</span>
-                  <p className="text-lg">Status updates</p>
-                  <p className="text-sm mt-2">Coming soon</p>
-                </div>
-              </div>
-
-              {/* SETTINGS */}
-              <div className="tab-pane bg-gray-50 p-6">
-                <div className="bg-white rounded-2xl shadow-sm p-6 mb-6">
-                  <div className="flex items-center gap-4 mb-6">
-                    <div className="w-20 h-20 rounded-full overflow-hidden shadow-md">
-                      <img 
-                        src={user.photoURL || `https://ui-avatars.com/api/?name=${userData.name}&background=3b82f6&color=fff`} 
-                        alt="Profile"
-                        className="w-full h-full object-cover"
-                      />
+              {/* ─── TAB 2: SETTINGS (WhatsApp Style) ─── */}
+              <div className="tab-pane bg-[#f0f2f5] overflow-y-auto pb-10">
+                
+                {/* Profile Card */}
+                <div onClick={() => setProfileSheetOpen(true)} className="bg-white flex items-center gap-4 px-4 py-4 mb-3 cursor-pointer hover:bg-gray-50 active:bg-gray-100 transition mt-2">
+                    <div className="w-16 h-16 rounded-full overflow-hidden border border-gray-100 relative">
+                        <img src={userData.photoURL} className="w-full h-full object-cover" />
                     </div>
-                    <div>
-                      <h2 className="text-xl font-bold">{userData.name}</h2>
-                      <div className="flex items-center gap-2 mt-1 bg-gray-100 px-3 py-1 rounded-full w-fit cursor-pointer hover:bg-gray-200"
-                           onClick={copyId}>
-                        <span className="text-sm font-mono text-gray-700">{userData.vynixId}</span>
-                        <span className="material-symbols-rounded text-gray-500 text-sm">content_copy</span>
-                      </div>
+                    <div className="flex-1">
+                        <h2 className="text-xl font-semibold text-gray-900">{userData.name}</h2>
+                        <p className="text-gray-500 text-sm truncate w-full">{userData.vynixId}</p>
                     </div>
-                  </div>
-
-                  <div className="space-y-4">
-                    <button className="w-full flex items-center gap-3 px-4 py-3.5 bg-gray-50 hover:bg-gray-100 rounded-xl transition">
-                      <span className="material-symbols-rounded text-gray-700">person</span>
-                      <span>Edit Profile</span>
-                    </button>
-                    <button className="w-full flex items-center gap-3 px-4 py-3.5 bg-gray-50 hover:bg-gray-100 rounded-xl transition">
-                      <span className="material-symbols-rounded text-gray-700">settings</span>
-                      <span>App Settings</span>
-                    </button>
-                    <button 
-                      onClick={() => auth.signOut()}
-                      className="w-full flex items-center gap-3 px-4 py-3.5 bg-red-50 text-red-700 hover:bg-red-100 rounded-xl transition mt-8"
-                    >
-                      <span className="material-symbols-rounded">logout</span>
-                      <span>Sign Out</span>
-                    </button>
-                  </div>
+                    <div className="p-2 rounded-full bg-gray-50">
+                        <span className="material-symbols-rounded text-blue-600">qr_code_2</span>
+                    </div>
                 </div>
+
+                {/* Settings Lists */}
+                <div className="bg-white border-y border-gray-100 mb-3">
+                    <SettingItem icon="key" color="text-blue-600" title="Account" subtitle="Security notifications, change number" />
+                    <SettingItem icon="lock" color="text-blue-600" title="Privacy" subtitle="Block contacts, disappearing messages" />
+                    <SettingItem icon="chat" color="text-green-600" title="Chats" subtitle="Theme, wallpapers, chat history" />
+                    <SettingItem icon="notifications" color="text-red-500" title="Notifications" subtitle="Message, group & call tones" />
+                </div>
+
+                <div className="bg-white border-y border-gray-100 mb-3">
+                    <SettingItem icon="help" color="text-gray-600" title="Help" subtitle="Help center, contact us, privacy policy" />
+                    <SettingItem icon="group" color="text-gray-600" title="Invite a friend" />
+                </div>
+
+                 <div className="px-4 py-4 text-center">
+                    <button onClick={() => auth.signOut()} className="text-red-500 font-medium text-sm py-2 px-6 bg-red-50 rounded-full hover:bg-red-100 transition">
+                        Log Out
+                    </button>
+                    <div className="mt-8 mb-4">
+                        <p className="text-xs text-gray-400">from</p>
+                        <p className="text-sm font-bold text-gray-800 tracking-widest">VYNIX META</p>
+                    </div>
+                 </div>
+
               </div>
             </div>
-
-            {/* FAB - only on Chats tab */}
-            {activeTab === 0 && (
-              <button 
-                onClick={() => setSheetOpen(true)}
-                className="fixed bottom-7 right-6 bg-blue-600 text-white w-14 h-14 rounded-full shadow-2xl flex items-center justify-center z-30 hover:bg-blue-700 active:scale-95 transition-all"
-              >
-                <span className="material-symbols-rounded text-3xl">person_add</span>
-              </button>
-            )}
           </div>
 
-          {/* Add Friend Bottom Sheet */}
-          <BottomSheet isOpen={sheetOpen} onClose={() => setSheetOpen(false)} title="Add Friend">
-            <p className="text-gray-600 mb-6">Enter your friend's Vynix ID (like name#1234)</p>
-            <div className="space-y-5">
-              <div className="relative">
-                <span className="absolute left-4 top-4 text-gray-500 font-bold">#</span>
-                <input
-                  className="w-full bg-gray-50 border border-gray-200 rounded-xl pl-10 py-3.5 px-4 focus:border-blue-500 outline-none"
-                  placeholder="username#0000"
-                  value={addIdInput}
+          {/* ─── ADD FRIEND SHEET ─── */}
+          <BottomSheet isOpen={sheetOpen} onClose={() => setSheetOpen(false)} title="New Chat">
+            <div className="pt-2">
+              <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 block">Friend's Vynix ID</label>
+              <div className="flex items-center bg-gray-100 rounded-xl px-4 py-3 mb-6 border-2 border-transparent focus-within:border-blue-600 transition">
+                <span className="text-gray-500 font-bold mr-2">#</span>
+                <input 
+                  value={addIdInput} 
                   onChange={e => setAddIdInput(e.target.value)}
+                  placeholder="username#1234"
+                  className="bg-transparent w-full outline-none text-lg font-medium text-gray-800"
                   autoFocus
                 />
               </div>
               <button 
                 onClick={handleAddFriend}
-                disabled={addLoading || !addIdInput.trim()}
-                className="w-full bg-blue-600 text-white font-medium py-3.5 rounded-xl hover:bg-blue-700 disabled:opacity-60 transition-all flex items-center justify-center gap-2"
+                disabled={addLoading}
+                className="w-full bg-blue-600 text-white font-bold py-4 rounded-xl hover:bg-blue-700 active:scale-[0.98] transition flex items-center justify-center"
               >
-                {addLoading ? (
-                  <>
-                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    <span>Adding...</span>
-                  </>
-                ) : "Add Friend"}
+                {addLoading ? "Adding..." : "Add Contact"}
               </button>
             </div>
           </BottomSheet>
 
-          <CustomAlert 
-            isOpen={alert.open} 
-            message={alert.msg} 
-            type={alert.type}
-            onClose={() => setAlert({ ...alert, open: false })}
-          />
+          {/* ─── EDIT PROFILE SHEET ─── */}
+          <BottomSheet isOpen={profileSheetOpen} onClose={() => setProfileSheetOpen(false)} title="Edit Profile">
+            <div className="flex flex-col items-center pt-2 pb-6">
+                <div className="relative group cursor-pointer" onClick={randomizeAvatar}>
+                    <img src={editPhoto} className="w-24 h-24 rounded-full object-cover border-4 border-white shadow-lg mb-4" />
+                    <div className="absolute inset-0 bg-black/30 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
+                        <span className="material-symbols-rounded text-white">refresh</span>
+                    </div>
+                </div>
+                <p className="text-xs text-blue-600 font-medium mb-6 cursor-pointer" onClick={randomizeAvatar}>Tap to generate avatar</p>
+
+                <div className="w-full space-y-4">
+                    <div>
+                        <label className="text-xs text-gray-500 font-semibold ml-1">Display Name</label>
+                        <input 
+                            value={editName}
+                            onChange={(e) => setEditName(e.target.value)}
+                            className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 mt-1 focus:ring-2 focus:ring-blue-500 outline-none"
+                        />
+                    </div>
+                    <div>
+                        <label className="text-xs text-gray-500 font-semibold ml-1">Vynix ID (Handle)</label>
+                         <div className="flex items-center gap-2 bg-gray-100 rounded-xl px-4 py-3 mt-1 opacity-70">
+                            <span className="text-gray-500 flex-1">{userData.vynixId}</span>
+                            <span className="material-symbols-rounded text-gray-400 text-sm cursor-pointer" onClick={copyId}>content_copy</span>
+                        </div>
+                        <p className="text-[10px] text-gray-400 mt-1 ml-1">Your unique ID cannot be changed.</p>
+                    </div>
+
+                    <button 
+                        onClick={handleSaveProfile}
+                        disabled={saveLoading}
+                        className="w-full mt-4 bg-blue-600 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-blue-200 hover:bg-blue-700 active:scale-[0.98] transition"
+                    >
+                        {saveLoading ? "Saving..." : "Save Changes"}
+                    </button>
+                </div>
+            </div>
+          </BottomSheet>
+
+          <CustomAlert isOpen={alert.open} message={alert.msg} type={alert.type} onClose={() => setAlert({ ...alert, open: false })} />
         </div>
       );
     };
+
+    // Helper Component for Settings List
+    const SettingItem = ({ icon, title, subtitle, color }) => (
+        <div className="flex items-center px-4 py-4 hover:bg-gray-50 active:bg-gray-100 cursor-pointer transition">
+            <div className="mr-4">
+                <span className={`material-symbols-rounded text-2xl ${color || 'text-gray-600'}`}>{icon}</span>
+            </div>
+            <div className="flex-1">
+                <h4 className="text-[16px] text-gray-900 font-normal">{title}</h4>
+                {subtitle && <p className="text-[13px] text-gray-500 leading-tight mt-0.5">{subtitle}</p>}
+            </div>
+        </div>
+    );
 
     // ─── ROOT APP ───
     const App = () => {
@@ -522,28 +526,28 @@
       }, []);
 
       const handleGoogleSignIn = async () => {
-        try {
-          await auth.signInWithPopup(googleProvider);
-        } catch (err) {
-          alert("Google sign-in failed: " + err.message);
-        }
+        try { await auth.signInWithPopup(googleProvider); } catch (err) { alert(err.message); }
       };
 
-      if (loading) {
+      if (loading) return <div className="h-screen flex items-center justify-center"><div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div></div>;
+
+      if (!authUser) {
         return (
-          <div className="h-screen flex items-center justify-center bg-gray-50">
-            <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-          </div>
+            <div className="h-full flex flex-col items-center justify-center bg-white p-8">
+                <div className="w-24 h-24 bg-blue-600 rounded-[2rem] flex items-center justify-center mb-8 shadow-blue-200 shadow-xl rotate-3">
+                    <span className="material-symbols-rounded text-5xl text-white">chat</span>
+                </div>
+                <h1 className="text-3xl font-bold text-gray-900 mb-2">Welcome to Vynix</h1>
+                <p className="text-gray-500 text-center max-w-xs mb-10">Simple, reliable messaging. Connect with your friends instantly.</p>
+                <button onClick={handleGoogleSignIn} className="flex items-center gap-3 bg-gray-900 text-white px-8 py-4 rounded-xl font-medium shadow-lg hover:bg-black transition w-full max-w-xs justify-center">
+                    <img src="https://www.google.com/favicon.ico" className="w-5 h-5 invert bg-white rounded-full p-0.5" />
+                    Sign in with Google
+                </button>
+            </div>
         );
       }
 
-      if (!authUser) {
-        return <AuthScreen onGoogleSignIn={handleGoogleSignIn} />;
-      }
-
-      if (needsProfile) {
-        return <ProfileSetup user={authUser} onComplete={() => setNeedsProfile(false)} />;
-      }
+      if (needsProfile) return <ProfileSetup user={authUser} onComplete={() => window.location.reload()} />;
 
       return <MainApp user={authUser} userData={userData} profileComplete={!!userData} />;
     };
