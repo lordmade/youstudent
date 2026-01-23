@@ -3,467 +3,368 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <title>Vynix Chat • Modern Messenger</title>
+  <title>Vynix Chat • Realtime</title>
 
   <script src="https://cdn.tailwindcss.com"></script>
-
-  <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
   <link href="https://fonts.googleapis.com/icon?family=Material+Symbols+Rounded" rel="stylesheet"/>
 
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 
   <style>
-    :root {
-      --vynix-accent: #ffffff;
-      --bg-light: #f0f2f5;
-      --bg-dark: #111b21;
-      --text-light: #111b21;
-      --text-dark: #e9edef;
-    }
-    body {
-      font-family: 'Inter', system-ui, sans-serif;
-      background: var(--bg-light);
-      min-height: 100vh;
-      margin: 0;
-    }
-    .dark body {
-      background: var(--bg-dark);
-      color: var(--text-dark);
-    }
-    * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color: transparent; }
-
-    .app-container {
-      width: 100vw;
-      height: 100vh;
-      background: inherit;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-    }
+    :root { --bg-dark: #111b21; --text-dark: #e9edef; }
+    body { font-family: 'Inter', sans-serif; background: #000; color: var(--text-dark); margin:0; }
+    .app-container { width: 100vw; height: 100vh; background: var(--bg-dark); display: flex; flex-direction: column; overflow: hidden; }
     @media (min-width: 768px) {
-      .app-container {
-        width: 420px;
-        height: 900px;
-        margin: 20px auto;
-        border-radius: 36px;
-        border: 12px solid #000;
-        box-shadow: 0 30px 80px rgba(0,0,0,0.35);
-        overflow: hidden;
-      }
+      .app-container { width: 420px; height: 900px; margin: 20px auto; border-radius: 36px; border: 12px solid #000; box-shadow: 0 30px 80px rgba(0,0,0,0.5); }
     }
-
     .scrollbar-hide::-webkit-scrollbar { display: none; }
-    .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
-
-    .shimmer-bg {
-      background: linear-gradient(90deg, #e0e0e0 25%, #d0d0d0 50%, #e0e0e0 75%);
-      background-size: 200% 100%;
-      animation: shimmer 1.5s infinite linear;
-    }
-    .dark .shimmer-bg {
-      background: linear-gradient(90deg, #2a2a2a 25%, #222 50%, #2a2a2a 75%);
-    }
-    @keyframes shimmer {
-      0%   { background-position: 200% 0; }
-      100% { background-position: -200% 0; }
-    }
-
-    .tab-content-wrapper {
-      display: flex;
-      width: 400%;
-      height: 100%;
-      transition: transform 0.35s cubic-bezier(0.15, 0.8, 0.3, 1);
-      will-change: transform;
-    }
-    .tab-panel {
-      width: 25%;
-      height: 100%;
-      flex-shrink: 0;
-    }
-
-    /* Modal animation */
-    .modal-enter {
-      animation: modalFadeIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    }
-    @keyframes modalFadeIn {
-      from { opacity: 0; transform: scale(0.95); }
-      to   { opacity: 1; transform: scale(1); }
-    }
+    .modal-enter { animation: modalFadeIn 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+    @keyframes modalFadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
   </style>
 </head>
-<body class="dark">
+<body>
 
   <div id="root"></div>
 
   <script type="text/babel">
     const { useState, useEffect, useRef } = React;
 
-    // ─── Reusable Modal ───
-    const Modal = ({ isOpen, onClose, title, children, showConfirm = false, onConfirm }) => {
-      if (!isOpen) return null;
-
-      return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm modal-enter">
-          <div className="bg-white dark:bg-[#1f2c34] rounded-2xl shadow-2xl max-w-sm w-full mx-4 overflow-hidden transform transition-all">
-            {title && (
-              <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
-                <h3 className="text-lg font-semibold text-black dark:text-white">{title}</h3>
-                <button onClick={onClose} className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
-                  <span className="material-symbols-rounded">close</span>
-                </button>
-              </div>
-            )}
-            <div className="p-6">{children}</div>
-            <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3">
-              <button
-                onClick={onClose}
-                className="px-5 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700"
-              >
-                Cancel
-              </button>
-              {showConfirm && (
-                <button
-                  onClick={() => { onConfirm?.(); onClose(); }}
-                  className="px-5 py-2.5 text-sm font-medium text-white bg-black rounded-lg hover:bg-gray-800"
-                >
-                  Confirm
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      );
-    };
-
-    // ─── Kebab Menu Dropdown ───
-    const KebabMenu = () => {
-      const [open, setOpen] = useState(false);
-      const ref = useRef(null);
-
-      useEffect(() => {
-        const handleClickOutside = (e) => {
-          if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    // ─── FIREBASE CONFIGURATION ───
+    // TODO: Replace with your actual Firebase config
+    const firebaseConfig = {
+            apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
+            authDomain: "fire-b-a8878.firebaseapp.com",
+            databaseURL: "https://fire-b-a8878.firebaseio.com",
+            projectId: "fire-b-a8878",
+            storageBucket: "fire-b-a8878.firebasestorage.app",
+            messagingSenderId: "658673187627",
+            appId: "1:658673187627:web:6e4c29af661785f0afa36e"
         };
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
-      }, []);
 
-      const options = [
-        { label: "New group", icon: "group_add" },
-        { label: "New broadcast", icon: "campaign" },
-        { label: "Linked devices", icon: "phonelink" },
-        { label: "Settings", icon: "settings" },
-      ];
+    // Initialize Firebase
+    if (!firebase.apps.length) {
+      firebase.initializeApp(firebaseConfig);
+    }
+    const auth = firebase.auth();
+    const db = firebase.database();
 
+    // ─── HELPER COMPONENTS ───
+    
+    const Modal = ({ isOpen, onClose, title, children }) => {
+      if (!isOpen) return null;
       return (
-        <div className="relative" ref={ref}>
-          <span
-            className="material-symbols-rounded cursor-pointer text-black dark:text-white"
-            onClick={() => setOpen(!open)}
-          >
-            more_vert
-          </span>
-          {open && (
-            <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-[#1f2c34] rounded-xl shadow-xl py-2 z-30 border border-gray-200 dark:border-gray-700">
-              {options.map((opt, i) => (
-                <button
-                  key={i}
-                  className="w-full px-5 py-3 text-left text-sm text-black dark:text-white hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center gap-4"
-                  onClick={() => {
-                    setOpen(false);
-                    if (opt.label === "Settings") alert("Opening settings modal...");
-                  }}
-                >
-                  <span className="material-symbols-rounded text-gray-600 dark:text-gray-400">{opt.icon}</span>
-                  {opt.label}
-                </button>
-              ))}
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm modal-enter p-4">
+          <div className="bg-[#1f2c34] rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden border border-gray-700">
+            <div className="px-6 py-4 border-b border-gray-700 flex justify-between items-center bg-[#202c33]">
+              <h3 className="text-lg font-semibold text-white">{title}</h3>
+              <button onClick={onClose} className="text-gray-400 hover:text-white"><span className="material-symbols-rounded">close</span></button>
             </div>
-          )}
+            <div className="p-6">{children}</div>
+          </div>
         </div>
       );
     };
 
-    // ─── Skeleton & ChatItem ───
-    const SkeletonChat = () => (
-      <div className="flex items-center px-4 py-3 bg-white dark:bg-[#1f2c34] border-b border-gray-200 dark:border-gray-800">
-        <div className="w-14 h-14 rounded-full shimmer-bg flex-shrink-0"></div>
-        <div className="ml-4 flex-1 space-y-2">
-          <div className="flex justify-between">
-            <div className="h-5 w-40 shimmer-bg rounded"></div>
-            <div className="h-4 w-12 shimmer-bg rounded"></div>
-          </div>
-          <div className="h-4 w-5/6 shimmer-bg rounded"></div>
-        </div>
-      </div>
-    );
-
-    const ChatItem = ({ chat }) => (
-      <div className="flex items-center px-4 py-3 bg-white dark:bg-[#1f2c34] border-b border-gray-200 dark:border-gray-800 active:bg-gray-100 dark:active:bg-gray-800">
+    const ChatItem = ({ chat, onClick }) => (
+      <div onClick={onClick} className="flex items-center px-4 py-3 bg-[#111b21] border-b border-gray-800 active:bg-[#202c33] cursor-pointer transition-colors">
         <div className="relative flex-shrink-0">
-          <img
-            src={`https://ui-avatars.com/api/?name=${encodeURIComponent(chat.name)}&background=000000&color=fff&size=128`}
-            className="w-14 h-14 rounded-full object-cover"
-            alt={chat.name}
-          />
-          {chat.online && <div className="absolute bottom-0 right-0 w-4 h-4 bg-black border-2 border-white dark:border-[#1f2c34] rounded-full"></div>}
+          <img src={`https://ui-avatars.com/api/?name=${encodeURIComponent(chat.name)}&background=random&color=fff&size=128`} className="w-12 h-12 rounded-full object-cover" />
         </div>
         <div className="ml-4 flex-1 min-w-0">
           <div className="flex justify-between items-baseline">
-            <h3 className={`text-base font-medium truncate ${chat.unread ? 'text-black dark:text-white' : 'text-gray-900 dark:text-gray-200'}`}>
-              {chat.name}
-            </h3>
-            <span className={`text-xs ${chat.unread ? 'text-black font-medium' : 'text-gray-500 dark:text-gray-400'}`}>
-              {chat.time}
-            </span>
+            <h3 className="text-base font-medium truncate text-white">{chat.name}</h3>
+            <span className="text-xs text-gray-500">{chat.lastTime || ''}</span>
           </div>
-          <p className={`text-sm truncate ${chat.unread ? 'text-black dark:text-white font-medium' : 'text-gray-600 dark:text-gray-400'}`}>
-            {chat.muted ? <span className="mr-1">🔇</span> : null}{chat.message}
-          </p>
+          <p className="text-sm truncate text-gray-400 mt-0.5">{chat.lastMessage || 'Start a conversation'}</p>
         </div>
-        {chat.unread > 0 && (
-          <div className="ml-2 bg-black text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center flex-shrink-0">
-            {chat.unread}
-          </div>
-        )}
       </div>
     );
 
-    // ─── Improved FAB with Speed Dial ───
-    const FabMenu = () => {
-      const [open, setOpen] = useState(false);
+    // ─── AUTH SCREEN ───
+    const AuthScreen = ({ onLogin }) => {
+      const [name, setName] = useState("");
+      const [loading, setLoading] = useState(false);
 
-      // You can make these dynamic later (e.g. from state / backend)
-      const hasNewFriends = true; // example
-      const newFriendsCount = 2;
+      const handleLogin = async (e) => {
+        e.preventDefault();
+        if (!name.trim()) return;
+        setLoading(true);
 
-      const actions = [
-        {
-          label: "New Chat",
-          icon: "chat",
-          color: "bg-black",
-          action: () => alert("Open contact list or start new chat")
-        },
-        {
-          label: "Add by Vynix ID",
-          icon: "person_add",
-          color: "bg-indigo-600",
-          action: () => alert("Open modal: Enter Vynix ID to add friend")
-        },
-        {
-          label: "New Group",
-          icon: "group_add",
-          color: "bg-teal-600",
-          action: () => alert("Open group creation flow")
-        },
-        ...(hasNewFriends ? [{
-          label: "New Friends",
-          icon: "group",
-          color: "bg-amber-600",
-          badge: newFriendsCount,
-          action: () => alert("Show list of recently added friends")
-        }] : [])
-      ];
+        try {
+          // Anonymous sign in for demo simplicity
+          const userCredential = await auth.signInAnonymously();
+          const uid = userCredential.user.uid;
+          
+          // Generate unique Vynix ID
+          const randomCode = Math.floor(1000 + Math.random() * 9000);
+          const vynixId = `${name.replace(/\s/g, '').toLowerCase()}#${randomCode}`;
+
+          // Save user profile
+          await db.ref(`users/${uid}`).update({
+            name: name,
+            vynixId: vynixId,
+            uid: uid,
+            createdAt: firebase.database.ServerValue.TIMESTAMP
+          });
+          
+          // Map Vynix ID for searching
+          await db.ref(`vynix_lookup/${vynixId.replace('#', '_')}`).set(uid);
+
+        } catch (error) {
+          console.error("Login failed", error);
+          alert(error.message);
+        } finally {
+          setLoading(false);
+        }
+      };
 
       return (
-        <div className="fixed bottom-6 right-6 z-30 flex flex-col items-end gap-5">
-          {/* Backdrop */}
-          {open && (
-            <div
-              className="fixed inset-0 bg-black/30 z-20"
-              onClick={() => setOpen(false)}
+        <div className="h-full flex flex-col items-center justify-center p-6 text-center bg-[#111b21]">
+          <div className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center mb-6 shadow-lg shadow-green-500/20">
+            <span className="material-symbols-rounded text-4xl text-black">chat</span>
+          </div>
+          <h1 className="text-3xl font-bold text-white mb-2">Welcome to Vynix</h1>
+          <p className="text-gray-400 mb-8">Enter your name to generate your unique Vynix ID.</p>
+          
+          <form onSubmit={handleLogin} className="w-full max-w-xs space-y-4">
+            <input 
+              type="text" 
+              placeholder="Your Name" 
+              className="w-full bg-[#202c33] text-white px-4 py-3 rounded-xl border border-gray-700 focus:border-green-500 focus:outline-none transition-colors"
+              value={name}
+              onChange={e => setName(e.target.value)}
             />
-          )}
-
-          {/* Action buttons appear upward */}
-          {open && actions.map((act, index) => (
-            <div
-              key={act.label}
-              className="flex items-center gap-3 transition-all duration-200"
-              style={{
-                transitionDelay: `${(actions.length - 1 - index) * 60}ms`,
-                transform: open ? 'translateY(0) scale(1)' : 'translateY(60px) scale(0.8)',
-                opacity: open ? 1 : 0
-              }}
-            >
-              <div className={`text-sm font-medium text-white px-4 py-2 rounded-full shadow-lg whitespace-nowrap ${act.color}`}>
-                {act.label}
-                {act.badge > 0 && (
-                  <span className="ml-2 bg-white text-black text-xs px-2 py-0.5 rounded-full font-bold">
-                    {act.badge}
-                  </span>
-                )}
-              </div>
-              <button
-                onClick={() => {
-                  act.action();
-                  setOpen(false);
-                }}
-                className={`w-12 h-12 rounded-full flex items-center justify-center shadow-xl text-white ${act.color} active:scale-90 transition-transform`}
-              >
-                <span className="material-symbols-rounded text-2xl">{act.icon}</span>
-              </button>
-            </div>
-          ))}
-
-          {/* Main FAB */}
-          <button
-            onClick={() => setOpen(!open)}
-            className={`w-14 h-14 rounded-full flex items-center justify-center shadow-2xl text-white transition-all duration-300 z-30 ${
-              open ? 'bg-red-600 rotate-45 scale-95' : 'bg-black hover:bg-gray-800'
-            } active:scale-90`}
-          >
-            {open ? (
-              <span className="material-symbols-rounded text-3xl">close</span>
-            ) : (
-              <>
-                <span className="material-symbols-rounded text-3xl">chat</span>
-                {hasNewFriends && (
-                  <div className="absolute -top-1 -right-1 w-5 h-5 bg-green-500 rounded-full border-2 border-white dark:border-[#111b21] flex items-center justify-center text-xs text-white font-bold">
-                    {newFriendsCount}
-                  </div>
-                )}
-              </>
-            )}
-          </button>
+            <button disabled={loading} className="w-full bg-green-500 text-black font-bold py-3 rounded-xl hover:bg-green-400 transition-all active:scale-95 disabled:opacity-50">
+              {loading ? "Creating Account..." : "Get Started"}
+            </button>
+          </form>
         </div>
       );
     };
 
-    const App = () => {
+    // ─── MAIN APP ───
+    const MainApp = ({ user }) => {
       const [chats, setChats] = useState([]);
-      const [loading, setLoading] = useState(true);
-      const [activeTabIndex, setActiveTabIndex] = useState(0);
-      const [searchOpen, setSearchOpen] = useState(false);
-      const [searchQuery, setSearchQuery] = useState("");
-      const [modalOpen, setModalOpen] = useState(false);
-      const [modalType, setModalType] = useState("");
+      const [userData, setUserData] = useState(null);
+      const [modalState, setModalState] = useState({ open: false, type: '' });
+      const [addIdInput, setAddIdInput] = useState("");
+      const [addLoading, setAddLoading] = useState(false);
+      const [activeTab, setActiveTab] = useState(0);
 
-      const tabs = ['Chats', 'Status', 'Communities', 'Calls'];
-      const touchStartX = useRef(0);
-      const touchEndX = useRef(0);
-      const wrapperRef = useRef(null);
-
+      // Fetch User Data & Chats
       useEffect(() => {
-        setTimeout(() => {
-          setChats([
-            { id:1, name:"Family Group", message:"Dad: Dinner at 8?", time:"now", unread:3, online:false, muted:false },
-            { id:2, name:"Bestie ❤️", message:"Check this meme 😂", time:"10:22", unread:1, online:true, muted:false },
-          ]);
-          setLoading(false);
-        }, 1600);
-      }, []);
+        const userRef = db.ref(`users/${user.uid}`);
+        userRef.on('value', (snapshot) => {
+          setUserData(snapshot.val());
+        });
 
-      useEffect(() => {
-        if (wrapperRef.current) {
-          wrapperRef.current.style.transform = `translateX(-${activeTabIndex * 25}%)`;
-        }
-      }, [activeTabIndex]);
+        // Listen for chats (Contacts list for now)
+        const contactsRef = db.ref(`users/${user.uid}/contacts`);
+        contactsRef.on('value', async (snapshot) => {
+          const contacts = snapshot.val() || {};
+          const loadedChats = [];
+          
+          for (let [uid, info] of Object.entries(contacts)) {
+            loadedChats.push({
+              id: uid,
+              ...info,
+              lastMessage: "Tap to chat", 
+              lastTime: "" 
+            });
+          }
+          setChats(loadedChats);
+        });
 
-      const handleTouchStart = (e) => touchStartX.current = e.touches[0].clientX;
-      const handleTouchEnd = (e) => {
-        touchEndX.current = e.changedTouches[0].clientX;
-        const diff = touchStartX.current - touchEndX.current;
-        if (Math.abs(diff) > 80) {
-          if (diff > 0 && activeTabIndex < tabs.length - 1) setActiveTabIndex(p => p + 1);
-          else if (diff < 0 && activeTabIndex > 0) setActiveTabIndex(p => p - 1);
+        return () => {
+          userRef.off();
+          contactsRef.off();
+        };
+      }, [user]);
+
+      // Add Friend Logic
+      const handleAddFriend = async () => {
+        if (!addIdInput.trim()) return;
+        setAddLoading(true);
+        const searchKey = addIdInput.trim().replace('#', '_');
+
+        try {
+          const snapshot = await db.ref(`vynix_lookup/${searchKey}`).get();
+          if (snapshot.exists()) {
+            const friendUid = snapshot.val();
+            if (friendUid === user.uid) throw new Error("You cannot add yourself.");
+
+            // Get Friend Info
+            const friendInfoSnap = await db.ref(`users/${friendUid}`).get();
+            const friendInfo = friendInfoSnap.val();
+
+            // Add to My Contacts
+            await db.ref(`users/${user.uid}/contacts/${friendUid}`).set({
+              name: friendInfo.name,
+              vynixId: friendInfo.vynixId
+            });
+
+            // Add Me to Their Contacts (Optional, auto-friend)
+            await db.ref(`users/${friendUid}/contacts/${user.uid}`).set({
+              name: userData.name,
+              vynixId: userData.vynixId
+            });
+
+            alert(`Added ${friendInfo.name}!`);
+            setModalState({ open: false, type: '' });
+            setAddIdInput("");
+          } else {
+            alert("User not found. Check the Vynix ID.");
+          }
+        } catch (err) {
+          alert(err.message);
         }
+        setAddLoading(false);
       };
 
-      const openModal = (type) => {
-        setModalType(type);
-        setModalOpen(true);
+      const copyId = () => {
+        if (userData) {
+          navigator.clipboard.writeText(userData.vynixId);
+          alert("ID Copied: " + userData.vynixId);
+        }
       };
 
       return (
         <div className="app-container relative">
+          
           {/* Header */}
-          <div className="fixed top-0 left-0 right-0 z-20 bg-white dark:bg-gray-900 shadow-sm transition-all duration-300">
-            {searchOpen ? (
-              <div className="flex items-center px-4 pt-10 pb-3 gap-3">
-                <span
-                  className="material-symbols-rounded cursor-pointer text-black dark:text-white"
-                  onClick={() => { setSearchOpen(false); setSearchQuery(""); }}
+          <div className="px-4 pt-8 pb-3 bg-[#202c33] shadow-md z-10">
+            <div className="flex justify-between items-center mb-4">
+              <h1 className="text-xl font-bold text-gray-100">Vynix Chat</h1>
+              <div className="flex gap-4">
+                <span className="material-symbols-rounded text-gray-400 cursor-pointer">search</span>
+                <span className="material-symbols-rounded text-gray-400 cursor-pointer" onClick={() => auth.signOut()}>logout</span>
+              </div>
+            </div>
+            
+            {/* User ID Display */}
+            <div className="bg-[#111b21] rounded-lg p-2 flex justify-between items-center border border-gray-700/50 mb-2">
+              <div className="flex flex-col">
+                <span className="text-[10px] uppercase tracking-wider text-gray-500 font-bold">My Vynix ID</span>
+                <span className="text-sm font-mono text-green-400">{userData ? userData.vynixId : 'Loading...'}</span>
+              </div>
+              <button onClick={copyId} className="p-2 hover:bg-white/5 rounded-full">
+                <span className="material-symbols-rounded text-sm text-gray-400">content_copy</span>
+              </button>
+            </div>
+
+            <div className="flex justify-between text-gray-400 text-sm font-medium pt-2">
+              {['Chats', 'Status', 'Calls'].map((t, i) => (
+                <button 
+                  key={t} 
+                  onClick={() => setActiveTab(i)}
+                  className={`pb-2 px-4 relative ${activeTab === i ? 'text-green-400 after:absolute after:bottom-0 after:left-0 after:w-full after:h-0.5 after:bg-green-400' : ''}`}
                 >
-                  arrow_back
-                </span>
-                <input
-                  autoFocus
-                  value={searchQuery}
-                  onChange={e => setSearchQuery(e.target.value)}
-                  placeholder="Search chats..."
-                  className="flex-1 bg-transparent outline-none text-black dark:text-white placeholder-gray-500 text-lg"
-                />
-              </div>
-            ) : (
-              <header className="px-4 pt-10 pb-3 flex items-center justify-between text-black dark:text-white">
-                <h1 className="text-xl font-semibold">Vynix Chat</h1>
-                <div className="flex gap-5 items-center">
-                  <span
-                    className="material-symbols-rounded cursor-pointer"
-                    onClick={() => setSearchOpen(true)}
-                  >
-                    search
-                  </span>
-                  <KebabMenu />
-                </div>
-              </header>
-            )}
-
-            {!searchOpen && (
-              <div className="flex justify-around text-black dark:text-white/90 text-sm font-medium py-3 border-b border-gray-200 dark:border-gray-800">
-                {tabs.map((tab, i) => (
-                  <button
-                    key={tab}
-                    onClick={() => setActiveTabIndex(i)}
-                    className={`pb-1 px-4 relative ${activeTabIndex === i ? 'font-semibold after:absolute after:bottom-0 after:left-1/2 after:-translate-x-1/2 after:w-8 after:h-0.5 after:bg-black dark:after:bg-white after:rounded-full' : ''}`}
-                  >
-                    {tab}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Content */}
-          <div
-            className="flex-1 overflow-hidden bg-[#f0f2f5] dark:bg-[#111b21] pt-[140px]"
-            onTouchStart={handleTouchStart}
-            onTouchEnd={handleTouchEnd}
-          >
-            <div ref={wrapperRef} className="tab-content-wrapper">
-              <div className="tab-panel overflow-y-auto scrollbar-hide">
-                {loading ? [...Array(8)].map((_, i) => <SkeletonChat key={i} />) : chats.map(c => <ChatItem key={c.id} chat={c} />)}
-              </div>
-              <div className="tab-panel overflow-y-auto scrollbar-hide flex items-center justify-center text-gray-500 dark:text-gray-400 text-lg">
-                Status Coming Soon...
-              </div>
-              <div className="tab-panel overflow-y-auto scrollbar-hide flex items-center justify-center text-gray-500 dark:text-gray-400 text-lg">
-                Communities Coming Soon...
-              </div>
-              <div className="tab-panel overflow-y-auto scrollbar-hide flex items-center justify-center text-gray-500 dark:text-gray-400 text-lg">
-                Calls Coming Soon...
-              </div>
+                  {t}
+                </button>
+              ))}
             </div>
           </div>
 
-          {/* Improved FAB */}
-          <FabMenu />
+          {/* List Area */}
+          <div className="flex-1 overflow-y-auto scrollbar-hide bg-[#111b21]">
+            {chats.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-64 text-gray-500 opacity-60">
+                <span className="material-symbols-rounded text-5xl mb-2">group_off</span>
+                <p>No friends yet</p>
+              </div>
+            ) : (
+              chats.map(chat => <ChatItem key={chat.id} chat={chat} />)
+            )}
+          </div>
 
-          {/* Example Modals */}
-          <Modal
-            isOpen={modalOpen && modalType === "settings"}
-            onClose={() => setModalOpen(false)}
-            title="Settings"
+          {/* Floating Action Button */}
+          <button 
+            onClick={() => setModalState({ open: true, type: 'fab_menu' })}
+            className="fixed bottom-6 right-6 bg-green-500 w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg shadow-green-900/50 text-black z-20 active:scale-95 transition-transform"
           >
-            <p className="text-gray-600 dark:text-gray-300">Manage your account, privacy, notifications, and more.</p>
+            <span className="material-symbols-rounded text-2xl">chat</span>
+          </button>
+
+          {/* FAB Modal (Contacts List) */}
+          <Modal 
+            isOpen={modalState.open && modalState.type === 'fab_menu'} 
+            onClose={() => setModalState({ open: false, type: '' })}
+            title="Start Chat"
+          >
+            <button 
+              onClick={() => setModalState({ open: true, type: 'add_friend' })}
+              className="w-full flex items-center gap-4 p-3 mb-4 rounded-xl bg-[#111b21] border border-gray-700 hover:bg-[#2a3942] transition-colors"
+            >
+              <div className="w-10 h-10 rounded-full bg-green-500 flex items-center justify-center text-black">
+                <span className="material-symbols-rounded">person_add</span>
+              </div>
+              <span className="font-medium text-white">Add New Contact</span>
+            </button>
+            
+            <div className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Your Contacts</div>
+            <div className="max-h-[300px] overflow-y-auto space-y-2">
+              {chats.map(chat => (
+                 <div key={chat.id} className="flex items-center gap-3 p-2 hover:bg-[#2a3942] rounded-lg cursor-pointer">
+                   <img src={`https://ui-avatars.com/api/?name=${chat.name}&background=random`} className="w-10 h-10 rounded-full"/>
+                   <div>
+                     <div className="text-white text-sm font-medium">{chat.name}</div>
+                     <div className="text-gray-500 text-xs font-mono">{chat.vynixId}</div>
+                   </div>
+                 </div>
+              ))}
+            </div>
           </Modal>
+
+          {/* Add Friend Modal */}
+          <Modal
+            isOpen={modalState.open && modalState.type === 'add_friend'}
+            onClose={() => setModalState({ open: true, type: 'fab_menu' })} // Go back to list
+            title="Add Contact"
+          >
+             <p className="text-sm text-gray-400 mb-4">Enter their unique Vynix ID (e.g. alex#1234) to add them.</p>
+             <div className="space-y-4">
+               <input
+                 className="w-full bg-[#111b21] border border-gray-700 text-white rounded-lg px-4 py-3 outline-none focus:border-green-500 font-mono"
+                 placeholder="username#0000"
+                 value={addIdInput}
+                 onChange={(e) => setAddIdInput(e.target.value)}
+               />
+               <button 
+                onClick={handleAddFriend}
+                disabled={addLoading}
+                className="w-full bg-green-500 text-black font-bold py-3 rounded-lg hover:bg-green-400 disabled:opacity-50"
+               >
+                 {addLoading ? 'Searching...' : 'Add Friend'}
+               </button>
+             </div>
+          </Modal>
+
         </div>
       );
+    };
+
+    // ─── ROOT COMPONENT ───
+    const App = () => {
+      const [user, setUser] = useState(null);
+      const [loading, setLoading] = useState(true);
+
+      useEffect(() => {
+        const unsubscribe = auth.onAuthStateChanged((u) => {
+          setUser(u);
+          setLoading(false);
+        });
+        return unsubscribe;
+      }, []);
+
+      if (loading) return <div className="h-screen w-screen bg-[#111b21] flex items-center justify-center text-green-500">Loading Vynix...</div>;
+
+      return user ? <MainApp user={user} /> : <AuthScreen />;
     };
 
     ReactDOM.createRoot(document.getElementById('root')).render(<App />);
