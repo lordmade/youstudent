@@ -632,6 +632,31 @@
     font-weight: 700;
     letter-spacing: 1px;
 }
+
+        .avatar-container-header {
+    position: relative;
+    cursor: pointer;
+}
+
+.avatar-container-header::after {
+    content: "edit";
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    background: rgba(0,0,0,0.6);
+    color: white;
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 10px;
+    opacity: 0;
+    transition: opacity 0.2s;
+    pointer-events: none;
+}
+
+.avatar-container-header:hover::after,
+.avatar-container-header:active::after {
+    opacity: 1;
+}
     </style>
 </head>
 <body>
@@ -647,13 +672,15 @@
     <div id="toast"></div>
     <div id="mainView">
         <header>
-            <div style="display:flex;align-items:center;">
-                <img id="myAvatar" class="avatar shimmer" src="" style="width:34px;height:34px;margin-right:12px;border:none;" onclick="openProfileSheet()">
-                <div>
-                    <div class="app-title">Vynix Chat</div>
-                    <div id="myVynixId" style="font-size:12px;color:var(--text-muted);margin-top:2px;">Loading...</div>
-                </div>
-            </div>
+           <div style="display:flex;align-items:center;">
+    <img id="myAvatar" class="avatar shimmer" src="" 
+         style="width:34px;height:34px;margin-right:12px;border:none;" 
+         onclick="openProfileSheet()">
+    <div>
+        <div class="app-title">Vynix Chat</div>
+        <div id="myVynixId" style="font-size:12px;color:var(--text-muted);margin-top:2px;">Loading...</div>
+    </div>
+</div>
             <div class="header-actions">
                 <span class="material-symbols-rounded" onclick="confirmClearAllChats()">delete_sweep</span>
             </div>
@@ -2289,32 +2316,63 @@ async function loadMessages() {
             return new Date(ts).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
         }
 
-        function openProfileSheet() {
-  // fill current values
-  document.getElementById('profileName').value   = myProfile.name || '';
-  document.getElementById('profilePhoto').value  = myProfile.photo || '';
-  document.getElementById('myProfileSheet').classList.add('active');
-  document.getElementById('overlay').classList.add('active');
+       function openProfileSheet() {
+    console.log("Opening profile sheet"); // ← debug helper
+
+    // Make sure we have the latest data (in case listener lagged)
+    db.ref(`users/${currentUser.uid}/profile`).once('value').then(snap => {
+        const data = snap.val() || {};
+        myProfile.name = data.name || "You";
+        myProfile.photo = data.photo || generateLetterAvatar(myProfile.name);
+
+        // Fill form
+        document.getElementById('profileName').value   = myProfile.name;
+        document.getElementById('profilePhoto').value  = data.photo || '';  // important: show current URL or empty
+
+        // Show UI
+        document.getElementById('myProfileSheet').classList.add('active');
+        document.getElementById('overlay').classList.add('active');
+    });
+}
+
+async function saveMyProfile() {
+    const name  = document.getElementById('profileName').value.trim();
+    const photo = document.getElementById('profilePhoto').value.trim();
+
+    if (!name) {
+        toast('Name cannot be empty');
+        return;
+    }
+
+    try {
+        const updates = { name };
+        if (photo) {
+            updates.photo = photo;
+        } else {
+            // Optional: if you want to allow clearing photo → set to null or delete field
+            // updates.photo = null;
+        }
+
+        await db.ref(`users/${currentUser.uid}/profile`).update(updates);
+
+        // Optimistic UI update
+        myProfile.name = name;
+        myProfile.photo = photo || generateLetterAvatar(name);
+        document.getElementById('myAvatar').src = myProfile.photo;
+
+        toast('Profile updated');
+        closeProfileSheet();
+    } catch (err) {
+        console.error(err);
+        toast('Failed to save profile');
+    }
 }
 
 function closeProfileSheet() {
   document.getElementById('myProfileSheet').classList.remove('active');
   document.getElementById('overlay').classList.remove('active');
 }
-        async function saveMyProfile() {
-  const name  = document.getElementById('profileName').value.trim();
-  const photo = document.getElementById('profilePhoto').value.trim();
-
-  if (!name) { toast('Name cannot be empty'); return; }
-
-  const updates = {};
-  updates['name'] = name;
-  if (photo) updates['photo'] = photo;   // keep old if blank
-  await db.ref(`users/${currentUser.uid}/profile`).update(updates);
-
-  toast('Profile saved');
-  closeProfileSheet();
-}
+     
         function closeAll() {
   document.getElementById('overlay').classList.remove('active');
   document.getElementById('friendsSheet').classList.remove('active');
