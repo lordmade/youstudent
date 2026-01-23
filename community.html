@@ -4,10 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <title>Vynix Chat • Modern Messenger</title>
+  <title>Vynix Chat</title>
 
   <script src="https://cdn.tailwindcss.com"></script>
-
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
   <link href="https://fonts.googleapis.com/icon?family=Material+Symbols+Rounded" rel="stylesheet"/>
@@ -18,11 +17,11 @@
 
   <style>
     :root {
-      --vynix-accent: #ffffff;
+      --vynix-black: #000000;
       --bg-light: #f0f2f5;
       --bg-dark: #111b21;
-      --text-light: #111b21;
-      --text-dark: #e9edef;
+      --bubble-sent: #000000;
+      --bubble-received: #e5e5ea;
     }
     body {
       font-family: 'Inter', system-ui, sans-serif;
@@ -32,7 +31,7 @@
     }
     .dark body {
       background: var(--bg-dark);
-      color: var(--text-dark);
+      color: #e9edef;
     }
     * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color: transparent; }
 
@@ -43,6 +42,7 @@
       display: flex;
       flex-direction: column;
       overflow: hidden;
+      position: relative;
     }
     @media (min-width: 768px) {
       .app-container {
@@ -59,30 +59,44 @@
     .scrollbar-hide::-webkit-scrollbar { display: none; }
     .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
 
-    .shimmer-bg {
-      background: linear-gradient(90deg, #e0e0e0 25%, #d0d0d0 50%, #e0e0e0 75%);
-      background-size: 200% 100%;
-      animation: shimmer 1.5s infinite linear;
+    /* Message bubble styles */
+    .message-bubble {
+      max-width: 75%;
+      padding: 10px 14px;
+      border-radius: 18px;
+      margin-bottom: 4px;
+      position: relative;
+      word-wrap: break-word;
     }
-    .dark .shimmer-bg {
-      background: linear-gradient(90deg, #2a2a2a 25%, #222 50%, #2a2a2a 75%);
+    .message-sent {
+      background: var(--bubble-sent);
+      color: white;
+      align-self: flex-end;
+      border-bottom-right-radius: 4px;
     }
-    @keyframes shimmer {
-      0%   { background-position: 200% 0; }
-      100% { background-position: -200% 0; }
+    .message-received {
+      background: var(--bubble-received);
+      color: black;
+      align-self: flex-start;
+      border-bottom-left-radius: 4px;
+    }
+    .dark .message-received {
+      background: #2a3942;
+      color: white;
     }
 
-    .tab-content-wrapper {
-      display: flex;
-      width: 400%;
-      height: 100%;
-      transition: transform 0.35s cubic-bezier(0.15, 0.8, 0.3, 1);
-      will-change: transform;
+    .date-separator {
+      align-self: center;
+      background: rgba(0,0,0,0.08);
+      color: #666;
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-size: 12px;
+      margin: 16px 0;
     }
-    .tab-panel {
-      width: 25%;
-      height: 100%;
-      flex-shrink: 0;
+    .dark .date-separator {
+      background: rgba(255,255,255,0.1);
+      color: #aaa;
     }
   </style>
 </head>
@@ -93,104 +107,177 @@
   <script type="text/babel">
     const { useState, useEffect, useRef } = React;
 
-    const SkeletonChat = () => (
-      <div className="flex items-center px-4 py-3 bg-white dark:bg-[#1f2c34] border-b border-gray-200 dark:border-gray-800">
-        <div className="w-14 h-14 rounded-full shimmer-bg flex-shrink-0"></div>
-        <div className="ml-4 flex-1 space-y-2">
-          <div className="flex justify-between">
-            <div className="h-5 w-40 shimmer-bg rounded"></div>
-            <div className="h-4 w-12 shimmer-bg rounded"></div>
+    // ─── Modal (from previous) ───
+    const Modal = ({ isOpen, onClose, title, children }) => {
+      if (!isOpen) return null;
+      return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-white dark:bg-[#1f2c34] rounded-2xl shadow-2xl max-w-sm w-full mx-4 overflow-hidden">
+            {title && <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+              <h3 className="text-lg font-semibold">{title}</h3>
+              <button onClick={onClose}><span className="material-symbols-rounded">close</span></button>
+            </div>}
+            <div className="p-6">{children}</div>
+            <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex justify-end">
+              <button onClick={onClose} className="px-5 py-2.5 bg-gray-200 dark:bg-gray-700 rounded-lg">Close</button>
+            </div>
           </div>
-          <div className="h-4 w-5/6 shimmer-bg rounded"></div>
         </div>
-      </div>
-    );
+      );
+    };
 
-    const ChatItem = ({ chat }) => (
-      <div className="flex items-center px-4 py-3 bg-white dark:bg-[#1f2c34] border-b border-gray-200 dark:border-gray-800 active:bg-gray-100 dark:active:bg-gray-800">
-        <div className="relative flex-shrink-0">
-          <img
-            src={`https://ui-avatars.com/api/?name=${encodeURIComponent(chat.name)}&background=000000&color=fff&size=128`}
-            className="w-14 h-14 rounded-full object-cover"
-            alt={chat.name}
-          />
-          {chat.online && (
-            <div className="absolute bottom-0 right-0 w-4 h-4 bg-black border-2 border-white dark:border-[#1f2c34] rounded-full"></div>
-          )}
-        </div>
-
-        <div className="ml-4 flex-1 min-w-0">
-          <div className="flex justify-between items-baseline">
-            <h3 className={`text-base font-medium truncate ${chat.unread ? 'text-black dark:text-white' : 'text-gray-900 dark:text-gray-200'}`}>
-              {chat.name}
-            </h3>
-            <span className={`text-xs ${chat.unread ? 'text-black font-medium' : 'text-gray-500 dark:text-gray-400'}`}>
-              {chat.time}
-            </span>
+    // ─── Chat Message Component ───
+    const Message = ({ msg }) => {
+      const isSent = msg.sender === 'me';
+      return (
+        <div className={`flex ${isSent ? 'justify-end' : 'justify-start'} px-3`}>
+          <div className={`message-bubble ${isSent ? 'message-sent' : 'message-received'}`}>
+            {msg.text}
+            <div className="text-[10px] opacity-70 mt-1 text-right">
+              {msg.time} {isSent && <span className="ml-1">✓✓</span>}
+            </div>
           </div>
-          <p className={`text-sm truncate ${chat.unread ? 'text-black dark:text-white font-medium' : 'text-gray-600 dark:text-gray-400'}`}>
-            {chat.muted ? <span className="mr-1">🔇</span> : null}{chat.message}
-          </p>
         </div>
+      );
+    };
 
-        {chat.unread > 0 && (
-          <div className="ml-2 bg-black text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center flex-shrink-0">
-            {chat.unread}
-          </div>
-        )}
-      </div>
-    );
+    // ─── Full Chat View ───
+    const ChatView = ({ chat, onBack }) => {
+      const messagesEndRef = useRef(null);
+      const [messages, setMessages] = useState([
+        { id:1, text: "Hey, are we still on for tomorrow?", time: "10:12", sender: "them" },
+        { id:2, text: "Yes definitely! 7 PM?", time: "10:14", sender: "me" },
+        { id:3, text: "Perfect. See you then 😊", time: "10:15", sender: "them" },
+        { id:4, text: "Btw I found that playlist you were talking about", time: "10:18", sender: "me" },
+        { id:5, text: "Send it!!", time: "10:19", sender: "them" },
+      ]);
 
-    const App = () => {
-      const [chats, setChats] = useState([]);
-      const [loading, setLoading] = useState(true);
-      const [activeTabIndex, setActiveTabIndex] = useState(0);
-
-      const tabs = ['Chats', 'Status', 'Communities', 'Calls'];
-      const touchStartX = useRef(0);
-      const touchEndX = useRef(0);
-      const wrapperRef = useRef(null);
+      const [input, setInput] = useState("");
 
       useEffect(() => {
-        setTimeout(() => {
-          setChats([
-            { id:1, name:"Family Group", message:"Dad: Dinner at 8?", time:"now", unread:3, online:false, muted:false },
-            { id:2, name:"Bestie ❤️", message:"Check this meme 😂", time:"10:22", unread:1, online:true, muted:false },
-            { id:3, name:"Work Team", message:"Meeting notes attached", time:"09:15", unread:0, online:false, muted:true },
-            { id:4, name:"Sarah", message:"See you tomorrow!", time:"Yesterday", unread:0, online:false, muted:false },
-            { id:5, name:"Kai", message:"Yo, game tonight?", time:"Mon", unread:2, online:true, muted:false },
-            { id:6, name:"Mom", message:"Call me when you get home", time:"2h ago", unread:0, online:false, muted:false },
-          ]);
-          setLoading(false);
-        }, 1600);
-      }, []);
+        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+      }, [messages]);
 
-      useEffect(() => {
-        if (wrapperRef.current) {
-          wrapperRef.current.style.transform = `translateX(-${activeTabIndex * 25}%)`;
-        }
-      }, [activeTabIndex]);
-
-      const handleTouchStart = (e) => {
-        touchStartX.current = e.touches[0].clientX;
-      };
-
-      const handleTouchEnd = (e) => {
-        touchEndX.current = e.changedTouches[0].clientX;
-        const diff = touchStartX.current - touchEndX.current;
-
-        if (Math.abs(diff) > 80) {
-          if (diff > 0 && activeTabIndex < tabs.length - 1) {
-            setActiveTabIndex(prev => prev + 1);
-          } else if (diff < 0 && activeTabIndex > 0) {
-            setActiveTabIndex(prev => prev - 1);
-          }
-        }
+      const sendMessage = () => {
+        if (!input.trim()) return;
+        const newMsg = {
+          id: messages.length + 1,
+          text: input,
+          time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+          sender: 'me'
+        };
+        setMessages([...messages, newMsg]);
+        setInput("");
       };
 
       return (
-        <div className="app-container relative">
-          {/* Fixed Header + Tabs */}
+        <div className="flex flex-col h-full bg-[#efeae2] dark:bg-[#0b141a]">
+          {/* Chat Header */}
+          <header className="fixed top-0 left-0 right-0 z-20 bg-[#008069] dark:bg-[#1f2c34] text-white shadow-md">
+            <div className="flex items-center px-4 py-3 gap-3">
+              <button onClick={onBack}>
+                <span className="material-symbols-rounded">arrow_back</span>
+              </button>
+              <div className="flex items-center gap-3 flex-1">
+                <img
+                  src={`https://ui-avatars.com/api/?name=${encodeURIComponent(chat.name)}&background=000000&color=fff&size=128`}
+                  className="w-10 h-10 rounded-full object-cover"
+                  alt={chat.name}
+                />
+                <div>
+                  <h2 className="font-medium">{chat.name}</h2>
+                  {chat.online && <p className="text-xs opacity-80">online</p>}
+                </div>
+              </div>
+              <div className="flex gap-5">
+                <span className="material-symbols-rounded">videocam</span>
+                <span className="material-symbols-rounded">call</span>
+              </div>
+            </div>
+          </header>
+
+          {/* Messages */}
+          <div className="flex-1 overflow-y-auto pt-20 pb-24 px-2 scrollbar-hide bg-[url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png')] bg-repeat">
+            <div className="date-separator">Today</div>
+            {messages.map(msg => <Message key={msg.id} msg={msg} />)}
+            <div ref={messagesEndRef} />
+          </div>
+
+          {/* Input Bar */}
+          <div className="fixed bottom-0 left-0 right-0 z-20 bg-white dark:bg-[#1f2c34] border-t border-gray-200 dark:border-gray-700 px-3 py-2 flex items-center gap-2">
+            <span className="material-symbols-rounded text-gray-600 dark:text-gray-400 cursor-pointer">mood</span>
+            <input
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              onKeyPress={e => e.key === 'Enter' && sendMessage()}
+              placeholder="Type a message..."
+              className="flex-1 bg-gray-100 dark:bg-[#2a3942] rounded-full px-5 py-3 outline-none text-black dark:text-white placeholder-gray-500"
+            />
+            <span className="material-symbols-rounded text-gray-600 dark:text-gray-400 cursor-pointer">attach_file</span>
+            {!input.trim() ? (
+              <span className="material-symbols-rounded text-gray-600 dark:text-gray-400 cursor-pointer">mic</span>
+            ) : (
+              <button onClick={sendMessage} className="bg-[#008069] text-white rounded-full p-3">
+                <span className="material-symbols-rounded">send</span>
+              </button>
+            )}
+          </div>
+        </div>
+      );
+    };
+
+    // ─── Main App ───
+    const App = () => {
+      const [chats] = useState([
+        { id:1, name:"Family Group", message:"Dad: Dinner at 8?", time:"now", unread:3, online:false },
+        { id:2, name:"Bestie ❤️", message:"Check this meme 😂", time:"10:22", unread:1, online:true },
+        { id:3, name:"Work Team", message:"Meeting notes attached", time:"09:15", unread:0, online:false },
+        { id:4, name:"Sarah", message:"See you tomorrow!", time:"Yesterday", unread:0, online:false },
+        { id:5, name:"Kai", message:"Yo, game tonight?", time:"Mon", unread:2, online:true },
+      ]);
+
+      const [selectedChat, setSelectedChat] = useState(null);
+
+      const ChatItem = ({ chat }) => (
+        <div
+          onClick={() => setSelectedChat(chat)}
+          className="flex items-center px-4 py-3 bg-white dark:bg-[#1f2c34] border-b border-gray-200 dark:border-gray-800 active:bg-gray-100 dark:active:bg-gray-700 cursor-pointer"
+        >
+          <div className="relative flex-shrink-0">
+            <img
+              src={`https://ui-avatars.com/api/?name=${encodeURIComponent(chat.name)}&background=000000&color=fff&size=128`}
+              className="w-14 h-14 rounded-full object-cover"
+              alt={chat.name}
+            />
+            {chat.online && <div className="absolute bottom-0 right-0 w-4 h-4 bg-black border-2 border-white dark:border-[#1f2c34] rounded-full"></div>}
+          </div>
+          <div className="ml-4 flex-1 min-w-0">
+            <div className="flex justify-between items-baseline">
+              <h3 className={`text-base font-medium truncate ${chat.unread ? 'text-black dark:text-white' : 'text-gray-900 dark:text-gray-200'}`}>
+                {chat.name}
+              </h3>
+              <span className={`text-xs ${chat.unread ? 'text-black font-medium' : 'text-gray-500 dark:text-gray-400'}`}>
+                {chat.time}
+              </span>
+            </div>
+            <p className={`text-sm truncate ${chat.unread ? 'text-black dark:text-white font-medium' : 'text-gray-600 dark:text-gray-400'}`}>
+              {chat.message}
+            </p>
+          </div>
+          {chat.unread > 0 && (
+            <div className="ml-2 bg-black text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center flex-shrink-0">
+              {chat.unread}
+            </div>
+          )}
+        </div>
+      );
+
+      if (selectedChat) {
+        return <ChatView chat={selectedChat} onBack={() => setSelectedChat(null)} />;
+      }
+
+      return (
+        <div className="app-container">
           <div className="fixed top-0 left-0 right-0 z-10 bg-white dark:bg-gray-900 shadow-sm">
             <header className="px-4 pt-10 pb-3 flex items-center justify-between text-black dark:text-white">
               <h1 className="text-xl font-semibold">Vynix Chat</h1>
@@ -199,55 +286,20 @@
                 <span className="material-symbols-rounded cursor-pointer">more_vert</span>
               </div>
             </header>
-
             <div className="flex justify-around text-black dark:text-white/90 text-sm font-medium py-3 border-b border-gray-200 dark:border-gray-800">
-              {tabs.map((tab, index) => (
-                <button
-                  key={tab}
-                  onClick={() => setActiveTabIndex(index)}
-                  className={`pb-1 px-4 relative ${activeTabIndex === index ? 'font-semibold after:absolute after:bottom-0 after:left-1/2 after:-translate-x-1/2 after:w-8 after:h-0.5 after:bg-black dark:after:bg-white after:rounded-full' : ''}`}
-                >
+              {['Chats', 'Status', 'Communities', 'Calls'].map((tab, i) => (
+                <button key={tab} className="pb-1 px-4 relative font-semibold">
                   {tab}
                 </button>
               ))}
             </div>
           </div>
 
-          {/* Swipeable Content */}
-          <div
-            className="flex-1 overflow-hidden bg-[#f0f2f5] dark:bg-[#111b21] pt-[140px]"
-            onTouchStart={handleTouchStart}
-            onTouchEnd={handleTouchEnd}
-          >
-            <div ref={wrapperRef} className="tab-content-wrapper">
-              {/* Chats */}
-              <div className="tab-panel overflow-y-auto scrollbar-hide">
-                {loading ? (
-                  [...Array(8)].map((_, i) => <SkeletonChat key={i} />)
-                ) : (
-                  chats.map(chat => <ChatItem key={chat.id} chat={chat} />)
-                )}
-              </div>
-
-              {/* Status */}
-              <div className="tab-panel overflow-y-auto scrollbar-hide flex items-center justify-center text-gray-500 dark:text-gray-400 text-lg">
-                Status Coming Soon...
-              </div>
-
-              {/* Communities */}
-              <div className="tab-panel overflow-y-auto scrollbar-hide flex items-center justify-center text-gray-500 dark:text-gray-400 text-lg">
-                Communities Coming Soon...
-              </div>
-
-              {/* Calls */}
-              <div className="tab-panel overflow-y-auto scrollbar-hide flex items-center justify-center text-gray-500 dark:text-gray-400 text-lg">
-                Calls Coming Soon...
-              </div>
-            </div>
+          <div className="flex-1 overflow-y-auto pt-[140px] bg-[#f0f2f5] dark:bg-[#111b21] scrollbar-hide">
+            {chats.map(chat => <ChatItem key={chat.id} chat={chat} />)}
           </div>
 
-          {/* Fixed FAB - now black */}
-          <button className="fixed bottom-6 right-6 bg-black w-14 h-14 rounded-full flex items-center justify-center shadow-xl text-white text-3xl z-20 active:scale-95 transition-transform">
+          <button className="fixed bottom-6 right-6 bg-black w-14 h-14 rounded-full flex items-center justify-center shadow-xl text-white text-3xl z-20">
             <span className="material-symbols-rounded">chat</span>
           </button>
         </div>
