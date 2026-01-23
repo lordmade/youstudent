@@ -2022,157 +2022,135 @@
             return el;
         }
 
-        async function loadMessages() {
-            if (messagesListener) messagesListener.off();
-            const list = document.getElementById('messageList');
-            list.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-muted);">Loading messages...</div>';
+// Global guard & deduplication
+let isLoadingMessages = false;
+const processedMessageKeys = new Set();
 
-            // Clear any existing message elements completely
-            list.innerHTML = '';
-            const processedMessageKeys = new Set();
+async function loadMessages() {
+    if (isLoadingMessages || !currentRoomId) return;
+    isLoadingMessages = true;
 
-            // If online, load from Firebase first
-            if (navigator.onLine) {
-                try {
-                    // Load messages from Firebase
-                    const messagesSnap = await db.ref(`messages/${currentRoomId}`).limitToLast(100).once('value');
-                    
-                    if (messagesSnap.exists()) {
-                        const messages = [];
-                        messagesSnap.forEach(child => {
-                            const msg = child.val();
-                            msg.key = child.key;
-                            messages.push(msg);
-                        });
-                        
-                        // Sort messages by timestamp
-                        messages.sort((a,b) => a.ts - b.ts);
-                        
-                        // Render Firebase messages
-                        messages.forEach(msg => {
-                            processedMessageKeys.add(msg.key);
-                            
-                            const isSent = msg.sender === currentUser.uid;
-                            const text = decrypt(msg.text, currentFriendUid);
-                            const isRead = msg.read || false;
-                            
-                            const el = createMessageElement(text, isSent, msg.ts, '', msg.key, isRead, msg.reactions || {});
-                            list.appendChild(el);
-                        });
-                        
-                        list.scrollTop = list.scrollHeight;
-                    }
-                } catch (error) {
-                    console.error("Error loading from Firebase:", error);
-                }
-            } else {
-                // If offline, load from cache
-                const cached = await getCachedMessages(currentRoomId);
-                if (cached.length > 0) {
-                    cached.sort((a,b) => a.ts - b.ts);
-                    cached.forEach(m => {
-                        if (m.key) processedMessageKeys.add(m.key);
-                        
-                        const isSent = m.sender === currentUser.uid;
-                        const text = decrypt(m.text, currentFriendUid);
-                        const isRead = m.read || false;
-                        
-                        const el = createMessageElement(text, isSent, m.ts, m.localId || '', m.key || '', isRead, m.reactions || {});
-                        list.appendChild(el);
-                    });
-                    list.scrollTop = list.scrollHeight;
-                }
-            }
+    // Kill any previous listener
+    if (messagesListener) messagesListener.off();
 
-            // Realtime listener for new messages
-            messagesListener = db.ref(`messages/${currentRoomId}`).limitToLast(100);
+    const list = document.getElementById('messageList');
+    list.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-muted);">Loading messages…</div>';
 
-            messagesListener.on('child_added', async snap => {
-                const msg = snap.val();
-                msg.key = snap.key;
+    /* ---------- 1.  Offline-first: show cached messages instantly ---------- */
+    const cached = await getCachedMessages(currentRoomId);
+    if (cached.length) {
+        list.innerHTML = '';                       // clear loader
+        cached.sort((a, b) => a.ts - b.ts);
+        cached.forEach(m => {
+            if (m.key) processedMessageKeys.add(m.key);
+            const isSent = m.sender === currentUser.uid;
+            const text = decrypt(m.text, currentFriendUid);
+            const el = createMessageElement(text, isSent, m.ts, m.localId || '', m.key || '', m.read || false, m.reactions || {});
+            list.appendChild(el);
+        });
+        list.scrollTop = list.scrollHeight;
+    }
 
-                // Skip if already rendered
+    /* ---------- 2.  Online: one-time fetch for missed messages ---------- */
+    if (navigator.onLine) {
+        try {
+            const snap = await db.ref(`messages/${currentRoomId}`).limitToLast(100).once('value');
+            const msgs = [];
+            snap.forEach(child => {
+                const msg = child.val();
+                msg.key = child.key;
+                msgs.push(msg);
+            });
+            msgs.sort((a, b) => a.ts - b.ts);
+
+            // Render only new keys
+            msgs.forEach(msg => {
                 if (processedMessageKeys.has(msg.key)) return;
-                
                 processedMessageKeys.add(msg.key);
+                cacheMessage(currentRoomId, msg);          // keep cache fresh
 
-                // Cache the message for offline use
-                await cacheMessage(currentRoomId, msg);
-
-                // Remove pending version if exists
-                if (msg.localId) {
-                    const pendingEl = list.querySelector(`[data-local-id="${msg.localId}"]`);
-                    if (pendingEl) pendingEl.remove();
-                }
-
-                // Add the new message
                 const isSent = msg.sender === currentUser.uid;
                 const text = decrypt(msg.text, currentFriendUid);
-                const isRead = msg.read || false;
-                
-                const el = createMessageElement(text, isSent, msg.ts, '', msg.key, isRead, msg.reactions || {});
+                const el = createMessageElement(text, isSent, msg.ts, '', msg.key, msg.read || false, msg.reactions || {});
                 list.appendChild(el);
-                list.scrollTop = list.scrollHeight;
-
-                // Mark as read if received message
-                if (!isSent && currentFriendUid) {
-                    await db.ref(`messages/${currentRoomId}/${msg.key}`).update({ read: true });
-                }
             });
-
-            // Listen for read status updates
-            db.ref(`messages/${currentRoomId}`).on('child_changed', snap => {
-                const msg = snap.val();
-                const existingEl = list.querySelector(`[data-msg-key="${snap.key}"]`);
-                if (existingEl) {
-                    // Update reactions
-                    const reactionsContainer = existingEl.querySelector('.message-reactions');
-                    if (reactionsContainer) {
-                        reactionsContainer.remove();
-                    }
-                    
-                    if (msg.reactions && Object.keys(msg.reactions).length > 0) {
-                        let reactionsHtml = '<div class="message-reactions">';
-                        Object.entries(msg.reactions).forEach(([emoji, users]) => {
-                            if (users && users.length > 0) {
-                                const count = users.length;
-                                const userReacted = users.includes(currentUser.uid);
-                                reactionsHtml += `
-                                    <div class="reaction-badge ${userReacted ? 'user-reacted' : ''}" 
-                                         data-emoji="${emoji}" 
-                                         data-key="${snap.key}"
-                                         onclick="toggleReaction('${snap.key}', '${emoji}')">
-                                        <span class="emoji">${emoji}</span>
-                                        ${count > 1 ? `<span class="count">${count}</span>` : ''}
-                                    </div>
-                                `;
-                            }
-                        });
-                        reactionsHtml += '</div>';
-                        
-                        const timeDiv = existingEl.querySelector('.message-time');
-                        if (timeDiv) {
-                            timeDiv.insertAdjacentHTML('afterend', reactionsHtml);
-                        }
-                    }
-                    
-                    // Update read status
-                    const ticks = existingEl.querySelector('.message-ticks');
-                    if (ticks && msg.read) {
-                        ticks.classList.add('read');
-                        ticks.textContent = '✓✓';
-                    }
-                }
-            });
-
-            // Close reaction picker when clicking outside
-            document.addEventListener('click', function(e) {
-                const picker = document.getElementById('reactionPicker');
-                if (picker.style.display === 'flex' && !picker.contains(e.target) && !e.target.closest('.message')) {
-                    hideReactionPicker();
-                }
-            });
+            list.scrollTop = list.scrollHeight;
+        } catch (e) {
+            console.warn('Live fetch failed', e);
         }
+    }
+
+    /* ---------- 3.  Real-time listener (child_added only) ---------- */
+    messagesListener = db.ref(`messages/${currentRoomId}`).limitToLast(1);
+    messagesListener.on('child_added', async snap => {
+        const msg = snap.val();
+        msg.key = snap.key;
+
+        if (processedMessageKeys.has(msg.key)) return;   // already rendered
+        processedMessageKeys.add(msg.key);
+
+        // Cache it
+        await cacheMessage(currentRoomId, msg);
+
+        // Remove pending placeholder if exists
+        if (msg.localId) {
+            const pendingEl = list.querySelector(`[data-local-id="${msg.localId}"]`);
+            if (pendingEl) pendingEl.remove();
+        }
+
+        // Render smoothly
+        const isSent = msg.sender === currentUser.uid;
+        const text = decrypt(msg.text, currentFriendUid);
+        const el = createMessageElement(text, isSent, msg.ts, '', msg.key, msg.read || false, msg.reactions || {});
+        list.appendChild(el);
+        list.scrollTop = list.scrollHeight;
+
+        // Auto-mark received messages as read
+        if (!isSent && currentFriendUid) {
+            db.ref(`messages/${currentRoomId}/${msg.key}`).update({ read: true });
+        }
+    });
+
+    /* ---------- 4.  Listen for read-status & reaction changes ---------- */
+    db.ref(`messages/${currentRoomId}`).on('child_changed', snap => {
+        const msg = snap.val();
+        const existingEl = list.querySelector(`[data-msg-key="${snap.key}"]`);
+        if (!existingEl) return;
+
+        // Update reactions
+        let reactionsHtml = '';
+        if (msg.reactions && Object.keys(msg.reactions).length) {
+            reactionsHtml = '<div class="message-reactions">';
+            Object.entries(msg.reactions).forEach(([emoji, users]) => {
+                if (users?.length) {
+                    const userReacted = users.includes(currentUser.uid);
+                    reactionsHtml += `
+                        <div class="reaction-badge ${userReacted ? 'user-reacted' : ''}"
+                             data-emoji="${emoji}" data-key="${snap.key}"
+                             onclick="toggleReaction('${snap.key}', '${emoji}')">
+                            <span class="emoji">${emoji}</span>${users.length > 1 ? `<span class="count">${users.length}</span>` : ''}
+                        </div>`;
+                }
+            });
+            reactionsHtml += '</div>';
+        }
+        const timeDiv = existingEl.querySelector('.message-time');
+        if (timeDiv) {
+            const existingReactions = existingEl.querySelector('.message-reactions');
+            if (existingReactions) existingReactions.remove();
+            timeDiv.insertAdjacentHTML('afterend', reactionsHtml);
+        }
+
+        // Update read ticks
+        const ticks = existingEl.querySelector('.message-ticks');
+        if (ticks && msg.read) {
+            ticks.classList.add('read');
+            ticks.textContent = '✓✓';
+        }
+    });
+
+    isLoadingMessages = false;
+}
 
         async function syncPendingMessages() {
             if (!navigator.onLine) return;
