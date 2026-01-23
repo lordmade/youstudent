@@ -175,7 +175,6 @@
                   className="w-full px-5 py-3 text-left text-sm text-black dark:text-white hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center gap-4"
                   onClick={() => {
                     setOpen(false);
-                    // You can trigger modals here based on label
                     if (opt.label === "Settings") alert("Opening settings modal...");
                   }}
                 >
@@ -189,7 +188,7 @@
       );
     };
 
-    // ─── Skeleton & ChatItem (unchanged except avatar bg black) ───
+    // ─── Skeleton & ChatItem ───
     const SkeletonChat = () => (
       <div className="flex items-center px-4 py-3 bg-white dark:bg-[#1f2c34] border-b border-gray-200 dark:border-gray-800">
         <div className="w-14 h-14 rounded-full shimmer-bg flex-shrink-0"></div>
@@ -234,6 +233,107 @@
       </div>
     );
 
+    // ─── Improved FAB with Speed Dial ───
+    const FabMenu = () => {
+      const [open, setOpen] = useState(false);
+
+      // You can make these dynamic later (e.g. from state / backend)
+      const hasNewFriends = true; // example
+      const newFriendsCount = 2;
+
+      const actions = [
+        {
+          label: "New Chat",
+          icon: "chat",
+          color: "bg-black",
+          action: () => alert("Open contact list or start new chat")
+        },
+        {
+          label: "Add by Vynix ID",
+          icon: "person_add",
+          color: "bg-indigo-600",
+          action: () => alert("Open modal: Enter Vynix ID to add friend")
+        },
+        {
+          label: "New Group",
+          icon: "group_add",
+          color: "bg-teal-600",
+          action: () => alert("Open group creation flow")
+        },
+        ...(hasNewFriends ? [{
+          label: "New Friends",
+          icon: "group",
+          color: "bg-amber-600",
+          badge: newFriendsCount,
+          action: () => alert("Show list of recently added friends")
+        }] : [])
+      ];
+
+      return (
+        <div className="fixed bottom-6 right-6 z-30 flex flex-col items-end gap-5">
+          {/* Backdrop */}
+          {open && (
+            <div
+              className="fixed inset-0 bg-black/30 z-20"
+              onClick={() => setOpen(false)}
+            />
+          )}
+
+          {/* Action buttons appear upward */}
+          {open && actions.map((act, index) => (
+            <div
+              key={act.label}
+              className="flex items-center gap-3 transition-all duration-200"
+              style={{
+                transitionDelay: `${(actions.length - 1 - index) * 60}ms`,
+                transform: open ? 'translateY(0) scale(1)' : 'translateY(60px) scale(0.8)',
+                opacity: open ? 1 : 0
+              }}
+            >
+              <div className={`text-sm font-medium text-white px-4 py-2 rounded-full shadow-lg whitespace-nowrap ${act.color}`}>
+                {act.label}
+                {act.badge > 0 && (
+                  <span className="ml-2 bg-white text-black text-xs px-2 py-0.5 rounded-full font-bold">
+                    {act.badge}
+                  </span>
+                )}
+              </div>
+              <button
+                onClick={() => {
+                  act.action();
+                  setOpen(false);
+                }}
+                className={`w-12 h-12 rounded-full flex items-center justify-center shadow-xl text-white ${act.color} active:scale-90 transition-transform`}
+              >
+                <span className="material-symbols-rounded text-2xl">{act.icon}</span>
+              </button>
+            </div>
+          ))}
+
+          {/* Main FAB */}
+          <button
+            onClick={() => setOpen(!open)}
+            className={`w-14 h-14 rounded-full flex items-center justify-center shadow-2xl text-white transition-all duration-300 z-30 ${
+              open ? 'bg-red-600 rotate-45 scale-95' : 'bg-black hover:bg-gray-800'
+            } active:scale-90`}
+          >
+            {open ? (
+              <span className="material-symbols-rounded text-3xl">close</span>
+            ) : (
+              <>
+                <span className="material-symbols-rounded text-3xl">chat</span>
+                {hasNewFriends && (
+                  <div className="absolute -top-1 -right-1 w-5 h-5 bg-green-500 rounded-full border-2 border-white dark:border-[#111b21] flex items-center justify-center text-xs text-white font-bold">
+                    {newFriendsCount}
+                  </div>
+                )}
+              </>
+            )}
+          </button>
+        </div>
+      );
+    };
+
     const App = () => {
       const [chats, setChats] = useState([]);
       const [loading, setLoading] = useState(true);
@@ -241,7 +341,7 @@
       const [searchOpen, setSearchOpen] = useState(false);
       const [searchQuery, setSearchQuery] = useState("");
       const [modalOpen, setModalOpen] = useState(false);
-      const [modalType, setModalType] = useState(""); // "settings" | "alert" etc.
+      const [modalType, setModalType] = useState("");
 
       const tabs = ['Chats', 'Status', 'Communities', 'Calls'];
       const touchStartX = useRef(0);
@@ -253,7 +353,6 @@
           setChats([
             { id:1, name:"Family Group", message:"Dad: Dinner at 8?", time:"now", unread:3, online:false, muted:false },
             { id:2, name:"Bestie ❤️", message:"Check this meme 😂", time:"10:22", unread:1, online:true, muted:false },
-            // ... more chats
           ]);
           setLoading(false);
         }, 1600);
@@ -282,7 +381,7 @@
 
       return (
         <div className="app-container relative">
-          {/* Fixed Header with conditional search */}
+          {/* Header */}
           <div className="fixed top-0 left-0 right-0 z-20 bg-white dark:bg-gray-900 shadow-sm transition-all duration-300">
             {searchOpen ? (
               <div className="flex items-center px-4 pt-10 pb-3 gap-3">
@@ -315,7 +414,6 @@
               </header>
             )}
 
-            {/* Tabs (hide when search open?) */}
             {!searchOpen && (
               <div className="flex justify-around text-black dark:text-white/90 text-sm font-medium py-3 border-b border-gray-200 dark:border-gray-800">
                 {tabs.map((tab, i) => (
@@ -331,7 +429,7 @@
             )}
           </div>
 
-          {/* Scrollable Content */}
+          {/* Content */}
           <div
             className="flex-1 overflow-hidden bg-[#f0f2f5] dark:bg-[#111b21] pt-[140px]"
             onTouchStart={handleTouchStart}
@@ -353,10 +451,8 @@
             </div>
           </div>
 
-          {/* FAB */}
-          <button className="fixed bottom-6 right-6 bg-black w-14 h-14 rounded-full flex items-center justify-center shadow-xl text-white text-3xl z-20 active:scale-95 transition-transform">
-            <span className="material-symbols-rounded">chat</span>
-          </button>
+          {/* Improved FAB */}
+          <FabMenu />
 
           {/* Example Modals */}
           <Modal
@@ -365,16 +461,6 @@
             title="Settings"
           >
             <p className="text-gray-600 dark:text-gray-300">Manage your account, privacy, notifications, and more.</p>
-          </Modal>
-
-          <Modal
-            isOpen={modalOpen && modalType === "new_broadcast"}
-            onClose={() => setModalOpen(false)}
-            title="New Broadcast"
-            showConfirm
-            onConfirm={() => alert("Broadcast list created!")}
-          >
-            <p className="text-gray-600 dark:text-gray-300">Create a broadcast list to send messages to multiple contacts at once.</p>
           </Modal>
         </div>
       );
