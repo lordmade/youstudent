@@ -1,305 +1,222 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <title>Signal Web • Vynix</title>
+  <title>GB WhatsApp • Redesign Concept 2026</title>
 
   <script src="https://cdn.tailwindcss.com"></script>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
   <link href="https://fonts.googleapis.com/icon?family=Material+Symbols+Rounded" rel="stylesheet"/>
 
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
-
-  <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
-
   <style>
     :root {
-      --signal-blue: #2c6bed;
-      --bg-light: #f6f6f6;
+      --whatsapp-green: #25D366;
+      --whatsapp-green-dark: #128C7E;
+      --bg-light: #f0f2f5;
+      --bg-dark: #111b21;
+      --text-light: #111b21;
+      --text-dark: #e9edef;
+    }
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: var(--bg-light);
+      min-height: 100vh;
+      margin: 0;
+    }
+    .dark body {
+      background: var(--bg-dark);
+      color: var(--text-dark);
     }
     * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color: transparent; }
-    body {
-      background: #e2e8f0;
-      font-family: 'Outfit', sans-serif;
-      min-height: 100vh;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-    }
 
-    /* Mobile-first full width + desktop frame */
+    /* Full mobile screen container */
     .app-container {
-      width: 100%;
+      width: 100vw;
       height: 100vh;
-      background: #fff;
-      position: relative;
-      overflow: hidden;
+      background: inherit;
       display: flex;
       flex-direction: column;
+      overflow: hidden;
     }
     @media (min-width: 768px) {
       .app-container {
-        width: 414px;
-        height: 896px;
-        border-radius: 40px;
-        border: 8px solid #1a1a1a;
-        box-shadow: 0 20px 50px rgba(0,0,0,0.2);
+        width: 420px;
+        height: 900px;
+        margin: 20px auto;
+        border-radius: 36px;
+        border: 12px solid #000;
+        box-shadow: 0 30px 80px rgba(0,0,0,0.35);
+        overflow: hidden;
       }
     }
 
     .scrollbar-hide::-webkit-scrollbar { display: none; }
     .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
 
-    /* Swipe Animation */
-    .swipe-content { transition: transform 0.3s cubic-bezier(0.18, 0.89, 0.32, 1.1); }
-
-    /* ─── Shimmer effect ─── */
+    /* Shimmer */
     .shimmer-bg {
-      background: linear-gradient(
-        90deg,
-        #f0f0f0 25%,
-        #e0e0e0 50%,
-        #f0f0f0 75%
-      );
+      background: linear-gradient(90deg, #e0e0e0 25%, #d0d0d0 50%, #e0e0e0 75%);
       background-size: 200% 100%;
-      animation: shimmer 1.6s infinite linear;
+      animation: shimmer 1.5s infinite linear;
     }
-
+    .dark .shimmer-bg {
+      background: linear-gradient(90deg, #2a2a2a 25%, #222 50%, #2a2a2a 75%);
+    }
     @keyframes shimmer {
       0%   { background-position: 200% 0; }
       100% { background-position: -200% 0; }
     }
   </style>
 </head>
-<body>
+<body class="dark"> <!-- remove 'dark' for light mode -->
 
   <div id="root"></div>
 
   <script type="text/babel">
-    const { useState, useEffect, useRef } = React;
+    const { useState, useEffect } = React;
 
-    // --- Firebase Config ---
-    const firebaseConfig = {
-      apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
-      authDomain: "fire-b-a8878.firebaseapp.com",
-      projectId: "fire-b-a8878",
-      appId: "1:658673187627:web:6e4c29af661785f0afa36e"
-    };
-
-    if (!firebase.apps.length) {
-      firebase.initializeApp(firebaseConfig);
-    }
-    const db = firebase.firestore();
-
-    // --- Cloudinary Avatar ---
-    const CLOUD_NAME = "demo";
-    const getAvatarUrl = (publicId) => {
-      if (!publicId) return `https://ui-avatars.com/api/?background=random&color=fff&name=User`;
-      return `https://res.cloudinary.com/\( {CLOUD_NAME}/image/upload/c_thumb,g_face,w_100,h_100,f_auto/ \){publicId}`;
-    };
-
-    // ─── Skeleton Chat Item ───
-    const SkeletonChatItem = () => (
-      <div className="relative w-full h-20 bg-white border-b border-gray-100 overflow-hidden">
-        <div className="flex items-center px-4 h-full">
-          {/* Avatar */}
-          <div className="w-14 h-14 rounded-full shimmer-bg"></div>
-
-          <div className="ml-4 flex-1 space-y-2.5">
-            {/* Name + time row */}
-            <div className="flex justify-between">
-              <div className="h-5 w-32 shimmer-bg rounded"></div>
-              <div className="h-3.5 w-10 shimmer-bg rounded"></div>
-            </div>
-            {/* Message */}
-            <div className="h-4 w-4/5 shimmer-bg rounded"></div>
+    // ─── Skeleton Item ───
+    const SkeletonChat = () => (
+      <div className="flex items-center px-4 py-3 bg-white dark:bg-[#1f2c34] border-b border-gray-200 dark:border-gray-800">
+        <div className="w-14 h-14 rounded-full shimmer-bg flex-shrink-0"></div>
+        <div className="ml-4 flex-1 space-y-2">
+          <div className="flex justify-between">
+            <div className="h-5 w-40 shimmer-bg rounded"></div>
+            <div className="h-4 w-12 shimmer-bg rounded"></div>
           </div>
+          <div className="h-4 w-5/6 shimmer-bg rounded"></div>
         </div>
       </div>
     );
 
-    // ─── Real Chat Item (unchanged except minor cleanup) ───
-    const SwipeableChatItem = ({ chat }) => {
-      const [translateX, setTranslateX] = useState(0);
-      const startX = useRef(0);
-      const isDragging = useRef(false);
-
-      const onTouchStart = (e) => {
-        startX.current = e.touches[0].clientX;
-        isDragging.current = true;
-      };
-
-      const onTouchMove = (e) => {
-        if (!isDragging.current) return;
-        const currentX = e.touches[0].clientX;
-        const diff = currentX - startX.current;
-        if (diff < 0) setTranslateX(Math.max(diff, -192));
-        else setTranslateX(0);
-      };
-
-      const onTouchEnd = () => {
-        isDragging.current = false;
-        setTranslateX(translateX < -80 ? -192 : 0);
-      };
-
-      return (
-        <div className="relative w-full h-20 overflow-hidden bg-white border-b border-gray-100 select-none">
-          {/* Action buttons underneath */}
-          <div className="absolute top-0 right-0 h-full flex">
-            <button className="w-16 h-full bg-violet-500 text-white flex flex-col items-center justify-center gap-1">
-              <span className="material-symbols-rounded text-xl">notifications_off</span>
-              <span className="text-[10px] font-bold">Mute</span>
-            </button>
-            <button className="w-16 h-full bg-red-500 text-white flex flex-col items-center justify-center gap-1">
-              <span className="material-symbols-rounded text-xl">delete</span>
-              <span className="text-[10px] font-bold">Delete</span>
-            </button>
-            <button className="w-16 h-full bg-gray-400 text-white flex flex-col items-center justify-center gap-1">
-              <span className="material-symbols-rounded text-xl">archive</span>
-              <span className="text-[10px] font-bold">Archive</span>
-            </button>
-          </div>
-
-          {/* Swipeable content */}
-          <div 
-            className="swipe-content relative z-10 bg-white h-full flex items-center px-4 cursor-pointer active:bg-gray-50"
-            style={{ transform: `translateX(${translateX}px)` }}
-            onTouchStart={onTouchStart}
-            onTouchMove={onTouchMove}
-            onTouchEnd={onTouchEnd}
-          >
-            <div className="relative">
-              <img 
-                src={getAvatarUrl(chat.avatar)} 
-                className="w-14 h-14 rounded-full object-cover bg-gray-100 border border-gray-100"
-                alt={chat.name}
-              />
-              {chat.online && (
-                <div className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 border-2 border-white rounded-full" />
-              )}
-            </div>
-
-            <div className="ml-4 flex-1 min-w-0">
-              <div className="flex justify-between items-baseline">
-                <h3 className={`text-[17px] truncate ${chat.unread ? 'font-bold text-black' : 'font-semibold text-gray-800'}`}>
-                  {chat.name}
-                </h3>
-                <span className={`text-xs ml-2 ${chat.unread ? 'text-blue-600 font-bold' : 'text-gray-400'}`}>
-                  {chat.time}
-                </span>
-              </div>
-              <p className={`text-[15px] truncate pr-4 ${chat.unread ? 'text-black font-semibold' : 'text-gray-500'}`}>
-                {chat.message}
-              </p>
-            </div>
-          </div>
+    // ─── Chat Item ───
+    const ChatItem = ({ chat }) => (
+      <div className="flex items-center px-4 py-3 bg-white dark:bg-[#1f2c34] border-b border-gray-200 dark:border-gray-800 active:bg-gray-100 dark:active:bg-gray-800">
+        <div className="relative">
+          <img
+            src={`https://ui-avatars.com/api/?name=${encodeURIComponent(chat.name)}&background=25D366&color=fff&size=128`}
+            className="w-14 h-14 rounded-full object-cover"
+            alt={chat.name}
+          />
+          {chat.online && (
+            <div className="absolute bottom-0 right-0 w-4 h-4 bg-green-500 border-2 border-white dark:border-[#1f2c34] rounded-full"></div>
+          )}
         </div>
-      );
-    };
+
+        <div className="ml-4 flex-1 min-w-0">
+          <div className="flex justify-between items-baseline">
+            <h3 className={`text-base font-medium truncate ${chat.unread ? 'text-black dark:text-white' : 'text-gray-900 dark:text-gray-200'}`}>
+              {chat.name}
+            </h3>
+            <span className={`text-xs ${chat.unread ? 'text-[#25D366] font-medium' : 'text-gray-500 dark:text-gray-400'}`}>
+              {chat.time}
+            </span>
+          </div>
+          <p className={`text-sm truncate ${chat.unread ? 'text-black dark:text-white font-medium' : 'text-gray-600 dark:text-gray-400'}`}>
+            {chat.muted ? <span className="mr-1">🔇</span> : null}
+            {chat.message}
+          </p>
+        </div>
+
+        {chat.unread > 0 && (
+          <div className="ml-2 bg-[#25D366] text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center">
+            {chat.unread}
+          </div>
+        )}
+      </div>
+    );
 
     const App = () => {
       const [chats, setChats] = useState([]);
       const [loading, setLoading] = useState(true);
+      const [activeTab, setActiveTab] = useState('chats');
 
       useEffect(() => {
-        // Simulate data fetch (replace with real Firestore / API call later)
-        const timer = setTimeout(() => {
+        // Simulate fetch
+        setTimeout(() => {
           setChats([
-            { id: 1, name: "Family", message: "Mom: Look at these old photos...", time: "20m", unread: true, online: false },
-            { id: 2, name: "Kai Guo", message: "This brownie recipe is good...", time: "40m", unread: false, online: true },
-            { id: 3, name: "Micheal Kirk", message: "View-once media", time: "8:00 AM", unread: false, online: false },
-            { id: 4, name: "Roommates", message: "Kai: Feed Spooky please?", time: "Tue", unread: false, online: true },
-            { id: 5, name: "Design Team", message: "Review the new mockups", time: "Mon", unread: true, online: false },
-            { id: 6, name: "Sarah", message: "See you at 7?", time: "Just now", unread: true, online: true },
+            { id:1, name:"Family Group", message:"Dad: Dinner at 8?", time:"now", unread:3, online:false, muted:false },
+            { id:2, name:"Bestie ❤️", message:"Check this meme 😂", time:"10:22", unread:1, online:true, muted:false },
+            { id:3, name:"Work Team", message:"Meeting notes attached", time:"09:15", unread:0, online:false, muted:true },
+            { id:4, name:"Sarah", message:"See you tomorrow!", time:"Yesterday", unread:0, online:false, muted:false },
+            { id:5, name:"Kai", message:"Yo, game tonight?", time:"Mon", unread:2, online:true, muted:false },
           ]);
           setLoading(false);
-        }, 1800); // 1.8s simulated delay
-
-        return () => clearTimeout(timer);
+        }, 1600);
       }, []);
 
       return (
         <div className="app-container">
           {/* Header */}
-          <header className="pt-12 px-5 pb-4 bg-white z-20">
-            <div className="flex justify-between items-center mb-5">
-              <div className="w-9 h-9 bg-gray-200 rounded-full flex items-center justify-center overflow-hidden cursor-pointer">
-                <img src="https://ui-avatars.com/api/?name=Vynix+Lingua&background=2c6bed&color=fff" alt="Profile" />
-              </div>
-              <h1 className="text-xl font-bold tracking-tight">Chats</h1>
-              <div className="flex gap-4">
-                <span className="material-symbols-rounded cursor-pointer">photo_camera</span>
-                <span className="material-symbols-rounded cursor-pointer">edit_square</span>
-              </div>
-            </div>
-
-            <div className="relative">
-              <span className="material-symbols-rounded absolute left-3 top-2.5 text-gray-400 text-xl">search</span>
-              <input 
-                type="text" 
-                placeholder="Search" 
-                className="w-full bg-gray-100 py-2.5 pl-11 pr-4 rounded-2xl focus:outline-none text-[16px] placeholder-gray-500"
-              />
+          <header className="bg-[#008069] dark:bg-[#1f2c34] text-white px-4 pt-10 pb-3 flex items-center justify-between">
+            <h1 className="text-xl font-semibold">WhatsApp</h1>
+            <div className="flex gap-5">
+              <span className="material-symbols-rounded">search</span>
+              <span className="material-symbols-rounded">more_vert</span>
             </div>
           </header>
 
-          {/* Chat list / skeleton */}
-          <div className="flex-1 overflow-y-auto scrollbar-hide pb-24">
+          {/* Tabs */}
+          <div className="bg-[#008069] dark:bg-[#1f2c34] text-white/90 flex justify-around text-xs font-medium py-2">
+            {['Chats', 'Status', 'Communities', 'Calls'].map(tab => (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab.toLowerCase())}
+                className={`pb-1 px-2 ${activeTab === tab.toLowerCase() ? 'border-b-2 border-white font-semibold' : ''}`}
+              >
+                {tab}
+              </button>
+            ))}
+          </div>
+
+          {/* Chat List */}
+          <div className="flex-1 overflow-y-auto scrollbar-hide bg-[#f0f2f5] dark:bg-[#111b21]">
             {loading ? (
               <>
-                {[...Array(7)].map((_, i) => <SkeletonChatItem key={i} />)}
+                {[...Array(6)].map((_, i) => <SkeletonChat key={i} />)}
               </>
             ) : (
-              chats.map(chat => (
-                <SwipeableChatItem key={chat.id} chat={chat} />
-              ))
-            )}
-
-            {!loading && (
-              <div className="p-8 text-center">
-                <p className="text-[11px] text-gray-400 leading-relaxed">
-                  Your personal messages are <span className="text-gray-600 font-medium">end-to-end encrypted</span>.
-                </p>
-              </div>
+              chats.map(chat => <ChatItem key={chat.id} chat={chat} />)
             )}
           </div>
+
+          {/* FAB */}
+          <button className="absolute bottom-24 right-6 bg-[#25D366] w-14 h-14 rounded-full flex items-center justify-center shadow-xl text-white text-3xl z-20 active:scale-95 transition">
+            <span className="material-symbols-rounded">chat</span>
+          </button>
 
           {/* Bottom Navigation */}
-          <div className="absolute bottom-6 left-0 right-0 flex justify-center z-30 pointer-events-none">
-            <nav className="pointer-events-auto bg-white/90 backdrop-blur-xl shadow-2xl rounded-[35px] border border-white/20 px-8 py-3 flex gap-10">
-              <div className="flex flex-col items-center gap-1 text-black">
-                <span className="material-symbols-rounded text-[28px]">chat_bubble</span>
-                <span className="text-[10px] font-bold">Chats</span>
-              </div>
-              <div className="flex flex-col items-center gap-1 text-gray-400">
-                <span className="material-symbols-rounded text-[28px]">call</span>
-                <span className="text-[10px] font-bold">Calls</span>
-              </div>
-              <div className="flex flex-col items-center gap-1 text-gray-400">
-                <span className="material-symbols-rounded text-[28px]">track_changes</span>
-                <span className="text-[10px] font-bold">Stories</span>
-              </div>
-            </nav>
-          </div>
-
-          {/* Home Indicator (desktop) */}
-          <div className="absolute bottom-1.5 left-1/2 -translate-x-1/2 w-32 h-1.5 bg-black rounded-full hidden sm:block"></div>
+          <nav className="bg-white dark:bg-[#1f2c34] border-t border-gray-200 dark:border-gray-800 flex justify-around py-2 text-gray-600 dark:text-gray-400 text-xs">
+            <div className="flex flex-col items-center text-[#25D366]">
+              <span className="material-symbols-rounded text-2xl">chat_bubble</span>
+              Chats
+            </div>
+            <div className="flex flex-col items-center">
+              <span className="material-symbols-rounded text-2xl">circle</span>
+              Status
+            </div>
+            <div className="flex flex-col items-center">
+              <span className="material-symbols-rounded text-2xl">group</span>
+              Communities
+            </div>
+            <div className="flex flex-col items-center">
+              <span className="material-symbols-rounded text-2xl">call</span>
+              Calls
+            </div>
+          </nav>
         </div>
       );
     };
 
-    const root = ReactDOM.createRoot(document.getElementById('root'));
-    root.render(<App />);
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
   </script>
 </body>
 </html>
