@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
-  <meta name="theme-color" content="#ffffff">
+  <meta name="theme-color" content="#000000">
   <title>Vynix Chat</title>
 
   <script src="https://cdn.tailwindcss.com"></script>
@@ -20,36 +20,75 @@
 
   <style>
     :root {
-      --bg-light: #f0f2f5;
-      --bg-white: #ffffff;
-      --text-primary: #111b21;
-      --accent: #00a884; 
+      --bg-light: #0a0a0a;
+      --bg-dark: #111111;
+      --bg-card: #1a1a1a;
+      --text-primary: #e0e0e0;
+      --text-secondary: #a0a0a0;
+      --accent: #000000;
+      --accent-hover: #222222;
     }
-    body { font-family: 'Inter', sans-serif; background: #e5e5e5; margin:0; -webkit-tap-highlight-color: transparent; }
+    body { 
+      font-family: 'Inter', sans-serif; 
+      background: var(--bg-light); 
+      color: var(--text-primary);
+      margin:0; 
+      -webkit-tap-highlight-color: transparent; 
+    }
     
     .app-container {
-      width: 100vw; height: 100vh; background: var(--bg-light);
+      width: 100vw; height: 100vh;
+      background: var(--bg-light);
       display: flex; flex-direction: column; overflow: hidden; position: relative;
     }
     @media (min-width: 768px) {
       .app-container {
-        width: 400px; height: 850px; margin: 20px auto; border-radius: 30px;
-        border: 10px solid #fff; box-shadow: 0 20px 60px rgba(0,0,0,0.1);
+        width: 400px; height: 850px; margin: 20px auto; 
+        border-radius: 30px;
+        border: 10px solid #111;
+        box-shadow: 0 20px 60px rgba(0,0,0,0.6);
       }
     }
 
     .scrollbar-hide::-webkit-scrollbar { display: none; }
     .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
 
-    /* Animations */
-    .modal-enter { animation: modalFadeIn 0.25s cubic-bezier(0.4, 0, 0.2, 1); }
-    @keyframes modalFadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
-    
-    .fade-in { animation: fadeIn 0.4s ease-out; }
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    /* Shimmer effect */
+    .shimmer-bg {
+      background: linear-gradient(90deg, #1a1a1a 0%, #2a2a2a 50%, #1a1a1a 100%);
+      background-size: 200% 100%;
+      animation: shimmer 2.5s infinite linear;
+    }
+    @keyframes shimmer {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
 
-    /* Tab Transition */
-    .tab-content { transition: transform 0.3s cubic-bezier(0.25, 0.8, 0.5, 1); width: 300%; display: flex; height: 100%; }
+    .shimmer-text {
+      background: linear-gradient(90deg, #888, #ddd, #888);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-size: 200% auto;
+      animation: shimmerText 3s linear infinite;
+    }
+    @keyframes shimmerText {
+      0% { background-position: 200% center; }
+      100% { background-position: -200% center; }
+    }
+
+    .modal-enter { animation: modalFadeIn 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+    @keyframes modalFadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+
+    .bottom-sheet-enter { animation: sheetUp 0.35s cubic-bezier(0.32, 0.72, 0, 1); }
+    @keyframes sheetUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+
+    .fade-in { animation: fadeIn 0.5s ease-out; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+
+    .tab-content { 
+      transition: transform 0.4s cubic-bezier(0.22, 0.61, 0.36, 1); 
+      width: 300%; display: flex; height: 100%; 
+    }
     .tab-pane { width: 33.33%; height: 100%; overflow-y: auto; flex-shrink: 0; }
   </style>
 </head>
@@ -60,7 +99,7 @@
   <script type="text/babel">
     const { useState, useEffect, useRef } = React;
 
-    // ─── FIREBASE CONFIGURATION ───
+    // ─── FIREBASE CONFIG ─── (unchanged)
     const firebaseConfig = {
       apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
       authDomain: "fire-b-a8878.firebaseapp.com",
@@ -71,29 +110,28 @@
       appId: "1:658673187627:web:6e4c29af661785f0afa36e"
     };
 
-    // Initialize Firebase only once
     if (!firebase.apps.length) {
       firebase.initializeApp(firebaseConfig);
     }
     const auth = firebase.auth();
     const db = firebase.database();
 
-    // ─── COMPONENT: CUSTOM ALERT ───
+    // ─── CUSTOM ALERT ─── (updated colors)
     const CustomAlert = ({ message, isOpen, onClose, type = 'info' }) => {
       if (!isOpen) return null;
       return (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-[2px] modal-enter">
-          <div className="bg-white rounded-2xl shadow-xl w-[85%] max-w-sm p-6 text-center transform transition-all">
-            <div className={`mx-auto flex items-center justify-center h-12 w-12 rounded-full mb-4 ${type === 'error' ? 'bg-red-100' : 'bg-green-100'}`}>
-              <span className={`material-symbols-rounded text-2xl ${type === 'error' ? 'text-red-600' : 'text-green-600'}`}>
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm modal-enter">
+          <div className="bg-[#1a1a1a] rounded-2xl shadow-2xl w-[88%] max-w-sm p-6 text-center border border-gray-800">
+            <div className={`mx-auto flex items-center justify-center h-12 w-12 rounded-full mb-4 ${type === 'error' ? 'bg-red-900/40' : 'bg-green-900/40'}`}>
+              <span className={`material-symbols-rounded text-2xl ${type === 'error' ? 'text-red-400' : 'text-green-400'}`}>
                 {type === 'error' ? 'priority_high' : 'check'}
               </span>
             </div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">{type === 'error' ? 'Oops!' : 'Success'}</h3>
-            <p className="text-sm text-gray-500 mb-6">{message}</p>
+            <h3 className="text-lg font-semibold text-white mb-2">{type === 'error' ? 'Error' : 'Success'}</h3>
+            <p className="text-sm text-gray-400 mb-6">{message}</p>
             <button 
               onClick={onClose}
-              className="w-full inline-flex justify-center rounded-lg border border-transparent shadow-sm px-4 py-2 bg-black text-base font-medium text-white hover:bg-gray-800 focus:outline-none sm:text-sm"
+              className="w-full rounded-xl bg-white text-black font-medium py-3 hover:bg-gray-200 transition"
             >
               Okay
             </button>
@@ -102,27 +140,29 @@
       );
     };
 
-    // ─── COMPONENT: MODAL ───
-    const Modal = ({ isOpen, onClose, title, children }) => {
+    // ─── BOTTOM SHEET ─── (replaces modal for add friend)
+    const BottomSheet = ({ isOpen, onClose, title, children }) => {
       if (!isOpen) return null;
       return (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4">
-          <div className="absolute inset-0 bg-black/30 backdrop-blur-sm transition-opacity" onClick={onClose}></div>
-          <div className="relative bg-white sm:rounded-2xl rounded-t-2xl shadow-2xl w-full max-w-sm overflow-hidden modal-enter flex flex-col max-h-[90vh]">
-            <div className="px-5 py-4 border-b border-gray-100 flex justify-between items-center bg-white">
-              <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
-              <button onClick={onClose} className="bg-gray-100 p-1 rounded-full text-gray-500 hover:text-gray-900 transition-colors">
-                <span className="material-symbols-rounded text-xl block">close</span>
+        <>
+          <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm" onClick={onClose}></div>
+          <div className={`fixed bottom-0 left-0 right-0 z-50 bg-[#111] rounded-t-3xl shadow-2xl max-h-[85vh] overflow-hidden bottom-sheet-enter ${isOpen ? 'translate-y-0' : 'translate-y-full'}`}>
+            <div className="px-5 pt-4 pb-2 flex justify-between items-center border-b border-gray-800">
+              <h3 className="text-lg font-semibold text-white">{title}</h3>
+              <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-800 text-gray-400">
+                <span className="material-symbols-rounded">close</span>
               </button>
             </div>
-            <div className="p-5 overflow-y-auto">{children}</div>
+            <div className="p-5 overflow-y-auto max-h-[70vh]">
+              {children}
+            </div>
           </div>
-        </div>
+        </>
       );
     };
 
-    // ─── AUTH SCREEN DESIGN ───
-    const AuthScreen = ({ onLogin }) => {
+    // ─── AUTH SCREEN ─── (black + shimmer)
+    const AuthScreen = () => {
       const [name, setName] = useState("");
       const [loading, setLoading] = useState(false);
 
@@ -133,105 +173,85 @@
         try {
           const userCredential = await auth.signInAnonymously();
           const uid = userCredential.user.uid;
-          
-          // Generate unique ID
           const randomCode = Math.floor(1000 + Math.random() * 9000);
-          const vynixId = `${name.replace(/\s/g, '').toLowerCase()}#${randomCode}`;
+          const vynixId = `\( {name.replace(/\s/g, '').toLowerCase()}# \){randomCode}`;
           
-          // Save to DB
           await db.ref(`users/${uid}`).update({
-            name: name,
-            vynixId: vynixId,
-            uid: uid,
+            name, vynixId, uid,
             createdAt: firebase.database.ServerValue.TIMESTAMP
           });
           
-          // Create Lookup Entry
           await db.ref(`vynix_lookup/${vynixId.replace('#', '_')}`).set(uid);
-
         } catch (error) {
-          console.error("Login Error:", error);
-          alert("Login failed: " + error.message);
+          alert("Error: " + error.message);
         } finally {
           setLoading(false);
         }
       };
 
       return (
-        <div className="h-full w-full flex flex-col bg-white">
-          {/* Top Graphic Area */}
+        <div className="h-full w-full flex flex-col bg-black">
           <div className="flex-1 flex flex-col items-center justify-center p-8 relative overflow-hidden">
-             {/* Decorative Background Blobs */}
-             <div className="absolute top-[-50px] left-[-50px] w-40 h-40 bg-green-100 rounded-full blur-3xl opacity-60"></div>
-             <div className="absolute bottom-[-20px] right-[-20px] w-60 h-60 bg-blue-100 rounded-full blur-3xl opacity-60"></div>
-             
-             <div className="z-10 text-center fade-in">
-                <div className="w-20 h-20 bg-black rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-2xl shadow-green-500/20 rotate-6">
-                  <span className="material-symbols-rounded text-4xl text-white">chat_bubble</span>
-                </div>
-                <h1 className="text-3xl font-bold text-gray-900 mb-2 tracking-tight">Vynix Chat</h1>
-                <p className="text-gray-500 text-sm max-w-[200px] mx-auto">Connect with friends using your unique Vynix ID.</p>
-             </div>
+            <div className="absolute inset-0 shimmer-bg opacity-30"></div>
+            <div className="z-10 text-center fade-in">
+              <div className="w-20 h-20 bg-gradient-to-br from-gray-800 to-black rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-2xl shadow-black/70 rotate-6 border border-gray-700">
+                <span className="material-symbols-rounded text-4xl text-white">chat_bubble</span>
+              </div>
+              <h1 className="text-4xl font-black text-white mb-2 tracking-tight shimmer-text">VYNIX</h1>
+              <p className="text-gray-400 text-sm max-w-[240px] mx-auto">Talk with your people using unique IDs</p>
+            </div>
           </div>
 
-          {/* Bottom Form Area */}
-          <div className="bg-white px-8 pb-12 pt-4 rounded-t-[30px] shadow-[0_-10px_40px_rgba(0,0,0,0.03)] z-20">
-            <form onSubmit={handleLogin} className="space-y-5">
+          <div className="bg-[#0f0f0f] px-8 pb-14 pt-6 rounded-t-[36px] border-t border-gray-800">
+            <form onSubmit={handleLogin} className="space-y-6">
               <div>
-                <label className="text-xs font-bold text-gray-400 uppercase tracking-wider ml-1">Display Name</label>
+                <label className="text-xs font-bold text-gray-500 uppercase tracking-wider ml-1">Your Name</label>
                 <input 
-                  type="text" 
-                  placeholder="e.g., Alex" 
-                  className="w-full mt-2 bg-gray-50 px-5 py-4 rounded-2xl border border-gray-100 text-gray-900 font-medium focus:border-black focus:ring-0 outline-none transition-all placeholder-gray-400"
-                  value={name} 
-                  onChange={e => setName(e.target.value)} 
-                  autoFocus
+                  type="text" placeholder="e.g. Thabo" autoFocus
+                  className="w-full mt-2 bg-[#1a1a1a] px-5 py-4 rounded-2xl border border-gray-800 text-white placeholder-gray-600 focus:border-gray-500 outline-none transition-all"
+                  value={name} onChange={e => setName(e.target.value)}
                 />
               </div>
               <button 
                 disabled={loading} 
-                className="w-full bg-black text-white font-bold py-4 rounded-2xl shadow-xl hover:bg-gray-800 transition-all active:scale-95 disabled:opacity-70 flex items-center justify-center gap-2"
+                className="w-full bg-white text-black font-bold py-4 rounded-2xl shadow-xl hover:bg-gray-200 active:scale-[0.98] disabled:opacity-60 flex items-center justify-center gap-2 transition-all"
               >
                 {loading ? (
-                   <>
-                     <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                     <span>Creating ID...</span>
-                   </>
+                  <>
+                    <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin"></div>
+                    <span>Creating...</span>
+                  </>
                 ) : (
-                   <>
-                     <span>Get Started</span>
-                     <span className="material-symbols-rounded">arrow_forward</span>
-                   </>
+                  <>
+                    <span>Start Chatting</span>
+                    <span className="material-symbols-rounded">arrow_forward</span>
+                  </>
                 )}
               </button>
             </form>
-            <p className="text-center text-xs text-gray-400 mt-6">By continuing, you agree to our Terms & Privacy Policy.</p>
+            <p className="text-center text-xs text-gray-600 mt-6">By continuing you accept our Terms</p>
           </div>
         </div>
       );
     };
 
-    // ─── MAIN APP LOGIC ───
+    // ─── MAIN APP ───
     const MainApp = ({ user }) => {
       const [chats, setChats] = useState([]);
       const [userData, setUserData] = useState(null);
-      
-      const [activeTab, setActiveTab] = useState(0); 
+      const [activeTab, setActiveTab] = useState(0);
       const [isSearchOpen, setIsSearchOpen] = useState(false);
       const [searchQuery, setSearchQuery] = useState("");
-      
-      const [modalState, setModalState] = useState({ open: false, type: '' });
+      const [sheetOpen, setSheetOpen] = useState(false);
       const [alertState, setAlertState] = useState({ open: false, message: '', type: 'info' });
-      
       const [addIdInput, setAddIdInput] = useState("");
       const [addLoading, setAddLoading] = useState(false);
 
       const touchStartX = useRef(0);
       const touchEndX = useRef(0);
 
-      const showAlert = (message, type = 'info') => setAlertState({ open: true, message, type });
+      const showAlert = (msg, type = 'info') => setAlertState({ open: true, message: msg, type });
 
-      // Load Data
       useEffect(() => {
         const userRef = db.ref(`users/${user.uid}`);
         userRef.on('value', snap => setUserData(snap.val()));
@@ -240,9 +260,7 @@
         contactsRef.on('value', snap => {
           const data = snap.val() || {};
           const list = Object.entries(data).map(([id, info]) => ({
-            id, ...info, 
-            lastMessage: "Tap to start chatting", 
-            lastTime: "Now"
+            id, ...info, lastMessage: "Tap to chat", lastTime: "Now"
           }));
           setChats(list);
         });
@@ -250,9 +268,8 @@
         return () => { userRef.off(); contactsRef.off(); };
       }, [user]);
 
-      // Swipe Handlers
-      const handleTouchStart = (e) => touchStartX.current = e.touches[0].clientX;
-      const handleTouchEnd = (e) => {
+      const handleTouchStart = e => touchStartX.current = e.touches[0].clientX;
+      const handleTouchEnd = e => {
         touchEndX.current = e.changedTouches[0].clientX;
         const diff = touchStartX.current - touchEndX.current;
         if (Math.abs(diff) > 60) {
@@ -261,43 +278,39 @@
         }
       };
 
-      // Add Friend Logic
       const handleAddFriend = async () => {
         if (!addIdInput.trim()) return;
         setAddLoading(true);
         const searchKey = addIdInput.trim().replace('#', '_');
 
         try {
-          const snapshot = await db.ref(`vynix_lookup/${searchKey}`).get();
-          if (snapshot.exists()) {
-            const friendUid = snapshot.val();
-            if (friendUid === user.uid) throw new Error("You cannot add yourself.");
-            
-            // Check if already exists locally in chats array
-            if (chats.find(c => c.id === friendUid)) throw new Error("User already in contacts.");
+          const snap = await db.ref(`vynix_lookup/${searchKey}`).once('value');
+          if (!snap.exists()) throw new Error("ID not found");
 
-            const friendInfo = (await db.ref(`users/${friendUid}`).get()).val();
+          const friendUid = snap.val();
+          if (friendUid === user.uid) throw new Error("Can't add yourself");
 
-            // Add to my contacts
-            await db.ref(`users/${user.uid}/contacts/${friendUid}`).set({
-              name: friendInfo.name, vynixId: friendInfo.vynixId
-            });
-            
-            // Add me to their contacts (Auto-friend for demo)
-            await db.ref(`users/${friendUid}/contacts/${user.uid}`).set({
-              name: userData.name, vynixId: userData.vynixId
-            });
+          if (chats.some(c => c.id === friendUid)) throw new Error("Already in contacts");
 
-            showAlert(`Success! Added ${friendInfo.name}`, 'success');
-            setModalState({ open: false });
-            setAddIdInput("");
-          } else {
-            showAlert("Vynix ID not found.", 'error');
-          }
+          const friendSnap = await db.ref(`users/${friendUid}`).once('value');
+          const friendInfo = friendSnap.val();
+
+          await db.ref(`users/\( {user.uid}/contacts/ \){friendUid}`).set({
+            name: friendInfo.name, vynixId: friendInfo.vynixId
+          });
+
+          await db.ref(`users/\( {friendUid}/contacts/ \){user.uid}`).set({
+            name: userData.name, vynixId: userData.vynixId
+          });
+
+          showAlert(`Added ${friendInfo.name}`, 'success');
+          setSheetOpen(false);
+          setAddIdInput("");
         } catch (err) {
           showAlert(err.message, 'error');
+        } finally {
+          setAddLoading(false);
         }
-        setAddLoading(false);
       };
 
       const filteredChats = chats.filter(c => 
@@ -306,30 +319,29 @@
 
       return (
         <div className="app-container">
-          
           {/* Header */}
-          <div className="bg-white z-20 shadow-sm flex-shrink-0 relative">
+          <div className="bg-black z-20 shadow-md flex-shrink-0 relative border-b border-gray-900">
             <div className="px-4 py-4 flex justify-between items-center h-16">
               {isSearchOpen ? (
-                <div className="flex items-center w-full gap-2 fade-in">
-                  <span onClick={() => { setIsSearchOpen(false); setSearchQuery(""); }} className="material-symbols-rounded text-gray-500 cursor-pointer p-2 hover:bg-gray-100 rounded-full">arrow_back</span>
-                  <input 
-                    autoFocus
-                    placeholder="Search friends..." 
-                    className="flex-1 bg-gray-100 border-none outline-none rounded-full px-4 py-2 text-gray-900"
-                    value={searchQuery}
-                    onChange={e => setSearchQuery(e.target.value)}
+                <div className="flex items-center w-full gap-3 fade-in">
+                  <span onClick={() => {setIsSearchOpen(false); setSearchQuery("");}} 
+                        className="material-symbols-rounded text-gray-400 cursor-pointer p-2 hover:bg-gray-900 rounded-full">
+                    arrow_back
+                  </span>
+                  <input autoFocus placeholder="Search..." 
+                    className="flex-1 bg-gray-900 border-none outline-none rounded-full px-5 py-2.5 text-white placeholder-gray-500"
+                    value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
                   />
                 </div>
               ) : (
                 <>
-                  <h1 className="text-xl font-bold text-[#00a884] tracking-tight">Vynix Chat</h1>
-                  <div className="flex gap-2">
-                    <button onClick={() => setIsSearchOpen(true)} className="p-2 rounded-full hover:bg-gray-100 text-gray-600">
+                  <h1 className="text-2xl font-black tracking-tight shimmer-text">VYNIX</h1>
+                  <div className="flex gap-1">
+                    <button onClick={() => setIsSearchOpen(true)} className="p-2.5 rounded-full hover:bg-gray-900 text-gray-300">
                       <span className="material-symbols-rounded">search</span>
                     </button>
-                    <button onClick={() => setModalState({ open: true, type: 'settings' })} className="p-2 rounded-full hover:bg-gray-100 text-gray-600">
-                      <span className="material-symbols-rounded">more_vert</span>
+                    <button onClick={() => auth.signOut()} className="p-2.5 rounded-full hover:bg-gray-900 text-gray-300">
+                      <span className="material-symbols-rounded">logout</span>
                     </button>
                   </div>
                 </>
@@ -337,146 +349,104 @@
             </div>
 
             {/* Tabs */}
-            <div className="flex justify-around items-center text-sm font-medium border-b border-gray-100">
+            <div className="flex border-b border-gray-900">
               {['Chats', 'Status', 'Calls'].map((tab, i) => (
-                <button 
-                  key={tab}
-                  onClick={() => setActiveTab(i)}
-                  className={`flex-1 py-3 text-center relative transition-colors duration-300 ${activeTab === i ? 'text-[#00a884]' : 'text-gray-500 hover:text-gray-700'}`}
-                >
+                <button key={tab} onClick={() => setActiveTab(i)}
+                  className={`flex-1 py-3 text-center font-medium text-sm transition-colors ${activeTab === i ? 'text-white border-b-2 border-white' : 'text-gray-500 hover:text-gray-300'}`}>
                   {tab}
-                  {activeTab === i && <span className="absolute bottom-0 left-0 w-full h-[3px] bg-[#00a884] rounded-t-full transition-all"></span>}
                 </button>
               ))}
             </div>
           </div>
 
-          {/* Swipeable Content */}
-          <div 
-            className="flex-1 overflow-hidden bg-[#f0f2f5] relative"
-            onTouchStart={handleTouchStart}
-            onTouchEnd={handleTouchEnd}
-          >
+          {/* Content */}
+          <div className="flex-1 overflow-hidden relative bg-black" 
+               onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
             <div className="tab-content" style={{ transform: `translateX(-${activeTab * 33.33}%)` }}>
-              
-              {/* CHATS TAB */}
-              <div className="tab-pane relative">
-                 <div className="bg-white min-h-full pb-24">
-                   {filteredChats.length === 0 ? (
-                     <div className="flex flex-col items-center justify-center pt-20 text-gray-400 fade-in">
-                       <span className="material-symbols-rounded text-6xl mb-4 text-gray-200">sentiment_dissatisfied</span>
-                       <p>{searchQuery ? "No results found" : "No chats yet"}</p>
-                       {!searchQuery && <p className="text-xs mt-2">Use the FAB to add friends!</p>}
-                     </div>
-                   ) : (
-                     filteredChats.map(chat => (
-                       <div key={chat.id} className="flex items-center px-4 py-3 bg-white hover:bg-gray-50 active:bg-gray-100 cursor-pointer border-b border-gray-50 transition-colors">
-                         <div className="relative">
-                            <img src={`https://ui-avatars.com/api/?name=${chat.name}&background=random&color=fff`} className="w-12 h-12 rounded-full object-cover shadow-sm"/>
-                         </div>
-                         <div className="ml-4 flex-1 min-w-0">
-                           <div className="flex justify-between items-baseline mb-1">
-                             <h3 className="text-[16px] font-semibold text-gray-900 truncate">{chat.name}</h3>
-                             <span className="text-[11px] text-gray-400">{chat.lastTime}</span>
-                           </div>
-                           <p className="text-[14px] text-gray-500 truncate">{chat.lastMessage}</p>
-                         </div>
-                       </div>
-                     ))
-                   )}
-                 </div>
-              </div>
-
-              {/* STATUS TAB */}
-              <div className="tab-pane flex items-center justify-center bg-white">
-                <div className="text-center text-gray-400">
-                   <span className="material-symbols-rounded text-5xl mb-2">donut_large</span>
-                   <p>Status updates coming soon</p>
+              {/* Chats */}
+              <div className="tab-pane">
+                <div className="min-h-full">
+                  {filteredChats.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center h-[70vh] text-gray-500">
+                      <span className="material-symbols-rounded text-7xl mb-4 opacity-50">chat</span>
+                      <p>{searchQuery ? "No matches" : "No chats yet"}</p>
+                    </div>
+                  ) : (
+                    filteredChats.map(chat => (
+                      <div key={chat.id} className="flex items-center px-4 py-3.5 hover:bg-gray-900/50 active:bg-gray-800 cursor-pointer border-b border-gray-900/70">
+                        <img src={`https://ui-avatars.com/api/?name=${chat.name}&background=111&color=eee`} 
+                             className="w-12 h-12 rounded-full object-cover" alt={chat.name}/>
+                        <div className="ml-4 flex-1 min-w-0">
+                          <div className="flex justify-between mb-0.5">
+                            <h3 className="font-medium text-white truncate">{chat.name}</h3>
+                            <span className="text-xs text-gray-500">{chat.lastTime}</span>
+                          </div>
+                          <p className="text-sm text-gray-400 truncate">{chat.lastMessage}</p>
+                        </div>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
 
-              {/* CALLS TAB */}
-              <div className="tab-pane flex items-center justify-center bg-white">
-                <div className="text-center text-gray-400">
-                   <span className="material-symbols-rounded text-5xl mb-2">call</span>
-                   <p>Calls coming soon</p>
+              <div className="tab-pane flex items-center justify-center text-gray-500">
+                <div className="text-center">
+                  <span className="material-symbols-rounded text-6xl mb-3 opacity-60">donut_large</span>
+                  <p>Status coming soon</p>
+                </div>
+              </div>
+
+              <div className="tab-pane flex items-center justify-center text-gray-500">
+                <div className="text-center">
+                  <span className="material-symbols-rounded text-6xl mb-3 opacity-60">call</span>
+                  <p>Calls coming soon</p>
                 </div>
               </div>
             </div>
 
-            {/* FAB */}
+            {/* Floating Action Button */}
             <button 
-              onClick={() => {
-                if (activeTab !== 0) setActiveTab(0);
-                setModalState({ open: true, type: 'add_friend' });
-              }}
-              className={`fixed bottom-6 right-6 bg-[#25D366] text-white w-14 h-14 rounded-2xl shadow-[0_4px_20px_rgba(37,211,102,0.4)] flex items-center justify-center z-30 transition-transform active:scale-90 ${activeTab !== 0 ? 'scale-0' : 'scale-100'}`}
+              onClick={() => setSheetOpen(true)}
+              className={`fixed bottom-7 right-6 bg-white text-black w-14 h-14 rounded-full shadow-2xl shadow-black/60 flex items-center justify-center z-30 transition-all active:scale-95 ${activeTab !== 0 ? 'scale-0' : 'scale-100'}`}
             >
               <span className="material-symbols-rounded text-2xl">person_add</span>
             </button>
           </div>
 
-          {/* Modals & Alerts */}
-          <Modal 
-            isOpen={modalState.open && modalState.type === 'add_friend'}
-            onClose={() => setModalState({ open: false })}
-            title="Add New Friend"
+          {/* Bottom Sheet for Add Friend */}
+          <BottomSheet 
+            isOpen={sheetOpen} 
+            onClose={() => setSheetOpen(false)} 
+            title="Add Friend"
           >
-             <p className="text-sm text-gray-500 mb-6">Ask your friend for their Vynix ID. It looks like <b>name#1234</b>.</p>
-             <div className="space-y-4">
-               <div>
-                 <label className="text-xs font-bold text-gray-400 uppercase ml-1">Vynix ID</label>
-                 <div className="relative mt-1">
-                   <span className="absolute left-3 top-3.5 text-gray-400 font-bold">#</span>
-                   <input
-                     className="w-full bg-gray-100 text-gray-900 rounded-xl pl-8 pr-4 py-3 font-mono outline-none focus:ring-2 focus:ring-black/10 transition-all"
-                     placeholder="username#0000"
-                     value={addIdInput}
-                     onChange={(e) => setAddIdInput(e.target.value)}
-                   />
-                 </div>
-               </div>
-               <button 
+            <p className="text-sm text-gray-400 mb-6">Enter your friend's Vynix ID (e.g. thabo#4821)</p>
+            <div className="space-y-5">
+              <div className="relative">
+                <input
+                  className="w-full bg-gray-900 text-white rounded-xl pl-10 pr-4 py-3.5 font-mono outline-none border border-gray-800 focus:border-gray-600 transition-all placeholder-gray-600"
+                  placeholder="username#0000"
+                  value={addIdInput}
+                  onChange={e => setAddIdInput(e.target.value)}
+                  autoFocus
+                />
+                <span className="absolute left-4 top-4 text-gray-500 font-bold">#</span>
+              </div>
+              <button 
                 onClick={handleAddFriend}
                 disabled={addLoading}
-                className="w-full bg-black text-white font-bold py-3.5 rounded-xl hover:bg-gray-800 disabled:opacity-50 transition-all shadow-lg shadow-black/20"
-               >
-                 {addLoading ? 'Searching...' : 'Send Request'}
-               </button>
-             </div>
-          </Modal>
-
-          <Modal
-             isOpen={modalState.open && modalState.type === 'settings'}
-             onClose={() => setModalState({ open: false })}
-             title="Profile & Settings"
-          >
-            <div className="flex flex-col items-center py-4">
-               <div className="w-20 h-20 rounded-full bg-gradient-to-tr from-blue-400 to-purple-500 flex items-center justify-center text-white text-3xl font-bold shadow-lg mb-3">
-                 {userData?.name?.[0]?.toUpperCase()}
-               </div>
-               <h2 className="text-xl font-bold text-gray-900">{userData?.name}</h2>
-               <div className="bg-gray-100 px-3 py-1 rounded-full mt-2 flex items-center gap-2 cursor-pointer active:bg-gray-200"
-                    onClick={() => { navigator.clipboard.writeText(userData?.vynixId); showAlert("ID Copied!", "success"); }}>
-                 <span className="text-sm font-mono text-gray-600">{userData?.vynixId}</span>
-                 <span className="material-symbols-rounded text-xs text-gray-400">content_copy</span>
-               </div>
-            </div>
-            <div className="mt-6">
-              <button onClick={() => { auth.signOut(); window.location.reload(); }} className="w-full flex items-center gap-3 px-4 py-3 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-colors">
-                <span className="material-symbols-rounded">logout</span>
-                <span className="font-medium">Logout</span>
+                className="w-full bg-white text-black font-bold py-3.5 rounded-xl hover:bg-gray-200 disabled:opacity-60 transition-all shadow-lg"
+              >
+                {addLoading ? 'Searching...' : 'Add Friend'}
               </button>
             </div>
-          </Modal>
+          </BottomSheet>
 
           <CustomAlert 
             isOpen={alertState.open} 
             message={alertState.message} 
             type={alertState.type}
-            onClose={() => setAlertState({ ...alertState, open: false })}
+            onClose={() => setAlertState({...alertState, open: false})}
           />
-
         </div>
       );
     };
@@ -486,14 +456,18 @@
       const [loading, setLoading] = useState(true);
 
       useEffect(() => {
-        const unsubscribe = auth.onAuthStateChanged((u) => {
+        const unsubscribe = auth.onAuthStateChanged(u => {
           setUser(u);
           setLoading(false);
         });
         return unsubscribe;
       }, []);
 
-      if (loading) return <div className="h-screen w-screen flex items-center justify-center bg-gray-50"><div className="w-8 h-8 border-4 border-[#00a884] border-t-transparent rounded-full animate-spin"></div></div>;
+      if (loading) return (
+        <div className="h-screen w-screen flex items-center justify-center bg-black">
+          <div className="w-10 h-10 border-4 border-white border-t-transparent rounded-full animate-spin"></div>
+        </div>
+      );
 
       return user ? <MainApp user={user} /> : <AuthScreen />;
     };
