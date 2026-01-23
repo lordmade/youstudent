@@ -1,20 +1,16 @@
 <!DOCTYPE html>
 <html lang="en" class="dark">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
   <meta name="apple-mobile-web-app-capable" content="yes">
   <title>Vynix Chat • Modern Messenger</title>
 
   <script src="https://cdn.tailwindcss.com"></script>
+
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
   <link href="https://fonts.googleapis.com/icon?family=Material+Symbols+Rounded" rel="stylesheet"/>
-
-  <!-- Firebase (compat version – replace config with your real one) -->
-  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -38,12 +34,7 @@
       background: var(--bg-dark);
       color: var(--text-dark);
     }
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-      -webkit-tap-highlight-color: transparent;
-    }
+    * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color: transparent; }
 
     .app-container {
       width: 100vw;
@@ -53,7 +44,6 @@
       flex-direction: column;
       overflow: hidden;
     }
-
     @media (min-width: 768px) {
       .app-container {
         width: 420px;
@@ -68,299 +58,415 @@
 
     .scrollbar-hide::-webkit-scrollbar { display: none; }
     .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+
+    .shimmer-bg {
+      background: linear-gradient(90deg, #e0e0e0 25%, #d0d0d0 50%, #e0e0e0 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.5s infinite linear;
+    }
+    .dark .shimmer-bg {
+      background: linear-gradient(90deg, #2a2a2a 25%, #222 50%, #2a2a2a 75%);
+    }
+    @keyframes shimmer {
+      0%   { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+
+    .tab-content-wrapper {
+      display: flex;
+      width: 400%;
+      height: 100%;
+      transition: transform 0.35s cubic-bezier(0.15, 0.8, 0.3, 1);
+      will-change: transform;
+    }
+    .tab-panel {
+      width: 25%;
+      height: 100%;
+      flex-shrink: 0;
+    }
+
+    /* Modal animation */
+    .modal-enter {
+      animation: modalFadeIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    @keyframes modalFadeIn {
+      from { opacity: 0; transform: scale(0.95); }
+      to   { opacity: 1; transform: scale(1); }
+    }
   </style>
 </head>
 <body class="dark">
 
-<div id="root"></div>
+  <div id="root"></div>
 
-<script type="text/babel">
-const { useState, useEffect, useRef } = React;
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
 
-// ─── Firebase Config ───
-// REPLACE WITH YOUR REAL CONFIG FROM FIREBASE CONSOLE
-const firebaseConfig = {
-  apiKey: "AIzaSyXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
-  authDomain: "your-project.firebaseapp.com",
-  projectId: "your-project",
-  storageBucket: "your-project.appspot.com",
-  messagingSenderId: "123456789012",
-  appId: "1:123456789012:web:abcdef1234567890abcdef"
-};
+    // ─── Reusable Modal ───
+    const Modal = ({ isOpen, onClose, title, children, showConfirm = false, onConfirm }) => {
+      if (!isOpen) return null;
 
-firebase.initializeApp(firebaseConfig);
-const db = firebase.firestore();
-const auth = firebase.auth();
-
-// ─── Reusable Modal ───
-const Modal = ({ isOpen, onClose, title, children }) => {
-  if (!isOpen) return null;
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-      <div className="bg-white dark:bg-[#1f2c34] rounded-2xl shadow-2xl max-w-sm w-full mx-4 max-h-[85vh] overflow-hidden flex flex-col">
-        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
-          <h3 className="text-lg font-semibold text-black dark:text-white">{title}</h3>
-          <button onClick={onClose}>
-            <span className="material-symbols-rounded text-gray-600 dark:text-gray-400">close</span>
-          </button>
-        </div>
-        <div className="flex-1 p-6 overflow-y-auto">{children}</div>
-      </div>
-    </div>
-  );
-};
-
-// ─── Chat Screen ───
-const ChatScreen = ({ friend, onBack }) => {
-  const [messages] = useState([
-    { id: 1, text: `Hey ${friend.name}! Long time!`, sentByMe: false, time: "10:15" },
-    { id: 2, text: "Yo! What's good?", sentByMe: true, time: "10:17" },
-  ]);
-
-  return (
-    <div className="fixed inset-0 z-40 bg-[#f0f2f5] dark:bg-[#111b21] flex flex-col">
-      {/* Header */}
-      <div className="fixed top-0 left-0 right-0 z-50 bg-white dark:bg-[#1f2c34] shadow-sm px-4 py-3 flex items-center gap-4">
-        <button onClick={onBack} className="text-black dark:text-white">
-          <span className="material-symbols-rounded">arrow_back</span>
-        </button>
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-black flex items-center justify-center text-white font-bold">
-            {friend.name.charAt(0)}
-          </div>
-          <div>
-            <h3 className="font-medium">{friend.name}</h3>
-            <p className="text-xs text-gray-500 dark:text-gray-400">Online</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Messages */}
-      <div className="flex-1 pt-[76px] pb-24 px-4 overflow-y-auto">
-        {messages.map(msg => (
-          <div key={msg.id} className={`flex mb-4 ${msg.sentByMe ? 'justify-end' : 'justify-start'}`}>
-            <div className={`max-w-[78%] px-4 py-2.5 rounded-2xl ${
-              msg.sentByMe
-                ? 'bg-black text-white rounded-br-none'
-                : 'bg-white dark:bg-[#2a3942] rounded-bl-none'
-            }`}>
-              <p className="text-[15px]">{msg.text}</p>
-              <p className="text-xs opacity-70 mt-1 text-right">{msg.time}</p>
+      return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm modal-enter">
+          <div className="bg-white dark:bg-[#1f2c34] rounded-2xl shadow-2xl max-w-sm w-full mx-4 overflow-hidden transform transition-all">
+            {title && (
+              <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+                <h3 className="text-lg font-semibold text-black dark:text-white">{title}</h3>
+                <button onClick={onClose} className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
+                  <span className="material-symbols-rounded">close</span>
+                </button>
+              </div>
+            )}
+            <div className="p-6">{children}</div>
+            <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3">
+              <button
+                onClick={onClose}
+                className="px-5 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700"
+              >
+                Cancel
+              </button>
+              {showConfirm && (
+                <button
+                  onClick={() => { onConfirm?.(); onClose(); }}
+                  className="px-5 py-2.5 text-sm font-medium text-white bg-black rounded-lg hover:bg-gray-800"
+                >
+                  Confirm
+                </button>
+              )}
             </div>
           </div>
-        ))}
+        </div>
+      );
+    };
+
+    // ─── Kebab Menu Dropdown ───
+    const KebabMenu = () => {
+      const [open, setOpen] = useState(false);
+      const ref = useRef(null);
+
+      useEffect(() => {
+        const handleClickOutside = (e) => {
+          if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+      }, []);
+
+      const options = [
+        { label: "New group", icon: "group_add" },
+        { label: "New broadcast", icon: "campaign" },
+        { label: "Linked devices", icon: "phonelink" },
+        { label: "Settings", icon: "settings" },
+      ];
+
+      return (
+        <div className="relative" ref={ref}>
+          <span
+            className="material-symbols-rounded cursor-pointer text-black dark:text-white"
+            onClick={() => setOpen(!open)}
+          >
+            more_vert
+          </span>
+          {open && (
+            <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-[#1f2c34] rounded-xl shadow-xl py-2 z-30 border border-gray-200 dark:border-gray-700">
+              {options.map((opt, i) => (
+                <button
+                  key={i}
+                  className="w-full px-5 py-3 text-left text-sm text-black dark:text-white hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center gap-4"
+                  onClick={() => {
+                    setOpen(false);
+                    if (opt.label === "Settings") alert("Opening settings modal...");
+                  }}
+                >
+                  <span className="material-symbols-rounded text-gray-600 dark:text-gray-400">{opt.icon}</span>
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      );
+    };
+
+    // ─── Skeleton & ChatItem ───
+    const SkeletonChat = () => (
+      <div className="flex items-center px-4 py-3 bg-white dark:bg-[#1f2c34] border-b border-gray-200 dark:border-gray-800">
+        <div className="w-14 h-14 rounded-full shimmer-bg flex-shrink-0"></div>
+        <div className="ml-4 flex-1 space-y-2">
+          <div className="flex justify-between">
+            <div className="h-5 w-40 shimmer-bg rounded"></div>
+            <div className="h-4 w-12 shimmer-bg rounded"></div>
+          </div>
+          <div className="h-4 w-5/6 shimmer-bg rounded"></div>
+        </div>
       </div>
+    );
 
-      {/* Input bar */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white dark:bg-[#1f2c34] border-t border-gray-200 dark:border-gray-700 px-4 py-3 flex items-center gap-3">
-        <input
-          type="text"
-          placeholder="Type a message..."
-          className="flex-1 bg-gray-100 dark:bg-gray-800 rounded-full px-5 py-3 outline-none text-black dark:text-white placeholder-gray-500"
-        />
-        <button className="w-11 h-11 rounded-full bg-black text-white flex items-center justify-center">
-          <span className="material-symbols-rounded">send</span>
-        </button>
+    const ChatItem = ({ chat }) => (
+      <div className="flex items-center px-4 py-3 bg-white dark:bg-[#1f2c34] border-b border-gray-200 dark:border-gray-800 active:bg-gray-100 dark:active:bg-gray-800">
+        <div className="relative flex-shrink-0">
+          <img
+            src={`https://ui-avatars.com/api/?name=${encodeURIComponent(chat.name)}&background=000000&color=fff&size=128`}
+            className="w-14 h-14 rounded-full object-cover"
+            alt={chat.name}
+          />
+          {chat.online && <div className="absolute bottom-0 right-0 w-4 h-4 bg-black border-2 border-white dark:border-[#1f2c34] rounded-full"></div>}
+        </div>
+        <div className="ml-4 flex-1 min-w-0">
+          <div className="flex justify-between items-baseline">
+            <h3 className={`text-base font-medium truncate ${chat.unread ? 'text-black dark:text-white' : 'text-gray-900 dark:text-gray-200'}`}>
+              {chat.name}
+            </h3>
+            <span className={`text-xs ${chat.unread ? 'text-black font-medium' : 'text-gray-500 dark:text-gray-400'}`}>
+              {chat.time}
+            </span>
+          </div>
+          <p className={`text-sm truncate ${chat.unread ? 'text-black dark:text-white font-medium' : 'text-gray-600 dark:text-gray-400'}`}>
+            {chat.muted ? <span className="mr-1">🔇</span> : null}{chat.message}
+          </p>
+        </div>
+        {chat.unread > 0 && (
+          <div className="ml-2 bg-black text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center flex-shrink-0">
+            {chat.unread}
+          </div>
+        )}
       </div>
-    </div>
-  );
-};
+    );
 
-// ─── Add Friend by Vynix ID Modal ───
-const AddByVynixIdModal = ({ isOpen, onClose }) => {
-  const [id, setId] = useState("");
-  const [status, setStatus] = useState("idle"); // idle | loading | success | error
+    // ─── Improved FAB with Speed Dial ───
+    const FabMenu = () => {
+      const [open, setOpen] = useState(false);
 
-  const handleAdd = () => {
-    if (!id.trim()) return;
-    setStatus("loading");
-    // Simulate Firebase lookup + add
-    setTimeout(() => {
-      if (Math.random() > 0.3) {
-        setStatus("success");
-        setTimeout(() => {
-          setId("");
-          setStatus("idle");
-          onClose();
-        }, 1400);
-      } else {
-        setStatus("error");
-        setTimeout(() => setStatus("idle"), 2200);
-      }
-    }, 1400);
-  };
+      // You can make these dynamic later (e.g. from state / backend)
+      const hasNewFriends = true; // example
+      const newFriendsCount = 2;
 
-  return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Add Friend by Vynix ID">
-      <input
-        value={id}
-        onChange={e => setId(e.target.value.toLowerCase().trim())}
-        placeholder="e.g. thabo_za"
-        className="w-full px-4 py-3.5 bg-gray-100 dark:bg-gray-800 rounded-xl outline-none text-black dark:text-white placeholder-gray-500"
-      />
-      {status === "loading" && <p className="mt-4 text-center text-gray-400">Adding friend...</p>}
-      {status === "success" && <p className="mt-4 text-center text-green-500 font-medium">Friend added successfully!</p>}
-      {status === "error" && <p className="mt-4 text-center text-red-500">User not found or already added.</p>}
+      const actions = [
+        {
+          label: "New Chat",
+          icon: "chat",
+          color: "bg-black",
+          action: () => alert("Open contact list or start new chat")
+        },
+        {
+          label: "Add by Vynix ID",
+          icon: "person_add",
+          color: "bg-indigo-600",
+          action: () => alert("Open modal: Enter Vynix ID to add friend")
+        },
+        {
+          label: "New Group",
+          icon: "group_add",
+          color: "bg-teal-600",
+          action: () => alert("Open group creation flow")
+        },
+        ...(hasNewFriends ? [{
+          label: "New Friends",
+          icon: "group",
+          color: "bg-amber-600",
+          badge: newFriendsCount,
+          action: () => alert("Show list of recently added friends")
+        }] : [])
+      ];
 
-      <button
-        onClick={handleAdd}
-        disabled={status !== "idle" || !id.trim()}
-        className="mt-6 w-full py-3.5 bg-black text-white rounded-xl font-medium disabled:opacity-50 transition"
-      >
-        Add Friend
-      </button>
-    </Modal>
-  );
-};
-
-// ─── New Friends Modal ───
-const NewFriendsModal = ({ isOpen, onClose, onSelectFriend }) => {
-  // Mock data – replace with real query later
-  const recent = [
-    { uid: "u1", name: "Thabo", vynixId: "thabo_za", added: "just now" },
-    { uid: "u2", name: "Lerato", vynixId: "lerato_g", added: "2 days ago" },
-    { uid: "u3", name: "Sipho", vynixId: "sipho_mzansi", added: "1 week ago" },
-  ];
-
-  return (
-    <Modal isOpen={isOpen} onClose={onClose} title="New Friends">
-      {recent.length === 0 ? (
-        <p className="text-center py-10 text-gray-500 dark:text-gray-400">No new friends yet.</p>
-      ) : (
-        <div className="space-y-3">
-          {recent.map(f => (
+      return (
+        <div className="fixed bottom-6 right-6 z-30 flex flex-col items-end gap-5">
+          {/* Backdrop */}
+          {open && (
             <div
-              key={f.uid}
-              onClick={() => onSelectFriend(f)}
-              className="flex items-center p-4 bg-gray-100 dark:bg-gray-800 rounded-2xl cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700 active:scale-[0.98] transition-all"
+              className="fixed inset-0 bg-black/30 z-20"
+              onClick={() => setOpen(false)}
+            />
+          )}
+
+          {/* Action buttons appear upward */}
+          {open && actions.map((act, index) => (
+            <div
+              key={act.label}
+              className="flex items-center gap-3 transition-all duration-200"
+              style={{
+                transitionDelay: `${(actions.length - 1 - index) * 60}ms`,
+                transform: open ? 'translateY(0) scale(1)' : 'translateY(60px) scale(0.8)',
+                opacity: open ? 1 : 0
+              }}
             >
-              <div className="w-14 h-14 rounded-full bg-black flex items-center justify-center text-white text-xl font-bold">
-                {f.name.charAt(0)}
+              <div className={`text-sm font-medium text-white px-4 py-2 rounded-full shadow-lg whitespace-nowrap ${act.color}`}>
+                {act.label}
+                {act.badge > 0 && (
+                  <span className="ml-2 bg-white text-black text-xs px-2 py-0.5 rounded-full font-bold">
+                    {act.badge}
+                  </span>
+                )}
               </div>
-              <div className="ml-4 flex-1">
-                <p className="font-medium text-base">{f.name}</p>
-                <p className="text-sm text-gray-500 dark:text-gray-400">@{f.vynixId}</p>
-                <p className="text-xs text-gray-500 mt-0.5">Added {f.added}</p>
-              </div>
-              <span className="material-symbols-rounded text-gray-400">chat</span>
+              <button
+                onClick={() => {
+                  act.action();
+                  setOpen(false);
+                }}
+                className={`w-12 h-12 rounded-full flex items-center justify-center shadow-xl text-white ${act.color} active:scale-90 transition-transform`}
+              >
+                <span className="material-symbols-rounded text-2xl">{act.icon}</span>
+              </button>
             </div>
           ))}
-        </div>
-      )}
-    </Modal>
-  );
-};
 
-// ─── Floating Action Button + Speed Dial ───
-const FabMenu = ({ onAddById, onShowNewFriends }) => {
-  const [open, setOpen] = useState(false);
-  const hasNew = true;
-  const newCount = 3;
-
-  const actions = [
-    { label: "New Chat",    icon: "chat",        color: "bg-black",       action: () => alert("Open contact list") },
-    { label: "Add by ID",    icon: "person_add", color: "bg-indigo-600",  action: onAddById },
-    { label: "New Group",    icon: "group_add",  color: "bg-teal-600",    action: () => alert("Create group") },
-    ...(hasNew ? [{ label: "New Friends", icon: "group", color: "bg-amber-600", badge: newCount, action: onShowNewFriends }] : [])
-  ];
-
-  return (
-    <div className="fixed bottom-6 right-6 z-30 flex flex-col-reverse items-end gap-5">
-      {open && (
-        <div className="fixed inset-0 bg-black/40 z-20" onClick={() => setOpen(false)} />
-      )}
-
-      {open && actions.map((act, i) => (
-        <div
-          key={act.label}
-          className="flex items-center gap-4 transition-all duration-200"
-          style={{
-            transitionDelay: `${i * 60}ms`,
-            opacity: open ? 1 : 0,
-            transform: open ? 'translateY(0)' : 'translateY(20px)'
-          }}
-        >
-          <div className={`px-4 py-2 rounded-full text-white text-sm font-medium shadow-lg ${act.color}`}>
-            {act.label}
-            {act.badge && (
-              <span className="ml-2 bg-white text-black text-xs px-2 py-0.5 rounded-full font-bold">
-                {act.badge}
-              </span>
-            )}
-          </div>
+          {/* Main FAB */}
           <button
-            onClick={() => { act.action(); setOpen(false); }}
-            className={`w-12 h-12 rounded-full shadow-xl flex items-center justify-center text-white ${act.color} active:scale-95 transition-transform`}
+            onClick={() => setOpen(!open)}
+            className={`w-14 h-14 rounded-full flex items-center justify-center shadow-2xl text-white transition-all duration-300 z-30 ${
+              open ? 'bg-red-600 rotate-45 scale-95' : 'bg-black hover:bg-gray-800'
+            } active:scale-90`}
           >
-            <span className="material-symbols-rounded text-2xl">{act.icon}</span>
+            {open ? (
+              <span className="material-symbols-rounded text-3xl">close</span>
+            ) : (
+              <>
+                <span className="material-symbols-rounded text-3xl">chat</span>
+                {hasNewFriends && (
+                  <div className="absolute -top-1 -right-1 w-5 h-5 bg-green-500 rounded-full border-2 border-white dark:border-[#111b21] flex items-center justify-center text-xs text-white font-bold">
+                    {newFriendsCount}
+                  </div>
+                )}
+              </>
+            )}
           </button>
         </div>
-      ))}
+      );
+    };
 
-      <button
-        onClick={() => setOpen(!open)}
-        className={`w-14 h-14 rounded-full shadow-2xl flex items-center justify-center text-white transition-all duration-300 z-30 ${
-          open ? 'bg-red-600 rotate-45 scale-95' : 'bg-black hover:bg-gray-800'
-        } active:scale-90`}
-      >
-        {open ? (
-          <span className="material-symbols-rounded text-3xl">close</span>
-        ) : (
-          <>
-            <span className="material-symbols-rounded text-3xl">chat</span>
-            {hasNew && (
-              <div className="absolute -top-1 -right-1 w-5 h-5 bg-green-500 rounded-full border-2 border-white dark:border-[#111b21] flex items-center justify-center text-xs text-white font-bold">
-                {newCount}
+    const App = () => {
+      const [chats, setChats] = useState([]);
+      const [loading, setLoading] = useState(true);
+      const [activeTabIndex, setActiveTabIndex] = useState(0);
+      const [searchOpen, setSearchOpen] = useState(false);
+      const [searchQuery, setSearchQuery] = useState("");
+      const [modalOpen, setModalOpen] = useState(false);
+      const [modalType, setModalType] = useState("");
+
+      const tabs = ['Chats', 'Status', 'Communities', 'Calls'];
+      const touchStartX = useRef(0);
+      const touchEndX = useRef(0);
+      const wrapperRef = useRef(null);
+
+      useEffect(() => {
+        setTimeout(() => {
+          setChats([
+            { id:1, name:"Family Group", message:"Dad: Dinner at 8?", time:"now", unread:3, online:false, muted:false },
+            { id:2, name:"Bestie ❤️", message:"Check this meme 😂", time:"10:22", unread:1, online:true, muted:false },
+          ]);
+          setLoading(false);
+        }, 1600);
+      }, []);
+
+      useEffect(() => {
+        if (wrapperRef.current) {
+          wrapperRef.current.style.transform = `translateX(-${activeTabIndex * 25}%)`;
+        }
+      }, [activeTabIndex]);
+
+      const handleTouchStart = (e) => touchStartX.current = e.touches[0].clientX;
+      const handleTouchEnd = (e) => {
+        touchEndX.current = e.changedTouches[0].clientX;
+        const diff = touchStartX.current - touchEndX.current;
+        if (Math.abs(diff) > 80) {
+          if (diff > 0 && activeTabIndex < tabs.length - 1) setActiveTabIndex(p => p + 1);
+          else if (diff < 0 && activeTabIndex > 0) setActiveTabIndex(p => p - 1);
+        }
+      };
+
+      const openModal = (type) => {
+        setModalType(type);
+        setModalOpen(true);
+      };
+
+      return (
+        <div className="app-container relative">
+          {/* Header */}
+          <div className="fixed top-0 left-0 right-0 z-20 bg-white dark:bg-gray-900 shadow-sm transition-all duration-300">
+            {searchOpen ? (
+              <div className="flex items-center px-4 pt-10 pb-3 gap-3">
+                <span
+                  className="material-symbols-rounded cursor-pointer text-black dark:text-white"
+                  onClick={() => { setSearchOpen(false); setSearchQuery(""); }}
+                >
+                  arrow_back
+                </span>
+                <input
+                  autoFocus
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  placeholder="Search chats..."
+                  className="flex-1 bg-transparent outline-none text-black dark:text-white placeholder-gray-500 text-lg"
+                />
+              </div>
+            ) : (
+              <header className="px-4 pt-10 pb-3 flex items-center justify-between text-black dark:text-white">
+                <h1 className="text-xl font-semibold">Vynix Chat</h1>
+                <div className="flex gap-5 items-center">
+                  <span
+                    className="material-symbols-rounded cursor-pointer"
+                    onClick={() => setSearchOpen(true)}
+                  >
+                    search
+                  </span>
+                  <KebabMenu />
+                </div>
+              </header>
+            )}
+
+            {!searchOpen && (
+              <div className="flex justify-around text-black dark:text-white/90 text-sm font-medium py-3 border-b border-gray-200 dark:border-gray-800">
+                {tabs.map((tab, i) => (
+                  <button
+                    key={tab}
+                    onClick={() => setActiveTabIndex(i)}
+                    className={`pb-1 px-4 relative ${activeTabIndex === i ? 'font-semibold after:absolute after:bottom-0 after:left-1/2 after:-translate-x-1/2 after:w-8 after:h-0.5 after:bg-black dark:after:bg-white after:rounded-full' : ''}`}
+                  >
+                    {tab}
+                  </button>
+                ))}
               </div>
             )}
-          </>
-        )}
-      </button>
-    </div>
-  );
-};
+          </div>
 
-// ─── Main App ───
-const App = () => {
-  const [addByIdOpen, setAddByIdOpen] = useState(false);
-  const [newFriendsOpen, setNewFriendsOpen] = useState(false);
-  const [currentChatFriend, setCurrentChatFriend] = useState(null);
+          {/* Content */}
+          <div
+            className="flex-1 overflow-hidden bg-[#f0f2f5] dark:bg-[#111b21] pt-[140px]"
+            onTouchStart={handleTouchStart}
+            onTouchEnd={handleTouchEnd}
+          >
+            <div ref={wrapperRef} className="tab-content-wrapper">
+              <div className="tab-panel overflow-y-auto scrollbar-hide">
+                {loading ? [...Array(8)].map((_, i) => <SkeletonChat key={i} />) : chats.map(c => <ChatItem key={c.id} chat={c} />)}
+              </div>
+              <div className="tab-panel overflow-y-auto scrollbar-hide flex items-center justify-center text-gray-500 dark:text-gray-400 text-lg">
+                Status Coming Soon...
+              </div>
+              <div className="tab-panel overflow-y-auto scrollbar-hide flex items-center justify-center text-gray-500 dark:text-gray-400 text-lg">
+                Communities Coming Soon...
+              </div>
+              <div className="tab-panel overflow-y-auto scrollbar-hide flex items-center justify-center text-gray-500 dark:text-gray-400 text-lg">
+                Calls Coming Soon...
+              </div>
+            </div>
+          </div>
 
-  const openChatWith = (friend) => {
-    setCurrentChatFriend(friend);
-    setNewFriendsOpen(false);
-  };
+          {/* Improved FAB */}
+          <FabMenu />
 
-  return (
-    <div className="app-container relative">
-      {/* Placeholder main screen */}
-      <div className="flex-1 bg-[#f0f2f5] dark:bg-[#111b21] flex items-center justify-center text-gray-500 dark:text-gray-400">
-        <p className="text-lg">Chats list goes here</p>
-      </div>
+          {/* Example Modals */}
+          <Modal
+            isOpen={modalOpen && modalType === "settings"}
+            onClose={() => setModalOpen(false)}
+            title="Settings"
+          >
+            <p className="text-gray-600 dark:text-gray-300">Manage your account, privacy, notifications, and more.</p>
+          </Modal>
+        </div>
+      );
+    };
 
-      <FabMenu
-        onAddById={() => setAddByIdOpen(true)}
-        onShowNewFriends={() => setNewFriendsOpen(true)}
-      />
-
-      <AddByVynixIdModal isOpen={addByIdOpen} onClose={() => setAddByIdOpen(false)} />
-      <NewFriendsModal
-        isOpen={newFriendsOpen}
-        onClose={() => setNewFriendsOpen(false)}
-        onSelectFriend={openChatWith}
-      />
-
-      {currentChatFriend && (
-        <ChatScreen
-          friend={currentChatFriend}
-          onBack={() => setCurrentChatFriend(null)}
-        />
-      )}
-    </div>
-  );
-};
-
-ReactDOM.createRoot(document.getElementById('root')).render(<App />);
-</script>
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
 </body>
 </html>
