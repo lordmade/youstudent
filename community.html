@@ -1,558 +1,2283 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
-  <meta name="theme-color" content="#ffffff">
-  <title>Vynix Chat</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, interactive-widget=resizes-content">
+    <title>Vynix Chat</title>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Symbols+Rounded" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+    <style>
+        :root {
+            --primary: #3a76f0;
+            --primary-dark: #2563eb;
+            --bg-body: #f3f4f6;
+            --bg-card: #ffffff;
+            --text-main: #111827;
+            --text-muted: #6b7280;
+            --border-light: #e5e7eb;
+            --chat-sent: #3a76f0;
+            --chat-received: #ffffff;
+            --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+            --online: #10b981;
+            --danger: #ef4444;
+        }
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --primary: #4f86f7;
+                --bg-body: #000000;
+                --bg-card: #1c1c1e;
+                --text-main: #f9fafb;
+                --text-muted: #9ca3af;
+                --border-light: #27272a;
+                --chat-sent: #3a76f0;
+                --chat-received: #2c2c2e;
+            }
+        }
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            -webkit-tap-highlight-color: transparent;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+        }
+        body {
+            background: var(--bg-body);
+            color: var(--text-main);
+            height: 100dvh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        /* --- Main List View --- */
+        #mainView {
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        header {
+            height: 60px;
+            padding: 0 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: var(--bg-card);
+            border-bottom: 1px solid var(--border-light);
+            flex-shrink: 0;
+            z-index: 10;
+        }
+        .app-title { font-size: 20px; font-weight: 700; color: var(--primary); }
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+        .header-actions span {
+            font-size: 24px;
+            cursor: pointer;
+            color: var(--text-main);
+        }
+        .search-container {
+            padding: 10px 15px;
+            background: var(--bg-card);
+            flex-shrink: 0;
+        }
+        .search-input {
+            width: 100%;
+            padding: 10px 16px;
+            border-radius: 10px;
+            border: 1px solid var(--border-light);
+            background: var(--bg-body);
+            color: var(--text-main);
+            font-size: 14px;
+        }
+        .search-input:focus { outline: none; border-color: var(--primary); }
+        /* Pill-shaped Sub Tabs - Centered + Swipeable */
+        .sub-tabs-wrapper {
+            overflow: hidden;
+            background: var(--bg-card);
+            flex-shrink: 0;
+        }
+        .sub-tabs {
+            display: flex;
+            justify-content: flex-start;
+            gap: 12px;
+            padding: 12px 15px;
+            overflow-x: auto;
+            scrollbar-width: none;
+            -webkit-overflow-scrolling: touch;
+            scroll-behavior: smooth;
+            transition: transform 0.3s ease;
+        }
+        .sub-tabs::-webkit-scrollbar { display: none; }
+        .sub-tab {
+            position: relative;
+            padding: 8px 20px;
+            border-radius: 20px;
+            background: var(--bg-body);
+            color: var(--text-muted);
+            font-size: 14px;
+            font-weight: 600;
+            white-space: nowrap;
+            cursor: pointer;
+            transition: all 0.2s;
+            flex-shrink: 0;
+        }
+        .sub-tab.active {
+            background: var(--primary);
+            color: white;
+        }
+        .sub-tab.unread-dot::after {
+            content: '';
+            position: absolute;
+            top: 8px;
+            right: 12px;
+            width: 8px;
+            height: 8px;
+            background: var(--primary);
+            border-radius: 50%;
+        }
+        #chatList {
+            flex: 1;
+            overflow-y: auto;
+            background: var(--bg-card);
+        }
+        .chat-card {
+            display: flex;
+            align-items: center;
+            padding: 12px 20px;
+            cursor: pointer;
+            border-bottom: 1px solid transparent;
+            background: var(--bg-card);
+        }
+        .chat-card:active { background: var(--bg-body); }
+        .avatar-container { position: relative; margin-right: 15px; }
+        .avatar { 
+            width: 50px; 
+            height: 50px; 
+            border-radius: 50%; 
+            object-fit: cover; 
+            background: var(--border-light);
+            pointer-events: none; 
+        }
+        .online-indicator {
+            position: absolute; bottom: 2px; right: 2px; width: 12px; height: 12px;
+            background: var(--online); border: 2px solid var(--bg-card); border-radius: 50%;
+        }
+        .chat-info { flex: 1; min-width: 0; }
+        .chat-header-row { display: flex; justify-content: space-between; margin-bottom: 4px; }
+        .chat-name { font-weight: 600; font-size: 16px; }
+        .chat-time { font-size: 12px; color: var(--text-muted); }
+        .chat-msg-row { display: flex; justify-content: space-between; align-items: center; }
+        .chat-msg { font-size: 14px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 85%; }
+        .unread-badge {
+            background: var(--primary); color: white; min-width: 18px; height: 18px;
+            border-radius: 9px; padding: 0 5px; font-size: 11px; font-weight: 700;
+            display: flex; align-items: center; justify-content: center;
+        }
+        /* --- Full Chat View --- */
+        #fullChatView {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100dvh;
+            background: var(--bg-body);
+            display: none;
+            flex-direction: column;
+            z-index: 2000;
+        }
+        .chat-bg-pattern {
+            position: absolute; inset: 0; z-index: -1; opacity: 0.05;
+            background-image: radial-gradient(#000 1px, transparent 1px);
+            background-size: 20px 20px;
+            pointer-events: none;
+        }
+        @media (prefers-color-scheme: dark) { .chat-bg-pattern { background-image: radial-gradient(#fff 1px, transparent 1px); opacity: 0.08; } }
+        #chatHeader {
+            flex-shrink: 0;
+            height: 65px;
+            background: rgba(255,255,255,0.95);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-bottom: 1px solid var(--border-light);
+            display: flex; align-items: center; padding: 0 10px;
+            z-index: 20;
+        }
+        @media (prefers-color-scheme: dark) { #chatHeader { background: rgba(28,28,30,0.95); } }
+        #chatBackBtn { padding: 10px; cursor: pointer; color: var(--text-main); margin-right: 5px; }
+        #chatFriendInfo { display: flex; align-items: center; flex: 1; overflow: hidden; }
+        #chatFriendAvatar { 
+            width: 36px; 
+            height: 36px; 
+            border-radius: 50%; 
+            margin-right: 10px;
+            pointer-events: none; 
+        }
+        #chatFriendName { font-weight: 600; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        #chatStatusInfo { font-size: 12px; color: var(--text-muted); }
+        #messageList {
+            flex: 1;
+            overflow-y: auto;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            overscroll-behavior-y: contain;
+        }
+        .message {
+            max-width: 75%;
+            padding: 8px 14px;
+            font-size: 15px;
+            line-height: 1.4;
+            position: relative;
+            word-wrap: break-word;
+            box-shadow: 0 1px 1px rgba(0,0,0,0.05);
+            transition: transform 0.2s ease;
+            touch-action: pan-y;
+        }
+        .message.received {
+            align-self: flex-start;
+            background: var(--chat-received);
+            color: var(--text-main);
+            border-radius: 16px 16px 16px 4px;
+        }
+        .message.sent {
+            align-self: flex-end;
+            background: var(--primary);
+            color: #fff;
+            border-radius: 16px 16px 4px 16px;
+        }
+        .message.pending {
+            opacity: 0.7;
+        }
+        .message.swiping {
+            transform: translateX(-20px);
+            transition: transform 0.2s ease;
+        }
+        .message-time {
+            font-size: 10px;
+            margin-top: 4px;
+            text-align: right;
+            opacity: 0.7;
+        }
+        .pending-indicator {
+            font-size: 12px;
+            opacity: 0.6;
+            margin-top: 4px;
+            text-align: right;
+        }
+        /* Message Actions Popup */
+        .message-actions-popup {
+            position: fixed;
+            background: var(--bg-card);
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+            padding: 8px 0;
+            z-index: 3000;
+            display: none;
+            min-width: 160px;
+        }
+        .message-action-item {
+            padding: 12px 20px;
+            font-size: 15px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            transition: background 0.2s;
+        }
+        .message-action-item:active {
+            background: var(--bg-body);
+        }
+        .message-action-item .material-symbols-rounded {
+            font-size: 20px;
+        }
+        .message-action-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.3);
+            z-index: 2999;
+            display: none;
+        }
+        /* Reaction Styles */
+        .reaction-picker {
+            position: fixed;
+            background: var(--bg-card);
+            border-radius: 16px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+            padding: 12px;
+            z-index: 3500;
+            display: none;
+            gap: 8px;
+            flex-wrap: wrap;
+            max-width: 280px;
+        }
+        .reaction-emoji {
+            font-size: 24px;
+            padding: 8px;
+            cursor: pointer;
+            border-radius: 8px;
+            transition: background 0.2s;
+        }
+        .reaction-emoji:hover {
+            background: var(--bg-body);
+        }
+        .reaction-emoji:active {
+            transform: scale(0.9);
+        }
+        .message-reactions {
+            display: flex;
+            gap: 4px;
+            margin-top: 4px;
+            flex-wrap: wrap;
+        }
+        .reaction-badge {
+            background: rgba(0,0,0,0.1);
+            padding: 2px 6px;
+            border-radius: 12px;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            gap: 2px;
+            cursor: pointer;
+        }
+        .reaction-badge .emoji {
+            font-size: 14px;
+        }
+        .reaction-badge .count {
+            font-size: 10px;
+            font-weight: 600;
+        }
+        .reaction-badge.user-reacted {
+            background: var(--primary) !important;
+            color: white !important;
+        }
+        @media (prefers-color-scheme: dark) {
+            .reaction-badge {
+                background: rgba(255,255,255,0.1);
+            }
+        }
+        #chatInputArea {
+            flex-shrink: 0;
+            background: var(--bg-card);
+            padding: 8px 10px;
+            display: flex;
+            align-items: flex-end;
+            gap: 8px;
+            border-top: 1px solid var(--border-light);
+            z-index: 20;
+        }
+        .input-wrapper {
+            flex: 1;
+            background: var(--bg-body);
+            border-radius: 20px;
+            padding: 8px 14px;
+            display: flex;
+            align-items: center;
+        }
+        #messageInput {
+            flex: 1;
+            background: transparent;
+            border: none;
+            font-size: 15px;
+            max-height: 120px;
+            resize: none;
+            color: var(--text-main);
+            padding: 0;
+            line-height: 1.3;
+        }
+        #messageInput:focus { outline: none; }
+        #sendBtn {
+            width: 40px; height: 40px;
+            border-radius: 50%;
+            background: var(--primary);
+            color: white;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer;
+            flex-shrink: 0;
+            display: none;
+        }
+        #sendBtn.visible { display: flex; }
+        #fabAddFriend {
+            position: fixed; bottom: 25px; right: 25px;
+            width: 56px; height: 56px;
+            background: var(--primary); color: white;
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 4px 12px rgba(58, 118, 240, 0.4);
+            cursor: pointer; z-index: 100;
+        }
+        .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 2500; display: none; }
+        .overlay.active { display: block; }
+        .bottom-sheet {
+            position: fixed; bottom: 0; left: 0; right: 0;
+            background: var(--bg-card);
+            border-radius: 24px 24px 0 0;
+            padding: 24px;
+            z-index: 2600;
+            transform: translateY(100%);
+            transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        .bottom-sheet.active { transform: translateY(0); }
+        .v-input { width: 100%; padding: 14px; border: 1px solid var(--border-light); border-radius: 12px; margin-bottom: 12px; font-size: 15px; background: var(--bg-body); color: var(--text-main); }
+        .btn-primary { width: 100%; padding: 14px; background: var(--primary); color: white; border: none; border-radius: 12px; font-weight: 600; font-size: 15px; cursor: pointer; }
+        .btn-danger { background: var(--danger); }
+        .btn-secondary {
+            background: var(--bg-body);
+            color: var(--text-main);
+            border: 1px solid var(--border-light);
+        }
+        #toast { position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%); background: #333; color: white; padding: 10px 20px; border-radius: 30px; z-index: 3000; font-size: 13px; display: none; }
+        #pageLoader { position: fixed; inset: 0; background: var(--bg-body); z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        .shimmer { background: linear-gradient(90deg, var(--bg-body) 25%, var(--border-light) 50%, var(--bg-body) 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; }
+        @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+        /* Friends list in sheet */
+        .friend-item {
+            display: flex;
+            align-items: center;
+            padding: 12px 0;
+            cursor: pointer;
+        }
+        .friend-item .avatar {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            margin-right: 15px;
+            pointer-events: none;
+        }
+        .friend-item .chat-name {
+            font-size: 16px;
+        }
+        /* Confirmation Dialog */
+        .confirm-dialog {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.6);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 3000;
+        }
+        .confirm-dialog.active {
+            display: flex;
+        }
+        .confirm-box {
+            background: var(--bg-card);
+            width: 90%;
+            max-width: 320px;
+            border-radius: 20px;
+            padding: 24px;
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        .confirm-title {
+            font-size: 18px;
+            font-weight: 700;
+            margin-bottom: 10px;
+        }
+        .confirm-message {
+            font-size: 14px;
+            color: var(--text-muted);
+            margin-bottom: 24px;
+        }
+        .confirm-buttons {
+            display: flex;
+            gap: 12px;
+        }
+        .confirm-buttons button {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 12px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .confirm-cancel {
+            background: var(--bg-body);
+            color: var(--text-main);
+        }
+        .confirm-delete {
+            background: var(--danger);
+            color: white;
+        }
+        /* Context Menu on Long Press */
+        #contextMenu {
+            position: fixed;
+            background: var(--bg-card);
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+            padding: 8px 0;
+            z-index: 4000;
+            display: none;
+            min-width: 160px;
+        }
+        .menu-item {
+            padding: 12px 20px;
+            font-size: 15px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .menu-item:active {
+            background: var(--bg-body);
+        }
+        /* Ensure no long-press on any image/avatar */
+        img, .avatar {
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
+            pointer-events: none;
+        }
+        .message-ticks {
+            font-size: 16px;
+            color: var(--text-muted);
+            margin-left: 4px;
+            vertical-align: middle;
+        }
+        .message-ticks.read {
+            color: var(--primary);
+        }
+        /* Forward selector styles */
+        .forward-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 4000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .forward-selector {
+            background: var(--bg-card);
+            border-radius: 16px;
+            padding: 20px;
+            max-width: 400px;
+            max-height: 70vh;
+            overflow-y: auto;
+            width: 90%;
+        }
+        .forward-friend-item {
+            display: flex;
+            align-items: center;
+            padding: 12px;
+            cursor: pointer;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            transition: background 0.2s;
+        }
+        .forward-friend-item:hover {
+            background: var(--bg-body);
+        }
+        .forward-friend-item.selected {
+            background: var(--primary);
+            color: white;
+        }
+        .message-edit-input {
+            width: 100%;
+            min-height: 40px;
+            padding: 8px;
+            border: 1px solid var(--border-light);
+            border-radius: 8px;
+            background: var(--bg-body);
+            color: var(--text-main);
+            font-size: 14px;
+            resize: vertical;
+        }
 
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
-  <link href="https://fonts.googleapis.com/icon?family=Material+Symbols+Rounded" rel="stylesheet"/>
-
-  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-   
-  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
-
-  <style>
-    :root {
-      --bg: #f0f2f5;
-      --bg-card: #ffffff;
-      --text: #111b21;
-      --text-secondary: #667781;
-      --accent: #008069; /* WhatsApp Green-ish */
-      --accent-light: #25d366;
+        @keyframes splashPulse {
+    0%, 100% {
+        transform: scale(1);
+        box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.4);
     }
-    body { 
-      font-family: 'Inter', sans-serif; 
-      background: var(--bg); 
-      color: var(--text);
-      margin:0; 
-      -webkit-tap-highlight-color: transparent;
+    50% {
+        transform: scale(1.05);
+        box-shadow: 0 0 0 20px rgba(255, 255, 255, 0);
     }
-    
-    .app-container {
-      width: 100vw; height: 100vh;
-      background: #efeae2; /* Chat wallpaper color */
-      display: flex; flex-direction: column; overflow: hidden;
-    }
-    @media (min-width: 768px) {
-      .app-container {
-        width: 400px; height: 850px; margin: 20px auto;
-        border-radius: 32px;
-        border: 12px solid #fff;
-        box-shadow: 0 25px 70px rgba(0,0,0,0.12);
-        background: #fff;
-      }
-    }
+}
 
-    .bottom-sheet-enter { animation: sheetUp 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
-    @keyframes sheetUp { from { transform: translateY(110%); } to { transform: translateY(0); } }
+#pageLoader {
+    background: var(--primary) !important;
+    color: white;
+    transition: opacity 0.6s ease;
+    opacity: 1;
+}
 
-    /* Hide scrollbar */
-    ::-webkit-scrollbar { width: 0px; background: transparent; }
+.splash-container {
+    text-align: center;
+}
 
-    .tab-content { 
-      transition: transform 0.3s ease-in-out; 
-      width: 300%; display: flex; height: 100%; 
-    }
-    .tab-pane { width: 33.33%; height: 100%; overflow-y: auto; flex-shrink: 0; background: #fff; }
-    
-    .settings-item:active { background-color: #f5f6f6; }
-  </style>
+.logo-circle {
+    width: 160px;
+    height: 160px;
+    background: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 40px;
+    animation: splashPulse 2.2s ease-in-out infinite;
+}
+
+.logo-circle .material-symbols-rounded {
+    font-size: 96px;
+    color: var(--primary);
+}
+
+.app-name {
+    font-size: 36px;
+    font-weight: 700;
+    letter-spacing: 1px;
+}
+    </style>
 </head>
 <body>
-
-  <div id="root"></div>
-
-  <script type="text/babel">
-    const { useState, useEffect, useRef } = React;
-
-    // ─── FIREBASE CONFIG ───
-    const firebaseConfig = {
-      apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
-      authDomain: "fire-b-a8878.firebaseapp.com",
-      databaseURL: "https://fire-b-a8878.firebaseio.com",
-      projectId: "fire-b-a8878",
-      storageBucket: "fire-b-a8878.firebasestorage.app",
-      messagingSenderId: "658673187627",
-      appId: "1:658673187627:web:6e4c29af661785f0afa36e"
-    };
-
-    if (!firebase.apps.length) {
-      firebase.initializeApp(firebaseConfig);
-    }
-    const auth = firebase.auth();
-    const db = firebase.database();
-    const googleProvider = new firebase.auth.GoogleAuthProvider();
-
-    // ─── COMPONENTS ───
-
-    const CustomAlert = ({ message, isOpen, onClose, type = 'info' }) => {
-      if (!isOpen) return null;
-      useEffect(() => {
-        const timer = setTimeout(onClose, 3000);
-        return () => clearTimeout(timer);
-      }, [isOpen]);
-      
-      return (
-        <div className="fixed top-10 left-0 right-0 z-50 flex justify-center px-4 pointer-events-none">
-          <div className="bg-gray-800 text-white px-6 py-3 rounded-full shadow-lg flex items-center gap-3 animate-bounce-in pointer-events-auto">
-             <span className="material-symbols-rounded text-sm">
-                {type === 'error' ? 'error' : 'check_circle'}
-             </span>
-             <span className="text-sm font-medium">{message}</span>
-          </div>
+    <div id="pageLoader">
+    <div class="splash-container">
+        <div class="logo-circle">
+            <span class="material-symbols-rounded">chat_bubble_outline</span>
         </div>
-      );
-    };
-
-    const BottomSheet = ({ isOpen, onClose, title, children }) => {
-      if (!isOpen) return null;
-      return (
-        <>
-          <div className="fixed inset-0 z-40 bg-black/40 backdrop-blur-[2px] transition-opacity" onClick={onClose}></div>
-          <div className={`fixed inset-x-0 bottom-0 z-50 bg-white rounded-t-2xl shadow-2xl max-h-[90vh] bottom-sheet-enter flex flex-col`}>
-            <div className="px-4 py-3 flex justify-between items-center border-b border-gray-100">
-              <h3 className="text-lg font-semibold text-gray-800">{title}</h3>
-              <button onClick={onClose} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200">
-                <span className="material-symbols-rounded text-gray-600 text-xl block">close</span>
-              </button>
+        <div class="app-name">Vynix Chat</div>
+        <div style="margin-top: 20px; opacity: 0.8; font-size: 16px;">Connecting...</div>
+    </div>
+</div>
+    <div id="toast"></div>
+    <div id="mainView">
+        <header>
+            <div style="display:flex;align-items:center;">
+                <img id="myAvatar" class="avatar shimmer" src="" style="width:34px;height:34px;margin-right:12px;border:none;">
+                <div>
+                    <div class="app-title">Vynix Chat</div>
+                    <div id="myVynixId" style="font-size:12px;color:var(--text-muted);margin-top:2px;">Loading...</div>
+                </div>
             </div>
-            <div className="p-4 overflow-y-auto">
-              {children}
+            <div class="header-actions">
+                <span class="material-symbols-rounded" onclick="confirmClearAllChats()">delete_sweep</span>
             </div>
-          </div>
-        </>
-      );
-    };
-
-    // ─── PROFILE SETUP ───
-    const ProfileSetup = ({ user, onComplete }) => {
-      const [name, setName] = useState(user.displayName?.split(' ')[0] || "");
-      const [loading, setLoading] = useState(false);
-
-      const handleCreateProfile = async () => {
-        if (!name.trim()) return;
-        setLoading(true);
-        try {
-          // FIX: Corrected Template Literal Syntax
-          const randomCode = Math.floor(1000 + Math.random() * 9000);
-          const cleanName = name.replace(/\s/g, '').toLowerCase();
-          const vynixId = `${cleanName}#${randomCode}`;
-
-          await db.ref(`users/${user.uid}`).set({
-            name: name.trim(),
-            vynixId,
-            uid: user.uid,
-            email: user.email,
-            photoURL: user.photoURL || `https://ui-avatars.com/api/?name=${name}&background=random`,
-            createdAt: firebase.database.ServerValue.TIMESTAMP
-          });
-
-          // Create lookup for adding friends
-          await db.ref(`vynix_lookup/${vynixId.replace('#', '_')}`).set(user.uid);
-
-          onComplete();
-        } catch (err) {
-          alert("Error creating profile: " + err.message);
-        } finally {
-          setLoading(false);
-        }
-      };
-
-      return (
-        <div className="h-full flex flex-col bg-white p-8 items-center justify-center">
-          <div className="w-24 h-24 rounded-full bg-blue-100 flex items-center justify-center mb-6">
-            <span className="material-symbols-rounded text-4xl text-blue-600">person</span>
-          </div>
-          <h1 className="text-2xl font-bold mb-2">Create Profile</h1>
-          <p className="text-gray-500 mb-8 text-center">Choose a display name for your friends to see.</p>
-          
-          <input 
-            type="text" 
-            value={name}
-            onChange={e => setName(e.target.value)}
-            placeholder="Your Name"
-            className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl mb-4 focus:ring-2 focus:ring-blue-500 outline-none transition"
-          />
-          
-          <button 
-            onClick={handleCreateProfile}
-            disabled={loading || !name.trim()}
-            className="w-full bg-blue-600 text-white font-semibold py-3.5 rounded-xl hover:bg-blue-700 transition flex justify-center"
-          >
-            {loading ? "Setting up..." : "Start Chatting"}
-          </button>
+        </header>
+        <div class="search-container">
+            <input type="text" class="search-input" id="friendSearch" placeholder="Search chats..." onkeyup="searchFriends()">
         </div>
-      );
-    };
+        <div class="sub-tabs-wrapper">
+            <div class="sub-tabs" id="subTabs">
+                <div class="sub-tab active" data-tab="all">All</div>
+                <div class="sub-tab" data-tab="favourite">Favourite</div>
+                <div class="sub-tab" data-tab="unread">Unread</div>
+                <div class="sub-tab" data-tab="archived">Archived</div>
+            </div>
+        </div>
+        <div id="chatList"></div>
+    </div>
+    <div id="fullChatView">
+        <div class="chat-bg-pattern"></div>
+        <div id="chatHeader">
+            <span class="material-symbols-rounded" id="chatBackBtn" onclick="closeFullChat()">arrow_back</span>
+            <div id="chatFriendInfo">
+                <img id="chatFriendAvatar" src="">
+                <div>
+                    <div id="chatFriendName"></div>
+                    <div id="chatStatusInfo">Loading...</div>
+                </div>
+            </div>
+        </div>
+        <div id="messageList"></div>
+        <div id="chatInputArea">
+            <div class="input-wrapper">
+                <textarea id="messageInput" rows="1" placeholder="Type a message..." oninput="autoResizeInput(this)" onkeypress="handleEnter(event)"></textarea>
+            </div>
+            <div id="sendBtn"><span class="material-symbols-rounded">arrow_upward</span></div>
+        </div>
+    </div>
+    <div class="overlay" id="overlay" onclick="closeAll()"></div>
+    <div class="bottom-sheet" id="friendsSheet">
+        <h3 style="margin-bottom:15px; font-weight:700;">Your Friends</h3>
+        <div id="friendsList"></div>
+        <div style="margin-top:20px;">
+            <input type="text" id="friendVynixId" class="v-input" placeholder="Enter Vynix ID (e.g. vnx_...)">
+            <button class="btn-primary" onclick="addFriendLogic()">Add Friend</button>
+        </div>
+    </div>
+    <div id="fabAddFriend" onclick="openFriendsSheet()">
+        <span class="material-symbols-rounded">person_add</span>
+    </div>
 
-    // ─── MAIN APP ───
-    const MainApp = ({ user, userData, profileComplete }) => {
-      const [chats, setChats] = useState([]);
-      const [activeTab, setActiveTab] = useState(0); // 0=Chats, 1=Settings (Simplified)
-      const [sheetOpen, setSheetOpen] = useState(false); // Add Friend Sheet
-      const [profileSheetOpen, setProfileSheetOpen] = useState(false); // Edit Profile Sheet
-      
-      const [searchQuery, setSearchQuery] = useState("");
-      const [alert, setAlert] = useState({ open: false, msg: '', type: 'info' });
-      const [addIdInput, setAddIdInput] = useState("");
-      const [addLoading, setAddLoading] = useState(false);
+    <!-- Confirmation Dialog -->
+    <div class="confirm-dialog" id="clearAllConfirm">
+        <div class="confirm-box">
+            <div class="confirm-title">Clear All Chats?</div>
+            <div class="confirm-message">This will permanently delete all your conversations from both sides. This action cannot be undone.</div>
+            <div class="confirm-buttons">
+                <button class="confirm-cancel" onclick="closeConfirm()">Cancel</button>
+                <button class="confirm-delete" onclick="executeClearAllChats()">Delete All</button>
+            </div>
+        </div>
+    </div>
 
-      // Edit Profile State
-      const [editName, setEditName] = useState(userData?.name || "");
-      const [editPhoto, setEditPhoto] = useState(userData?.photoURL || "");
-      const [saveLoading, setSaveLoading] = useState(false);
+    <!-- Context Menu -->
+    <div id="contextMenu">
+        <div class="menu-item" onclick="markAsFavourite(currentContextUid)">
+            <span class="material-symbols-rounded">star</span> Favourite
+        </div>
+        <div class="menu-item" onclick="archiveChat(currentContextUid)">
+            <span class="material-symbols-rounded">archive</span> Archive
+        </div>
+    </div>
 
-      const showAlert = (msg, type = 'info') => setAlert({ open: true, msg, type });
+    <!-- Reaction Picker -->
+    <div class="reaction-picker" id="reactionPicker">
+        <div class="reaction-emoji" data-emoji="👍">👍</div>
+        <div class="reaction-emoji" data-emoji="❤️">❤️</div>
+        <div class="reaction-emoji" data-emoji="😂">😂</div>
+        <div class="reaction-emoji" data-emoji="😮">😮</div>
+        <div class="reaction-emoji" data-emoji="😢">😢</div>
+        <div class="reaction-emoji" data-emoji="🔥">🔥</div>
+        <div class="reaction-emoji" data-emoji="👏">👏</div>
+        <div class="reaction-emoji" data-emoji="🎉">🎉</div>
+    </div>
 
-      useEffect(() => {
-        if (!profileComplete) return;
-        const contactsRef = db.ref(`users/${user.uid}/contacts`);
-        contactsRef.on('value', snap => {
-          const data = snap.val() || {};
-          setChats(Object.entries(data).map(([id, info]) => ({ id, ...info })));
-        });
-        return () => contactsRef.off();
-      }, [user.uid, profileComplete]);
+    <!-- Message Actions Popup -->
+    <div class="message-action-overlay" id="messageActionOverlay" onclick="hideMessageActions()"></div>
+    <div class="message-actions-popup" id="messageActionsPopup">
+        <div class="message-action-item" onclick="deleteMessage()">
+            <span class="material-symbols-rounded">delete</span> Delete
+        </div>
+        <div class="message-action-item" onclick="editMessage()">
+            <span class="material-symbols-rounded">edit</span> Edit
+        </div>
+        <div class="message-action-item" onclick="forwardMessage()">
+            <span class="material-symbols-rounded">forward</span> Forward
+        </div>
+    </div>
 
-      const handleAddFriend = async () => {
-        if (!addIdInput.trim()) return;
-        setAddLoading(true);
-        // Replace # with _ for firebase key compatibility
-        const key = addIdInput.trim().replace('#', '_');
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
+            authDomain: "fire-b-a8878.firebaseapp.com",
+            databaseURL: "https://fire-b-a8878.firebaseio.com/",
+            projectId: "fire-b-a8878",
+            storageBucket: "fire-b-a8878.firebasestorage.app",
+            messagingSenderId: "658673187627",
+            appId: "1:658673187627:web:6e4c29af661785f0afa36e"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.database();
 
-        try {
-          const snap = await db.ref(`vynix_lookup/${key}`).once('value');
-          if (!snap.exists()) throw new Error("ID not found. Check casing!");
+        let currentUser = null;
+        let myProfile = { name: "", photo: "" };
+        let myVId = "";
+        let currentFriendUid = null;
+        let currentRoomId = null;
+        let chatsListener = null;
+        let messagesListener = null;
+        let sharedKeys = JSON.parse(localStorage.getItem('sharedKeys') || '{}');
+        let currentSubTab = 'all';
+        let currentContextUid = null;
+        let cachedChats = JSON.parse(localStorage.getItem('cached_chats') || '{}');
+        let pendingMessages = [];
 
-          const friendUid = snap.val();
-          if (friendUid === user.uid) throw new Error("That's your own ID.");
-          if (chats.some(c => c.id === friendUid)) throw new Error("Already in contacts.");
+        // Variables for swipe handling
+        let currentMessageEl = null;
+        let currentMessageKey = null;
+        let currentMessageText = null;
+        let startX = 0;
+        let currentX = 0;
+        let isSwiping = false;
+        let swipeThreshold = 100;
 
-          const friendSnap = await db.ref(`users/${friendUid}`).once('value');
-          const friend = friendSnap.val();
+        // IndexedDB Setup for messages
+        let idb = null;
+        const DB_NAME = 'vynix_messages';
+        const DB_VERSION = 1;
+        const STORE_NAME = 'messages';
 
-          // Add to my contacts
-          await db.ref(`users/${user.uid}/contacts/${friendUid}`).set({
-            name: friend.name,
-            vynixId: friend.vynixId,
-            photoURL: friend.photoURL
-          });
+        function openIndexedDB() {
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open(DB_NAME, DB_VERSION);
 
-          // Add me to their contacts (Auto-accept for demo simplicity)
-          await db.ref(`users/${friendUid}/contacts/${user.uid}`).set({
-            name: userData.name,
-            vynixId: userData.vynixId,
-            photoURL: userData.photoURL
-          });
+                request.onerror = () => reject(request.error);
+                request.onsuccess = () => {
+                    idb = request.result;
+                    resolve(idb);
+                };
 
-          showAlert(`Added ${friend.name}`, 'success');
-          setSheetOpen(false);
-          setAddIdInput("");
-        } catch (err) {
-          showAlert(err.message, 'error');
-        } finally {
-          setAddLoading(false);
-        }
-      };
-
-      const handleSaveProfile = async () => {
-        setSaveLoading(true);
-        try {
-            await db.ref(`users/${user.uid}`).update({
-                name: editName,
-                photoURL: editPhoto
+                request.onupgradeneeded = (e) => {
+                    idb = e.target.result;
+                    if (!idb.objectStoreNames.contains(STORE_NAME)) {
+                        const store = idb.createObjectStore(STORE_NAME, { keyPath: 'localId', autoIncrement: true });
+                        store.createIndex('roomId', 'roomId', { unique: false });
+                        store.createIndex('ts', 'ts', { unique: false });
+                    }
+                };
             });
-            // Update local state is handled by parent re-render or we could force it, 
-            // but for now let's just close and show alert. Reload required to see changes everywhere perfectly in this simple structure.
-            showAlert("Profile updated!", 'success');
-            setProfileSheetOpen(false);
-            window.location.reload(); // Simple way to refresh all data refs
-        } catch(e) {
-            showAlert(e.message, 'error');
-        } finally {
-            setSaveLoading(false);
         }
-      };
 
-      const filteredChats = chats.filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase()));
-      const copyId = () => {
-        navigator.clipboard.writeText(userData.vynixId);
-        showAlert("ID copied to clipboard", 'success');
-      };
+        async function cacheMessage(roomId, message) {
+            if (!idb) return;
+            const tx = idb.transaction(STORE_NAME, 'readwrite');
+            const store = tx.objectStore(STORE_NAME);
+            store.put({ roomId, ...message });
+            await tx.done;
+        }
 
-      // Generate a new random avatar
-      const randomizeAvatar = () => {
-        const seed = Math.floor(Math.random() * 10000);
-        setEditPhoto(`https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}`);
-      };
+        async function getCachedMessages(roomId) {
+            if (!idb) return [];
+            const tx = idb.transaction(STORE_NAME, 'readonly');
+            const store = tx.objectStore(STORE_NAME);
+            const index = store.index('roomId');
+            const request = index.getAll(roomId);
+            return new Promise((resolve) => {
+                request.onsuccess = () => resolve(request.result);
+            });
+        }
 
-      return (
-        <div className="app-container">
-          {/* HEADER */}
-          <div className="bg-white z-20 flex-shrink-0 pt-safe">
-            <div className="px-4 py-3 flex justify-between items-center">
-               <h1 className="text-2xl font-bold text-blue-600 tracking-tight">Vynix</h1>
-               <div className="flex gap-4">
-                  <button className="p-2 hover:bg-gray-100 rounded-full transition">
-                     <span className="material-symbols-rounded text-gray-800">camera_alt</span>
-                  </button>
-                  <button onClick={() => setSheetOpen(true)} className="p-2 hover:bg-gray-100 rounded-full transition">
-                     <span className="material-symbols-rounded text-gray-800">add_circle</span>
-                  </button>
-               </div>
-            </div>
+        async function clearCachedMessages(roomId) {
+            if (!idb) return;
+            const tx = idb.transaction(STORE_NAME, 'readwrite');
+            const store = tx.objectStore(STORE_NAME);
+            const index = store.index('roomId');
+            const request = index.openCursor(IDBKeyRange.only(roomId));
+            request.onsuccess = () => {
+                const cursor = request.result;
+                if (cursor) {
+                    cursor.delete();
+                    cursor.continue();
+                }
+            };
+            await tx.done;
+        }
 
-            {/* NAVIGATION TABS */}
-            <div className="flex">
-              {['Chats', 'Settings'].map((tab, i) => (
-                <button 
-                  key={tab}
-                  onClick={() => setActiveTab(i)}
-                  className={`flex-1 py-3 text-[15px] font-medium transition-all relative ${activeTab === i ? 'text-blue-600' : 'text-gray-500'}`}
-                >
-                  {tab}
-                  {activeTab === i && <div className="absolute bottom-0 left-0 right-0 h-[3px] bg-blue-600 rounded-t-full mx-10"></div>}
-                </button>
-              ))}
-            </div>
-          </div>
+        async function clearAllCachedMessages() {
+            if (!idb) return;
+            const tx = idb.transaction(STORE_NAME, 'readwrite');
+            tx.objectStore(STORE_NAME).clear();
+            await tx.done;
+        }
 
-          {/* MAIN CONTENT AREA */}
-          <div className="flex-1 overflow-hidden relative bg-gray-100">
-            <div className="tab-content h-full" style={{ transform: `translateX(-${activeTab * 50}%)`, width: '200%' }}>
-              
-              {/* ─── TAB 1: CHATS ─── */}
-              <div className="tab-pane bg-white">
-                <div className="p-3 bg-white">
-                  <div className="bg-gray-100 rounded-xl flex items-center px-4 py-2">
-                     <span className="material-symbols-rounded text-gray-500 mr-2">search</span>
-                     <input 
-                        value={searchQuery}
-                        onChange={e => setSearchQuery(e.target.value)}
-                        placeholder="Search" 
-                        className="bg-transparent border-none outline-none w-full text-gray-800 placeholder-gray-500"
-                     />
-                  </div>
-                </div>
-
-                {filteredChats.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center h-[60%] text-center px-8">
-                    <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mb-4">
-                        <span className="material-symbols-rounded text-gray-300 text-4xl">chat_bubble_outline</span>
-                    </div>
-                    <h3 className="text-gray-900 font-semibold text-lg">No chats yet</h3>
-                    <p className="text-gray-500 text-sm mt-1 mb-6">Connect with your friends by adding their Vynix ID.</p>
-                    <button onClick={() => setSheetOpen(true)} className="text-blue-600 font-medium text-sm hover:underline">
-                        Add a Friend
-                    </button>
-                  </div>
-                ) : (
-                  <div className="pb-20">
-                    {filteredChats.map(chat => (
-                      <div key={chat.id} className="flex items-center px-4 py-3 hover:bg-gray-50 active:bg-gray-100 cursor-pointer transition">
-                        <img src={chat.photoURL || `https://ui-avatars.com/api/?name=${chat.name}`} className="w-12 h-12 rounded-full object-cover border border-gray-100" />
-                        <div className="ml-4 flex-1 border-b border-gray-100 pb-3 min-w-0">
-                          <div className="flex justify-between items-baseline mb-0.5">
-                            <h3 className="font-semibold text-gray-900 truncate text-[16px]">{chat.name}</h3>
-                            <span className="text-xs text-gray-400">Now</span>
-                          </div>
-                          <p className="text-sm text-gray-500 truncate">Hey! Let's chat on Vynix.</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* ─── TAB 2: SETTINGS (WhatsApp Style) ─── */}
-              <div className="tab-pane bg-[#f0f2f5] overflow-y-auto pb-10">
-                
-                {/* Profile Card */}
-                <div onClick={() => setProfileSheetOpen(true)} className="bg-white flex items-center gap-4 px-4 py-4 mb-3 cursor-pointer hover:bg-gray-50 active:bg-gray-100 transition mt-2">
-                    <div className="w-16 h-16 rounded-full overflow-hidden border border-gray-100 relative">
-                        <img src={userData.photoURL} className="w-full h-full object-cover" />
-                    </div>
-                    <div className="flex-1">
-                        <h2 className="text-xl font-semibold text-gray-900">{userData.name}</h2>
-                        <p className="text-gray-500 text-sm truncate w-full">{userData.vynixId}</p>
-                    </div>
-                    <div className="p-2 rounded-full bg-gray-50">
-                        <span className="material-symbols-rounded text-blue-600">qr_code_2</span>
-                    </div>
-                </div>
-
-                {/* Settings Lists */}
-                <div className="bg-white border-y border-gray-100 mb-3">
-                    <SettingItem icon="key" color="text-blue-600" title="Account" subtitle="Security notifications, change number" />
-                    <SettingItem icon="lock" color="text-blue-600" title="Privacy" subtitle="Block contacts, disappearing messages" />
-                    <SettingItem icon="chat" color="text-green-600" title="Chats" subtitle="Theme, wallpapers, chat history" />
-                    <SettingItem icon="notifications" color="text-red-500" title="Notifications" subtitle="Message, group & call tones" />
-                </div>
-
-                <div className="bg-white border-y border-gray-100 mb-3">
-                    <SettingItem icon="help" color="text-gray-600" title="Help" subtitle="Help center, contact us, privacy policy" />
-                    <SettingItem icon="group" color="text-gray-600" title="Invite a friend" />
-                </div>
-
-                 <div className="px-4 py-4 text-center">
-                    <button onClick={() => auth.signOut()} className="text-red-500 font-medium text-sm py-2 px-6 bg-red-50 rounded-full hover:bg-red-100 transition">
-                        Log Out
-                    </button>
-                    <div className="mt-8 mb-4">
-                        <p className="text-xs text-gray-400">from</p>
-                        <p className="text-sm font-bold text-gray-800 tracking-widest">VYNIX META</p>
-                    </div>
-                 </div>
-
-              </div>
-            </div>
-          </div>
-
-          {/* ─── ADD FRIEND SHEET ─── */}
-          <BottomSheet isOpen={sheetOpen} onClose={() => setSheetOpen(false)} title="New Chat">
-            <div className="pt-2">
-              <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 block">Friend's Vynix ID</label>
-              <div className="flex items-center bg-gray-100 rounded-xl px-4 py-3 mb-6 border-2 border-transparent focus-within:border-blue-600 transition">
-                <span className="text-gray-500 font-bold mr-2">#</span>
-                <input 
-                  value={addIdInput} 
-                  onChange={e => setAddIdInput(e.target.value)}
-                  placeholder="username#1234"
-                  className="bg-transparent w-full outline-none text-lg font-medium text-gray-800"
-                  autoFocus
-                />
-              </div>
-              <button 
-                onClick={handleAddFriend}
-                disabled={addLoading}
-                className="w-full bg-blue-600 text-white font-bold py-4 rounded-xl hover:bg-blue-700 active:scale-[0.98] transition flex items-center justify-center"
-              >
-                {addLoading ? "Adding..." : "Add Contact"}
-              </button>
-            </div>
-          </BottomSheet>
-
-          {/* ─── EDIT PROFILE SHEET ─── */}
-          <BottomSheet isOpen={profileSheetOpen} onClose={() => setProfileSheetOpen(false)} title="Edit Profile">
-            <div className="flex flex-col items-center pt-2 pb-6">
-                <div className="relative group cursor-pointer" onClick={randomizeAvatar}>
-                    <img src={editPhoto} className="w-24 h-24 rounded-full object-cover border-4 border-white shadow-lg mb-4" />
-                    <div className="absolute inset-0 bg-black/30 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
-                        <span className="material-symbols-rounded text-white">refresh</span>
-                    </div>
-                </div>
-                <p className="text-xs text-blue-600 font-medium mb-6 cursor-pointer" onClick={randomizeAvatar}>Tap to generate avatar</p>
-
-                <div className="w-full space-y-4">
-                    <div>
-                        <label className="text-xs text-gray-500 font-semibold ml-1">Display Name</label>
-                        <input 
-                            value={editName}
-                            onChange={(e) => setEditName(e.target.value)}
-                            className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 mt-1 focus:ring-2 focus:ring-blue-500 outline-none"
-                        />
-                    </div>
-                    <div>
-                        <label className="text-xs text-gray-500 font-semibold ml-1">Vynix ID (Handle)</label>
-                         <div className="flex items-center gap-2 bg-gray-100 rounded-xl px-4 py-3 mt-1 opacity-70">
-                            <span className="text-gray-500 flex-1">{userData.vynixId}</span>
-                            <span className="material-symbols-rounded text-gray-400 text-sm cursor-pointer" onClick={copyId}>content_copy</span>
-                        </div>
-                        <p className="text-[10px] text-gray-400 mt-1 ml-1">Your unique ID cannot be changed.</p>
-                    </div>
-
-                    <button 
-                        onClick={handleSaveProfile}
-                        disabled={saveLoading}
-                        className="w-full mt-4 bg-blue-600 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-blue-200 hover:bg-blue-700 active:scale-[0.98] transition"
-                    >
-                        {saveLoading ? "Saving..." : "Save Changes"}
-                    </button>
-                </div>
-            </div>
-          </BottomSheet>
-
-          <CustomAlert isOpen={alert.open} message={alert.msg} type={alert.type} onClose={() => setAlert({ ...alert, open: false })} />
-        </div>
-      );
-    };
-
-    // Helper Component for Settings List
-    const SettingItem = ({ icon, title, subtitle, color }) => (
-        <div className="flex items-center px-4 py-4 hover:bg-gray-50 active:bg-gray-100 cursor-pointer transition">
-            <div className="mr-4">
-                <span className={`material-symbols-rounded text-2xl ${color || 'text-gray-600'}`}>{icon}</span>
-            </div>
-            <div className="flex-1">
-                <h4 className="text-[16px] text-gray-900 font-normal">{title}</h4>
-                {subtitle && <p className="text-[13px] text-gray-500 leading-tight mt-0.5">{subtitle}</p>}
-            </div>
-        </div>
-    );
-
-    // ─── ROOT APP ───
-    const App = () => {
-      const [authUser, setAuthUser] = useState(null);
-      const [userData, setUserData] = useState(null);
-      const [loading, setLoading] = useState(true);
-      const [needsProfile, setNeedsProfile] = useState(false);
-
-      useEffect(() => {
-        const unsubscribe = auth.onAuthStateChanged(async (u) => {
-          setAuthUser(u);
-          if (u) {
-            const userRef = db.ref(`users/${u.uid}`);
-            const snap = await userRef.once('value');
-            if (snap.exists()) {
-              setUserData(snap.val());
-              setNeedsProfile(false);
+        auth.onAuthStateChanged(user => {
+            if (user) {
+                currentUser = user;
+                initApp();
             } else {
-              setNeedsProfile(true);
+                window.location.href = "login.html";
             }
-          } else {
-            setUserData(null);
-            setNeedsProfile(false);
-          }
-          setLoading(false);
         });
-        return unsubscribe;
-      }, []);
 
-      const handleGoogleSignIn = async () => {
-        try { await auth.signInWithPopup(googleProvider); } catch (err) { alert(err.message); }
-      };
+        function toast(msg) {
+            const t = document.getElementById('toast');
+            t.textContent = msg;
+            t.style.display = 'block';
+            setTimeout(() => t.style.display = 'none', 3000);
+        }
 
-      if (loading) return <div className="h-screen flex items-center justify-center"><div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div></div>;
+        function generateLetterAvatar(name) {
+            if (!name) name = 'U';
+            const initials = name.trim().split(/\s+/).map(w => w[0]).slice(0,2).join('').toUpperCase();
+            const colors = ['#3a76f0','#10b981','#f59e0b','#ef4444','#8b5cf6','#ec4899'];
+            const hash = name.split('').reduce((a,b) => a + b.charCodeAt(0), 0);
+            const bg = colors[hash % colors.length];
+            const canvas = document.createElement('canvas');
+            canvas.width = canvas.height = 100;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = bg;
+            ctx.fillRect(0,0,100,100);
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 40px "Plus Jakarta Sans", sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(initials, 50, 50);
+            return canvas.toDataURL();
+        }
 
-      if (!authUser) {
-        return (
-            <div className="h-full flex flex-col items-center justify-center bg-white p-8">
-                <div className="w-24 h-24 bg-blue-600 rounded-[2rem] flex items-center justify-center mb-8 shadow-blue-200 shadow-xl rotate-3">
-                    <span className="material-symbols-rounded text-5xl text-white">chat</span>
+        async function generateKeyPair() {
+            const keyPair = await crypto.subtle.generateKey({ name: "ECDH", namedCurve: "P-256" }, true, ["deriveBits"]);
+            const pub = await crypto.subtle.exportKey("jwk", keyPair.publicKey);
+            const priv = await crypto.subtle.exportKey("jwk", keyPair.privateKey);
+            localStorage.setItem('privateKey', JSON.stringify(priv));
+            return pub;
+        }
+
+        async function deriveSharedSecret(friendPublicJwk) {
+            const privateKeyJwk = JSON.parse(localStorage.getItem('privateKey'));
+            const privateKey = await crypto.subtle.importKey("jwk", privateKeyJwk, { name: "ECDH", namedCurve: "P-256" }, false, ["deriveBits"]);
+            const friendPublicKey = await crypto.subtle.importKey("jwk", friendPublicJwk, { name: "ECDH", namedCurve: "P-256" }, false, []);
+            const sharedSecret = await crypto.subtle.deriveBits({ name: "ECDH", public: friendPublicKey }, privateKey, 256);
+            return Array.from(new Uint8Array(sharedSecret)).map(b => b.toString(16).padStart(2,'0')).join('');
+        }
+
+        function decrypt(ciphertext, friendUid) {
+            if (!ciphertext) return "[Message]";
+            try {
+                const key = sharedKeys[friendUid];
+                if (!key) return "🔒 Encrypted";
+                const bytes = CryptoJS.AES.decrypt(ciphertext, key);
+                return bytes.toString(CryptoJS.enc.Utf8) || "🔒 Message";
+            } catch (e) {
+                return "🔒 Message";
+            }
+        }
+
+        async function initApp() {
+            await openIndexedDB();
+
+            listenToMyProfile();
+            const snap = await db.ref(`users/${currentUser.uid}/profile`).once('value');
+            const data = snap.val() || {};
+
+            if (!data.vynixId) {
+                myVId = await generateAndAssignVynixId();
+                if (myVId) {
+                    await db.ref(`users/${currentUser.uid}/profile`).update({ vynixId: myVId });
+                    await db.ref(`vynix_ids/${myVId}`).set(currentUser.uid);
+                    document.getElementById('myVynixId').textContent = `@${myVId}`;
+                }
+            } else {
+                myVId = data.vynixId;
+                document.getElementById('myVynixId').textContent = `@${myVId}`;
+            }
+            if (!localStorage.getItem('privateKey')) {
+                const publicJwk = await generateKeyPair();
+                await db.ref(`users/${currentUser.uid}/profile`).update({ publicKey: JSON.stringify(publicJwk) });
+            }
+
+            loadChats();
+           setTimeout(() => {
+    const loader = document.getElementById('pageLoader');
+    loader.style.opacity = '0';
+    setTimeout(() => loader.style.display = 'none', 600); // matches transition duration
+}, 800); // slightly longer to ensure content is ready
+
+            window.addEventListener('online', syncPendingMessages);
+
+            // Setup sub-tab click handlers
+            document.querySelectorAll('.sub-tab').forEach(tab => {
+                tab.addEventListener('click', () => {
+                    const newTab = tab.dataset.tab;
+                    if (newTab !== currentSubTab) {
+                        switchSubTab(newTab);
+                    }
+                });
+            });
+
+            // Swipe tab switching
+            const subTabs = document.getElementById('subTabs');
+            let isDown = false;
+            let startX;
+            let scrollLeft;
+
+            subTabs.addEventListener('touchstart', e => {
+                isDown = true;
+                startX = e.touches[0].pageX - subTabs.offsetLeft;
+                scrollLeft = subTabs.scrollLeft;
+            });
+
+            subTabs.addEventListener('touchmove', e => {
+                if (!isDown) return;
+                e.preventDefault();
+                const x = e.touches[0].pageX - subTabs.offsetLeft;
+                const walk = (x - startX) * 2;
+                subTabs.scrollLeft = scrollLeft - walk;
+            });
+
+            subTabs.addEventListener('touchend', () => {
+                isDown = false;
+                snapToNearestTab();
+            });
+
+            subTabs.addEventListener('mousedown', e => {
+                isDown = true;
+                startX = e.pageX - subTabs.offsetLeft;
+                scrollLeft = subTabs.scrollLeft;
+            });
+
+            subTabs.addEventListener('mousemove', e => {
+                if (!isDown) return;
+                e.preventDefault();
+                const x = e.pageX - subTabs.offsetLeft;
+                const walk = (x - startX) * 2;
+                subTabs.scrollLeft = scrollLeft - walk;
+            });
+
+            subTabs.addEventListener('mouseup', () => {
+                isDown = false;
+                snapToNearestTab();
+            });
+
+            subTabs.addEventListener('mouseleave', () => {
+                isDown = false;
+            });
+
+            function snapToNearestTab() {
+                const tabs = subTabs.querySelectorAll('.sub-tab');
+                let closestTab = null;
+                let closestDistance = Infinity;
+
+                tabs.forEach(tab => {
+                    const rect = tab.getBoundingClientRect();
+                    const tabCenter = rect.left + rect.width / 2;
+                    const containerCenter = subTabs.getBoundingClientRect().left + subTabs.clientWidth / 2;
+                    const distance = Math.abs(tabCenter - containerCenter);
+                    if (distance < closestDistance) {
+                        closestDistance = distance;
+                        closestTab = tab;
+                    }
+                });
+
+                if (closestTab) {
+                    const newTab = closestTab.dataset.tab;
+                    if (newTab !== currentSubTab) {
+                        switchSubTab(newTab);
+                    }
+                    closestTab.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+                }
+            }
+
+            // Handle device back button
+            window.addEventListener('popstate', (e) => {
+                if (document.getElementById('fullChatView').style.display === 'flex') {
+                    closeFullChat();
+                    e.preventDefault();
+                }
+            });
+        }
+
+        function listenToMyProfile() {
+            db.ref(`users/${currentUser.uid}/profile`).on('value', snap => {
+                const data = snap.val() || {};
+                myProfile.name = data.name || "You";
+                myProfile.photo = data.photo || generateLetterAvatar(myProfile.name);
+                document.getElementById('myAvatar').src = myProfile.photo;
+                document.getElementById('myAvatar').classList.remove('shimmer');
+                
+                // Display Vynix ID
+                if (data.vynixId) {
+                    document.getElementById('myVynixId').textContent = `@${data.vynixId}`;
+                }
+            });
+        }
+
+        async function generateAndAssignVynixId() {
+            const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+            let attempts = 0;
+            while (attempts < 10) {
+                const candidate = 'vnx_' + Array.from(crypto.getRandomValues(new Uint32Array(4))).map(n => chars[n % chars.length]).join('');
+                const snap = await db.ref(`vynix_ids/${candidate}`).once('value');
+                if (!snap.exists()) return candidate;
+                attempts++;
+            }
+            return null;
+        }
+
+        /* --- Sub Tabs --- */
+        function switchSubTab(tab) {
+            currentSubTab = tab;
+            document.querySelectorAll('.sub-tab').forEach(t => t.classList.remove('active'));
+            const activeTab = document.querySelector(`.sub-tab[data-tab="${tab}"]`);
+            activeTab.classList.add('active');
+
+            // Update unread dot on "Unread" tab
+            if (tab === 'unread') {
+                updateUnreadDot();
+            } else {
+                activeTab.classList.remove('unread-dot');
+            }
+
+            loadChats();
+        }
+
+        async function updateUnreadDot() {
+            const snap = await db.ref(`users/${currentUser.uid}/chats`).once('value');
+            let hasUnread = false;
+            snap.forEach(child => {
+                if ((child.val().unreadCount || 0) > 0) {
+                    hasUnread = true;
+                }
+            });
+            const unreadTab = document.querySelector('.sub-tab[data-tab="unread"]');
+            if (hasUnread) {
+                unreadTab.classList.add('unread-dot');
+            } else {
+                unreadTab.classList.remove('unread-dot');
+            }
+        }
+
+        /* --- Main Chat List with Filters --- */
+        async function loadChats() {
+            if (chatsListener) chatsListener.off();
+            chatsListener = db.ref(`users/${currentUser.uid}/chats`);
+
+            chatsListener.on('value', async snap => {
+                if (!snap.exists()) return;
+
+                cachedChats = {};
+                const chats = [];
+                snap.forEach(child => {
+                    const data = child.val();
+                    if (data.lastMsg) {
+                        data.uid = child.key;
+                        chats.push(data);
+                    }
+                });
+                chats.sort((a,b) => (b.ts || 0) - (a.ts || 0));
+
+                const list = document.getElementById('chatList');
+                list.innerHTML = '';
+
+                let filtered = chats;
+                if (currentSubTab === 'favourite') filtered = chats.filter(c => c.isFavourite);
+                else if (currentSubTab === 'unread') filtered = chats.filter(c => c.unreadCount > 0);
+                else if (currentSubTab === 'archived') filtered = chats.filter(c => c.isArchived);
+
+                if (filtered.length === 0) {
+                    let msg = "No chats yet.";
+                    if (currentSubTab === 'favourite') msg = "No favourite chats.";
+                    if (currentSubTab === 'unread') msg = "No unread chats.";
+                    if (currentSubTab === 'archived') msg = "No archived chats.";
+                    list.innerHTML = `<p style="text-align:center;padding:50px;color:var(--text-muted);">${msg}</p>`;
+                    return;
+                }
+
+                for (const chat of filtered) {
+                    const pSnap = await db.ref(`users/${chat.uid}/profile`).once('value');
+                    const profile = pSnap.val() || { name: "User", photo: "" };
+                    const lastText = decrypt(chat.lastMsg, chat.uid);
+
+                    // Check if last message was sent by current user and is read
+                    let readStatus = '';
+                    if (chat.lastMsgSender === currentUser.uid) {
+                        const roomId = currentUser.uid < chat.uid ? currentUser.uid + "_" + chat.uid : chat.uid + "_" + currentUser.uid;
+                        const lastMsgSnap = await db.ref(`messages/${roomId}`).orderByChild('ts').limitToLast(1).once('value');
+                        lastMsgSnap.forEach(child => {
+                            const msg = child.val();
+                            if (msg.read && msg.sender === currentUser.uid) {
+                                readStatus = '<span style="color:var(--primary);margin-left:4px;">✓✓</span>';
+                            } else if (msg.sender === currentUser.uid) {
+                                readStatus = '<span style="color:var(--text-muted);margin-left:4px;">✓✓</span>';
+                            }
+                        });
+                    }
+
+                    cachedChats[chat.uid] = {
+                        uid: chat.uid,
+                        name: profile.name,
+                        photo: profile.photo,
+                        lastMsgText: lastText,
+                        ts: chat.ts,
+                        unreadCount: chat.unreadCount || 0
+                    };
+                    localStorage.setItem('cached_chats', JSON.stringify(cachedChats));
+
+                    list.innerHTML += `
+                        <div class="chat-card" data-uid="${chat.uid}" onclick="openFullChat('${chat.uid}')">
+                            <div class="avatar-container">
+                                <img class="avatar" src="${profile.photo || generateLetterAvatar(profile.name)}">
+                                <div class="online-indicator" id="online_${chat.uid}" style="display:none"></div>
+                            </div>
+                            <div class="chat-info">
+                                <div class="chat-header-row">
+                                    <div class="chat-name">${profile.name}</div>
+                                    <div class="chat-time">${formatTimeAgo(chat.ts)}</div>
+                                </div>
+                                <div class="chat-msg-row">
+                                    <div class="chat-msg">${lastText}${readStatus}</div>
+                                    ${chat.unreadCount > 0 ? `<div class="unread-badge">${chat.unreadCount > 99 ? '99+' : chat.unreadCount}</div>` : ''}
+                                </div>
+                            </div>
+                        </div>`;
+
+                    db.ref(`users/${chat.uid}/online`).on('value', s => {
+                        const el = document.getElementById(`online_${chat.uid}`);
+                        if (el) el.style.display = s.val() === true ? 'block' : 'none';
+                    });
+
+                    const card = list.lastElementChild;
+                    let longPressTimer;
+                    card.addEventListener('touchstart', e => {
+                        longPressTimer = setTimeout(() => showContextMenu(e, chat.uid), 500);
+                    });
+                    card.addEventListener('touchend', () => clearTimeout(longPressTimer));
+                    card.addEventListener('touchmove', () => clearTimeout(longPressTimer));
+                    card.addEventListener('contextmenu', e => {
+                        e.preventDefault();
+                        showContextMenu(e, chat.uid);
+                    });
+                }
+
+                // Update unread dot after rendering
+                updateUnreadDot();
+            });
+        }
+
+        function showContextMenu(e, uid) {
+            e.preventDefault();
+            currentContextUid = uid;
+            const menu = document.getElementById('contextMenu');
+            menu.style.display = 'block';
+            menu.style.left = `${e.pageX}px`;
+            menu.style.top = `${e.pageY}px`;
+            document.addEventListener('click', hideContextMenu);
+        }
+
+        function hideContextMenu() {
+            document.getElementById('contextMenu').style.display = 'none';
+            document.removeEventListener('click', hideContextMenu);
+        }
+
+        async function markAsFavourite(uid) {
+            hideContextMenu();
+            const snap = await db.ref(`users/${currentUser.uid}/chats/${uid}/isFavourite`).once('value');
+            const current = snap.val() || false;
+            await db.ref(`users/${currentUser.uid}/chats/${uid}`).update({ isFavourite: !current });
+            toast(!current ? "Added to favourites" : "Removed from favourites");
+        }
+
+        async function archiveChat(uid) {
+            hideContextMenu();
+            const snap = await db.ref(`users/${currentUser.uid}/chats/${uid}/isArchived`).once('value');
+            const current = snap.val() || false;
+            await db.ref(`users/${currentUser.uid}/chats/${uid}`).update({ isArchived: !current });
+            toast(!current ? "Chat archived" : "Chat unarchived");
+        }
+
+        /* --- Confirmation Dialogs --- */
+        function confirmClearAllChats() {
+            document.getElementById('clearAllConfirm').querySelector('.confirm-title').textContent = 'Clear All Chats?';
+            document.getElementById('clearAllConfirm').querySelector('.confirm-message').textContent = 'This will permanently delete all your conversations from both sides. This action cannot be undone.';
+            document.getElementById('clearAllConfirm').classList.add('active');
+        }
+
+        function closeConfirm() {
+            document.getElementById('clearAllConfirm').classList.remove('active');
+        }
+
+        async function executeClearAllChats() {
+            try {
+                const chatsSnap = await db.ref(`users/${currentUser.uid}/chats`).once('value');
+                if (!chatsSnap.exists()) {
+                    toast("No chats to delete");
+                    closeConfirm();
+                    return;
+                }
+
+                const deletePromises = [];
+
+                chatsSnap.forEach(child => {
+                    const friendUid = child.key;
+                    const roomId = currentUser.uid < friendUid ? currentUser.uid + "_" + friendUid : friendUid + "_" + currentUser.uid;
+
+                    deletePromises.push(db.ref(`messages/${roomId}`).remove());
+                    deletePromises.push(db.ref(`users/${currentUser.uid}/chats/${friendUid}`).remove());
+                    deletePromises.push(db.ref(`users/${friendUid}/chats/${currentUser.uid}`).remove());
+                });
+
+                await Promise.all(deletePromises);
+                await clearAllCachedMessages();
+                localStorage.removeItem('cached_chats');
+                toast("All chats and messages permanently deleted");
+            } catch (e) {
+                console.error(e);
+                toast("Failed to delete some chats");
+            }
+            closeConfirm();
+        }
+
+        /* --- Friends Sheet (all added friends) --- */
+        async function loadFriendsList() {
+            const list = document.getElementById('friendsList');
+            list.innerHTML = '';
+            const snap = await db.ref(`users/${currentUser.uid}/chats`).once('value');
+            if (!snap.exists()) {
+                list.innerHTML = '<p style="text-align:center;color:var(--text-muted);">No friends yet. Add one below!</p>';
+                return;
+            }
+            const friends = [];
+            snap.forEach(child => friends.push(child.key));
+
+            for (const uid of friends) {
+                const profileSnap = await db.ref(`users/${uid}/profile`).once('value');
+                const profile = profileSnap.val() || { name: "User", photo: "" };
+                list.innerHTML += `
+                    <div class="friend-item" onclick="openFullChat('${uid}')">
+                        <img class="avatar" src="${profile.photo || generateLetterAvatar(profile.name)}">
+                        <div class="chat-name">${profile.name}</div>
+                    </div>`;
+            }
+        }
+
+        function openFriendsSheet() {
+            loadFriendsList();
+            document.getElementById('overlay').classList.add('active');
+            document.getElementById('friendsSheet').classList.add('active');
+        }
+
+        function closeAll() {
+            document.getElementById('overlay').classList.remove('active');
+            document.getElementById('friendsSheet').classList.remove('active');
+        }
+
+        /* --- Full Chat View --- */
+        async function openFullChat(friendUid) {
+            currentFriendUid = friendUid;
+            currentRoomId = currentUser.uid < friendUid ? currentUser.uid + "_" + friendUid : friendUid + "_" + currentUser.uid;
+            const snap = await db.ref(`users/${friendUid}/profile`).once('value');
+            const profile = snap.val() || { name: "User", photo: "" };
+            document.getElementById('chatFriendName').textContent = profile.name;
+            document.getElementById('chatFriendAvatar').src = profile.photo || generateLetterAvatar(profile.name);
+
+            if (!sharedKeys[friendUid] && profile.publicKey) {
+                const secret = await deriveSharedSecret(JSON.parse(profile.publicKey));
+                sharedKeys[friendUid] = secret;
+                localStorage.setItem('sharedKeys', JSON.stringify(sharedKeys));
+            }
+            document.getElementById('fullChatView').style.display = 'flex';
+            loadMessages();
+            markAsRead(friendUid);
+
+            db.ref(`users/${friendUid}/online`).on('value', s => {
+                const statusEl = document.getElementById('chatStatusInfo');
+                statusEl.textContent = s.val() === true ? 'Online' : 'Offline';
+                statusEl.style.color = s.val() === true ? 'var(--online)' : 'var(--text-muted)';
+            });
+
+            history.pushState({chatOpen: true}, '');
+        }
+
+        function closeFullChat() {
+            document.getElementById('fullChatView').style.display = 'none';
+            if (messagesListener) {
+                messagesListener.off();
+                messagesListener = null;
+            }
+            currentFriendUid = null;
+            history.back();
+        }
+
+        // Reaction picker functions
+        function showReactionPicker(e, messageEl, msgKey) {
+            e.preventDefault();
+            const picker = document.getElementById('reactionPicker');
+            
+            // Position picker near the message
+            const rect = messageEl.getBoundingClientRect();
+            picker.style.left = `${rect.left + window.scrollX}px`;
+            picker.style.top = `${rect.bottom + window.scrollY + 5}px`;
+            picker.style.display = 'flex';
+            
+            // Store current message info
+            picker.dataset.currentMsgKey = msgKey;
+            picker.dataset.currentMsgEl = messageEl;
+            
+            // Close picker when clicking outside
+            setTimeout(() => {
+                document.addEventListener('click', hideReactionPicker);
+            }, 100);
+        }
+
+        function hideReactionPicker() {
+            const picker = document.getElementById('reactionPicker');
+            picker.style.display = 'none';
+            document.removeEventListener('click', hideReactionPicker);
+        }
+
+        // Handle reaction selection
+        document.querySelectorAll('.reaction-emoji').forEach(emoji => {
+            emoji.addEventListener('click', function() {
+                const selectedEmoji = this.dataset.emoji;
+                const msgKey = document.getElementById('reactionPicker').dataset.currentMsgKey;
+                
+                if (msgKey) {
+                    toggleReaction(msgKey, selectedEmoji);
+                }
+                
+                hideReactionPicker();
+            });
+        });
+
+        // Toggle reaction on/off
+        async function toggleReaction(msgKey, emoji) {
+            if (!msgKey || !currentRoomId) return;
+            
+            try {
+                const reactionRef = db.ref(`messages/${currentRoomId}/${msgKey}/reactions/${emoji}`);
+                const snap = await reactionRef.once('value');
+                const users = snap.val() || [];
+                
+                if (users.includes(currentUser.uid)) {
+                    // Remove reaction
+                    const updatedUsers = users.filter(uid => uid !== currentUser.uid);
+                    if (updatedUsers.length === 0) {
+                        await reactionRef.remove();
+                    } else {
+                        await reactionRef.set(updatedUsers);
+                    }
+                } else {
+                    // Add reaction
+                    await reactionRef.set([...users, currentUser.uid]);
+                }
+            } catch (error) {
+                console.error("Error toggling reaction:", error);
+            }
+        }
+
+        // Message action functions
+        async function deleteMessage() {
+            const popup = document.getElementById('messageActionsPopup');
+            const msgKey = popup.dataset.currentMsgKey;
+            const msgEl = popup.dataset.currentMsgEl;
+            
+            if (!msgKey || !msgEl) return;
+            
+            try {
+                // Remove from Firebase
+                await db.ref(`messages/${currentRoomId}/${msgKey}`).remove();
+                
+                // Remove from DOM
+                msgEl.remove();
+                
+                toast("Message deleted");
+            } catch (error) {
+                console.error("Error deleting message:", error);
+                toast("Failed to delete message");
+            }
+            
+            hideMessageActions();
+        }
+
+        async function editMessage() {
+            const popup = document.getElementById('messageActionsPopup');
+            const msgKey = popup.dataset.currentMsgKey;
+            const msgText = popup.dataset.currentMsgText;
+            const msgEl = popup.dataset.currentMsgEl;
+            
+            if (!msgKey || !msgText || !msgEl) return;
+            
+            // Create inline edit input
+            const messageContent = msgEl.querySelector('.message-content') || msgEl;
+            const originalHtml = messageContent.innerHTML;
+            
+            const editInput = document.createElement('textarea');
+            editInput.className = 'message-edit-input';
+            editInput.value = msgText;
+            editInput.style.width = '100%';
+            editInput.style.minHeight = '40px';
+            editInput.style.padding = '8px';
+            editInput.style.border = '1px solid var(--border-light)';
+            editInput.style.borderRadius = '8px';
+            editInput.style.background = 'var(--bg-body)';
+            editInput.style.color = 'var(--text-main)';
+            editInput.style.fontSize = '14px';
+            editInput.style.resize = 'vertical';
+            
+            messageContent.innerHTML = '';
+            messageContent.appendChild(editInput);
+            editInput.focus();
+            
+            // Handle save/cancel
+            const saveEdit = async () => {
+                const newText = editInput.value.trim();
+                if (newText && newText !== msgText) {
+                    try {
+                        // Encrypt new text
+                        const key = sharedKeys[currentFriendUid];
+                        if (!key) {
+                            toast('Security key missing');
+                            return;
+                        }
+                        const encrypted = CryptoJS.AES.encrypt(newText, key).toString();
+                        
+                        // Update in Firebase
+                        await db.ref(`messages/${currentRoomId}/${msgKey}/text`).set(encrypted);
+                        
+                        // Update last message in chat if this was the last message
+                        const lastMsgSnap = await db.ref(`messages/${currentRoomId}`).orderByChild('ts').limitToLast(1).once('value');
+                        let isLastMessage = false;
+                        lastMsgSnap.forEach(child => {
+                            if (child.key === msgKey) {
+                                isLastMessage = true;
+                            }
+                        });
+                        
+                        if (isLastMessage) {
+                            // Update chat last message
+                            const updates = {};
+                            updates[`users/${currentUser.uid}/chats/${currentFriendUid}/lastMsg`] = encrypted;
+                            updates[`users/${currentFriendUid}/chats/${currentUser.uid}/lastMsg`] = encrypted;
+                            await db.ref().update(updates);
+                        }
+                        
+                        toast("Message edited");
+                    } catch (error) {
+                        console.error("Error editing message:", error);
+                        toast("Failed to edit message");
+                    }
+                }
+                messageContent.innerHTML = originalHtml;
+                hideMessageActions();
+            };
+            
+            const cancelEdit = () => {
+                messageContent.innerHTML = originalHtml;
+                hideMessageActions();
+            };
+            
+            editInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    saveEdit();
+                } else if (e.key === 'Escape') {
+                    cancelEdit();
+                }
+            });
+            
+            editInput.addEventListener('blur', () => {
+                setTimeout(saveEdit, 100);
+            });
+            
+            hideMessageActions();
+        }
+
+        async function forwardMessage() {
+            const popup = document.getElementById('messageActionsPopup');
+            const msgText = popup.dataset.currentMsgText;
+            
+            if (!msgText) return;
+            
+            // Open friend selector for forwarding
+            openForwardSelector(msgText);
+            hideMessageActions();
+        }
+
+        function openForwardSelector(messageText) {
+            // Create forward selector overlay
+            const overlay = document.createElement('div');
+            overlay.className = 'forward-overlay';
+            overlay.style.cssText = `
+                position: fixed;
+                inset: 0;
+                background: rgba(0,0,0,0.5);
+                z-index: 4000;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            `;
+            
+            const selector = document.createElement('div');
+            selector.className = 'forward-selector';
+            selector.style.cssText = `
+                background: var(--bg-card);
+                border-radius: 16px;
+                padding: 20px;
+                max-width: 400px;
+                max-height: 70vh;
+                overflow-y: auto;
+                width: 90%;
+            `;
+            
+            selector.innerHTML = `
+                <h3 style="margin-bottom:15px;font-weight:700;">Forward Message</h3>
+                <div style="margin-bottom:15px;padding:10px;background:var(--bg-body);border-radius:8px;font-size:14px;">${messageText}</div>
+                <div id="forwardFriendsList"></div>
+                <div style="display:flex;gap:10px;margin-top:15px;">
+                    <button class="btn-secondary" onclick="closeForwardSelector()" style="flex:1;padding:10px;border:none;border-radius:8px;background:var(--bg-body);">Cancel</button>
+                    <button class="btn-primary" onclick="sendForwardedMessage()" style="flex:1;padding:10px;border:none;border-radius:8px;">Send</button>
                 </div>
-                <h1 className="text-3xl font-bold text-gray-900 mb-2">Welcome to Vynix</h1>
-                <p className="text-gray-500 text-center max-w-xs mb-10">Simple, reliable messaging. Connect with your friends instantly.</p>
-                <button onClick={handleGoogleSignIn} className="flex items-center gap-3 bg-gray-900 text-white px-8 py-4 rounded-xl font-medium shadow-lg hover:bg-black transition w-full max-w-xs justify-center">
-                    <img src="https://www.google.com/favicon.ico" className="w-5 h-5 invert bg-white rounded-full p-0.5" />
-                    Sign in with Google
-                </button>
-            </div>
-        );
-      }
+            `;
+            
+            overlay.appendChild(selector);
+            document.body.appendChild(overlay);
+            
+            // Load friends for forwarding
+            loadFriendsForForwarding();
+            
+            // Store message text for forwarding
+            selector.dataset.messageText = messageText;
+        }
 
-      if (needsProfile) return <ProfileSetup user={authUser} onComplete={() => window.location.reload()} />;
+        function closeForwardSelector() {
+            const overlay = document.querySelector('.forward-overlay');
+            if (overlay) overlay.remove();
+        }
 
-      return <MainApp user={authUser} userData={userData} profileComplete={!!userData} />;
-    };
+        async function loadFriendsForForwarding() {
+            const list = document.getElementById('forwardFriendsList');
+            list.innerHTML = '<div style="text-align:center;padding:20px;">Loading friends...</div>';
+            
+            try {
+                const snap = await db.ref(`users/${currentUser.uid}/chats`).once('value');
+                if (!snap.exists()) {
+                    list.innerHTML = '<p style="text-align:center;color:var(--text-muted);">No friends to forward to</p>';
+                    return;
+                }
+                
+                list.innerHTML = '';
+                const friends = [];
+                snap.forEach(child => friends.push(child.key));
+                
+                for (const uid of friends) {
+                    if (uid === currentFriendUid) continue; // Don't show current chat
+                    
+                    const profileSnap = await db.ref(`users/${uid}/profile`).once('value');
+                    const profile = profileSnap.val() || { name: "User", photo: "" };
+                    
+                    const friendEl = document.createElement('div');
+                    friendEl.className = 'forward-friend-item';
+                    friendEl.style.cssText = `
+                        display: flex;
+                        align-items: center;
+                        padding: 12px;
+                        cursor: pointer;
+                        border-radius: 8px;
+                        margin-bottom: 8px;
+                        transition: background 0.2s;
+                    `;
+                    
+                    friendEl.innerHTML = `
+                        <img class="avatar" src="${profile.photo || generateLetterAvatar(profile.name)}" style="width:40px;height:40px;margin-right:12px;">
+                        <div class="chat-name">${profile.name}</div>
+                    `;
+                    
+                    friendEl.addEventListener('click', () => {
+                        // Toggle selection
+                        const selected = document.querySelectorAll('.forward-friend-item.selected');
+                        selected.forEach(el => el.classList.remove('selected'));
+                        friendEl.classList.add('selected');
+                        // Store UID for forwarding
+                        friendEl.dataset.friendUid = uid;
+                    });
+                    
+                    list.appendChild(friendEl);
+                }
+                
+                if (list.children.length === 0) {
+                    list.innerHTML = '<p style="text-align:center;color:var(--text-muted);">No other friends to forward to</p>';
+                }
+            } catch (error) {
+                console.error("Error loading friends:", error);
+                list.innerHTML = '<p style="text-align:center;color:var(--text-muted);">Error loading friends</p>';
+            }
+        }
 
-    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
-  </script>
+        async function sendForwardedMessage() {
+            const selector = document.querySelector('.forward-selector');
+            const selected = selector.querySelector('.forward-friend-item.selected');
+            
+            if (!selected) {
+                toast("Please select a friend to forward to");
+                return;
+            }
+            
+            const messageText = selector.dataset.messageText;
+            const targetUid = selected.dataset.friendUid;
+            
+            if (!targetUid) {
+                toast("Please select a friend");
+                return;
+            }
+            
+            try {
+                // Create forwarded message
+                const forwardedText = `Forwarded: ${messageText}`;
+                
+                // Get encryption key for target friend
+                const profileSnap = await db.ref(`users/${targetUid}/profile`).once('value');
+                const profile = profileSnap.val() || {};
+                
+                if (!sharedKeys[targetUid] && profile.publicKey) {
+                    const secret = await deriveSharedSecret(JSON.parse(profile.publicKey));
+                    sharedKeys[targetUid] = secret;
+                    localStorage.setItem('sharedKeys', JSON.stringify(sharedKeys));
+                }
+                
+                const key = sharedKeys[targetUid];
+                if (!key) {
+                    toast('Security key missing for forwarding');
+                    return;
+                }
+                
+                const encrypted = CryptoJS.AES.encrypt(forwardedText, key).toString();
+                const timestamp = Date.now();
+                
+                // Create room ID for target friend
+                const targetRoomId = currentUser.uid < targetUid ? currentUser.uid + "_" + targetUid : targetUid + "_" + currentUser.uid;
+                
+                // Send the forwarded message
+                await db.ref(`messages/${targetRoomId}`).push({
+                    text: encrypted,
+                    sender: currentUser.uid,
+                    ts: timestamp,
+                    read: false
+                });
+                
+                // Update chat timestamps
+                const updates = {};
+                updates[`users/${currentUser.uid}/chats/${targetUid}/lastMsg`] = encrypted;
+                updates[`users/${currentUser.uid}/chats/${targetUid}/ts`] = timestamp;
+                updates[`users/${targetUid}/chats/${currentUser.uid}/lastMsg`] = encrypted;
+                updates[`users/${targetUid}/chats/${currentUser.uid}/ts`] = timestamp;
+                updates[`users/${targetUid}/chats/${currentUser.uid}/unreadCount`] = firebase.database.ServerValue.increment(1);
+                
+                await db.ref().update(updates);
+                
+                toast("Message forwarded");
+                closeForwardSelector();
+                
+            } catch (error) {
+                console.error("Error forwarding message:", error);
+                toast("Failed to forward message");
+            }
+        }
+
+        function hideMessageActions() {
+            const popup = document.getElementById('messageActionsPopup');
+            const overlay = document.getElementById('messageActionOverlay');
+            
+            popup.style.display = 'none';
+            overlay.style.display = 'none';
+            
+            // Reset message position
+            document.querySelectorAll('.message.swiping').forEach(msg => {
+                msg.style.transform = '';
+                msg.classList.remove('swiping');
+            });
+        }
+
+        function showMessageActions(e, messageEl, msgKey, msgText) {
+            e.preventDefault();
+            
+            // Reset all swiped messages
+            document.querySelectorAll('.message.swiping').forEach(msg => {
+                msg.style.transform = '';
+                msg.classList.remove('swiping');
+            });
+            
+            const popup = document.getElementById('messageActionsPopup');
+            const overlay = document.getElementById('messageActionOverlay');
+            
+            // Position popup near the message
+            const rect = messageEl.getBoundingClientRect();
+            popup.style.left = `${rect.right + 10}px`;
+            popup.style.top = `${rect.top + window.scrollY}px`;
+            
+            // Adjust position if popup would go off screen
+            const popupRect = popup.getBoundingClientRect();
+            if (popupRect.right > window.innerWidth) {
+                popup.style.left = `${rect.left - popup.offsetWidth - 10}px`;
+            }
+            
+            // Show overlay and popup
+            overlay.style.display = 'block';
+            popup.style.display = 'block';
+            
+            // Store current message info
+            popup.dataset.currentMsgKey = msgKey;
+            popup.dataset.currentMsgText = msgText;
+            popup.dataset.currentMsgEl = messageEl;
+            
+            // Hide after 3 seconds or when clicking outside
+            setTimeout(() => {
+                hideMessageActions();
+            }, 3000);
+        }
+
+        // Add swipe listeners to messages
+        function addSwipeListeners(messageEl) {
+            messageEl.addEventListener('touchstart', handleTouchStart, { passive: false });
+            messageEl.addEventListener('touchmove', handleTouchMove, { passive: false });
+            messageEl.addEventListener('touchend', handleTouchEnd, { passive: false });
+            
+            // Mouse events for desktop testing
+            messageEl.addEventListener('mousedown', handleMouseDown);
+            messageEl.addEventListener('mousemove', handleMouseMove);
+            messageEl.addEventListener('mouseup', handleMouseUp);
+            messageEl.addEventListener('mouseleave', handleMouseLeave);
+        }
+
+        function handleTouchStart(e) {
+            startX = e.touches[0].clientX;
+            currentX = startX;
+            isSwiping = true;
+            currentMessageEl = e.currentTarget;
+            currentMessageKey = currentMessageEl.dataset.msgKey;
+            currentMessageText = currentMessageEl.textContent;
+        }
+
+        function handleTouchMove(e) {
+            if (!isSwiping || !currentMessageEl) return;
+            
+            currentX = e.touches[0].clientX;
+            const diffX = currentX - startX;
+            
+            if (diffX < 0) { // Only allow left swipe
+                currentMessageEl.style.transform = `translateX(${Math.max(diffX, -100)}px)`;
+                currentMessageEl.classList.add('swiping');
+            }
+        }
+
+        function handleTouchEnd(e) {
+            if (!isSwiping || !currentMessageEl) return;
+            
+            const diffX = currentX - startX;
+            
+            if (Math.abs(diffX) > swipeThreshold) {
+                // Show action menu
+                showMessageActions(e, currentMessageEl, currentMessageKey, currentMessageText);
+            } else {
+                // Reset position
+                currentMessageEl.style.transform = '';
+                currentMessageEl.classList.remove('swiping');
+            }
+            
+            resetSwipeState();
+        }
+
+        function handleMouseDown(e) {
+            startX = e.clientX;
+            currentX = startX;
+            isSwiping = true;
+            currentMessageEl = e.currentTarget;
+            currentMessageKey = currentMessageEl.dataset.msgKey;
+            currentMessageText = currentMessageEl.textContent;
+        }
+
+        function handleMouseMove(e) {
+            if (!isSwiping || !currentMessageEl) return;
+            
+            currentX = e.clientX;
+            const diffX = currentX - startX;
+            
+            if (diffX < 0) { // Only allow left swipe
+                currentMessageEl.style.transform = `translateX(${Math.max(diffX, -100)}px)`;
+                currentMessageEl.classList.add('swiping');
+            }
+        }
+
+        function handleMouseUp(e) {
+            if (!isSwiping || !currentMessageEl) return;
+            
+            const diffX = currentX - startX;
+            
+            if (Math.abs(diffX) > swipeThreshold) {
+                // Show action menu
+                showMessageActions(e, currentMessageEl, currentMessageKey, currentMessageText);
+            } else {
+                // Reset position
+                currentMessageEl.style.transform = '';
+                currentMessageEl.classList.remove('swiping');
+            }
+            
+            resetSwipeState();
+        }
+
+        function handleMouseLeave(e) {
+            if (currentMessageEl) {
+                currentMessageEl.style.transform = '';
+                currentMessageEl.classList.remove('swiping');
+            }
+            resetSwipeState();
+        }
+
+        function resetSwipeState() {
+            isSwiping = false;
+            currentMessageEl = null;
+            currentMessageKey = null;
+            currentMessageText = null;
+            startX = 0;
+            currentX = 0;
+        }
+
+        /* --- Send Message (with offline support) --- */
+        function autoResizeInput(field) {
+            field.style.height = 'auto';
+            field.style.height = field.scrollHeight + 'px';
+            const btn = document.getElementById('sendBtn');
+            if (field.value.trim().length > 0) btn.classList.add('visible');
+            else btn.classList.remove('visible');
+        }
+
+        async function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const text = input.value.trim();
+            if (!text || !currentFriendUid) return;
+            const key = sharedKeys[currentFriendUid];
+            if (!key) { toast('Security key missing'); return; }
+            const encrypted = CryptoJS.AES.encrypt(text, key).toString();
+
+            const tempTs = Date.now();
+            const localId = tempTs + Math.random();
+
+            const list = document.getElementById('messageList');
+            
+            // Create and append pending message
+            const el = createMessageElement(text, true, tempTs, localId, '', false);
+            list.appendChild(el);
+            list.scrollTop = list.scrollHeight;
+
+            input.value = '';
+            input.style.height = 'auto';
+            document.getElementById('sendBtn').classList.remove('visible');
+
+            // Cache pending message for offline support
+            await cacheMessage(currentRoomId, {
+                text: encrypted,
+                sender: currentUser.uid,
+                ts: tempTs,
+                pending: true,
+                localId: localId,
+                read: false
+            });
+
+            // Try to send to Firebase if online
+            if (navigator.onLine) {
+                try {
+                    const msgRef = await db.ref(`messages/${currentRoomId}`).push({
+                        text: encrypted, 
+                        sender: currentUser.uid, 
+                        ts: tempTs,
+                        read: false,
+                        localId: localId
+                    });
+
+                    const updates = {};
+                    updates[`users/${currentUser.uid}/chats/${currentFriendUid}/lastMsg`] = encrypted;
+                    updates[`users/${currentUser.uid}/chats/${currentFriendUid}/lastMsgSender`] = currentUser.uid;
+                    updates[`users/${currentUser.uid}/chats/${currentFriendUid}/ts`] = tempTs;
+                    updates[`users/${currentFriendUid}/chats/${currentUser.uid}/lastMsg`] = encrypted;
+                    updates[`users/${currentFriendUid}/chats/${currentUser.uid}/lastMsgSender`] = currentUser.uid;
+                    updates[`users/${currentFriendUid}/chats/${currentUser.uid}/ts`] = tempTs;
+                    updates[`users/${currentFriendUid}/chats/${currentUser.uid}/unreadCount`] = firebase.database.ServerValue.increment(1);
+
+                    await db.ref().update(updates);
+                } catch (e) {
+                    console.error("Send failed:", e);
+                    toast("Message will be sent when online");
+                }
+            } else {
+                toast("Message will be sent when online");
+            }
+        }
+
+        function createMessageElement(text, isSent, ts, localId = '', msgKey = '', isRead = false, reactions = {}) {
+            const el = document.createElement('div');
+            el.className = `message ${isSent ? 'sent' : 'received'} ${localId ? 'pending' : ''}`;
+            if (localId) el.dataset.localId = localId;
+            if (msgKey) el.dataset.msgKey = msgKey;
+            
+            // Build reactions HTML
+            let reactionsHtml = '';
+            if (reactions && Object.keys(reactions).length > 0) {
+                reactionsHtml = '<div class="message-reactions">';
+                Object.entries(reactions).forEach(([emoji, users]) => {
+                    if (users && users.length > 0) {
+                        const count = users.length;
+                        const userReacted = users.includes(currentUser.uid);
+                        reactionsHtml += `
+                            <div class="reaction-badge ${userReacted ? 'user-reacted' : ''}" 
+                                 data-emoji="${emoji}" 
+                                 data-key="${msgKey}"
+                                 onclick="toggleReaction('${msgKey}', '${emoji}')">
+                                <span class="emoji">${emoji}</span>
+                                ${count > 1 ? `<span class="count">${count}</span>` : ''}
+                            </div>
+                        `;
+                    }
+                });
+                reactionsHtml += '</div>';
+            }
+            
+            const ticks = isSent ? `<span class="message-ticks ${isRead ? 'read' : ''}">✓✓</span>` : '';
+            
+            // Wrap message content for better editing
+            el.innerHTML = `
+                <div class="message-content">${text}</div>
+                <div class="message-time">${formatMessageTime(ts)}${ticks}</div>
+                ${reactionsHtml}
+            `;
+            
+            // Add long press event for reactions
+            let longPressTimer;
+            el.addEventListener('touchstart', e => {
+                longPressTimer = setTimeout(() => showReactionPicker(e, el, msgKey), 500);
+            });
+            el.addEventListener('touchend', () => clearTimeout(longPressTimer));
+            el.addEventListener('touchmove', () => clearTimeout(longPressTimer));
+            el.addEventListener('contextmenu', e => {
+                e.preventDefault();
+                showReactionPicker(e, el, msgKey);
+            });
+            
+            // Add swipe listeners
+            addSwipeListeners(el);
+            
+            // Add pending class only for local messages that haven't been confirmed
+            if (localId && !msgKey) {
+                el.classList.add('pending');
+            }
+            
+            return el;
+        }
+
+        async function loadMessages() {
+            if (messagesListener) messagesListener.off();
+            const list = document.getElementById('messageList');
+            list.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-muted);">Loading messages...</div>';
+
+            // Clear any existing message elements completely
+            list.innerHTML = '';
+            const processedMessageKeys = new Set();
+
+            // If online, load from Firebase first
+            if (navigator.onLine) {
+                try {
+                    // Load messages from Firebase
+                    const messagesSnap = await db.ref(`messages/${currentRoomId}`).limitToLast(100).once('value');
+                    
+                    if (messagesSnap.exists()) {
+                        const messages = [];
+                        messagesSnap.forEach(child => {
+                            const msg = child.val();
+                            msg.key = child.key;
+                            messages.push(msg);
+                        });
+                        
+                        // Sort messages by timestamp
+                        messages.sort((a,b) => a.ts - b.ts);
+                        
+                        // Render Firebase messages
+                        messages.forEach(msg => {
+                            processedMessageKeys.add(msg.key);
+                            
+                            const isSent = msg.sender === currentUser.uid;
+                            const text = decrypt(msg.text, currentFriendUid);
+                            const isRead = msg.read || false;
+                            
+                            const el = createMessageElement(text, isSent, msg.ts, '', msg.key, isRead, msg.reactions || {});
+                            list.appendChild(el);
+                        });
+                        
+                        list.scrollTop = list.scrollHeight;
+                    }
+                } catch (error) {
+                    console.error("Error loading from Firebase:", error);
+                }
+            } else {
+                // If offline, load from cache
+                const cached = await getCachedMessages(currentRoomId);
+                if (cached.length > 0) {
+                    cached.sort((a,b) => a.ts - b.ts);
+                    cached.forEach(m => {
+                        if (m.key) processedMessageKeys.add(m.key);
+                        
+                        const isSent = m.sender === currentUser.uid;
+                        const text = decrypt(m.text, currentFriendUid);
+                        const isRead = m.read || false;
+                        
+                        const el = createMessageElement(text, isSent, m.ts, m.localId || '', m.key || '', isRead, m.reactions || {});
+                        list.appendChild(el);
+                    });
+                    list.scrollTop = list.scrollHeight;
+                }
+            }
+
+            // Realtime listener for new messages
+            messagesListener = db.ref(`messages/${currentRoomId}`).limitToLast(100);
+
+            messagesListener.on('child_added', async snap => {
+                const msg = snap.val();
+                msg.key = snap.key;
+
+                // Skip if already rendered
+                if (processedMessageKeys.has(msg.key)) return;
+                
+                processedMessageKeys.add(msg.key);
+
+                // Cache the message for offline use
+                await cacheMessage(currentRoomId, msg);
+
+                // Remove pending version if exists
+                if (msg.localId) {
+                    const pendingEl = list.querySelector(`[data-local-id="${msg.localId}"]`);
+                    if (pendingEl) pendingEl.remove();
+                }
+
+                // Add the new message
+                const isSent = msg.sender === currentUser.uid;
+                const text = decrypt(msg.text, currentFriendUid);
+                const isRead = msg.read || false;
+                
+                const el = createMessageElement(text, isSent, msg.ts, '', msg.key, isRead, msg.reactions || {});
+                list.appendChild(el);
+                list.scrollTop = list.scrollHeight;
+
+                // Mark as read if received message
+                if (!isSent && currentFriendUid) {
+                    await db.ref(`messages/${currentRoomId}/${msg.key}`).update({ read: true });
+                }
+            });
+
+            // Listen for read status updates
+            db.ref(`messages/${currentRoomId}`).on('child_changed', snap => {
+                const msg = snap.val();
+                const existingEl = list.querySelector(`[data-msg-key="${snap.key}"]`);
+                if (existingEl) {
+                    // Update reactions
+                    const reactionsContainer = existingEl.querySelector('.message-reactions');
+                    if (reactionsContainer) {
+                        reactionsContainer.remove();
+                    }
+                    
+                    if (msg.reactions && Object.keys(msg.reactions).length > 0) {
+                        let reactionsHtml = '<div class="message-reactions">';
+                        Object.entries(msg.reactions).forEach(([emoji, users]) => {
+                            if (users && users.length > 0) {
+                                const count = users.length;
+                                const userReacted = users.includes(currentUser.uid);
+                                reactionsHtml += `
+                                    <div class="reaction-badge ${userReacted ? 'user-reacted' : ''}" 
+                                         data-emoji="${emoji}" 
+                                         data-key="${snap.key}"
+                                         onclick="toggleReaction('${snap.key}', '${emoji}')">
+                                        <span class="emoji">${emoji}</span>
+                                        ${count > 1 ? `<span class="count">${count}</span>` : ''}
+                                    </div>
+                                `;
+                            }
+                        });
+                        reactionsHtml += '</div>';
+                        
+                        const timeDiv = existingEl.querySelector('.message-time');
+                        if (timeDiv) {
+                            timeDiv.insertAdjacentHTML('afterend', reactionsHtml);
+                        }
+                    }
+                    
+                    // Update read status
+                    const ticks = existingEl.querySelector('.message-ticks');
+                    if (ticks && msg.read) {
+                        ticks.classList.add('read');
+                        ticks.textContent = '✓✓';
+                    }
+                }
+            });
+
+            // Close reaction picker when clicking outside
+            document.addEventListener('click', function(e) {
+                const picker = document.getElementById('reactionPicker');
+                if (picker.style.display === 'flex' && !picker.contains(e.target) && !e.target.closest('.message')) {
+                    hideReactionPicker();
+                }
+            });
+        }
+
+        async function syncPendingMessages() {
+            if (!navigator.onLine) return;
+
+            const cached = await getCachedMessages(currentRoomId);
+            const pending = cached.filter(m => m.pending);
+
+            for (const msg of pending) {
+                try {
+                    // Push to Firebase
+                    await db.ref(`messages/${currentRoomId}`).push({
+                        text: msg.text,
+                        sender: currentUser.uid,
+                        ts: msg.ts,
+                        read: false
+                    });
+
+                    // Update chat timestamps if this is the first pending message
+                    if (pending.indexOf(msg) === 0) {
+                        const updates = {};
+                        updates[`users/${currentUser.uid}/chats/${currentFriendUid}/lastMsg`] = msg.text;
+                        updates[`users/${currentUser.uid}/chats/${currentFriendUid}/ts`] = msg.ts;
+                        updates[`users/${currentFriendUid}/chats/${currentUser.uid}/lastMsg`] = msg.text;
+                        updates[`users/${currentFriendUid}/chats/${currentUser.uid}/ts`] = msg.ts;
+                        updates[`users/${currentFriendUid}/chats/${currentUser.uid}/unreadCount`] = firebase.database.ServerValue.increment(1);
+                        await db.ref().update(updates);
+                    }
+
+                    // Update cache to remove pending status
+                    const tx = idb.transaction(STORE_NAME, 'readwrite');
+                    const store = tx.objectStore(STORE_NAME);
+                    const getReq = store.get(msg.localId);
+                    getReq.onsuccess = () => {
+                        const record = getReq.result;
+                        if (record) {
+                            delete record.pending;
+                            store.put(record);
+                        }
+                    };
+                } catch (e) {
+                    console.error("Sync failed for message:", e);
+                }
+            }
+        }
+
+        window.addEventListener('online', syncPendingMessages);
+
+        document.getElementById('sendBtn').addEventListener('click', sendMessage);
+        function handleEnter(e) {
+            if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+        }
+
+        async function markAsRead(friendUid) {
+            await db.ref(`users/${currentUser.uid}/chats/${friendUid}`).update({ unreadCount: 0 });
+            updateUnreadDot();
+        }
+
+        async function addFriendLogic() {
+            const raw = document.getElementById('friendVynixId').value.trim().toLowerCase();
+            const vid = raw.startsWith('@') ? raw.substring(1) : raw;
+            if(!vid) return;
+            const snap = await db.ref(`vynix_ids/${vid}`).once('value');
+            if (!snap.exists()) { toast('User ID not found'); return; }
+
+            const targetUid = snap.val();
+            if (targetUid === currentUser.uid) { toast("That's you!"); return; }
+
+            const existing = await db.ref(`users/${currentUser.uid}/chats/${targetUid}`).once('value');
+            if (existing.exists()) {
+                toast('Already added!');
+                closeAll();
+                openFullChat(targetUid);
+                return;
+            }
+
+            await db.ref(`users/${currentUser.uid}/chats/${targetUid}`).set({
+                lastMsg: null,
+                ts: Date.now(),
+                unreadCount: 0,
+                isFavourite: false,
+                isArchived: false
+            });
+            toast("Friend added! Tap their name to start chatting.");
+            closeAll();
+            document.getElementById('friendVynixId').value = "";
+        }
+
+        function searchFriends() {
+            const term = document.getElementById('friendSearch').value.toLowerCase();
+            document.querySelectorAll('.chat-card').forEach(c => {
+                const name = c.querySelector('.chat-name')?.textContent.toLowerCase() || '';
+                c.style.display = name.includes(term) ? 'flex' : 'none';
+            });
+        }
+
+        function formatTimeAgo(ts) {
+            if (!ts) return '';
+            const diff = Date.now() - ts;
+            if (diff < 86400000) return new Date(ts).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+            return new Date(ts).toLocaleDateString();
+        }
+
+        function formatMessageTime(ts) {
+            return new Date(ts).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+        }
+    </script>
 </body>
 </html>
