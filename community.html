@@ -1994,34 +1994,56 @@
         }
 
         async function addFriendLogic() {
-            const raw = document.getElementById('friendVynixId').value.trim().toLowerCase();
-            const vid = raw.startsWith('@') ? raw.substring(1) : raw;
-            if(!vid) return;
-            const snap = await db.ref(`vynix_ids/${vid}`).once('value');
-            if (!snap.exists()) { toast('User ID not found'); return; }
+    const raw = document.getElementById('friendVynixId').value.trim().toLowerCase();
+    const vid = raw.startsWith('@') ? raw.substring(1) : raw;
+    if (!vid) return;
 
-            const targetUid = snap.val();
-            if (targetUid === currentUser.uid) { toast("That's you!"); return; }
+    const snap = await db.ref(`vynix_ids/${vid}`).once('value');
+    if (!snap.exists()) { toast('User ID not found'); return; }
 
-            const existing = await db.ref(`users/\( {currentUser.uid}/chats/ \){targetUid}`).once('value');
-            if (existing.exists()) {
-                toast('Already added!');
-                closeAll();
-                openFullChat(targetUid);
-                return;
-            }
+    const targetUid = snap.val();
+    if (targetUid === currentUser.uid) { toast("That's you!"); return; }
 
-            await db.ref(`users/\( {currentUser.uid}/chats/ \){targetUid}`).set({
-                lastMsg: null,
-                ts: Date.now(),
-                unreadCount: 0,
-                isFavourite: false,
-                isArchived: false
-            });
-            toast("Friend added! Tap their name to start chatting.");
-            closeAll();
-            document.getElementById('friendVynixId').value = "";
-        }
+    // Check if already friends (either direction)
+    const mySide = await db.ref(`users/\( {currentUser.uid}/chats/ \){targetUid}`).once('value');
+    if (mySide.exists()) {
+        toast('Already added!');
+        closeAll();
+        openFullChat(targetUid);
+        return;
+    }
+
+    const timestamp = Date.now();
+    const batch = {};
+
+    // My side
+    batch[`users/\( {currentUser.uid}/chats/ \){targetUid}`] = {
+        lastMsg: null,
+        ts: timestamp,
+        unreadCount: 0,
+        isFavourite: false,
+        isArchived: false
+    };
+
+    // Their side (they see you as a chat/friend)
+    batch[`users/\( {targetUid}/chats/ \){currentUser.uid}`] = {
+        lastMsg: null,
+        ts: timestamp,
+        unreadCount: 0,
+        isFavourite: false,
+        isArchived: false
+    };
+
+    try {
+        await db.ref().update(batch);
+        toast("Friend added! Tap their name to start chatting.");
+        closeAll();
+        document.getElementById('friendVynixId').value = "";
+    } catch (err) {
+        console.error("Friend add failed:", err);
+        toast("Failed to add friend – check console");
+    }
+}
 
         function searchFriends() {
             const term = document.getElementById('friendSearch').value.toLowerCase();
