@@ -1076,20 +1076,84 @@
 
         /* --- Sub Tabs --- */
         function switchSubTab(tab) {
-            currentSubTab = tab;
-            document.querySelectorAll('.sub-tab').forEach(t => t.classList.remove('active'));
-            const activeTab = document.querySelector(`.sub-tab[data-tab="${tab}"]`);
-            activeTab.classList.add('active');
+    if (tab === currentSubTab) return;
 
-            // Update unread dot on "Unread" tab
-            if (tab === 'unread') {
-                updateUnreadDot();
-            } else {
-                activeTab.classList.remove('unread-dot');
-            }
+    currentSubTab = tab;
 
-            loadChats();
-        }
+    // Update visual active state
+    document.querySelectorAll('.sub-tab').forEach(t => t.classList.remove('active'));
+    const activeTab = document.querySelector(`.sub-tab[data-tab="${tab}"]`);
+    activeTab.classList.add('active');
+
+    // Re-apply filter using already loaded data (much faster)
+    renderChatListWithCurrentFilter();
+
+    // Optional: refresh unread dot when switching to/from Unread tab
+    if (tab === 'unread' || currentSubTab === 'unread') {
+        updateUnreadDot();
+    }
+}
+        function renderChatListWithCurrentFilter() {
+    const list = document.getElementById('chatList');
+    list.innerHTML = '';
+
+    // We use the already collected & sorted chats from the last listener snapshot
+    let filtered = cachedChatsArray || [];   // ← we'll define this below
+
+    if (currentSubTab === 'favourite') {
+        filtered = filtered.filter(c => c.isFavourite);
+    } else if (currentSubTab === 'unread') {
+        filtered = filtered.filter(c => (c.unreadCount || 0) > 0);
+    } else if (currentSubTab === 'archived') {
+        filtered = filtered.filter(c => c.isArchived);
+    }
+    // 'all' → no filter
+
+    if (filtered.length === 0) {
+        let msg = "No chats yet.";
+        if (currentSubTab === 'favourite') msg = "No favourite chats.";
+        if (currentSubTab === 'unread')    msg = "No unread chats.";
+        if (currentSubTab === 'archived')  msg = "No archived chats.";
+        list.innerHTML = `<p style="text-align:center;padding:50px;color:var(--text-muted);">${msg}</p>`;
+        return;
+    }
+
+    filtered.forEach(chat => {
+        // Reuse the same card rendering logic you already have
+        const profile = chat.profile || { name: "User", photo: "" }; // you may need to store profile too
+        const lastText = chat.lastMsgText || decrypt(chat.lastMsg, chat.uid) || "";
+        const readStatus = chat.readStatus || ""; // you'll need to keep this too if you want ticks
+
+        const html = `
+            <div class="chat-card" data-uid="\( {chat.uid}" onclick="openFullChat(' \){chat.uid}')">
+                <div class="avatar-container">
+                    <img class="avatar" src="${profile.photo || generateLetterAvatar(profile.name)}">
+                    <div class="online-indicator" id="online_${chat.uid}" style="display:none"></div>
+                </div>
+                <div class="chat-info">
+                    <div class="chat-header-row">
+                        <div class="chat-name">${profile.name}</div>
+                        <div class="chat-time">${formatTimeAgo(chat.ts)}</div>
+                    </div>
+                    <div class="chat-msg-row">
+                        <div class="chat-msg">\( {lastText} \){readStatus}</div>
+                        \( {chat.unreadCount > 0 ? `<div class="unread-badge"> \){chat.unreadCount > 99 ? '99+' : chat.unreadCount}</div>` : ''}
+                    </div>
+                </div>
+            </div>`;
+
+        list.insertAdjacentHTML('beforeend', html);
+
+        // Re-attach online listener if needed
+        db.ref(`users/${chat.uid}/online`).on('value', s => {
+            const el = document.getElementById(`online_${chat.uid}`);
+            if (el) el.style.display = s.val() === true ? 'block' : 'none';
+        });
+    });
+
+    // Re-attach long-press / context menu listeners if necessary
+    attachContextMenuListeners();
+}
 
         async function updateUnreadDot() {
             const snap = await db.ref(`users/${currentUser.uid}/chats`).once('value');
