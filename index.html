@@ -1078,7 +1078,7 @@
         /* --- Sub Tabs --- */
 function switchSubTab(tab) {
     currentSubTab = tab;
-    
+
     // Update active tab styling
     document.querySelectorAll('.sub-tab').forEach(t => t.classList.remove('active'));
     const activeTab = document.querySelector(`.sub-tab[data-tab="${tab}"]`);
@@ -1100,22 +1100,23 @@ function switchSubTab(tab) {
 }
 
         async function updateUnreadDot() {
-            const snap = await db.ref(`users/${currentUser.uid}/chats`).once('value');
-            let hasUnread = false;
-            snap.forEach(child => {
-                if ((child.val().unreadCount || 0) > 0) {
-                    hasUnread = true;
-                }
-            });
-            const unreadTab = document.querySelector('.sub-tab[data-tab="unread"]');
-            if (hasUnread) {
-                unreadTab.classList.add('unread-dot');
-            } else {
-                unreadTab.classList.remove('unread-dot');
-            }
+    const snap = await db.ref(`users/${currentUser.uid}/chats`).once('value');
+    let hasUnread = false;
+    snap.forEach(child => {
+        if ((child.val().unreadCount || 0) > 0) {
+            hasUnread = true;
         }
+    });
+    const unreadTab = document.querySelector('.sub-tab[data-tab="unread"]');
+    if (hasUnread) {
+        unreadTab.classList.add('unread-dot');
+    } else {
+        unreadTab.classList.remove('unread-dot');
+    }
+}
 
         /* --- Main Chat List with Filters --- */
+
 async function loadChats() {
     if (chatsListener) chatsListener.off();
     chatsListener = db.ref(`users/${currentUser.uid}/chats`);
@@ -1125,7 +1126,7 @@ async function loadChats() {
 
         const list = document.getElementById('chatList');
         const existingCards = new Map();
-        
+
         // Store existing chat cards
         document.querySelectorAll('.chat-card').forEach(card => {
             const uid = card.dataset.uid;
@@ -1140,7 +1141,7 @@ async function loadChats() {
                 chats.push(data);
             }
         });
-        chats.sort((a,b) => (b.ts || 0) - (a.ts || 0));
+        chats.sort((a, b) => (b.ts || 0) - (a.ts || 0));
 
         let filtered = chats;
         if (currentSubTab === 'favourite') filtered = chats.filter(c => c.isFavourite);
@@ -1148,27 +1149,17 @@ async function loadChats() {
         else if (currentSubTab === 'archived') filtered = chats.filter(c => c.isArchived);
 
         if (filtered.length === 0) {
-    let msg = "";
-    switch(currentSubTab) {
-        case 'all':
-            msg = "No chats yet.";
-            break;
-        case 'favourite':
-            msg = "No favourite chats.";
-            break;
-        case 'unread':
-            msg = "No unread chats.";
-            break;
-        case 'archived':
-            msg = "No archived chats.";
-            break;
-        default:
-            msg = "No chats found.";
-    }
-    
-    list.innerHTML = `<p style="text-align:center;padding:50px;color:var(--text-muted);">${msg}</p>`;
-    return;
-}
+            let msg = "";
+            switch (currentSubTab) {
+                case 'all': msg = "No chats yet."; break;
+                case 'favourite': msg = "No favourite chats."; break;
+                case 'unread': msg = "No unread chats."; break;
+                case 'archived': msg = "No archived chats."; break;
+                default: msg = "No chats found.";
+            }
+            list.innerHTML = `<p style="text-align:center;padding:50px;color:var(--text-muted);">${msg}</p>`;
+            return;
+        }
 
         // Update existing cards or create new ones
         for (const chat of filtered) {
@@ -1177,7 +1168,6 @@ async function loadChats() {
             const profile = pSnap.val() || { name: "User", photo: "" };
             const lastText = decrypt(chat.lastMsg, chat.uid);
 
-            // Check if last message was sent by current user and is read
             let readStatus = '';
             if (chat.lastMsgSender === currentUser.uid) {
                 const roomId = currentUser.uid < chat.uid ? currentUser.uid + "_" + chat.uid : chat.uid + "_" + currentUser.uid;
@@ -1202,10 +1192,12 @@ async function loadChats() {
 
                 if (nameEl) nameEl.textContent = profile.name;
                 if (msgEl) msgEl.innerHTML = `${lastText}${readStatus}`;
-                if (timeEl) timeEl.textContent = formatTimeAgo(chat.ts);
+                if (timeEl) {
+                    timeEl.textContent = formatTimeAgo(chat.ts);
+                    timeEl.dataset.ts = chat.ts;
+                }
                 if (avatarEl) avatarEl.src = profile.photo || generateLetterAvatar(profile.name);
 
-                // Update unread badge
                 if (chat.unreadCount > 0) {
                     if (badgeEl) {
                         badgeEl.textContent = chat.unreadCount > 99 ? '99+' : chat.unreadCount;
@@ -1220,7 +1212,6 @@ async function loadChats() {
                     badgeEl.style.display = 'none';
                 }
 
-                // Update cached data
                 cachedChats[chat.uid] = {
                     uid: chat.uid,
                     name: profile.name,
@@ -1240,7 +1231,7 @@ async function loadChats() {
                         <div class="chat-info">
                             <div class="chat-header-row">
                                 <div class="chat-name">${profile.name}</div>
-                                <div class="chat-time">${formatTimeAgo(chat.ts)}</div>
+                                <div class="chat-time" data-ts="${chat.ts}">${formatTimeAgo(chat.ts)}</div>
                             </div>
                             <div class="chat-msg-row">
                                 <div class="chat-msg">${lastText}${readStatus}</div>
@@ -1249,7 +1240,6 @@ async function loadChats() {
                         </div>
                     </div>`;
 
-                // Insert at correct position based on timestamp
                 let inserted = false;
                 const existingCardsArray = Array.from(list.querySelectorAll('.chat-card'));
                 for (let i = 0; i < existingCardsArray.length; i++) {
@@ -1264,13 +1254,11 @@ async function loadChats() {
                     list.insertAdjacentHTML('beforeend', cardHtml);
                 }
 
-                // Set up online indicator
                 db.ref(`users/${chat.uid}/online`).on('value', s => {
                     const el = document.getElementById(`online_${chat.uid}`);
                     if (el) el.style.display = s.val() === true ? 'block' : 'none';
                 });
 
-                // Add long press listeners
                 const newCard = list.querySelector(`[data-uid="${chat.uid}"]`);
                 if (newCard) {
                     let longPressTimer;
@@ -1285,7 +1273,6 @@ async function loadChats() {
                     });
                 }
 
-                // Update cached data
                 cachedChats[chat.uid] = {
                     uid: chat.uid,
                     name: profile.name,
@@ -1309,6 +1296,8 @@ async function loadChats() {
         updateUnreadDot();
     });
 }
+
+
 
         function showContextMenu(e, uid) {
             e.preventDefault();
