@@ -1117,17 +1117,21 @@ function switchSubTab(tab) {
 
         /* --- Main Chat List with Filters --- */
 
+
+/* ----------  FULL FIXED loadChats()  ---------- */
 async function loadChats() {
     if (chatsListener) chatsListener.off();
     chatsListener = db.ref(`users/${currentUser.uid}/chats`);
 
     chatsListener.on('value', async snap => {
-        if (!snap.exists()) return;
-
         const list = document.getElementById('chatList');
-        const existingCards = new Map();
 
-        // Store existing chat cards
+        if (!snap.exists()) {
+            list.innerHTML = `<p style="text-align:center;padding:50px;color:var(--text-muted);">No chats yet.</p>`;
+            return;
+        }
+
+        const existingCards = new Map();
         document.querySelectorAll('.chat-card').forEach(card => {
             const uid = card.dataset.uid;
             if (uid) existingCards.set(uid, card);
@@ -1148,29 +1152,34 @@ async function loadChats() {
         else if (currentSubTab === 'unread') filtered = chats.filter(c => c.unreadCount > 0);
         else if (currentSubTab === 'archived') filtered = chats.filter(c => c.isArchived);
 
+        /* ----  EMPTY STATE  ---- */
         if (filtered.length === 0) {
-            let msg = "";
+            let msg = '';
             switch (currentSubTab) {
-                case 'all': msg = "No chats yet."; break;
-                case 'favourite': msg = "No favourite chats."; break;
-                case 'unread': msg = "No unread chats."; break;
-                case 'archived': msg = "No archived chats."; break;
-                default: msg = "No chats found.";
+                case 'all':       msg = 'No chats yet.';          break;
+                case 'favourite': msg = 'No favourite chats.';    break;
+                case 'unread':    msg = 'No unread chats.';       break;
+                case 'archived':  msg = 'No archived chats.';     break;
+                default:          msg = 'No chats found.';
             }
             list.innerHTML = `<p style="text-align:center;padding:50px;color:var(--text-muted);">${msg}</p>`;
+            updateUnreadDot();
             return;
         }
 
-        // Update existing cards or create new ones
+        /* ----  CLEAR LOADING / OLD CARDS  ---- */
+        list.innerHTML = '';
+
+        /* ----  RENDER CARDS  ---- */
         for (const chat of filtered) {
             const existingCard = existingCards.get(chat.uid);
             const pSnap = await db.ref(`users/${chat.uid}/profile`).once('value');
-            const profile = pSnap.val() || { name: "User", photo: "" };
+            const profile = pSnap.val() || { name: 'User', photo: '' };
             const lastText = decrypt(chat.lastMsg, chat.uid);
 
             let readStatus = '';
             if (chat.lastMsgSender === currentUser.uid) {
-                const roomId = currentUser.uid < chat.uid ? currentUser.uid + "_" + chat.uid : chat.uid + "_" + currentUser.uid;
+                const roomId = currentUser.uid < chat.uid ? `${currentUser.uid}_${chat.uid}` : `${chat.uid}_${currentUser.uid}`;
                 const lastMsgSnap = await db.ref(`messages/${roomId}`).orderByChild('ts').limitToLast(1).once('value');
                 lastMsgSnap.forEach(child => {
                     const msg = child.val();
@@ -1183,45 +1192,32 @@ async function loadChats() {
             }
 
             if (existingCard) {
-                // Update existing card
-                const nameEl = existingCard.querySelector('.chat-name');
-                const msgEl = existingCard.querySelector('.chat-msg');
+                /*  UPDATE  */
+                existingCard.querySelector('.chat-name').textContent = profile.name;
+                existingCard.querySelector('.chat-msg').innerHTML = `${lastText}${readStatus}`;
                 const timeEl = existingCard.querySelector('.chat-time');
+                timeEl.textContent = formatTimeAgo(chat.ts);
+                timeEl.dataset.ts = chat.ts;
+                existingCard.querySelector('.avatar').src = profile.photo || generateLetterAvatar(profile.name);
+
                 const badgeEl = existingCard.querySelector('.unread-badge');
-                const avatarEl = existingCard.querySelector('.avatar');
-
-                if (nameEl) nameEl.textContent = profile.name;
-                if (msgEl) msgEl.innerHTML = `${lastText}${readStatus}`;
-                if (timeEl) {
-                    timeEl.textContent = formatTimeAgo(chat.ts);
-                    timeEl.dataset.ts = chat.ts;
-                }
-                if (avatarEl) avatarEl.src = profile.photo || generateLetterAvatar(profile.name);
-
                 if (chat.unreadCount > 0) {
                     if (badgeEl) {
                         badgeEl.textContent = chat.unreadCount > 99 ? '99+' : chat.unreadCount;
                         badgeEl.style.display = 'flex';
                     } else {
-                        const msgRow = existingCard.querySelector('.chat-msg-row');
-                        if (msgRow) {
-                            msgRow.innerHTML += `<div class="unread-badge">${chat.unreadCount > 99 ? '99+' : chat.unreadCount}</div>`;
-                        }
+                        existingCard.querySelector('.chat-msg-row').insertAdjacentHTML('beforeend',
+                            `<div class="unread-badge">${chat.unreadCount > 99 ? '99+' : chat.unreadCount}</div>`);
                     }
                 } else if (badgeEl) {
                     badgeEl.style.display = 'none';
                 }
-
                 cachedChats[chat.uid] = {
-                    uid: chat.uid,
-                    name: profile.name,
-                    photo: profile.photo,
-                    lastMsgText: lastText,
-                    ts: chat.ts,
-                    unreadCount: chat.unreadCount || 0
+                    uid: chat.uid, name: profile.name, photo: profile.photo,
+                    lastMsgText: lastText, ts: chat.ts, unreadCount: chat.unreadCount || 0
                 };
             } else {
-                // Create new card
+                /*  CREATE  */
                 const cardHtml = `
                     <div class="chat-card" data-uid="${chat.uid}" onclick="openFullChat('${chat.uid}')">
                         <div class="avatar-container">
@@ -1246,13 +1242,10 @@ async function loadChats() {
                     const existingTs = parseInt(existingCardsArray[i].querySelector('.chat-time')?.dataset.ts || 0);
                     if (chat.ts > existingTs) {
                         existingCardsArray[i].insertAdjacentHTML('beforebegin', cardHtml);
-                        inserted = true;
-                        break;
+                        inserted = true; break;
                     }
                 }
-                if (!inserted) {
-                    list.insertAdjacentHTML('beforeend', cardHtml);
-                }
+                if (!inserted) list.insertAdjacentHTML('beforeend', cardHtml);
 
                 db.ref(`users/${chat.uid}/online`).on('value', s => {
                     const el = document.getElementById(`online_${chat.uid}`);
@@ -1260,36 +1253,22 @@ async function loadChats() {
                 });
 
                 const newCard = list.querySelector(`[data-uid="${chat.uid}"]`);
-                if (newCard) {
-                    let longPressTimer;
-                    newCard.addEventListener('touchstart', e => {
-                        longPressTimer = setTimeout(() => showContextMenu(e, chat.uid), 500);
-                    });
-                    newCard.addEventListener('touchend', () => clearTimeout(longPressTimer));
-                    newCard.addEventListener('touchmove', () => clearTimeout(longPressTimer));
-                    newCard.addEventListener('contextmenu', e => {
-                        e.preventDefault();
-                        showContextMenu(e, chat.uid);
-                    });
-                }
+                let longPressTimer;
+                newCard.addEventListener('touchstart', e => { longPressTimer = setTimeout(() => showContextMenu(e, chat.uid), 500); });
+                newCard.addEventListener('touchend', () => clearTimeout(longPressTimer));
+                newCard.addEventListener('touchmove', () => clearTimeout(longPressTimer));
+                newCard.addEventListener('contextmenu', e => { e.preventDefault(); showContextMenu(e, chat.uid); });
 
                 cachedChats[chat.uid] = {
-                    uid: chat.uid,
-                    name: profile.name,
-                    photo: profile.photo,
-                    lastMsgText: lastText,
-                    ts: chat.ts,
-                    unreadCount: chat.unreadCount || 0
+                    uid: chat.uid, name: profile.name, photo: profile.photo,
+                    lastMsgText: lastText, ts: chat.ts, unreadCount: chat.unreadCount || 0
                 };
             }
         }
 
-        // Remove cards that are no longer in the filtered list
+        /*  remove cards no longer in filter  */
         existingCards.forEach((card, uid) => {
-            if (!filtered.find(c => c.uid === uid)) {
-                card.remove();
-                delete cachedChats[uid];
-            }
+            if (!filtered.find(c => c.uid === uid)) card.remove();
         });
 
         localStorage.setItem('cached_chats', JSON.stringify(cachedChats));
