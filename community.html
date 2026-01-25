@@ -1,727 +1,448 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Vynix Chat</title>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/icon?family=Material+Symbols+Rounded" rel="stylesheet">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
-    <style>
-        :root {
-            --primary: #3a76f0;
-            --bg-body: #f3f4f6;
-            --bg-card: #ffffff;
-            --text-main: #111827;
-            --text-muted: #6b7280;
-            --border-light: #e5e7eb;
-            --online: #10b981;
-            --danger: #ef4444;
-        }
-        @media (prefers-color-scheme: dark) {
-            :root {
-                --primary: #60a5fa;
-                --bg-body: #0f172a;
-                --bg-card: #1e293b;
-                --text-main: #f1f5f9;
-                --text-muted: #94a3b8;
-                --border-light: #334155;
-            }
-        }
-        * { margin:0; padding:0; box-sizing:border-box; font-family:'Plus Jakarta Sans',sans-serif; user-select:none; }
-        body { background:var(--bg-body); color:var(--text-main); height:100dvh; overflow:hidden; display:flex; flex-direction:column; }
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+  <title>Privy • Private Messenger</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"/>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Symbols+Rounded"/>
+  <style>
+    :root {
+      --bg:         #f8fafc;
+      --surface:    #ffffff;
+      --elevated:   #f1f5f9;
+      --text:       #0f172a;
+      --text2:      #64748b;
+      --text3:      #94a3b8;
+      --accent:     #2e7df6;
+      --accent-dark: #1a6be0;
+      --success:    #188038;
+      --danger:     #dc2626;
+      --divider:    #e2e8f0;
+      --radius:     20px;
+      --radius-sm:  12px;
+    }
 
-        header { height:64px; padding:0 20px; background:var(--bg-card); border-bottom:1px solid var(--border-light); display:flex; align-items:center; justify-content:space-between; }
-        .app-title { font-size:22px; font-weight:700; color:var(--primary); }
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
 
-        .search-container { padding:12px 16px; background:var(--bg-card); }
-        .search-input { width:100%; padding:10px 16px; border-radius:12px; border:1px solid var(--border-light); background:var(--bg-body); font-size:15px; }
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      -webkit-font-smoothing: antialiased;
+      -webkit-tap-highlight-color: transparent;
+    }
 
-        .sub-tabs { display:flex; gap:10px; padding:12px 16px; overflow-x:auto; background:var(--bg-card); }
-        .sub-tab { padding:8px 18px; border-radius:20px; background:var(--bg-body); color:var(--text-muted); font-weight:600; cursor:pointer; white-space:nowrap; }
-        .sub-tab.active { background:var(--primary); color:white; }
+    header {
+      height: 56px;
+      padding: 0 16px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--divider);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 17px;
+      font-weight: 600;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
 
-        #chatList { flex:1; overflow-y:auto; background:var(--bg-card); }
-        .chat-card { display:flex; padding:14px 20px; cursor:pointer; border-bottom:1px solid var(--border-light); }
-        .chat-card:active { background:rgba(0,0,0,0.04); }
-        .avatar { width:54px; height:54px; border-radius:50%; object-fit:cover; background:#e2e8f0; }
-        .online-indicator { position:absolute; bottom:4px; right:4px; width:12px; height:12px; background:var(--online); border:2px solid var(--bg-card); border-radius:50%; }
-        .chat-info { flex:1; margin-left:16px; }
-        .chat-name { font-weight:600; font-size:16px; }
-        .chat-time { font-size:12px; color:var(--text-muted); float:right; }
-        .chat-msg { font-size:14px; color:var(--text-muted); max-width:80%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-        .unread-badge { background:var(--primary); color:white; min-width:20px; height:20px; border-radius:10px; padding:0 6px; font-size:12px; font-weight:bold; display:flex; align-items:center; justify-content:center; }
+    .avatar {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: #e2e8f0;
+      object-fit: cover;
+      flex-shrink: 0;
+    }
 
-        .silent-friend .chat-msg { color:var(--primary); font-style:italic; }
+    .avatar-lg {
+      width: 56px;
+      height: 56px;
+    }
 
-        #fullChatView { position:fixed; inset:0; background:var(--bg-body); display:none; flex-direction:column; z-index:1000; }
-        #chatHeader { height:64px; background:var(--bg-card); border-bottom:1px solid var(--border-light); display:flex; align-items:center; padding:0 16px; }
-        #messageList { flex:1; overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:10px; }
-        .message { max-width:78%; padding:10px 16px; border-radius:18px; font-size:15.5px; line-height:1.38; }
-        .message.received { align-self:flex-start; background:var(--bg-card); border:1px solid var(--border-light); border-radius:18px 18px 18px 4px; }
-        .message.sent { align-self:flex-end; background:var(--primary); color:white; border-radius:18px 18px 4px 18px; }
-        .message-time { font-size:11px; opacity:0.7; margin-top:4px; text-align:right; }
-        .message-ticks { font-size:16px; vertical-align:middle; margin-left:4px; }
-        .message-ticks.read { color:#34b7f1; }
+    .fab {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      width: 56px;
+      height: 56px;
+      background: var(--accent);
+      color: white;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      cursor: pointer;
+      z-index: 100;
+    }
 
-        #chatInputArea { padding:10px 16px; background:var(--bg-card); border-top:1px solid var(--border-light); display:flex; gap:12px; align-items:flex-end; }
-        #messageInput { flex:1; padding:12px 16px; border-radius:24px; background:var(--bg-body); border:none; font-size:15px; max-height:120px; resize:none; }
-        #sendBtn { width:48px; height:48px; border-radius:50%; background:var(--primary); color:white; display:none; align-items:center; justify-content:center; cursor:pointer; }
-        #sendBtn.visible { display:flex; }
+    .fab:active {
+      background: var(--accent-dark);
+    }
 
-        #fabAddFriend { position:fixed; bottom:24px; right:24px; width:56px; height:56px; background:var(--primary); color:white; border-radius:50%; box-shadow:0 4px 16px rgba(0,0,0,0.25); display:flex; align-items:center; justify-content:center; z-index:999; cursor:pointer; }
+    /* ── Chats List ──────────────────────────────────────── */
 
-        .overlay { position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:2000; display:none; }
-        .overlay.active { display:block; }
-        .bottom-sheet { position:fixed; bottom:0; left:0; right:0; background:var(--bg-card); border-radius:24px 24px 0 0; padding:24px; transform:translateY(100%); transition:transform 0.3s ease; max-height:85vh; overflow-y:auto; z-index:3000; }
-        .bottom-sheet.active { transform:translateY(0); }
+    #chatsView {
+      flex: 1;
+      overflow-y: auto;
+    }
 
-        .v-input { width:100%; padding:14px 16px; border:1px solid var(--border-light); border-radius:12px; margin-bottom:16px; font-size:15px; background:var(--bg-body); }
-        .btn-primary { width:100%; padding:14px; background:var(--primary); color:white; border:none; border-radius:12px; font-weight:600; cursor:pointer; }
+    .search-bar {
+      padding: 12px 16px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--divider);
+    }
 
-        #toast { position:fixed; bottom:90px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,0.85); color:white; padding:12px 24px; border-radius:30px; z-index:4000; display:none; font-size:14px; }
+    .search-input {
+      width: 100%;
+      padding: 10px 16px;
+      background: var(--elevated);
+      border: 1px solid var(--divider);
+      border-radius: var(--radius-sm);
+      font-size: 16px;
+      color: var(--text);
+    }
 
-        .reaction-picker { position:fixed; background:var(--bg-card); border-radius:20px; box-shadow:0 8px 32px rgba(0,0,0,0.3); padding:12px; display:none; flex-wrap:wrap; gap:12px; z-index:5000; }
-        .reaction-emoji { font-size:28px; padding:8px; cursor:pointer; border-radius:12px; transition:0.15s; }
-        .reaction-emoji:hover { background:rgba(0,0,0,0.08); transform:scale(1.15); }
+    .search-input::placeholder {
+      color: var(--text3);
+    }
 
-        .message-actions-popup { position:fixed; background:var(--bg-card); border-radius:12px; box-shadow:0 8px 32px rgba(0,0,0,0.3); padding:8px 0; min-width:160px; z-index:4500; display:none; }
-        .message-action-item { padding:12px 20px; display:flex; align-items:center; gap:12px; cursor:pointer; }
-        .message-action-item:hover { background:rgba(0,0,0,0.06); }
+    .chat-item {
+      padding: 12px 16px;
+      display: flex;
+      gap: 12px;
+      border-bottom: 1px solid var(--divider);
+      cursor: pointer;
+    }
 
-        .confirm-dialog { position:fixed; inset:0; background:rgba(0,0,0,0.6); display:none; align-items:center; justify-content:center; z-index:6000; }
-        .confirm-box { background:var(--bg-card); width:90%; max-width:360px; border-radius:20px; padding:24px; text-align:center; box-shadow:0 10px 40px rgba(0,0,0,0.4); }
-        .confirm-title { font-size:20px; font-weight:700; margin-bottom:12px; }
-        .confirm-buttons { display:flex; gap:12px; margin-top:24px; }
-        .confirm-buttons button { flex:1; padding:14px; border-radius:12px; font-weight:600; cursor:pointer; }
-        .confirm-cancel { background:var(--bg-body); border:1px solid var(--border-light); }
-        .confirm-delete { background:var(--danger); color:white; border:none; }
-    </style>
+    .chat-item:active {
+      background: rgba(0,0,0,0.04);
+    }
+
+    .chat-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .chat-name {
+      font-size: 17px;
+      font-weight: 600;
+      margin-bottom: 2px;
+    }
+
+    .chat-preview {
+      font-size: 15px;
+      color: var(--text2);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .chat-time {
+      font-size: 13px;
+      color: var(--text2);
+      margin-left: 8px;
+      white-space: nowrap;
+    }
+
+    .unread {
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .unread-dot {
+      width: 10px;
+      height: 10px;
+      background: var(--accent);
+      border-radius: 50%;
+      margin-left: auto;
+    }
+
+    /* ── Chat View ───────────────────────────────────────── */
+
+    #chatView {
+      display: none;
+      flex-direction: column;
+      height: 100dvh;
+      background: var(--bg);
+    }
+
+    #chatHeader {
+      background: var(--surface);
+    }
+
+    #messageList {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .message {
+      max-width: 78%;
+      padding: 10px 14px;
+      border-radius: var(--radius);
+      font-size: 16px;
+      line-height: 1.4;
+      position: relative;
+    }
+
+    .message.received {
+      align-self: flex-start;
+      background: var(--surface);
+      border: 1px solid var(--divider);
+      border-radius: var(--radius) var(--radius) var(--radius) 6px;
+    }
+
+    .message.sent {
+      align-self: flex-end;
+      background: var(--accent);
+      color: white;
+      border-radius: var(--radius) var(--radius) 6px var(--radius);
+    }
+
+    .msg-time {
+      font-size: 12px;
+      color: var(--text2);
+      margin-top: 4px;
+      opacity: 0.9;
+    }
+
+    .msg-sent .msg-time {
+      color: rgba(255,255,255,0.8);
+      text-align: right;
+    }
+
+    .msg-checks {
+      font-size: 14px;
+      margin-left: 4px;
+      vertical-align: middle;
+    }
+
+    .msg-checks.read {
+      color: #60a5fa;
+    }
+
+    #chatInputArea {
+      padding: 8px 12px;
+      background: var(--surface);
+      border-top: 1px solid var(--divider);
+      display: flex;
+      align-items: flex-end;
+      gap: 8px;
+    }
+
+    #messageInput {
+      flex: 1;
+      padding: 12px 16px;
+      background: var(--elevated);
+      border: 1px solid var(--divider);
+      border-radius: 24px;
+      font-size: 16px;
+      max-height: 120px;
+      resize: none;
+      line-height: 1.4;
+    }
+
+    #sendBtn {
+      width: 44px;
+      height: 44px;
+      background: var(--accent);
+      color: white;
+      border: none;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+
+    #sendBtn.hidden {
+      display: none;
+    }
+
+    .icon-btn {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text2);
+      font-size: 24px;
+      cursor: pointer;
+    }
+
+    .status-secure {
+      font-size: 12px;
+      color: var(--success);
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .status-secure::before {
+      content: "lock";
+      font-family: "Material Symbols Rounded";
+      font-size: 14px;
+    }
+
+    @media (min-width: 768px) {
+      body {
+        max-width: 480px;
+        margin: 0 auto;
+        border-left: 1px solid var(--divider);
+        border-right: 1px solid var(--divider);
+      }
+    }
+  </style>
 </head>
 <body>
 
-<div id="pageLoader" style="display:flex;align-items:center;justify-content:center;height:100vh;background:var(--primary);color:white;font-size:28px;font-weight:600;">
-    Vynix Chat • Connecting...
-</div>
-
-<div id="toast"></div>
-
-<div id="mainView" style="display:none;flex-direction:column;height:100%;">
+  <!-- Chats List View -->
+  <div id="chatsView">
     <header>
-        <div style="display:flex;align-items:center;gap:12px;">
-            <img id="myAvatar" class="avatar" src="">
-            <div>
-                <div class="app-title">Vynix Chat</div>
-                <div id="myVynixId" style="font-size:13px;color:var(--text-muted);">...</div>
-            </div>
-        </div>
-        <span class="material-symbols-rounded" style="font-size:28px;cursor:pointer;" onclick="confirmClearAllChats()">delete_sweep</span>
+      <div style="display:flex; align-items:center; gap:12px;">
+        <div class="avatar avatar-lg" style="background:#3b82f6; color:white; display:flex; align-items:center; justify-content:center; font-weight:600;">K</div>
+        <span>Chats</span>
+      </div>
+      <span class="material-symbols-rounded" style="font-size:24px;">more_vert</span>
     </header>
 
-    <div class="search-container">
-        <input type="text" class="search-input" id="friendSearch" placeholder="Search friends..." onkeyup="searchFriends()">
+    <div class="search-bar">
+      <input type="text" class="search-input" placeholder="Search"/>
     </div>
 
-    <div class="sub-tabs">
-        <div class="sub-tab active" data-tab="all">All</div>
-        <div class="sub-tab" data-tab="favourite">Favourite</div>
-        <div class="sub-tab" data-tab="unread">Unread</div>
-        <div class="sub-tab" data-tab="archived">Archived</div>
+    <div style="padding:16px 16px 8px; font-size:13px; color:var(--text2);">
+      All conversations are end-to-end encrypted
     </div>
 
-    <div id="chatList"></div>
-</div>
-
-<div id="fullChatView" style="display:none;">
-    <div id="chatHeader">
-        <span class="material-symbols-rounded" onclick="closeFullChat()" style="font-size:28px;padding:12px;cursor:pointer;">arrow_back</span>
-        <img id="chatFriendAvatar" class="avatar" src="" style="width:44px;height:44px;margin-right:12px;">
-        <div>
-            <div id="chatFriendName" style="font-weight:600;font-size:17px;"></div>
-            <div id="chatStatusInfo" style="font-size:13px;color:var(--text-muted);">Loading...</div>
+    <!-- Chat items -->
+    <div class="chat-item">
+      <div class="avatar avatar-lg" style="background:#8b5cf6;"></div>
+      <div class="chat-info">
+        <div style="display:flex; justify-content:space-between;">
+          <div class="chat-name">Sarah M.</div>
+          <div class="chat-time">14:22</div>
         </div>
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div class="chat-preview unread">Hey, are we still on for tomorrow?</div>
+          <div class="unread-dot"></div>
+        </div>
+      </div>
     </div>
 
-    <div id="messageList"></div>
+    <div class="chat-item">
+      <div class="avatar avatar-lg" style="background:#ec4899;"></div>
+      <div class="chat-info">
+        <div style="display:flex; justify-content:space-between;">
+          <div class="chat-name">Thabo K.</div>
+          <div class="chat-time">Yesterday</div>
+        </div>
+        <div class="chat-preview">Here's the document ✓✓</div>
+      </div>
+    </div>
+
+    <div class="chat-item">
+      <div class="avatar avatar-lg" style="background:#f59e0b;"></div>
+      <div class="chat-info">
+        <div style="display:flex; justify-content:space-between;">
+          <div class="chat-name">Work Group</div>
+          <div class="chat-time">10:15</div>
+        </div>
+        <div class="chat-preview">You: Sounds good, I'll handle it</div>
+      </div>
+    </div>
+
+    <!-- More items can be added here -->
+
+    <div class="fab" onclick="openChat()">
+      <span class="material-symbols-rounded" style="font-size:28px;">edit</span>
+    </div>
+  </div>
+
+  <!-- Single Chat View -->
+  <div id="chatView">
+    <header id="chatHeader">
+      <div style="display:flex; align-items:center; gap:12px;">
+        <span class="material-symbols-rounded" onclick="closeChat()" style="font-size:28px; cursor:pointer;">arrow_back</span>
+        <div class="avatar avatar-lg" style="background:#8b5cf6;"></div>
+        <div>
+          <div style="font-weight:600; font-size:17px;">Sarah M.</div>
+          <div class="status-secure">End-to-end encrypted</div>
+        </div>
+      </div>
+      <div style="display:flex; gap:16px;">
+        <span class="material-symbols-rounded">call</span>
+        <span class="material-symbols-rounded">videocam</span>
+      </div>
+    </header>
+
+    <div id="messageList">
+      <!-- Messages are added via JS below -->
+    </div>
 
     <div id="chatInputArea">
-        <textarea id="messageInput" placeholder="Message..." rows="1" oninput="autoResizeInput(this)" onkeypress="handleEnter(event)"></textarea>
-        <div id="sendBtn" onclick="sendMessage()"><span class="material-symbols-rounded">send</span></div>
+      <div class="icon-btn">+</div>
+      <textarea id="messageInput" placeholder="Message..." rows="1" oninput="autoGrow(this)"></textarea>
+      <div class="icon-btn">mood</div>
+      <button id="sendBtn" class="hidden"><span class="material-symbols-rounded">send</span></button>
     </div>
-</div>
+  </div>
 
-<div class="overlay" id="overlay" onclick="closeAll()"></div>
+  <script>
+    function autoGrow(el) {
+      el.style.height = "auto";
+      el.style.height = (el.scrollHeight) + "px";
+      const btn = document.getElementById('sendBtn');
+      btn.classList.toggle('hidden', el.value.trim().length === 0);
+    }
 
-<div class="bottom-sheet" id="addFriendSheet">
-    <h3 style="margin-bottom:20px;">Add Friend</h3>
-    <input type="text" id="friendVynixId" class="v-input" placeholder="vnx_abc123">
-    <button class="btn-primary" onclick="addFriendLogic()">Add Friend</button>
-</div>
+    function openChat() {
+      document.getElementById('chatsView').style.display = 'none';
+      document.getElementById('chatView').style.display = 'flex';
+    }
 
-<div id="fabAddFriend" onclick="openAddFriendSheet()">
-    <span class="material-symbols-rounded" style="font-size:32px;">person_add</span>
-</div>
+    function closeChat() {
+      document.getElementById('chatView').style.display = 'none';
+      document.getElementById('chatsView').style.display = 'block';
+    }
 
-<!-- Reaction Picker -->
-<div class="reaction-picker" id="reactionPicker">
-    <div class="reaction-emoji" data-emoji="👍">👍</div>
-    <div class="reaction-emoji" data-emoji="❤️">❤️</div>
-    <div class="reaction-emoji" data-emoji="😂">😂</div>
-    <div class="reaction-emoji" data-emoji="🔥">🔥</div>
-</div>
+    // Mock messages (you can replace with real data later)
+    const messages = [
+      { type: 'received', text: 'Hey! Are we still meeting at 3?', time: '14:18' },
+      { type: 'sent', text: 'Yes, definitely. See you there 😊', time: '14:19', read: true },
+      { type: 'received', text: 'Perfect. Should I bring the files?', time: '14:20' },
+      { type: 'sent', text: 'No need, I printed them already', time: '14:21', read: true },
+      { type: 'received', text: 'Great, saves me time. Thanks!', time: '14:22' }
+    ];
 
-<!-- Message Actions -->
-<div class="message-actions-popup" id="messageActionsPopup">
-    <div class="message-action-item" onclick="deleteMessage()"><span class="material-symbols-rounded">delete</span> Delete</div>
-    <div class="message-action-item" onclick="editMessage()"><span class="material-symbols-rounded">edit</span> Edit</div>
-    <div class="message-action-item" onclick="forwardMessage()"><span class="material-symbols-rounded">forward</span> Forward</div>
-</div>
-
-<!-- Confirm Dialog -->
-<div class="confirm-dialog" id="clearAllConfirm">
-    <div class="confirm-box">
-        <div class="confirm-title">Clear All Chats?</div>
-        <div style="margin:16px 0;color:var(--text-muted);">This cannot be undone.</div>
-        <div class="confirm-buttons">
-            <button class="confirm-cancel" onclick="document.getElementById('clearAllConfirm').style.display='none'">Cancel</button>
-            <button class="confirm-delete" onclick="executeClearAllChats()">Delete All</button>
+    const list = document.getElementById('messageList');
+    messages.forEach(m => {
+      const div = document.createElement('div');
+      div.className = `message ${m.type}`;
+      div.innerHTML = `
+        ${m.text}
+        <div class="msg-time ${m.type === 'sent' ? 'msg-sent' : ''}">
+          ${m.time}
+          ${m.type === 'sent' ? `<span class="msg-checks ${m.read ? 'read' : ''}">✓✓</span>` : ''}
         </div>
-    </div>
-</div>
-
-<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
-
-<script>
-// ────────────────────────────────────────────────
-//  Config & Globals
-// ────────────────────────────────────────────────
-const firebaseConfig = {
-    apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
-    authDomain: "fire-b-a8878.firebaseapp.com",
-    databaseURL: "https://fire-b-a8878.firebaseio.com/",
-    projectId: "fire-b-a8878",
-    storageBucket: "fire-b-a8878.appspot.com",
-    messagingSenderId: "658673187627",
-    appId: "1:658673187627:web:6e4c29af661785f0afa36e"
-};
-firebase.initializeApp(firebaseConfig);
-const auth = firebase.auth();
-const db = firebase.database();
-
-let currentUser = null;
-let myVId = "";
-let currentFriendUid = null;
-let currentRoomId = null;
-let chatsListener = null;
-let messagesListener = null;
-let sharedKeys = JSON.parse(localStorage.getItem('sharedKeys') || '{}');
-let currentSubTab = 'all';
-let currentMessageKey = null;
-let currentMessageText = null;
-
-// ────────────────────────────────────────────────
-//  Utility Functions
-// ────────────────────────────────────────────────
-function toast(msg) {
-    const t = document.getElementById('toast');
-    t.textContent = msg;
-    t.style.display = 'block';
-    setTimeout(() => t.style.display = 'none', 2400);
-}
-
-function generateLetterAvatar(name) {
-    if (!name) name = 'U';
-    const canvas = document.createElement('canvas');
-    canvas.width = canvas.height = 100;
-    const ctx = canvas.getContext('2d');
-    ctx.fillStyle = '#3a76f0';
-    ctx.fillRect(0,0,100,100);
-    ctx.fillStyle = '#fff';
-    ctx.font = 'bold 54px "Plus Jakarta Sans", sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(name[0].toUpperCase(), 50, 55);
-    return canvas.toDataURL();
-}
-
-function formatTimeAgo(ts) {
-    if (!ts) return '';
-    const diff = Date.now() - ts;
-    if (diff < 60000) return 'now';
-    if (diff < 3600000) return Math.floor(diff/60000) + 'm';
-    if (diff < 86400000) return Math.floor(diff/3600000) + 'h';
-    return new Date(ts).toLocaleDateString([], {month:'short', day:'numeric'});
-}
-
-function autoResizeInput(el) {
-    el.style.height = 'auto';
-    el.style.height = el.scrollHeight + 'px';
-    document.getElementById('sendBtn').classList.toggle('visible', el.value.trim().length > 0);
-}
-
-function handleEnter(e) {
-    if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        sendMessage();
-    }
-}
-
-// ────────────────────────────────────────────────
-//  Crypto
-// ────────────────────────────────────────────────
-async function ensureKeyPair() {
-    if (!localStorage.getItem('privateKey')) {
-        const keyPair = await crypto.subtle.generateKey(
-            { name: "ECDH", namedCurve: "P-256" },
-            true,
-            ["deriveBits"]
-        );
-        const pub = await crypto.subtle.exportKey("jwk", keyPair.publicKey);
-        const priv = await crypto.subtle.exportKey("jwk", keyPair.privateKey);
-        localStorage.setItem('privateKey', JSON.stringify(priv));
-        await db.ref(`users/${currentUser.uid}/profile`).update({ publicKey: JSON.stringify(pub) });
-    }
-}
-
-async function deriveSharedSecret(friendPubJwk) {
-    const privJwk = JSON.parse(localStorage.getItem('privateKey'));
-    const privKey = await crypto.subtle.importKey("jwk", privJwk, {name:"ECDH", namedCurve:"P-256"}, false, ["deriveBits"]);
-    const pubKey = await crypto.subtle.importKey("jwk", friendPubJwk, {name:"ECDH", namedCurve:"P-256"}, false, []);
-
-    const secret = await crypto.subtle.deriveBits(
-        { name: "ECDH", public: pubKey },
-        privKey,
-        256
-    );
-
-    return Array.from(new Uint8Array(secret)).map(b => b.toString(16).padStart(2,'0')).join('');
-}
-
-function encrypt(text, key) {
-    return CryptoJS.AES.encrypt(text, key).toString();
-}
-
-function decrypt(ciphertext, friendUid) {
-    try {
-        const key = sharedKeys[friendUid];
-        if (!key) return "🔒 Encrypted";
-        const bytes = CryptoJS.AES.decrypt(ciphertext, key);
-        return bytes.toString(CryptoJS.enc.Utf8) || "Message";
-    } catch (e) {
-        return "🔒 Failed to decrypt";
-    }
-}
-
-// ────────────────────────────────────────────────
-//  Auth & Init
-// ────────────────────────────────────────────────
-auth.onAuthStateChanged(async user => {
-    if (user) {
-        currentUser = user;
-        await ensureKeyPair();
-        document.getElementById('pageLoader').style.display = 'none';
-        document.getElementById('mainView').style.display = 'flex';
-        initApp();
-    } else {
-        // Redirect to login page if needed
-        alert("Please sign in first");
-    }
-});
-
-async function initApp() {
-    listenToMyProfile();
-    loadChats();
-
-    document.querySelectorAll('.sub-tab').forEach(tab => {
-        tab.onclick = () => {
-            currentSubTab = tab.dataset.tab;
-            document.querySelectorAll('.sub-tab').forEach(t => t.classList.remove('active'));
-            tab.classList.add('active');
-            loadChats();
-        };
+      `;
+      list.appendChild(div);
     });
-
-    // Reaction picker clicks
-    document.querySelectorAll('.reaction-emoji').forEach(el => {
-        el.onclick = () => {
-            const emoji = el.dataset.emoji;
-            if (currentMessageKey) toggleReaction(currentMessageKey, emoji);
-            document.getElementById('reactionPicker').style.display = 'none';
-        };
-    });
-}
-
-function listenToMyProfile() {
-    db.ref(`users/${currentUser.uid}/profile`).on('value', snap => {
-        const data = snap.val() || {};
-        document.getElementById('myAvatar').src = data.photo || generateLetterAvatar(data.name || "You");
-        myVId = data.vynixId || "";
-        document.getElementById('myVynixId').textContent = myVId ? `@${myVId}` : "setting up...";
-    });
-}
-
-// ────────────────────────────────────────────────
-//  Add Friend
-// ────────────────────────────────────────────────
-function openAddFriendSheet() {
-    document.getElementById('overlay').classList.add('active');
-    document.getElementById('addFriendSheet').classList.add('active');
-}
-
-async function addFriendLogic() {
-    const input = document.getElementById('friendVynixId');
-    const vid = input.value.trim().toLowerCase().replace('@','');
-    if (!vid) return toast("Enter Vynix ID");
-
-    const snap = await db.ref(`vynix_ids/${vid}`).once('value');
-    if (!snap.exists()) return toast("User not found");
-
-    const targetUid = snap.val();
-    if (targetUid === currentUser.uid) return toast("Can't add yourself");
-
-    const alreadyFriend = await db.ref(`users/\( {currentUser.uid}/friends/ \){targetUid}`).once('value');
-    if (alreadyFriend.exists()) {
-        toast("Already friends");
-        closeAll();
-        openFullChat(targetUid);
-        return;
-    }
-
-    await db.ref(`users/\( {currentUser.uid}/friends/ \){targetUid}`).set(true);
-
-    const chatRef = db.ref(`users/\( {currentUser.uid}/chats/ \){targetUid}`);
-    if (!(await chatRef.once('value')).exists()) {
-        await chatRef.set({
-            lastMsg: null,
-            ts: Date.now(),
-            unreadCount: 0,
-            isFavourite: false,
-            isArchived: false
-        });
-    }
-
-    toast("Friend added!");
-    input.value = '';
-    closeAll();
-    loadChats();
-}
-
-function closeAll() {
-    document.getElementById('overlay').classList.remove('active');
-    document.getElementById('addFriendSheet').classList.remove('active');
-}
-
-// ────────────────────────────────────────────────
-//  Main Chat List
-// ────────────────────────────────────────────────
-async function loadChats() {
-    if (chatsListener) chatsListener.off();
-
-    const uid = currentUser.uid;
-    const friendsRef = db.ref(`users/${uid}/friends`);
-    const chatsRef = db.ref(`users/${uid}/chats`);
-
-    const refresh = async () => {
-        const [fSnap, cSnap] = await Promise.all([friendsRef.once('value'), chatsRef.once('value')]);
-
-        const friendUids = [];
-        fSnap.forEach(c => friendUids.push(c.key));
-
-        const chatMap = {};
-        cSnap.forEach(c => chatMap[c.key] = c.val() || {});
-
-        const items = friendUids.map(fUid => ({
-            uid: fUid,
-            hasConversation: !!chatMap[fUid]?.lastMsg,
-            lastMsg: chatMap[fUid]?.lastMsg,
-            ts: chatMap[fUid]?.ts || 0,
-            unreadCount: chatMap[fUid]?.unreadCount || 0,
-            isFavourite: chatMap[fUid]?.isFavourite || false,
-            isArchived: chatMap[fUid]?.isArchived || false
-        }));
-
-        items.sort((a,b) => b.ts - a.ts);
-
-        renderChatList(items);
-    };
-
-    chatsListener = { off: () => { friendsRef.off(); chatsRef.off(); } };
-    friendsRef.on('value', refresh);
-    chatsRef.on('value', refresh);
-    refresh();
-}
-
-async function renderChatList(items) {
-    const list = document.getElementById('chatList');
-    list.innerHTML = '';
-
-    const filtered = items.filter(item => {
-        if (currentSubTab === 'all') return true;
-        if (currentSubTab === 'favourite') return item.isFavourite;
-        if (currentSubTab === 'unread') return item.unreadCount > 0;
-        if (currentSubTab === 'archived') return item.isArchived;
-        return false;
-    });
-
-    if (filtered.length === 0) {
-        list.innerHTML = '<div style="padding:80px 20px;text-align:center;color:var(--text-muted);">No matches in this view</div>';
-        return;
-    }
-
-    for (const item of filtered) {
-        const snap = await db.ref(`users/${item.uid}/profile`).once('value');
-        const profile = snap.val() || { name: "User", photo: "" };
-
-        const lastText = item.hasConversation ? decrypt(item.lastMsg, item.uid) : "Start chatting →";
-
-        const card = document.createElement('div');
-        card.className = `chat-card ${item.hasConversation ? '' : 'silent-friend'}`;
-        card.innerHTML = `
-            <div style="position:relative;">
-                <img class="avatar" src="${profile.photo || generateLetterAvatar(profile.name)}">
-                <div class="online-indicator" id="online_${item.uid}"></div>
-            </div>
-            <div class="chat-info">
-                <div style="display:flex;justify-content:space-between;">
-                    <div class="chat-name">${profile.name}</div>
-                    <div class="chat-time">${item.ts ? formatTimeAgo(item.ts) : ''}</div>
-                </div>
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-top:3px;">
-                    <div class="chat-msg">${lastText}</div>
-                    \( {item.unreadCount > 0 ? `<div class="unread-badge"> \){item.unreadCount}</div>` : ''}
-                </div>
-            </div>
-        `;
-        card.onclick = () => openFullChat(item.uid);
-        list.appendChild(card);
-
-        db.ref(`users/${item.uid}/online`).on('value', s => {
-            const dot = document.getElementById(`online_${item.uid}`);
-            if (dot) dot.style.display = s.val() ? 'block' : 'none';
-        });
-    }
-}
-
-// ────────────────────────────────────────────────
-//  Chat View & Messages
-// ────────────────────────────────────────────────
-async function openFullChat(uid) {
-    currentFriendUid = uid;
-    currentRoomId = [currentUser.uid, uid].sort().join('_');
-
-    const snap = await db.ref(`users/${uid}/profile`).once('value');
-    const p = snap.val() || {};
-
-    document.getElementById('chatFriendName').textContent = p.name || "User";
-    document.getElementById('chatFriendAvatar').src = p.photo || generateLetterAvatar(p.name || "User");
-    document.getElementById('fullChatView').style.display = 'flex';
-
-    // Load shared key if missing
-    if (!sharedKeys[uid] && p.publicKey) {
-        sharedKeys[uid] = await deriveSharedSecret(JSON.parse(p.publicKey));
-        localStorage.setItem('sharedKeys', JSON.stringify(sharedKeys));
-    }
-
-    loadMessages();
-    markAsRead(uid);
-}
-
-function closeFullChat() {
-    document.getElementById('fullChatView').style.display = 'none';
-    if (messagesListener) messagesListener.off();
-    currentFriendUid = currentRoomId = null;
-}
-
-async function loadMessages() {
-    const list = document.getElementById('messageList');
-    list.innerHTML = '';
-
-    messagesListener = db.ref(`messages/${currentRoomId}`).limitToLast(80);
-
-    messagesListener.on('child_added', snap => {
-        const msg = snap.val();
-        const isSent = msg.sender === currentUser.uid;
-        const text = decrypt(msg.text, currentFriendUid);
-
-        const div = document.createElement('div');
-        div.className = `message ${isSent ? 'sent' : 'received'}`;
-        div.innerHTML = `
-            ${text}
-            <div class="message-time">${formatTimeAgo(msg.ts)}
-                ${isSent ? `<span class="message-ticks ${msg.read ? 'read' : ''}">✓✓</span>` : ''}
-            </div>
-        `;
-        list.appendChild(div);
-        list.scrollTop = list.scrollHeight;
-
-        if (!isSent && !msg.read) {
-            db.ref(`messages/\( {currentRoomId}/ \){snap.key}`).update({ read: true });
-        }
-    });
-}
-
-async function sendMessage() {
-    const input = document.getElementById('messageInput');
-    const text = input.value.trim();
-    if (!text || !currentFriendUid) return;
-
-    const key = sharedKeys[currentFriendUid];
-    if (!key) return toast("No encryption key");
-
-    const encrypted = encrypt(text, key);
-    const ts = Date.now();
-
-    const tempId = 'temp_' + ts;
-
-    // Show pending message
-    const list = document.getElementById('messageList');
-    const pending = document.createElement('div');
-    pending.className = 'message sent';
-    pending.innerHTML = `\( {text}<div class="message-time"> \){formatTimeAgo(ts)} <span class="message-ticks">✓</span></div>`;
-    pending.id = tempId;
-    list.appendChild(pending);
     list.scrollTop = list.scrollHeight;
-
-    input.value = '';
-    autoResizeInput(input);
-
-    try {
-        const ref = await db.ref(`messages/${currentRoomId}`).push({
-            text: encrypted,
-            sender: currentUser.uid,
-            ts,
-            read: false
-        });
-
-        // Replace pending with real message
-        document.getElementById(tempId)?.remove();
-
-        const updates = {};
-        updates[`users/\( {currentUser.uid}/chats/ \){currentFriendUid}/lastMsg`] = encrypted;
-        updates[`users/\( {currentUser.uid}/chats/ \){currentFriendUid}/ts`] = ts;
-        updates[`users/\( {currentFriendUid}/chats/ \){currentUser.uid}/lastMsg`] = encrypted;
-        updates[`users/\( {currentFriendUid}/chats/ \){currentUser.uid}/ts`] = ts;
-        updates[`users/\( {currentFriendUid}/chats/ \){currentUser.uid}/unreadCount`] = firebase.database.ServerValue.increment(1);
-
-        await db.ref().update(updates);
-    } catch (e) {
-        toast("Message failed to send");
-    }
-}
-
-function markAsRead(uid) {
-    db.ref(`users/\( {currentUser.uid}/chats/ \){uid}`).update({ unreadCount: 0 });
-}
-
-// ────────────────────────────────────────────────
-//  Reactions (basic)
-// ────────────────────────────────────────────────
-function showReactionPicker(e, msgKey) {
-    currentMessageKey = msgKey;
-    const picker = document.getElementById('reactionPicker');
-    picker.style.left = e.pageX + 'px';
-    picker.style.top = e.pageY + 'px';
-    picker.style.display = 'flex';
-}
-
-async function toggleReaction(msgKey, emoji) {
-    const ref = db.ref(`messages/\( {currentRoomId}/ \){msgKey}/reactions/${emoji}`);
-    const snap = await ref.once('value');
-    let users = snap.val() || [];
-
-    if (users.includes(currentUser.uid)) {
-        users = users.filter(u => u !== currentUser.uid);
-        if (users.length === 0) await ref.remove();
-        else await ref.set(users);
-    } else {
-        users.push(currentUser.uid);
-        await ref.set(users);
-    }
-}
-
-// ────────────────────────────────────────────────
-//  Message Actions (delete, edit, forward)
-// ────────────────────────────────────────────────
-function showMessageActions(e, msgKey, text) {
-    currentMessageKey = msgKey;
-    currentMessageText = text;
-
-    const popup = document.getElementById('messageActionsPopup');
-    popup.style.left = e.pageX + 'px';
-    popup.style.top = e.pageY + 'px';
-    popup.style.display = 'block';
-
-    setTimeout(() => {
-        document.addEventListener('click', hideMessageActions, {once:true});
-    }, 50);
-}
-
-function hideMessageActions() {
-    document.getElementById('messageActionsPopup').style.display = 'none';
-}
-
-async function deleteMessage() {
-    if (!currentMessageKey) return;
-    await db.ref(`messages/\( {currentRoomId}/ \){currentMessageKey}`).remove();
-    toast("Message deleted");
-    hideMessageActions();
-}
-
-async function editMessage() {
-    if (!currentMessageKey) return;
-    const newText = prompt("Edit message:", currentMessageText);
-    if (!newText || newText === currentMessageText) return;
-
-    const key = sharedKeys[currentFriendUid];
-    const encrypted = encrypt(newText, key);
-
-    await db.ref(`messages/\( {currentRoomId}/ \){currentMessageKey}`).update({ text: encrypted });
-    toast("Message edited");
-    hideMessageActions();
-}
-
-function forwardMessage() {
-    toast("Forward feature coming soon...");
-    hideMessageActions();
-}
-
-// ────────────────────────────────────────────────
-//  Clear All Chats
-// ────────────────────────────────────────────────
-function confirmClearAllChats() {
-    document.getElementById('clearAllConfirm').style.display = 'flex';
-}
-
-async function executeClearAllChats() {
-    const chats = await db.ref(`users/${currentUser.uid}/chats`).once('value');
-    const promises = [];
-
-    chats.forEach(child => {
-        const friendUid = child.key;
-        const room = [currentUser.uid, friendUid].sort().join('_');
-        promises.push(db.ref(`messages/${room}`).remove());
-        promises.push(db.ref(`users/\( {currentUser.uid}/chats/ \){friendUid}`).remove());
-        promises.push(db.ref(`users/\( {friendUid}/chats/ \){currentUser.uid}`).remove());
-    });
-
-    await Promise.all(promises);
-    toast("All chats cleared");
-    document.getElementById('clearAllConfirm').style.display = 'none';
-    loadChats();
-}
-
-// ────────────────────────────────────────────────
-//  Search
-// ────────────────────────────────────────────────
-function searchFriends() {
-    const term = document.getElementById('friendSearch').value.toLowerCase();
-    document.querySelectorAll('.chat-card').forEach(card => {
-        const name = card.querySelector('.chat-name')?.textContent.toLowerCase() || '';
-        card.style.display = name.includes(term) ? 'flex' : 'none';
-    });
-}
-</script>
+  </script>
 </body>
 </html>
