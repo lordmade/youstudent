@@ -785,646 +785,1645 @@
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
-<script>
-/* ==========  CONFIG  ========== */
-const CLOUD_NAME    = 'YOUR_CLOUD_NAME';        // <— your Cloudinary cloud
-const UPLOAD_PRESET = 'YOUR_UNSIGNED_PRESET';   // <— unsigned-upload preset
-const CL_URL        = `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`;
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
+            authDomain: "fire-b-a8878.firebaseapp.com",
+            databaseURL: "https://fire-b-a8878.firebaseio.com/",
+            projectId: "fire-b-a8878",
+            storageBucket: "fire-b-a8878.firebasestorage.app",
+            messagingSenderId: "658673187627",
+            appId: "1:658673187627:web:6e4c29af661785f0afa36e"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.database();
 
-/* ==========  FIREBASE  ========== */
-const firebaseConfig = {
-  apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
-  authDomain: "fire-b-a8878.firebaseapp.com",
-  databaseURL: "https://fire-b-a8878.firebaseio.com",
-  projectId: "fire-b-a8878",
-  storageBucket: "fire-b-a8878.firebasestorage.app",
-  messagingSenderId: "658673187627",
-  appId: "1:658673187627:web:6e4c29af661785f0afa36e"
-};
-firebase.initializeApp(firebaseConfig);
-const auth = firebase.auth();
-const db   = firebase.database();
+        let currentUser = null;
+        let myProfile = { name: "", photo: "" };
+        let myVId = "";
+        let currentFriendUid = null;
+        let currentRoomId = null;
+        let chatsListener = null;
+        let messagesListener = null;
+        let sharedKeys = JSON.parse(localStorage.getItem('sharedKeys') || '{}');
+        let currentSubTab = 'all';
+        let currentContextUid = null;
+        let cachedChats = JSON.parse(localStorage.getItem('cached_chats') || '{}');
+        let pendingMessages = [];
 
-/* ==========  GLOBALS  ========== */
-let currentUser = null;
-let myProfile   = { name:'', photo:'' };
-let myVId       = '';
-let currentFriendUid = null;
-let currentRoomId    = null;
-let chatsListener= null;
-let messagesListener= null;
-let sharedKeys  = JSON.parse(localStorage.getItem('sharedKeys')||'{}');
-let currentSubTab = 'all';
-let currentContextUid = null;
-let cachedChats = JSON.parse(localStorage.getItem('cached_chats')||'{}');
-let idb = null;
-const DB_NAME = 'vynix_messages';
-const DB_VERSION = 1;
-const STORE_NAME = 'messages';
+        // Variables for swipe handling
+        let currentMessageEl = null;
+        let currentMessageKey = null;
+        let currentMessageText = null;
+        let startX = 0;
+        let currentX = 0;
+        let isSwiping = false;
+        let swipeThreshold = 100;
 
-/* ==========  INDEXEDDB  ========== */
-function openIndexedDB() {
-  return new Promise((res,rej)=>{
-    const req = indexedDB.open(DB_NAME,DB_VERSION);
-    req.onerror=()=>rej(req.error);
-    req.onsuccess=()=>{ idb=req.result; res(idb); };
-    req.onupgradeneeded=e=>{
-      const store = e.target.result.createObjectStore(STORE_NAME,{keyPath:'localId',autoIncrement:true});
-      store.createIndex('roomId','roomId',{unique:false});
-      store.createIndex('ts','ts',{unique:false});
-    };
-  });
-}
-async function cacheMessage(roomId,msg){
-  if(!idb)return;
-  const tx = idb.transaction(STORE_NAME,'readwrite');
-  tx.objectStore(STORE_NAME).put({roomId,...msg});
-  await tx.done;
-}
-async function getCachedMessages(roomId){
-  if(!idb)return[];
-  const tx = idb.transaction(STORE_NAME,'readonly');
-  const idx = tx.objectStore(STORE_NAME).index('roomId');
-  return new Promise(res=>{ const r=idx.getAll(roomId); r.onsuccess=()=>res(r.result); });
-}
-async function clearCachedMessages(roomId){
-  if(!idb)return;
-  const tx = idb.transaction(STORE_NAME,'readwrite');
-  const idx = tx.objectStore(STORE_NAME).index('roomId');
-  const r = idx.openCursor(IDBKeyRange.only(roomId));
-  r.onsuccess=()=>{const c=r.result;if(c){c.delete();c.continue();}};
-  await tx.done;
-}
-async function clearAllCachedMessages(){
-  if(!idb)return;
-  const tx = idb.transaction(STORE_NAME,'readwrite');
-  tx.objectStore(STORE_NAME).clear();
-  await tx.done;
-}
+        // IndexedDB Setup for messages
+        let idb = null;
+        const DB_NAME = 'vynix_messages';
+        const DB_VERSION = 1;
+        const STORE_NAME = 'messages';
 
-/* ==========  UTILS  ========== */
-function toast(msg){
-  const t=document.getElementById('toast');
-  t.textContent=msg; t.style.display='block';
-  setTimeout(()=>t.style.display='none',3000);
-}
-function generateLetterAvatar(name){
-  if(!name)name='U';
-  const initials=name.trim().split(/\s+/).map(w=>w[0]).slice(0,2).join('').toUpperCase();
-  const colors=['#3a76f0','#10b981','#f59e0b','#ef4444','#8b5cf6','#ec4899'];
-  const hash=name.split('').reduce((a,b)=>a+b.charCodeAt(0),0);
-  const bg=colors[hash%colors.length];
-  const c=document.createElement('canvas');
-  c.width=c.height=100;
-  const ctx=c.getContext('2d');
-  ctx.fillStyle=bg; ctx.fillRect(0,0,100,100);
-  ctx.fillStyle='#fff'; ctx.font='bold 40px "Plus Jakarta Sans",sans-serif';
-  ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(initials,50,50);
-  return c.toDataURL();
-}
-async function generateKeyPair(){
-  const kp=await crypto.subtle.generateKey({name:'ECDH',namedCurve:'P-256'},true,['deriveBits']);
-  const pub=await crypto.subtle.exportKey('jwk',kp.publicKey);
-  const priv=await crypto.subtle.exportKey('jwk',kp.privateKey);
-  localStorage.setItem('privateKey',JSON.stringify(priv));
-  return pub;
-}
-async function deriveSharedSecret(friendPublicJwk){
-  const privJwk=JSON.parse(localStorage.getItem('privateKey'));
-  const priv=await crypto.subtle.importKey('jwk',privJwk,{name:'ECDH',namedCurve:'P-256'},false,['deriveBits']);
-  const friendPub=await crypto.subtle.importKey('jwk',friendPublicJwk,{name:'ECDH',namedCurve:'P-256'},false,[]);
-  const secret=await crypto.subtle.deriveBits({name:'ECDH',public:friendPub},priv,256);
-  return [...new Uint8Array(secret)].map(b=>b.toString(16).padStart(2,'0')).join('');
-}
-function decrypt(ciphertext,friendUid){
-  if(!ciphertext)return'[Message]';
-  try{
-    const key=sharedKeys[friendUid];
-    if(!key)return'🔒 Encrypted';
-    const bytes=CryptoJS.AES.decrypt(ciphertext,key);
-    return bytes.toString(CryptoJS.enc.Utf8)||'🔒 Message';
-  }catch{return'🔒 Message';}
-}
+        function openIndexedDB() {
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open(DB_NAME, DB_VERSION);
 
-/* ==========  AUTH  ========== */
-auth.onAuthStateChanged(async user=>{
-  if(user){currentUser=user; await openIndexedDB(); initApp();}
-  else{window.location.href='login.html';}
-});
+                request.onerror = () => reject(request.error);
+                request.onsuccess = () => {
+                    idb = request.result;
+                    resolve(idb);
+                };
 
-/* ==========  INIT  ========== */
-async function initApp(){
-  listenToMyProfile();
-  const snap=await db.ref(`users/${currentUser.uid}/profile`).once('value');
-  const data=snap.val()||{};
-
-  if(!data.vynixId){
-    myVId=await generateAndAssignVynixId();
-    if(myVId){
-      await db.ref(`users/${currentUser.uid}/profile`).update({vynixId:myVId});
-      await db.ref(`vynix_ids/${myVId}`).set(currentUser.uid);
-      document.getElementById('myVynixId').textContent=`@${myVId}`;
-    }
-  }else{myVId=data.vynixId; document.getElementById('myVynixId').textContent=`@${myVId}`;}
-
-  if(!localStorage.getItem('privateKey')){
-    const pubJwk=await generateKeyPair();
-    await db.ref(`users/${currentUser.uid}/profile`).update({publicKey:JSON.stringify(pubJwk)});
-  }
-
-  loadChats();
-  setTimeout(()=>{
-    const loader=document.getElementById('pageLoader');
-    loader.style.opacity='0';
-    setTimeout(()=>loader.style.display='none',600);
-  },800);
-
-  window.addEventListener('online',syncPendingMessages);
-  setupSubTabHandlers();
-}
-
-function listenToMyProfile(){
-  db.ref(`users/${currentUser.uid}/profile`).on('value',snap=>{
-    const d=snap.val()||{};
-    myProfile.name=d.name||'You';
-    myProfile.photo=d.photo||generateLetterAvatar(myProfile.name);
-    document.getElementById('myAvatar').src=myProfile.photo;
-    document.getElementById('myAvatar').classList.remove('shimmer');
-    const sheetImg=document.getElementById('profileAvatar');
-    if(sheetImg) sheetImg.src=myProfile.photo;
-  });
-}
-
-async function generateAndAssignVynixId(){
-  const chars='abcdefghijklmnopqrstuvwxyz0123456789';
-  for(let i=0;i<10;i++){
-    const id='vnx_'+Array.from(crypto.getRandomValues(new Uint32Array(4))).map(n=>chars[n%chars.length]).join('');
-    const snap=await db.ref(`vynix_ids/${id}`).once('value');
-    if(!snap.exists())return id;
-  }
-  return null;
-}
-
-/* ==========  SUB-TABS  ========== */
-function switchSubTab(tab){
-  currentSubTab=tab;
-  document.querySelectorAll('.sub-tab').forEach(t=>t.classList.remove('active'));
-  document.querySelector(`.sub-tab[data-tab="${tab}"]`).classList.add('active');
-  if(tab==='unread')updateUnreadDot(); else document.querySelector('.sub-tab[data-tab="unread"]').classList.remove('unread-dot');
-  const list=document.getElementById('chatList');
-  list.innerHTML='<div style="text-align:center;padding:50px;color:var(--text-muted);">Loading...</div>';
-  loadChats();
-}
-async function updateUnreadDot(){
-  const snap=await db.ref(`users/${currentUser.uid}/chats`).once('value');
-  let hasUnread=false;
-  snap.forEach(child=>{if((child.val().unreadCount||0)>0)hasUnread=true;});
-  const unreadTab=document.querySelector('.sub-tab[data-tab="unread"]');
-  unreadTab.classList.toggle('unread-dot',hasUnread);
-}
-function setupSubTabHandlers(){
-  document.querySelectorAll('.sub-tab').forEach(tab=>{
-    tab.addEventListener('click',()=>{if(tab.dataset.tab!==currentSubTab)switchSubTab(tab.dataset.tab);});
-  });
-  const subTabs=document.getElementById('subTabs');
-  let isDown=false,startX,scrollLeft;
-  ['touchstart','mousedown'].forEach(ev=>subTabs.addEventListener(ev,e=>{
-    isDown=true;startX=(e.touches?e.touches[0].pageX:e.pageX)-subTabs.offsetLeft;scrollLeft=subTabs.scrollLeft;
-  }));
-  ['touchmove','mousemove'].forEach(ev=>subTabs.addEventListener(ev,e=>{
-    if(!isDown)return;e.preventDefault();
-    const x=(e.touches?e.touches[0].pageX:e.pageX)-subTabs.offsetLeft;
-    subTabs.scrollLeft=scrollLeft-(x-startX)*2;
-  }));
-  ['touchend','mouseup','mouseleave'].forEach(ev=>subTabs.addEventListener(ev,()=>{
-    if(!isDown)return;isDown=false;
-    const tabs=subTabs.querySelectorAll('.sub-tab');
-    let closestTab=null,closestDist=Infinity;
-    tabs.forEach(tab=>{
-      const rect=tab.getBoundingClientRect(),tabCenter=rect.left+rect.width/2,containerCenter=subTabs.getBoundingClientRect().left+subTabs.clientWidth/2;
-      const dist=Math.abs(tabCenter-containerCenter);
-      if(dist<closestDist){closestDist=dist;closestTab=tab;}
-    });
-    if(closestTab){const newTab=closestTab.dataset.tab;if(newTab!==currentSubTab)switchSubTab(newTab);}
-  }));
-}
-
-/* ==========  CHAT LIST  ========== */
-async function loadChats(){
-  if(chatsListener)chatsListener.off();
-  chatsListener=db.ref(`users/${currentUser.uid}/chats`);
-  let firstLoad=true;
-  chatsListener.on('value',async snap=>{
-    const list=document.getElementById('chatList');
-    if(!snap.exists()){
-      list.innerHTML='<p style="text-align:center;padding:50px;color:var(--text-muted);">No chats yet.</p>';
-      updateUnreadDot();return;
-    }
-    if(firstLoad){
-      firstLoad=false;
-      const chats=[];snap.forEach(child=>{const d=child.val();if(d.lastMsg){d.uid=child.key;chats.push(d);}});
-      chats.sort((a,b)=>(b.ts||0)-(a.ts||0));
-      let filtered=chats;
-      if(currentSubTab==='favourite')filtered=chats.filter(c=>c.isFavourite);
-      else if(currentSubTab==='unread')filtered=chats.filter(c=>c.unreadCount>0);
-      else if(currentSubTab==='archived')filtered=chats.filter(c=>c.isArchived);
-      if(filtered.length===0){
-        let msg='';switch(currentSubTab){case'all':msg='No chats yet.';break;case'favourite':msg='No favourite chats.';break;case'unread':msg='No unread chats.';break;case'archived':msg='No archived chats.';break;}
-        list.innerHTML=`<p style="text-align:center;padding:50px;color:var(--text-muted);">${msg}</p>`;updateUnreadDot();return;
-      }
-      list.innerHTML='';
-      for(const chat of filtered){
-        const pSnap=await db.ref(`users/${chat.uid}/profile`).once('value');
-        const profile=pSnap.val()||{name:'User',photo:''};
-        const lastText=decrypt(chat.lastMsg,chat.uid);
-        let readStatus='';if(chat.lastMsgSender===currentUser.uid){
-          const roomId=currentUser.uid<chat.uid?`${currentUser.uid}_${chat.uid}`:`${chat.uid}_${currentUser.uid}`;
-          const lastMsgSnap=await db.ref(`messages/${roomId}`).orderByChild('ts').limitToLast(1).once('value');
-          lastMsgSnap.forEach(child=>{const msg=child.val();if(msg.read&&msg.sender===currentUser.uid)readStatus='<span style="color:var(--primary);margin-left:4px;">✓✓</span>';else if(msg.sender===currentUser.uid)readStatus='<span style="color:var(--text-muted);margin-left:4px;">✓✓</span>';});
+                request.onupgradeneeded = (e) => {
+                    idb = e.target.result;
+                    if (!idb.objectStoreNames.contains(STORE_NAME)) {
+                        const store = idb.createObjectStore(STORE_NAME, { keyPath: 'localId', autoIncrement: true });
+                        store.createIndex('roomId', 'roomId', { unique: false });
+                        store.createIndex('ts', 'ts', { unique: false });
+                    }
+                };
+            });
         }
-        const card=document.createElement('div');card.className='chat-card';card.dataset.uid=chat.uid;card.onclick=()=>openFullChat(chat.uid);
-        card.innerHTML=`<div class="avatar-container"><img class="avatar" src="${profile.photo||generateLetterAvatar(profile.name)}"><div class="online-indicator" id="online_${chat.uid}" style="display:none"></div></div><div class="chat-info"><div class="chat-header-row"><div class="chat-name">${profile.name}</div><div class="chat-time" data-ts="${chat.ts}">${formatTimeAgo(chat.ts)}</div></div><div class="chat-msg-row"><div class="chat-msg">${lastText}${readStatus}</div>${chat.unreadCount>0?`<div class="unread-badge">${chat.unreadCount>99?'99+':chat.unreadCount}</div>`:''}</div></div>`;
-        list.appendChild(card);db.ref(`users/${chat.uid}/online`).on('value',s=>{const el=document.getElementById(`online_${chat.uid}`);if(el)el.style.display=s.val()===true?'block':'none';});
-        let longPressTimer;card.addEventListener('touchstart',e=>{longPressTimer=setTimeout(()=>showContextMenu(e,chat.uid),500);});card.addEventListener('touchend',()=>clearTimeout(longPressTimer));card.addEventListener('touchmove',()=>clearTimeout(longPressTimer));card.addEventListener('contextmenu',e=>{e.preventDefault();showContextMenu(e,chat.uid);});
-        cachedChats[chat.uid]={uid:chat.uid,name:profile.name,photo:profile.photo,lastMsgText:lastText,ts:chat.ts,unreadCount:chat.unreadCount||0};
-      }localStorage.setItem('cached_chats',JSON.stringify(cachedChats));updateUnreadDot();return;
+
+        async function cacheMessage(roomId, message) {
+            if (!idb) return;
+            const tx = idb.transaction(STORE_NAME, 'readwrite');
+            const store = tx.objectStore(STORE_NAME);
+            store.put({ roomId, ...message });
+            await tx.done;
+        }
+
+        async function getCachedMessages(roomId) {
+            if (!idb) return [];
+            const tx = idb.transaction(STORE_NAME, 'readonly');
+            const store = tx.objectStore(STORE_NAME);
+            const index = store.index('roomId');
+            const request = index.getAll(roomId);
+            return new Promise((resolve) => {
+                request.onsuccess = () => resolve(request.result);
+            });
+        }
+
+        async function clearCachedMessages(roomId) {
+            if (!idb) return;
+            const tx = idb.transaction(STORE_NAME, 'readwrite');
+            const store = tx.objectStore(STORE_NAME);
+            const index = store.index('roomId');
+            const request = index.openCursor(IDBKeyRange.only(roomId));
+            request.onsuccess = () => {
+                const cursor = request.result;
+                if (cursor) {
+                    cursor.delete();
+                    cursor.continue();
+                }
+            };
+            await tx.done;
+        }
+
+        async function clearAllCachedMessages() {
+            if (!idb) return;
+            const tx = idb.transaction(STORE_NAME, 'readwrite');
+            tx.objectStore(STORE_NAME).clear();
+            await tx.done;
+        }
+
+        auth.onAuthStateChanged(user => {
+            if (user) {
+                currentUser = user;
+                initApp();
+            } else {
+                window.location.href = "login.html";
+            }
+        });
+
+        function toast(msg) {
+            const t = document.getElementById('toast');
+            t.textContent = msg;
+            t.style.display = 'block';
+            setTimeout(() => t.style.display = 'none', 3000);
+        }
+
+        function generateLetterAvatar(name) {
+            if (!name) name = 'U';
+            const initials = name.trim().split(/\s+/).map(w => w[0]).slice(0,2).join('').toUpperCase();
+            const colors = ['#3a76f0','#10b981','#f59e0b','#ef4444','#8b5cf6','#ec4899'];
+            const hash = name.split('').reduce((a,b) => a + b.charCodeAt(0), 0);
+            const bg = colors[hash % colors.length];
+            const canvas = document.createElement('canvas');
+            canvas.width = canvas.height = 100;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = bg;
+            ctx.fillRect(0,0,100,100);
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 40px "Plus Jakarta Sans", sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(initials, 50, 50);
+            return canvas.toDataURL();
+        }
+
+        async function generateKeyPair() {
+            const keyPair = await crypto.subtle.generateKey({ name: "ECDH", namedCurve: "P-256" }, true, ["deriveBits"]);
+            const pub = await crypto.subtle.exportKey("jwk", keyPair.publicKey);
+            const priv = await crypto.subtle.exportKey("jwk", keyPair.privateKey);
+            localStorage.setItem('privateKey', JSON.stringify(priv));
+            return pub;
+        }
+
+        async function deriveSharedSecret(friendPublicJwk) {
+            const privateKeyJwk = JSON.parse(localStorage.getItem('privateKey'));
+            const privateKey = await crypto.subtle.importKey("jwk", privateKeyJwk, { name: "ECDH", namedCurve: "P-256" }, false, ["deriveBits"]);
+            const friendPublicKey = await crypto.subtle.importKey("jwk", friendPublicJwk, { name: "ECDH", namedCurve: "P-256" }, false, []);
+            const sharedSecret = await crypto.subtle.deriveBits({ name: "ECDH", public: friendPublicKey }, privateKey, 256);
+            return Array.from(new Uint8Array(sharedSecret)).map(b => b.toString(16).padStart(2,'0')).join('');
+        }
+
+        function decrypt(ciphertext, friendUid) {
+            if (!ciphertext) return "[Message]";
+            try {
+                const key = sharedKeys[friendUid];
+                if (!key) return "🔒 Encrypted";
+                const bytes = CryptoJS.AES.decrypt(ciphertext, key);
+                return bytes.toString(CryptoJS.enc.Utf8) || "🔒 Message";
+            } catch (e) {
+                return "🔒 Message";
+            }
+        }
+
+        async function initApp() {
+            await openIndexedDB();
+
+            listenToMyProfile();
+            const snap = await db.ref(`users/${currentUser.uid}/profile`).once('value');
+            const data = snap.val() || {};
+
+            if (!data.vynixId) {
+                myVId = await generateAndAssignVynixId();
+                if (myVId) {
+                    await db.ref(`users/${currentUser.uid}/profile`).update({ vynixId: myVId });
+                    await db.ref(`vynix_ids/${myVId}`).set(currentUser.uid);
+                    document.getElementById('myVynixId').textContent = `@${myVId}`;
+                }
+            } else {
+                myVId = data.vynixId;
+                document.getElementById('myVynixId').textContent = `@${myVId}`;
+            }
+            if (!localStorage.getItem('privateKey')) {
+                const publicJwk = await generateKeyPair();
+                await db.ref(`users/${currentUser.uid}/profile`).update({ publicKey: JSON.stringify(publicJwk) });
+            }
+
+            loadChats();
+           setTimeout(() => {
+    const loader = document.getElementById('pageLoader');
+    loader.style.opacity = '0';
+    setTimeout(() => loader.style.display = 'none', 600); // matches transition duration
+}, 800); // slightly longer to ensure content is ready
+
+            window.addEventListener('online', syncPendingMessages);
+
+            // Setup sub-tab click handlers
+            document.querySelectorAll('.sub-tab').forEach(tab => {
+                tab.addEventListener('click', () => {
+                    const newTab = tab.dataset.tab;
+                    if (newTab !== currentSubTab) {
+                        switchSubTab(newTab);
+                    }
+                });
+            });
+
+            // Swipe tab switching
+            const subTabs = document.getElementById('subTabs');
+            let isDown = false;
+            let startX;
+            let scrollLeft;
+
+            subTabs.addEventListener('touchstart', e => {
+                isDown = true;
+                startX = e.touches[0].pageX - subTabs.offsetLeft;
+                scrollLeft = subTabs.scrollLeft;
+            });
+
+            subTabs.addEventListener('touchmove', e => {
+                if (!isDown) return;
+                e.preventDefault();
+                const x = e.touches[0].pageX - subTabs.offsetLeft;
+                const walk = (x - startX) * 2;
+                subTabs.scrollLeft = scrollLeft - walk;
+            });
+
+            subTabs.addEventListener('touchend', () => {
+                isDown = false;
+                snapToNearestTab();
+            });
+
+            subTabs.addEventListener('mousedown', e => {
+                isDown = true;
+                startX = e.pageX - subTabs.offsetLeft;
+                scrollLeft = subTabs.scrollLeft;
+            });
+
+            subTabs.addEventListener('mousemove', e => {
+                if (!isDown) return;
+                e.preventDefault();
+                const x = e.pageX - subTabs.offsetLeft;
+                const walk = (x - startX) * 2;
+                subTabs.scrollLeft = scrollLeft - walk;
+            });
+
+            subTabs.addEventListener('mouseup', () => {
+                isDown = false;
+                snapToNearestTab();
+            });
+
+            subTabs.addEventListener('mouseleave', () => {
+                isDown = false;
+            });
+
+            function snapToNearestTab() {
+                const tabs = subTabs.querySelectorAll('.sub-tab');
+                let closestTab = null;
+                let closestDistance = Infinity;
+
+                tabs.forEach(tab => {
+                    const rect = tab.getBoundingClientRect();
+                    const tabCenter = rect.left + rect.width / 2;
+                    const containerCenter = subTabs.getBoundingClientRect().left + subTabs.clientWidth / 2;
+                    const distance = Math.abs(tabCenter - containerCenter);
+                    if (distance < closestDistance) {
+                        closestDistance = distance;
+                        closestTab = tab;
+                    }
+                });
+
+                if (closestTab) {
+                    const newTab = closestTab.dataset.tab;
+                    if (newTab !== currentSubTab) {
+                        switchSubTab(newTab);
+                    }
+                    closestTab.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+                }
+            }
+
+            // Handle device back button
+            window.addEventListener('popstate', (e) => {
+                if (document.getElementById('fullChatView').style.display === 'flex') {
+                    closeFullChat();
+                    e.preventDefault();
+                }
+            });
+        }
+
+        function listenToMyProfile() {
+            db.ref(`users/${currentUser.uid}/profile`).on('value', snap => {
+                const data = snap.val() || {};
+                myProfile.name = data.name || "You";
+                myProfile.photo = data.photo || generateLetterAvatar(myProfile.name);
+                document.getElementById('myAvatar').src = myProfile.photo;
+                document.getElementById('myAvatar').classList.remove('shimmer');
+                
+                // Display Vynix ID
+                if (data.vynixId) {
+                    document.getElementById('myVynixId').textContent = `@${data.vynixId}`;
+                }
+            });
+        }
+
+        async function generateAndAssignVynixId() {
+            const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+            let attempts = 0;
+            while (attempts < 10) {
+                const candidate = 'vnx_' + Array.from(crypto.getRandomValues(new Uint32Array(4))).map(n => chars[n % chars.length]).join('');
+                const snap = await db.ref(`vynix_ids/${candidate}`).once('value');
+                if (!snap.exists()) return candidate;
+                attempts++;
+            }
+            return null;
+        }
+
+        /* --- Sub Tabs --- */
+function switchSubTab(tab) {
+    currentSubTab = tab;
+
+    // Update active tab styling
+    document.querySelectorAll('.sub-tab').forEach(t => t.classList.remove('active'));
+    const activeTab = document.querySelector(`.sub-tab[data-tab="${tab}"]`);
+    activeTab.classList.add('active');
+
+    // Update unread dot on "Unread" tab
+    if (tab === 'unread') {
+        updateUnreadDot();
+    } else {
+        activeTab.classList.remove('unread-dot');
     }
-    snap.forEach(async child=>{const uid=child.key,data=child.val();if(!data.lastMsg)return;const card=list.querySelector(`.chat-card[data-uid="${uid}"]`);if(!card)return;
-      const pSnap=await db.ref(`users/${uid}/profile`).once('value');const profile=pSnap.val()||{name:'User',photo:''};const lastText=decrypt(data.lastMsg,uid);
-      let readStatus='';if(data.lastMsgSender===currentUser.uid){const roomId=currentUser.uid<uid?`${currentUser.uid}_${uid}`:`${uid}_${currentUser.uid}`;const lastMsgSnap=await db.ref(`messages/${roomId}`).orderByChild('ts').limitToLast(1).once('value');lastMsgSnap.forEach(ch=>{const msg=ch.val();if(msg.read&&msg.sender===currentUser.uid)readStatus='<span style="color:var(--primary);margin-left:4px;">✓✓</span>';else if(msg.sender===currentUser.uid)readStatus='<span style="color:var(--text-muted);margin-left:4px;">✓✓</span>';});}
-      card.querySelector('.chat-name').textContent=profile.name;card.querySelector('.chat-msg').innerHTML=`${lastText}${readStatus}`;const timeEl=card.querySelector('.chat-time');timeEl.textContent=formatTimeAgo(data.ts);timeEl.dataset.ts=data.ts;
-      const badgeEl=card.querySelector('.unread-badge');if(data.unreadCount>0){if(badgeEl){badgeEl.textContent=data.unreadCount>99?'99+':data.unreadCount;badgeEl.style.display='flex';}else{card.querySelector('.chat-msg-row').insertAdjacentHTML('beforeend',`<div class="unread-badge">${data.unreadCount>99?'99+':data.unreadCount}</div>`);}}else if(badgeEl)badgeEl.style.display='none';
-      cachedChats[uid]={uid,name:profile.name,photo:profile.photo,lastMsgText:lastText,ts:data.ts,unreadCount:data.unreadCount||0};});localStorage.setItem('cached_chats',JSON.stringify(cachedChats));updateUnreadDot();
-  });
+
+    // Clear the chat list immediately to prevent showing old messages
+    const list = document.getElementById('chatList');
+    list.innerHTML = '<div style="text-align:center;padding:50px;color:var(--text-muted);">Loading...</div>';
+
+    // Force reload chats for the new tab
+    loadChats();
 }
 
-/* ==========  CONTEXT MENU  ========== */
-function showContextMenu(e,uid){
-  e.preventDefault();currentContextUid=uid;
-  const menu=document.getElementById('contextMenu');
-  menu.style.display='block';menu.style.left=`${e.pageX}px`;menu.style.top=`${e.pageY}px`;
-  document.addEventListener('click',hideContextMenu,{once:true});
-}
-function hideContextMenu(){document.getElementById('contextMenu').style.display='none';}
-async function markAsFavourite(uid){
-  hideContextMenu();const snap=await db.ref(`users/${currentUser.uid}/chats/${uid}/isFavourite`).once('value');const cur=snap.val()||false;
-  await db.ref(`users/${currentUser.uid}/chats/${uid}`).update({isFavourite:!cur});toast(!cur?'Added to favourites':'Removed from favourites');
-}
-async function archiveChat(uid){
-  hideContextMenu();const snap=await db.ref(`users/${currentUser.uid}/chats/${uid}/isArchived`).once('value');const cur=snap.val()||false;
-  await db.ref(`users/${currentUser.uid}/chats/${uid}`).update({isArchived:!cur});toast(!cur?'Chat archived':'Chat unarchived');
-}
-
-/* ==========  CLEAR ALL CHATS  ========== */
-function confirmClearAllChats(){
-  const box=document.getElementById('clearAllConfirm');
-  box.querySelector('.confirm-title').textContent='Clear All Chats?';
-  box.querySelector('.confirm-message').textContent='This will permanently delete every conversation from both sides. Your friend list will NOT be affected.';
-  box.classList.add('active');
-}
-function closeConfirm(){document.getElementById('clearAllConfirm').classList.remove('active');}
-async function executeClearAllChats(){
-  closeConfirm();
-  try{
-    const myChatsSnap=await db.ref(`users/${currentUser.uid}/chats`).once('value');
-    if(!myChatsSnap.exists()){toast('No chats to delete');return;}
-    const jobs=[];
-    myChatsSnap.forEach(child=>{
-      const friendUid=child.key;
-      const roomId=currentUser.uid<friendUid?`${currentUser.uid}_${friendUid}`:`${friendUid}_${currentUser.uid}`;
-      jobs.push(db.ref(`messages/${roomId}`).remove());
-      jobs.push(db.ref(`users/${currentUser.uid}/chats/${friendUid}`).remove());
-      jobs.push(db.ref(`users/${friendUid}/chats/${currentUser.uid}`).remove());
+        async function updateUnreadDot() {
+    const snap = await db.ref(`users/${currentUser.uid}/chats`).once('value');
+    let hasUnread = false;
+    snap.forEach(child => {
+        if ((child.val().unreadCount || 0) > 0) {
+            hasUnread = true;
+        }
     });
-    await Promise.all(jobs);
-    await clearAllCachedMessages();localStorage.removeItem('cached_chats');
-    toast('All chats cleared ✓');
-  }catch(e){console.error(e);toast('Failed to delete some chats');}
+    const unreadTab = document.querySelector('.sub-tab[data-tab="unread"]');
+    if (hasUnread) {
+        unreadTab.classList.add('unread-dot');
+    } else {
+        unreadTab.classList.remove('unread-dot');
+    }
 }
 
-/* ==========  PROFILE SHEET  ========== */
-function openProfileSheet(){
-  document.getElementById('profileAvatar').src=myProfile.photo||generateLetterAvatar(myProfile.name);
-  document.getElementById('profileNameInput').value=myProfile.name;
-  document.getElementById('profileOverlay').classList.add('active');
-  document.getElementById('profileSheet').classList.add('active');
-}
-function closeProfileSheet(){
-  document.getElementById('profileOverlay').classList.remove('active');
-  document.getElementById('profileSheet').classList.remove('active');
-}
-document.getElementById('profileNameInput').addEventListener('change',async e=>{
-  const newName=e.target.value.trim();if(!newName)return;
-  await db.ref(`users/${currentUser.uid}/profile`).update({name:newName});
-  toast('Name saved ✓');
-});
-async function uploadAvatar(files){
-  if(!files.length)return;
-  const file=files[0];if(!file.type.startsWith('image/')){toast('Please choose an image');return;}
-  toast('Uploading…');
-  try{
-    const fd=new FormData();fd.append('file',file);fd.append('upload_preset',UPLOAD_PRESET);
-    const res=await fetch(CL_URL,{method:'POST',body:fd});if(!res.ok)throw new Error('Upload failed');
-    const data=await res.json();const url=data.secure_url;
-    await db.ref(`users/${currentUser.uid}/profile`).update({photo:url});
-    toast('Photo updated ✓');
-  }catch(e){console.error(e);toast('Upload failed');}
-}
 
-/* ==========  FRIENDS SHEET  ========== */
-async function loadFriendsList(){
-  const list=document.getElementById('friendsList');
-  list.innerHTML='<div style="text-align:center;padding:20px;">Loading all users...</div>';
-  try{
-    const usersSnap=await db.ref('users').once('value');
-    if(!usersSnap.exists()){list.innerHTML='<p style="text-align:center;color:var(--text-muted);">No users found</p>';return;}
-    list.innerHTML='';const users=[];
-    usersSnap.forEach(child=>{
-      const uid=child.key;if(uid===currentUser.uid)return;
-      const prof=child.val().profile||{};
-      users.push({uid,name:prof.name||'User',photo:prof.photo||'',vynixId:prof.vynixId||''});
+/* ----------  FULL FIXED loadChats()  ---------- */
+async function loadChats() {
+    if (chatsListener) chatsListener.off();
+
+    chatsListener = db.ref(`users/${currentUser.uid}/chats`);
+
+    /* 🔒 Run once to draw initial list (or on tab change) */
+    let firstLoad = true;
+
+    chatsListener.on('value', async snap => {
+        const list = document.getElementById('chatList');
+
+        if (!snap.exists()) {
+            list.innerHTML = `<p style="text-align:center;padding:50px;color:var(--text-muted);">No chats yet.</p>`;
+            updateUnreadDot();
+            return;
+        }
+
+        /* ----------  FIRST LOAD – draw everything  ---------- */
+        if (firstLoad) {
+            firstLoad = false;
+
+            const chats = [];
+            snap.forEach(child => {
+                const data = child.val();
+                if (data.lastMsg) { data.uid = child.key; chats.push(data); }
+            });
+            chats.sort((a, b) => (b.ts || 0) - (a.ts || 0));
+
+            let filtered = chats;
+            if (currentSubTab === 'favourite') filtered = chats.filter(c => c.isFavourite);
+            else if (currentSubTab === 'unread') filtered = chats.filter(c => c.unreadCount > 0);
+            else if (currentSubTab === 'archived') filtered = chats.filter(c => c.isArchived);
+
+            if (filtered.length === 0) {
+                let msg = '';
+                switch (currentSubTab) {
+                    case 'all': msg = 'No chats yet.'; break;
+                    case 'favourite': msg = 'No favourite chats.'; break;
+                    case 'unread': msg = 'No unread chats.'; break;
+                    case 'archived': msg = 'No archived chats.'; break;
+                }
+                list.innerHTML = `<p style="text-align:center;padding:50px;color:var(--text-muted);">${msg}</p>`;
+                updateUnreadDot();
+                return;
+            }
+
+            /* clear only on first draw */
+            list.innerHTML = '';
+
+            for (const chat of filtered) {
+                const pSnap = await db.ref(`users/${chat.uid}/profile`).once('value');
+                const profile = pSnap.val() || { name: 'User', photo: '' };
+                const lastText = decrypt(chat.lastMsg, chat.uid);
+
+                let readStatus = '';
+                if (chat.lastMsgSender === currentUser.uid) {
+                    const roomId = currentUser.uid < chat.uid ? `${currentUser.uid}_${chat.uid}` : `${chat.uid}_${currentUser.uid}`;
+                    const lastMsgSnap = await db.ref(`messages/${roomId}`).orderByChild('ts').limitToLast(1).once('value');
+                    lastMsgSnap.forEach(child => {
+                        const msg = child.val();
+                        if (msg.read && msg.sender === currentUser.uid) readStatus = '<span style="color:var(--primary);margin-left:4px;">✓✓</span>';
+                        else if (msg.sender === currentUser.uid) readStatus = '<span style="color:var(--text-muted);margin-left:4px;">✓✓</span>';
+                    });
+                }
+
+                const card = document.createElement('div');
+                card.className = 'chat-card';
+                card.dataset.uid = chat.uid;
+                card.onclick = () => openFullChat(chat.uid);
+                card.innerHTML = `
+                    <div class="avatar-container">
+                        <img class="avatar" src="${profile.photo || generateLetterAvatar(profile.name)}">
+                        <div class="online-indicator" id="online_${chat.uid}" style="display:none"></div>
+                    </div>
+                    <div class="chat-info">
+                        <div class="chat-header-row">
+                            <div class="chat-name">${profile.name}</div>
+                            <div class="chat-time" data-ts="${chat.ts}">${formatTimeAgo(chat.ts)}</div>
+                        </div>
+                        <div class="chat-msg-row">
+                            <div class="chat-msg">${lastText}${readStatus}</div>
+                            ${chat.unreadCount > 0 ? `<div class="unread-badge">${chat.unreadCount > 99 ? '99+' : chat.unreadCount}</div>` : ''}
+                        </div>
+                    </div>`;
+                list.appendChild(card);
+
+                db.ref(`users/${chat.uid}/online`).on('value', s => {
+                    const el = document.getElementById(`online_${chat.uid}`);
+                    if (el) el.style.display = s.val() === true ? 'block' : 'none';
+                });
+
+                let longPressTimer;
+                card.addEventListener('touchstart', e => { longPressTimer = setTimeout(() => showContextMenu(e, chat.uid), 500); });
+                card.addEventListener('touchend', () => clearTimeout(longPressTimer));
+                card.addEventListener('touchmove', () => clearTimeout(longPressTimer));
+                card.addEventListener('contextmenu', e => { e.preventDefault(); showContextMenu(e, chat.uid); });
+
+                cachedChats[chat.uid] = {
+                    uid: chat.uid, name: profile.name, photo: profile.photo,
+                    lastMsgText: lastText, ts: chat.ts, unreadCount: chat.unreadCount || 0
+                };
+            }
+            localStorage.setItem('cached_chats', JSON.stringify(cachedChats));
+            updateUnreadDot();
+            return;
+        }
+
+        /* ----------  SUBSEQUENT UPDATES – patch only the changed card  ---------- */
+        snap.forEach(async child => {
+            const uid   = child.key;
+            const data  = child.val();
+            if (!data.lastMsg) return;                       // skip empty nodes
+
+            const card  = list.querySelector(`.chat-card[data-uid="${uid}"]`);
+            if (!card) return;                               // card not on screen (filter)
+
+            /* ----  fetch profile once  ---- */
+            const pSnap  = await db.ref(`users/${uid}/profile`).once('value');
+            const profile= pSnap.val() || { name:'User',photo:'' };
+            const lastText= decrypt(data.lastMsg, uid);
+
+            /* ----  read-status  ---- */
+            let readStatus = '';
+            if (data.lastMsgSender === currentUser.uid) {
+                const roomId = currentUser.uid < uid ? `${currentUser.uid}_${uid}` : `${uid}_${currentUser.uid}`;
+                const lastMsgSnap = await db.ref(`messages/${roomId}`).orderByChild('ts').limitToLast(1).once('value');
+                lastMsgSnap.forEach(ch => {
+                    const msg = ch.val();
+                    if (msg.read && msg.sender === currentUser.uid)       readStatus = '<span style="color:var(--primary);margin-left:4px;">✓✓</span>';
+                    else if (msg.sender === currentUser.uid)              readStatus = '<span style="color:var(--text-muted);margin-left:4px;">✓✓</span>';
+                });
+            }
+
+            /* ----  update DOM  ---- */
+            card.querySelector('.chat-name').textContent = profile.name;
+            card.querySelector('.chat-msg').innerHTML  = `${lastText}${readStatus}`;
+            const timeEl = card.querySelector('.chat-time');
+            timeEl.textContent = formatTimeAgo(data.ts);
+            timeEl.dataset.ts  = data.ts;
+
+            const badgeEl = card.querySelector('.unread-badge');
+            if (data.unreadCount > 0) {
+                if (badgeEl) {
+                    badgeEl.textContent = data.unreadCount > 99 ? '99+' : data.unreadCount;
+                    badgeEl.style.display = 'flex';
+                } else {
+                    card.querySelector('.chat-msg-row').insertAdjacentHTML('beforeend',
+                        `<div class="unread-badge">${data.unreadCount > 99 ? '99+' : data.unreadCount}</div>`);
+                }
+            } else if (badgeEl) badgeEl.style.display = 'none';
+
+            /* ----  update cache  ---- */
+            cachedChats[uid] = {
+                uid, name: profile.name, photo: profile.photo,
+                lastMsgText: lastText, ts: data.ts, unreadCount: data.unreadCount || 0
+            };
+        });
+
+        localStorage.setItem('cached_chats', JSON.stringify(cachedChats));
+        updateUnreadDot();
     });
-    users.sort((a,b)=>(a.name||'').localeCompare(b.name||''));
-    if(users.length===0){list.innerHTML='<p style="text-align:center;color:var(--text-muted);">No other users found</p>';return;}
-    for(const u of users){
-      const el=document.createElement('div');el.className='friend-item';el.style.cssText='display:flex;align-items:center;padding:12px 0;cursor:pointer;border-bottom:1px solid var(--border-light);';
-      el.innerHTML=`<img class="avatar" src="${u.photo||generateLetterAvatar(u.name)}" style="width:48px;height:48px;margin-right:15px;"><div style="flex:1;"><div class="chat-name">${u.name}</div>${u.vynixId?`<div style="font-size:12px;color:var(--text-muted);">@${u.vynixId}</div>`:''}</div><span class="material-symbols-rounded" style="color:var(--primary);">chat_bubble</span>`;
-      el.addEventListener('click',()=>{closeAll();openFullChat(u.uid);});
-      list.appendChild(el);
+}
+
+        function showContextMenu(e, uid) {
+            e.preventDefault();
+            currentContextUid = uid;
+            const menu = document.getElementById('contextMenu');
+            menu.style.display = 'block';
+            menu.style.left = `${e.pageX}px`;
+            menu.style.top = `${e.pageY}px`;
+            document.addEventListener('click', hideContextMenu);
+        }
+
+        function hideContextMenu() {
+            document.getElementById('contextMenu').style.display = 'none';
+            document.removeEventListener('click', hideContextMenu);
+        }
+
+        async function markAsFavourite(uid) {
+            hideContextMenu();
+            const snap = await db.ref(`users/${currentUser.uid}/chats/${uid}/isFavourite`).once('value');
+            const current = snap.val() || false;
+            await db.ref(`users/${currentUser.uid}/chats/${uid}`).update({ isFavourite: !current });
+            toast(!current ? "Added to favourites" : "Removed from favourites");
+        }
+
+        async function archiveChat(uid) {
+            hideContextMenu();
+            const snap = await db.ref(`users/${currentUser.uid}/chats/${uid}/isArchived`).once('value');
+            const current = snap.val() || false;
+            await db.ref(`users/${currentUser.uid}/chats/${uid}`).update({ isArchived: !current });
+            toast(!current ? "Chat archived" : "Chat unarchived");
+        }
+
+        /* --- Confirmation Dialogs --- */
+        function confirmClearAllChats() {
+            document.getElementById('clearAllConfirm').querySelector('.confirm-title').textContent = 'Clear All Chats?';
+            document.getElementById('clearAllConfirm').querySelector('.confirm-message').textContent = 'This will permanently delete all your conversations from both sides. This action cannot be undone.';
+            document.getElementById('clearAllConfirm').classList.add('active');
+        }
+
+        function closeConfirm() {
+            document.getElementById('clearAllConfirm').classList.remove('active');
+        }
+
+        async function executeClearAllChats() {
+    closeConfirm();
+
+    try {
+        /* 1. Get all chats of current user */
+        const myChatsSnap = await db.ref(`users/${currentUser.uid}/chats`).once('value');
+        if (!myChatsSnap.exists()) { toast('No chats to delete'); return; }
+
+        const deleteJobs = [];
+
+        myChatsSnap.forEach(child => {
+            const friendUid = child.key;
+            const roomId = currentUser.uid < friendUid
+                ? `${currentUser.uid}_${friendUid}`
+                : `${friendUid}_${currentUser.uid}`;
+
+            /* 2. Wipe messages for both sides */
+            deleteJobs.push(db.ref(`messages/${roomId}`).remove());
+
+            /* 3. Remove chat metadata for both users */
+            deleteJobs.push(db.ref(`users/${currentUser.uid}/chats/${friendUid}`).remove());
+            deleteJobs.push(db.ref(`users/${friendUid}/chats/${currentUser.uid}`).remove());
+        });
+
+        /* 4. Execute wipe */
+        await Promise.all(deleteJobs);
+
+        /* 5. Local clean-up */
+        await clearAllCachedMessages();
+        localStorage.removeItem('cached_chats');
+        toast('All chats cleared ✓');
+
+    } catch (e) {
+        console.error(e);
+        toast('Could not clear some chats');
     }
-  }catch(e){console.error(e);list.innerHTML='<p style="text-align:center;color:var(--text-muted);">Error loading users</p>';}
-}
-function openFriendsSheet(){loadFriendsList();document.getElementById('overlay').classList.add('active');document.getElementById('friendsSheet').classList.add('active');}
-function closeAll(){document.getElementById('overlay').classList.remove('active');document.getElementById('friendsSheet').classList.remove('active');}
-
-/* ==========  FULL CHAT  ========== */
-async function openFullChat(friendUid){
-  currentFriendUid=friendUid;
-  currentRoomId=currentUser.uid<friendUid?`${currentUser.uid}_${friendUid}`:`${friendUid}_${currentUser.uid}`;
-  const snap=await db.ref(`users/${friendUid}/profile`).once('value');
-  const profile=snap.val()||{name:'User',photo:''};
-  document.getElementById('chatFriendName').textContent=profile.name;
-  document.getElementById('chatFriendAvatar').src=profile.photo||generateLetterAvatar(profile.name);
-  if(!sharedKeys[friendUid]&&profile.publicKey){
-    const secret=await deriveSharedSecret(JSON.parse(profile.publicKey));
-    sharedKeys[friendUid]=secret;localStorage.setItem('sharedKeys',JSON.stringify(sharedKeys));
-  }
-  document.getElementById('fullChatView').style.display='flex';
-  loadMessages();markAsRead(friendUid);
-  db.ref(`users/${friendUid}/online`).on('value',s=>{
-    const st=document.getElementById('chatStatusInfo');st.textContent=s.val()===true?'Online':'Offline';st.style.color=s.val()===true?'var(--online)':'var(--text-muted)';
-  });
-  history.pushState({chatOpen:true},'');
-}
-function closeFullChat(){
-  document.getElementById('fullChatView').style.display='none';
-  if(messagesListener){messagesListener.off();messagesListener=null;}
-  currentFriendUid=null;history.back();
 }
 
-/* ==========  MESSAGES  ========== */
-function createMessageElement(text,isSent,ts,localId='',msgKey='',isRead=false,reactions={}){
-  const el=document.createElement('div');el.className=`message ${isSent?'sent':'received'} ${localId?'pending':''}`;
-  if(localId)el.dataset.localId=localId;if(msgKey)el.dataset.msgKey=msgKey;
-  let reactionsHtml='';if(reactions&&Object.keys(reactions).length>0){
-    reactionsHtml='<div class="message-reactions">';
-    Object.entries(reactions).forEach(([emoji,users])=>{if(users&&users.length>0){const count=users.length;const userReacted=users.includes(currentUser.uid);reactionsHtml+=`<div class="reaction-badge ${userReacted?'user-reacted':''}" data-emoji="${emoji}" data-key="${msgKey}" onclick="toggleReaction('${msgKey}','${emoji}')"><span class="emoji">${emoji}</span>${count>1?`<span class="count">${count}</span>`:''}</div>`;}});
-    reactionsHtml+='</div>';
-  }
-  const ticks=isSent?`<span class="message-ticks ${isRead?'read':''}">✓✓</span>`:'';
-  el.innerHTML=`<div class="message-content">${text}</div><div class="message-time">${formatMessageTime(ts)}${ticks}</div>${reactionsHtml}`;
-  let longPressTimer;el.addEventListener('touchstart',e=>{longPressTimer=setTimeout(()=>showReactionPicker(e,el,msgKey),500);});el.addEventListener('touchend',()=>clearTimeout(longPressTimer));el.addEventListener('touchmove',()=>clearTimeout(longPressTimer));el.addEventListener('contextmenu',e=>{e.preventDefault();showReactionPicker(e,el,msgKey);});
-  addSwipeListeners(el);return el;
-}
-async function loadMessages(){
-  if(messagesListener)messagesListener.off();
-  const list=document.getElementById('messageList');
-  list.innerHTML='';const processed=new Set();
-  if(navigator.onLine){
-    try{
-      const snap=await db.ref(`messages/${currentRoomId}`).limitToLast(100).once('value');
-      if(snap.exists()){
-        const msgs=[];snap.forEach(child=>{const m=child.val();m.key=child.key;msgs.push(m);});msgs.sort((a,b)=>a.ts-b.ts);
-        msgs.forEach(msg=>{processed.add(msg.key);const isSent=msg.sender===currentUser.uid;const text=decrypt(msg.text,currentFriendUid);const el=createMessageElement(text,isSent,msg.ts,'',msg.key,msg.read||false,msg.reactions||{});list.appendChild(el);});
-        list.scrollTop=list.scrollHeight;
-      }
-    }catch(e){console.error(e);}
-  }else{
-    const cached=await getCachedMessages(currentRoomId);if(cached.length){cached.sort((a,b)=>a.ts-b.ts);cached.forEach(m=>{if(m.key)processed.add(m.key);const isSent=m.sender===currentUser.uid;const text=decrypt(m.text,currentFriendUid);const el=createMessageElement(text,isSent,m.ts,m.localId||'',m.key||'',m.read||false,m.reactions||{});list.appendChild(el);});list.scrollTop=list.scrollHeight;}
-  }
-  messagesListener=db.ref(`messages/${currentRoomId}`).limitToLast(100);
-  messagesListener.on('child_added',async snap=>{
-    const msg=snap.val();msg.key=snap.key;if(processed.has(msg.key))return;processed.add(msg.key);await cacheMessage(currentRoomId,msg);
-    if(msg.localId){const pending=list.querySelector(`[data-local-id="${msg.localId}"]`);if(pending)pending.remove();}
-    const isSent=msg.sender===currentUser.uid;const text=decrypt(msg.text,currentFriendUid);const el=createMessageElement(text,isSent,msg.ts,'',msg.key,msg.read||false,msg.reactions||{});list.appendChild(el);list.scrollTop=list.scrollHeight;
-    if(!isSent&&currentFriendUid)await db.ref(`messages/${currentRoomId}/${msg.key}`).update({read:true});
-  });
-  db.ref(`messages/${currentRoomId}`).on('child_changed',snap=>{
-    const msg=snap.val();const existing=list.querySelector(`[data-msg-key="${snap.key}"]`);if(!existing)return;
-    const reactionsContainer=existing.querySelector('.message-reactions');if(reactionsContainer)reactionsContainer.remove();
-    if(msg.reactions&&Object.keys(msg.reactions).length>0){
-      let html='<div class="message-reactions">';Object.entries(msg.reactions).forEach(([emoji,users])=>{if(users&&users.length>0){const count=users.length;const userReacted=users.includes(currentUser.uid);html+=`<div class="reaction-badge ${userReacted?'user-reacted':''}" data-emoji="${emoji}" data-key="${snap.key}" onclick="toggleReaction('${snap.key}','${emoji}')"><span class="emoji">${emoji}</span>${count>1?`<span class="count">${count}</span>`:''}</div>`;}});html+='</div>';
-      existing.querySelector('.message-time').insertAdjacentHTML('afterend',html);
+        /* --- Friends Sheet (all added friends) --- */
+        async function loadFriendsList() {
+    const list = document.getElementById('friendsList');
+    list.innerHTML = '<div style="text-align:center;padding:20px;">Loading all users...</div>';
+    
+    try {
+        // Get all users except current user
+        const usersSnap = await db.ref('users').once('value');
+        if (!usersSnap.exists()) {
+            list.innerHTML = '<p style="text-align:center;color:var(--text-muted);">No users found</p>';
+            return;
+        }
+        
+        list.innerHTML = '';
+        const users = [];
+        
+        usersSnap.forEach(child => {
+            const uid = child.key;
+            if (uid !== currentUser.uid) { // Exclude current user
+                const profile = child.val().profile || {};
+                users.push({
+                    uid: uid,
+                    name: profile.name || "User",
+                    photo: profile.photo || "",
+                    vynixId: profile.vynixId || ""
+                });
+            }
+        });
+        
+        // Sort users by name
+        users.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+        
+        if (users.length === 0) {
+            list.innerHTML = '<p style="text-align:center;color:var(--text-muted);">No other users found</p>';
+            return;
+        }
+        
+        // Display all users
+        for (const user of users) {
+            const friendEl = document.createElement('div');
+            friendEl.className = 'friend-item';
+            friendEl.style.cursor = 'pointer';
+            friendEl.style.padding = '12px 0';
+            friendEl.style.borderBottom = '1px solid var(--border-light)';
+            
+            friendEl.innerHTML = `
+                <img class="avatar" src="${user.photo || generateLetterAvatar(user.name)}" style="width:48px;height:48px;margin-right:15px;">
+                <div style="flex:1;">
+                    <div class="chat-name">${user.name}</div>
+                    ${user.vynixId ? `<div style="font-size:12px;color:var(--text-muted);">@${user.vynixId}</div>` : ''}
+                </div>
+                <span class="material-symbols-rounded" style="color:var(--primary);">chat_bubble</span>
+            `;
+            
+            friendEl.addEventListener('click', () => {
+                closeAll();
+                openFullChat(user.uid);
+            });
+            
+            list.appendChild(friendEl);
+        }
+        
+    } catch (error) {
+        console.error("Error loading users:", error);
+        list.innerHTML = '<p style="text-align:center;color:var(--text-muted);">Error loading users</p>';
     }
-    const ticks=existing.querySelector('.message-ticks');if(ticks&&msg.read){ticks.classList.add('read');ticks.textContent='✓✓';}
-  });
-}
-async function syncPendingMessages(){
-  if(!navigator.onLine)return;
-  const cached=await getCachedMessages(currentRoomId);const pending=cached.filter(m=>m.pending);
-  for(const msg of pending){
-    try{
-      await db.ref(`messages/${currentRoomId}`).push({text:msg.text,sender:currentUser.uid,ts:msg.ts,read:false});
-      const updates={};updates[`users/${currentUser.uid}/chats/${currentFriendUid}/lastMsg`]=msg.text;updates[`users/${currentUser.uid}/chats/${currentFriendUid}/ts`]=msg.ts;
-      updates[`users/${currentFriendUid}/chats/${currentUser.uid}/lastMsg`]=msg.text;updates[`users/${currentFriendUid}/chats/${currentUser.uid}/ts`]=msg.ts;
-      updates[`users/${currentFriendUid}/chats/${currentUser.uid}/unreadCount`]=firebase.database.ServerValue.increment(1);
-      await db.ref().update(updates);
-      const tx=idb.transaction(STORE_NAME,'readwrite');const store=tx.objectStore(STORE_NAME);const getReq=store.get(msg.localId);getReq.onsuccess=()=>{const rec=getReq.result;if(rec){delete rec.pending;store.put(rec);}};
-    }catch(e){console.error('sync failed',e);}
-  }
-}
-window.addEventListener('online',syncPendingMessages);
-
-/* ==========  SEND  ========== */
-function autoResizeInput(field){
-  field.style.height='auto';field.style.height=field.scrollHeight+'px';
-  const btn=document.getElementById('sendBtn');field.value.trim()?btn.classList.add('visible'):btn.classList.remove('visible');
-}
-async function sendMessage(){
-  const input=document.getElementById('messageInput');const text=input.value.trim();if(!text||!currentFriendUid)return;
-  const key=sharedKeys[currentFriendUid];if(!key){toast('Security key missing');return;}
-  const encrypted=CryptoJS.AES.encrypt(text,key).toString();const tempTs=Date.now();const localId=tempTs+Math.random();
-  const list=document.getElementById('messageList');const el=createMessageElement(text,true,tempTs,localId,'',false);list.appendChild(el);list.scrollTop=list.scrollHeight;
-  input.value='';input.style.height='auto';document.getElementById('sendBtn').classList.remove('visible');
-  await cacheMessage(currentRoomId,{text:encrypted,sender:currentUser.uid,ts:tempTs,pending:true,localId:localId,read:false});
-  if(navigator.onLine){
-    try{
-      const msgRef=await db.ref(`messages/${currentRoomId}`).push({text:encrypted,sender:currentUser.uid,ts:tempTs,read:false,localId:localId});
-      const updates={};updates[`users/${currentUser.uid}/chats/${currentFriendUid}/lastMsg`]=encrypted;updates[`users/${currentUser.uid}/chats/${currentFriendUid}/lastMsgSender`]=currentUser.uid;updates[`users/${currentUser.uid}/chats/${currentFriendUid}/ts`]=tempTs;
-      updates[`users/${currentFriendUid}/chats/${currentUser.uid}/lastMsg`]=encrypted;updates[`users/${currentFriendUid}/chats/${currentUser.uid}/lastMsgSender`]=currentUser.uid;updates[`users/${currentFriendUid}/chats/${currentUser.uid}/ts`]=tempTs;
-      updates[`users/${currentFriendUid}/chats/${currentUser.uid}/unreadCount`]=firebase.database.ServerValue.increment(1);
-      await db.ref().update(updates);
-    }catch(e){console.error(e);toast('Message will be sent when online');}
-  }else{toast('Message will be sent when online');}
-}
-document.getElementById('sendBtn').addEventListener('click',sendMessage);
-function handleEnter(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMessage();}}
-
-/* ==========  REACTIONS  ========== */
-function showReactionPicker(e,messageEl,msgKey){
-  e.preventDefault();const picker=document.getElementById('reactionPicker');
-  const rect=messageEl.getBoundingClientRect();picker.style.left=`${rect.left+window.scrollX}px`;picker.style.top=`${rect.bottom+window.scrollY+5}px`;picker.style.display='flex';
-  picker.dataset.currentMsgKey=msgKey;picker.dataset.currentMsgEl=messageEl;
-  setTimeout(()=>document.addEventListener('click',hideReactionPicker,{once:true}),100);
-}
-function hideReactionPicker(){document.getElementById('reactionPicker').style.display='none';}
-document.querySelectorAll('.reaction-emoji').forEach(emoji=>{
-  emoji.addEventListener('click',function(){
-    const selectedEmoji=this.dataset.emoji;const msgKey=document.getElementById('reactionPicker').dataset.currentMsgKey;
-    if(msgKey)toggleReaction(msgKey,selectedEmoji);hideReactionPicker();
-  });
-});
-async function toggleReaction(msgKey,emoji){
-  if(!msgKey||!currentRoomId)return;
-  try{
-    const ref=db.ref(`messages/${currentRoomId}/${msgKey}/reactions/${emoji}`);
-    const snap=await ref.once('value');const users=snap.val()||[];
-    if(users.includes(currentUser.uid)){
-      const updated=users.filter(u=>u!==currentUser.uid);
-      if(updated.length)await ref.set(updated);else await ref.remove();
-    }else{await ref.set([...users,currentUser.uid]);}
-  }catch(e){console.error(e);}
 }
 
-/* ==========  MESSAGE ACTIONS  ========== */
-function hideMessageActions(){
-  document.getElementById('messageActionsPopup').style.display='none';
-  document.getElementById('messageActionOverlay').style.display='none';
-  document.querySelectorAll('.message.swiping').forEach(m=>{m.style.transform='';m.classList.remove('swiping');});
-}
-function showMessageActions(e,messageEl,msgKey,msgText){
-  e.preventDefault();document.querySelectorAll('.message.swiping').forEach(m=>{m.style.transform='';m.classList.remove('swiping');});
-  const popup=document.getElementById('messageActionsPopup');const overlay=document.getElementById('messageActionOverlay');
-  const rect=messageEl.getBoundingClientRect();popup.style.left=`${rect.right+10}px`;popup.style.top=`${rect.top+window.scrollY}px`;
-  const popupRect=popup.getBoundingClientRect();if(popupRect.right>window.innerWidth)popup.style.left=`${rect.left-popup.offsetWidth-10}px`;
-  overlay.style.display='block';popup.style.display='block';popup.dataset.currentMsgKey=msgKey;popup.dataset.currentMsgText=msgText;popup.dataset.currentMsgEl=messageEl;
-  setTimeout(()=>hideMessageActions(),3000);
-}
-function addSwipeListeners(el){
-  let startX=0,currentX=0,isSwiping=false,swipeThreshold=100;
-  const start=e=>{startX=e.touches?e.touches[0].clientX:e.clientX;currentX=startX;isSwiping=true;};
-  const move=e=>{if(!isSwiping)return;e.preventDefault();currentX=e.touches?e.touches[0].clientX:e.clientX;const dx=currentX-startX;if(dx<0){el.style.transform=`translateX(${Math.max(dx,-100)}px)`;el.classList.add('swiping');}};
-  const end=e=>{
-    if(!isSwiping)return;const dx=currentX-startX;
-    if(Math.abs(dx)>swipeThreshold){showMessageActions(e,el,el.dataset.msgKey,el.textContent);}else{el.style.transform='';el.classList.remove('swiping');}
-    isSwiping=false;el.style.transform='';el.classList.remove('swiping');
-  };
-  el.addEventListener('touchstart',start,{passive:false});el.addEventListener('touchmove',move,{passive:false});el.addEventListener('touchend',end,{passive:false});
-  el.addEventListener('mousedown',start);el.addEventListener('mousemove',move);el.addEventListener('mouseup',end);el.addEventListener('mouseleave',end);
-}
-async function deleteMessage(){
-  const popup=document.getElementById('messageActionsPopup');const msgKey=popup.dataset.currentMsgKey;const msgEl=popup.dataset.currentMsgEl;
-  if(!msgKey||!msgEl)return;
-  try{await db.ref(`messages/${currentRoomId}/${msgKey}`).remove();msgEl.remove();toast('Message deleted');}catch(e){console.error(e);toast('Failed to delete message');}
-  hideMessageActions();
-}
-async function editMessage(){
-  const popup=document.getElementById('messageActionsPopup');const msgKey=popup.dataset.currentMsgKey;const msgText=popup.dataset.currentMsgText;const msgEl=popup.dataset.currentMsgEl;
-  if(!msgKey||!msgText||!msgEl)return;
-  const messageContent=msgEl.querySelector('.message-content')||msgEl;const originalHtml=messageContent.innerHTML;
-  const input=document.createElement('textarea');input.className='message-edit-input';input.value=msgText;input.style.cssText='width:100%;min-height:40px;padding:8px;border:1px solid var(--border-light);border-radius:8px;background:var(--bg-body);color:var(--text-main);font-size:14px;resize:vertical;';
-  messageContent.innerHTML='';messageContent.appendChild(input);input.focus();
-  const save=async()=>{
-    const newText=input.value.trim();if(newText&&newText!==msgText){
-      const key=sharedKeys[currentFriendUid];if(!key){toast('Security key missing');return;}
-      const encrypted=CryptoJS.AES.encrypt(newText,key).toString();
-      await db.ref(`messages/${currentRoomId}/${msgKey}/text`).set(encrypted);
-      const lastMsgSnap=await db.ref(`messages/${currentRoomId}`).orderByChild('ts').limitToLast(1).once('value');let isLast=false;
-      lastMsgSnap.forEach(ch=>{if(ch.key===msgKey)isLast=true;});
-      if(isLast){const up={};up[`users/${currentUser.uid}/chats/${currentFriendUid}/lastMsg`]=encrypted;up[`users/${currentFriendUid}/chats/${currentUser.uid}/lastMsg`]=encrypted;await db.ref().update(up);}
-      toast('Message edited');
-    }messageContent.innerHTML=originalHtml;hideMessageActions();
-  };
-  input.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();save();}else if(e.key==='Escape'){messageContent.innerHTML=originalHtml;hideMessageActions();}});
-  input.addEventListener('blur',()=>setTimeout(save,100));hideMessageActions();
-}
-function forwardMessage(){
-  const popup=document.getElementById('messageActionsPopup');const msgText=popup.dataset.currentMsgText;
-  if(!msgText)return;openForwardSelector(msgText);hideMessageActions();
-}
-function openForwardSelector(msgText){
-  const overlay=document.createElement('div');overlay.className='forward-overlay';overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:4000;display:flex;align-items:center;justify-content:center;';
-  const selector=document.createElement('div');selector.className='forward-selector';selector.style.cssText='background:var(--bg-card);border-radius:16px;padding:20px;max-width:400px;max-height:70vh;overflow-y:auto;width:90%;';
-  selector.innerHTML=`<h3 style="margin-bottom:15px;font-weight:700;">Forward Message</h3><div style="margin-bottom:15px;padding:10px;background:var(--bg-body);border-radius:8px;font-size:14px;">${msgText}</div><div id="forwardFriendsList"></div><div style="display:flex;gap:10px;margin-top:15px;"><button class="btn-secondary" onclick="closeForwardSelector()" style="flex:1;padding:10px;border:none;border-radius:8px;background:var(--bg-body);">Cancel</button><button class="btn-primary" onclick="sendForwardedMessage()" style="flex:1;padding:10px;border:none;border-radius:8px;">Send</button></div>`;
-  overlay.appendChild(selector);document.body.appendChild(overlay);loadFriendsForForwarding();selector.dataset.messageText=msgText;
-}
-function closeForwardSelector(){const o=document.querySelector('.forward-overlay');if(o)o.remove();}
-async function loadFriendsForForwarding(){
-  const list=document.getElementById('forwardFriendsList');list.innerHTML='<div style="text-align:center;padding:20px;">Loading friends...</div>';
-  try{
-    const snap=await db.ref(`users/${currentUser.uid}/chats`).once('value');
-    if(!snap.exists()){list.innerHTML='<p style="text-align:center;color:var(--text-muted);">No friends to forward to</p>';return;}
-    list.innerHTML='';const friends=[];snap.forEach(child=>friends.push(child.key));
-    for(const uid of friends){
-      if(uid===currentFriendUid)continue;
-      const profSnap=await db.ref(`users/${uid}/profile`).once('value');const prof=profSnap.val()||{name:'User',photo:''};
-      const el=document.createElement('div');el.className='forward-friend-item';el.style.cssText='display:flex;align-items:center;padding:12px;cursor:pointer;border-radius:8px;margin-bottom:8px;transition:background 0.2s;';
-      el.innerHTML=`<img class="avatar" src="${prof.photo||generateLetterAvatar(prof.name)}" style="width:40px;height:40px;margin-right:12px;"><div class="chat-name">${prof.name}</div>`;
-      el.addEventListener('click',()=>{document.querySelectorAll('.forward-friend-item.selected').forEach(x=>x.classList.remove('selected'));el.classList.add('selected');el.dataset.friendUid=uid;});
-      list.appendChild(el);
-    }
-    if(list.children.length===0)list.innerHTML='<p style="text-align:center;color:var(--text-muted);">No other friends to forward to</p>';
-  }catch(e){console.error(e);list.innerHTML='<p style="text-align:center;color:var(--text-muted);">Error loading friends</p>';}
-}
-async function sendForwardedMessage(){
-  const selector=document.querySelector('.forward-selector');const selected=selector.querySelector('.forward-friend-item.selected');
-  if(!selected){toast('Please select a friend to forward to');return;}
-  const msgText=selector.dataset.messageText;const targetUid=selected.dataset.friendUid;
-  if(!targetUid){toast('Please select a friend');return;}
-  try{
-    const forwardedText=`Forwarded: ${msgText}`;
-    const profSnap=await db.ref(`users/${targetUid}/profile`).once('value');const prof=profSnap.val()||{};
-    if(!sharedKeys[targetUid]&&prof.publicKey){const secret=await deriveSharedSecret(JSON.parse(prof.publicKey));sharedKeys[targetUid]=secret;localStorage.setItem('sharedKeys',JSON.stringify(sharedKeys));}
-    const key=sharedKeys[targetUid];if(!key){toast('Security key missing for forwarding');return;}
-    const encrypted=CryptoJS.AES.encrypt(forwardedText,key).toString();const timestamp=Date.now();
-    const targetRoomId=currentUser.uid<targetUid?`${currentUser.uid}_${targetUid}`:`${targetUid}_${currentUser.uid}`;
-    await db.ref(`messages/${targetRoomId}`).push({text:encrypted,sender:currentUser.uid,ts:timestamp,read:false});
-    const updates={};updates[`users/${currentUser.uid}/chats/${targetUid}/lastMsg`]=encrypted;updates[`users/${currentUser.uid}/chats/${targetUid}/ts`]=timestamp;
-    updates[`users/${targetUid}/chats/${currentUser.uid}/lastMsg`]=encrypted;updates[`users/${targetUid}/chats/${currentUser.uid}/ts`]=timestamp;
-    updates[`users/${targetUid}/chats/${currentUser.uid}/unreadCount`]=firebase.database.ServerValue.increment(1);
-    await db.ref().update(updates);toast('Message forwarded');closeForwardSelector();
-  }catch(e){console.error(e);toast('Failed to forward message');}
-}
+        function openFriendsSheet() {
+            loadFriendsList();
+            document.getElementById('overlay').classList.add('active');
+            document.getElementById('friendsSheet').classList.add('active');
+        }
 
-/* ==========  SEARCH  ========== */
-function searchFriends(){
-  const term=document.getElementById('friendSearch').value.toLowerCase();
-  document.querySelectorAll('.chat-card').forEach(c=>{
-    const name=c.querySelector('.chat-name')?.textContent.toLowerCase()||'';
-    c.style.display=name.includes(term)?'flex':'none';
-  });
+        function closeAll() {
+            document.getElementById('overlay').classList.remove('active');
+            document.getElementById('friendsSheet').classList.remove('active');
+        }
+
+        /* --- Full Chat View --- */
+        async function openFullChat(friendUid) {
+            currentFriendUid = friendUid;
+            currentRoomId = currentUser.uid < friendUid ? currentUser.uid + "_" + friendUid : friendUid + "_" + currentUser.uid;
+            const snap = await db.ref(`users/${friendUid}/profile`).once('value');
+            const profile = snap.val() || { name: "User", photo: "" };
+            document.getElementById('chatFriendName').textContent = profile.name;
+            document.getElementById('chatFriendAvatar').src = profile.photo || generateLetterAvatar(profile.name);
+
+            if (!sharedKeys[friendUid] && profile.publicKey) {
+                const secret = await deriveSharedSecret(JSON.parse(profile.publicKey));
+                sharedKeys[friendUid] = secret;
+                localStorage.setItem('sharedKeys', JSON.stringify(sharedKeys));
+            }
+            document.getElementById('fullChatView').style.display = 'flex';
+            loadMessages();
+            markAsRead(friendUid);
+
+            db.ref(`users/${friendUid}/online`).on('value', s => {
+                const statusEl = document.getElementById('chatStatusInfo');
+                statusEl.textContent = s.val() === true ? 'Online' : 'Offline';
+                statusEl.style.color = s.val() === true ? 'var(--online)' : 'var(--text-muted)';
+            });
+
+            history.pushState({chatOpen: true}, '');
+        }
+
+        function closeFullChat() {
+    document.getElementById('fullChatView').style.display = 'none';
+    if (messagesListener) { messagesListener.off(); messagesListener = null; }
+    currentFriendUid = null;
+
+    /* ✅ Silent refresh – no loading banner, no flash */
+    chatsListener.once('value', () => { /* fires instantly if local cache valid */ });
+    history.back();
 }
+        // Reaction picker functions
+        function showReactionPicker(e, messageEl, msgKey) {
+            e.preventDefault();
+            const picker = document.getElementById('reactionPicker');
+            
+            // Position picker near the message
+            const rect = messageEl.getBoundingClientRect();
+            picker.style.left = `${rect.left + window.scrollX}px`;
+            picker.style.top = `${rect.bottom + window.scrollY + 5}px`;
+            picker.style.display = 'flex';
+            
+            // Store current message info
+            picker.dataset.currentMsgKey = msgKey;
+            picker.dataset.currentMsgEl = messageEl;
+            
+            // Close picker when clicking outside
+            setTimeout(() => {
+                document.addEventListener('click', hideReactionPicker);
+            }, 100);
+        }
 
-/* ==========  TIME  ========== */
-function formatTimeAgo(ts){if(!ts)return'';const diff=Date.now()-ts;if(diff<86400000)return new Date(ts).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});return new Date(ts).toLocaleDateString();}
-function formatMessageTime(ts){return new Date(ts).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});}
+        function hideReactionPicker() {
+            const picker = document.getElementById('reactionPicker');
+            picker.style.display = 'none';
+            document.removeEventListener('click', hideReactionPicker);
+        }
 
-/* ==========  MISC  ========== */
-async function markAsRead(friendUid){await db.ref(`users/${currentUser.uid}/chats/${friendUid}`).update({unreadCount:0});updateUnreadDot();}
-async function addFriendLogic(){
-  const raw=document.getElementById('friendVynixId').value.trim().toLowerCase();
-  const vid=raw.startsWith('@')?raw.substring(1):raw;if(!vid)return;
-  const snap=await db.ref(`vynix_ids/${vid}`).once('value');if(!snap.exists()){toast('User ID not found');return;}
-  const targetUid=snap.val();if(targetUid===currentUser.uid){toast("That's you!");return;}
-  const existing=await db.ref(`users/${currentUser.uid}/chats/${targetUid}`).once('value');if(existing.exists()){toast('Already added!');closeAll();openFullChat(targetUid);return;}
-  await db.ref(`users/${currentUser.uid}/chats/${targetUid}`).set({lastMsg:null,ts:Date.now(),unreadCount:0,isFavourite:false,isArchived:false});
-  toast('Friend added! Tap their name to start chatting.');closeAll();document.getElementById('friendVynixId').value='';
-}
+        // Handle reaction selection
+        document.querySelectorAll('.reaction-emoji').forEach(emoji => {
+            emoji.addEventListener('click', function() {
+                const selectedEmoji = this.dataset.emoji;
+                const msgKey = document.getElementById('reactionPicker').dataset.currentMsgKey;
+                
+                if (msgKey) {
+                    toggleReaction(msgKey, selectedEmoji);
+                }
+                
+                hideReactionPicker();
+            });
+        });
 
-/* ==========  POP-STATE  ========== */
-window.addEventListener('popstate',e=>{
-  if(document.getElementById('fullChatView').style.display==='flex'){closeFullChat();e.preventDefault();}
-});
-</script>
+        // Toggle reaction on/off
+        async function toggleReaction(msgKey, emoji) {
+            if (!msgKey || !currentRoomId) return;
+            
+            try {
+                const reactionRef = db.ref(`messages/${currentRoomId}/${msgKey}/reactions/${emoji}`);
+                const snap = await reactionRef.once('value');
+                const users = snap.val() || [];
+                
+                if (users.includes(currentUser.uid)) {
+                    // Remove reaction
+                    const updatedUsers = users.filter(uid => uid !== currentUser.uid);
+                    if (updatedUsers.length === 0) {
+                        await reactionRef.remove();
+                    } else {
+                        await reactionRef.set(updatedUsers);
+                    }
+                } else {
+                    // Add reaction
+                    await reactionRef.set([...users, currentUser.uid]);
+                }
+            } catch (error) {
+                console.error("Error toggling reaction:", error);
+            }
+        }
+
+        // Message action functions
+        async function deleteMessage() {
+            const popup = document.getElementById('messageActionsPopup');
+            const msgKey = popup.dataset.currentMsgKey;
+            const msgEl = popup.dataset.currentMsgEl;
+            
+            if (!msgKey || !msgEl) return;
+            
+            try {
+                // Remove from Firebase
+                await db.ref(`messages/${currentRoomId}/${msgKey}`).remove();
+                
+                // Remove from DOM
+                msgEl.remove();
+                
+                toast("Message deleted");
+            } catch (error) {
+                console.error("Error deleting message:", error);
+                toast("Failed to delete message");
+            }
+            
+            hideMessageActions();
+        }
+
+        async function editMessage() {
+            const popup = document.getElementById('messageActionsPopup');
+            const msgKey = popup.dataset.currentMsgKey;
+            const msgText = popup.dataset.currentMsgText;
+            const msgEl = popup.dataset.currentMsgEl;
+            
+            if (!msgKey || !msgText || !msgEl) return;
+            
+            // Create inline edit input
+            const messageContent = msgEl.querySelector('.message-content') || msgEl;
+            const originalHtml = messageContent.innerHTML;
+            
+            const editInput = document.createElement('textarea');
+            editInput.className = 'message-edit-input';
+            editInput.value = msgText;
+            editInput.style.width = '100%';
+            editInput.style.minHeight = '40px';
+            editInput.style.padding = '8px';
+            editInput.style.border = '1px solid var(--border-light)';
+            editInput.style.borderRadius = '8px';
+            editInput.style.background = 'var(--bg-body)';
+            editInput.style.color = 'var(--text-main)';
+            editInput.style.fontSize = '14px';
+            editInput.style.resize = 'vertical';
+            
+            messageContent.innerHTML = '';
+            messageContent.appendChild(editInput);
+            editInput.focus();
+            
+            // Handle save/cancel
+            const saveEdit = async () => {
+                const newText = editInput.value.trim();
+                if (newText && newText !== msgText) {
+                    try {
+                        // Encrypt new text
+                        const key = sharedKeys[currentFriendUid];
+                        if (!key) {
+                            toast('Security key missing');
+                            return;
+                        }
+                        const encrypted = CryptoJS.AES.encrypt(newText, key).toString();
+                        
+                        // Update in Firebase
+                        await db.ref(`messages/${currentRoomId}/${msgKey}/text`).set(encrypted);
+                        
+                        // Update last message in chat if this was the last message
+                        const lastMsgSnap = await db.ref(`messages/${currentRoomId}`).orderByChild('ts').limitToLast(1).once('value');
+                        let isLastMessage = false;
+                        lastMsgSnap.forEach(child => {
+                            if (child.key === msgKey) {
+                                isLastMessage = true;
+                            }
+                        });
+                        
+                        if (isLastMessage) {
+                            // Update chat last message
+                            const updates = {};
+                            updates[`users/${currentUser.uid}/chats/${currentFriendUid}/lastMsg`] = encrypted;
+                            updates[`users/${currentFriendUid}/chats/${currentUser.uid}/lastMsg`] = encrypted;
+                            await db.ref().update(updates);
+                        }
+                        
+                        toast("Message edited");
+                    } catch (error) {
+                        console.error("Error editing message:", error);
+                        toast("Failed to edit message");
+                    }
+                }
+                messageContent.innerHTML = originalHtml;
+                hideMessageActions();
+            };
+            
+            const cancelEdit = () => {
+                messageContent.innerHTML = originalHtml;
+                hideMessageActions();
+            };
+            
+            editInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    saveEdit();
+                } else if (e.key === 'Escape') {
+                    cancelEdit();
+                }
+            });
+            
+            editInput.addEventListener('blur', () => {
+                setTimeout(saveEdit, 100);
+            });
+            
+            hideMessageActions();
+        }
+
+        async function forwardMessage() {
+            const popup = document.getElementById('messageActionsPopup');
+            const msgText = popup.dataset.currentMsgText;
+            
+            if (!msgText) return;
+            
+            // Open friend selector for forwarding
+            openForwardSelector(msgText);
+            hideMessageActions();
+        }
+
+        function openForwardSelector(messageText) {
+            // Create forward selector overlay
+            const overlay = document.createElement('div');
+            overlay.className = 'forward-overlay';
+            overlay.style.cssText = `
+                position: fixed;
+                inset: 0;
+                background: rgba(0,0,0,0.5);
+                z-index: 4000;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            `;
+            
+            const selector = document.createElement('div');
+            selector.className = 'forward-selector';
+            selector.style.cssText = `
+                background: var(--bg-card);
+                border-radius: 16px;
+                padding: 20px;
+                max-width: 400px;
+                max-height: 70vh;
+                overflow-y: auto;
+                width: 90%;
+            `;
+            
+            selector.innerHTML = `
+                <h3 style="margin-bottom:15px;font-weight:700;">Forward Message</h3>
+                <div style="margin-bottom:15px;padding:10px;background:var(--bg-body);border-radius:8px;font-size:14px;">${messageText}</div>
+                <div id="forwardFriendsList"></div>
+                <div style="display:flex;gap:10px;margin-top:15px;">
+                    <button class="btn-secondary" onclick="closeForwardSelector()" style="flex:1;padding:10px;border:none;border-radius:8px;background:var(--bg-body);">Cancel</button>
+                    <button class="btn-primary" onclick="sendForwardedMessage()" style="flex:1;padding:10px;border:none;border-radius:8px;">Send</button>
+                </div>
+            `;
+            
+            overlay.appendChild(selector);
+            document.body.appendChild(overlay);
+            
+            // Load friends for forwarding
+            loadFriendsForForwarding();
+            
+            // Store message text for forwarding
+            selector.dataset.messageText = messageText;
+        }
+
+        function closeForwardSelector() {
+            const overlay = document.querySelector('.forward-overlay');
+            if (overlay) overlay.remove();
+        }
+
+        async function loadFriendsForForwarding() {
+            const list = document.getElementById('forwardFriendsList');
+            list.innerHTML = '<div style="text-align:center;padding:20px;">Loading friends...</div>';
+            
+            try {
+                const snap = await db.ref(`users/${currentUser.uid}/chats`).once('value');
+                if (!snap.exists()) {
+                    list.innerHTML = '<p style="text-align:center;color:var(--text-muted);">No friends to forward to</p>';
+                    return;
+                }
+                
+                list.innerHTML = '';
+                const friends = [];
+                snap.forEach(child => friends.push(child.key));
+                
+                for (const uid of friends) {
+                    if (uid === currentFriendUid) continue; // Don't show current chat
+                    
+                    const profileSnap = await db.ref(`users/${uid}/profile`).once('value');
+                    const profile = profileSnap.val() || { name: "User", photo: "" };
+                    
+                    const friendEl = document.createElement('div');
+                    friendEl.className = 'forward-friend-item';
+                    friendEl.style.cssText = `
+                        display: flex;
+                        align-items: center;
+                        padding: 12px;
+                        cursor: pointer;
+                        border-radius: 8px;
+                        margin-bottom: 8px;
+                        transition: background 0.2s;
+                    `;
+                    
+                    friendEl.innerHTML = `
+                        <img class="avatar" src="${profile.photo || generateLetterAvatar(profile.name)}" style="width:40px;height:40px;margin-right:12px;">
+                        <div class="chat-name">${profile.name}</div>
+                    `;
+                    
+                    friendEl.addEventListener('click', () => {
+                        // Toggle selection
+                        const selected = document.querySelectorAll('.forward-friend-item.selected');
+                        selected.forEach(el => el.classList.remove('selected'));
+                        friendEl.classList.add('selected');
+                        // Store UID for forwarding
+                        friendEl.dataset.friendUid = uid;
+                    });
+                    
+                    list.appendChild(friendEl);
+                }
+                
+                if (list.children.length === 0) {
+                    list.innerHTML = '<p style="text-align:center;color:var(--text-muted);">No other friends to forward to</p>';
+                }
+            } catch (error) {
+                console.error("Error loading friends:", error);
+                list.innerHTML = '<p style="text-align:center;color:var(--text-muted);">Error loading friends</p>';
+            }
+        }
+
+        async function sendForwardedMessage() {
+            const selector = document.querySelector('.forward-selector');
+            const selected = selector.querySelector('.forward-friend-item.selected');
+            
+            if (!selected) {
+                toast("Please select a friend to forward to");
+                return;
+            }
+            
+            const messageText = selector.dataset.messageText;
+            const targetUid = selected.dataset.friendUid;
+            
+            if (!targetUid) {
+                toast("Please select a friend");
+                return;
+            }
+            
+            try {
+                // Create forwarded message
+                const forwardedText = `Forwarded: ${messageText}`;
+                
+                // Get encryption key for target friend
+                const profileSnap = await db.ref(`users/${targetUid}/profile`).once('value');
+                const profile = profileSnap.val() || {};
+                
+                if (!sharedKeys[targetUid] && profile.publicKey) {
+                    const secret = await deriveSharedSecret(JSON.parse(profile.publicKey));
+                    sharedKeys[targetUid] = secret;
+                    localStorage.setItem('sharedKeys', JSON.stringify(sharedKeys));
+                }
+                
+                const key = sharedKeys[targetUid];
+                if (!key) {
+                    toast('Security key missing for forwarding');
+                    return;
+                }
+                
+                const encrypted = CryptoJS.AES.encrypt(forwardedText, key).toString();
+                const timestamp = Date.now();
+                
+                // Create room ID for target friend
+                const targetRoomId = currentUser.uid < targetUid ? currentUser.uid + "_" + targetUid : targetUid + "_" + currentUser.uid;
+                
+                // Send the forwarded message
+                await db.ref(`messages/${targetRoomId}`).push({
+                    text: encrypted,
+                    sender: currentUser.uid,
+                    ts: timestamp,
+                    read: false
+                });
+                
+                // Update chat timestamps
+                const updates = {};
+                updates[`users/${currentUser.uid}/chats/${targetUid}/lastMsg`] = encrypted;
+                updates[`users/${currentUser.uid}/chats/${targetUid}/ts`] = timestamp;
+                updates[`users/${targetUid}/chats/${currentUser.uid}/lastMsg`] = encrypted;
+                updates[`users/${targetUid}/chats/${currentUser.uid}/ts`] = timestamp;
+                updates[`users/${targetUid}/chats/${currentUser.uid}/unreadCount`] = firebase.database.ServerValue.increment(1);
+                
+                await db.ref().update(updates);
+                
+                toast("Message forwarded");
+                closeForwardSelector();
+                
+            } catch (error) {
+                console.error("Error forwarding message:", error);
+                toast("Failed to forward message");
+            }
+        }
+
+        function hideMessageActions() {
+            const popup = document.getElementById('messageActionsPopup');
+            const overlay = document.getElementById('messageActionOverlay');
+            
+            popup.style.display = 'none';
+            overlay.style.display = 'none';
+            
+            // Reset message position
+            document.querySelectorAll('.message.swiping').forEach(msg => {
+                msg.style.transform = '';
+                msg.classList.remove('swiping');
+            });
+        }
+
+        function showMessageActions(e, messageEl, msgKey, msgText) {
+            e.preventDefault();
+            
+            // Reset all swiped messages
+            document.querySelectorAll('.message.swiping').forEach(msg => {
+                msg.style.transform = '';
+                msg.classList.remove('swiping');
+            });
+            
+            const popup = document.getElementById('messageActionsPopup');
+            const overlay = document.getElementById('messageActionOverlay');
+            
+            // Position popup near the message
+            const rect = messageEl.getBoundingClientRect();
+            popup.style.left = `${rect.right + 10}px`;
+            popup.style.top = `${rect.top + window.scrollY}px`;
+            
+            // Adjust position if popup would go off screen
+            const popupRect = popup.getBoundingClientRect();
+            if (popupRect.right > window.innerWidth) {
+                popup.style.left = `${rect.left - popup.offsetWidth - 10}px`;
+            }
+            
+            // Show overlay and popup
+            overlay.style.display = 'block';
+            popup.style.display = 'block';
+            
+            // Store current message info
+            popup.dataset.currentMsgKey = msgKey;
+            popup.dataset.currentMsgText = msgText;
+            popup.dataset.currentMsgEl = messageEl;
+            
+            // Hide after 3 seconds or when clicking outside
+            setTimeout(() => {
+                hideMessageActions();
+            }, 3000);
+        }
+
+        // Add swipe listeners to messages
+        function addSwipeListeners(messageEl) {
+            messageEl.addEventListener('touchstart', handleTouchStart, { passive: false });
+            messageEl.addEventListener('touchmove', handleTouchMove, { passive: false });
+            messageEl.addEventListener('touchend', handleTouchEnd, { passive: false });
+            
+            // Mouse events for desktop testing
+            messageEl.addEventListener('mousedown', handleMouseDown);
+            messageEl.addEventListener('mousemove', handleMouseMove);
+            messageEl.addEventListener('mouseup', handleMouseUp);
+            messageEl.addEventListener('mouseleave', handleMouseLeave);
+        }
+
+        function handleTouchStart(e) {
+            startX = e.touches[0].clientX;
+            currentX = startX;
+            isSwiping = true;
+            currentMessageEl = e.currentTarget;
+            currentMessageKey = currentMessageEl.dataset.msgKey;
+            currentMessageText = currentMessageEl.textContent;
+        }
+
+        function handleTouchMove(e) {
+            if (!isSwiping || !currentMessageEl) return;
+            
+            currentX = e.touches[0].clientX;
+            const diffX = currentX - startX;
+            
+            if (diffX < 0) { // Only allow left swipe
+                currentMessageEl.style.transform = `translateX(${Math.max(diffX, -100)}px)`;
+                currentMessageEl.classList.add('swiping');
+            }
+        }
+
+        function handleTouchEnd(e) {
+            if (!isSwiping || !currentMessageEl) return;
+            
+            const diffX = currentX - startX;
+            
+            if (Math.abs(diffX) > swipeThreshold) {
+                // Show action menu
+                showMessageActions(e, currentMessageEl, currentMessageKey, currentMessageText);
+            } else {
+                // Reset position
+                currentMessageEl.style.transform = '';
+                currentMessageEl.classList.remove('swiping');
+            }
+            
+            resetSwipeState();
+        }
+
+        function handleMouseDown(e) {
+            startX = e.clientX;
+            currentX = startX;
+            isSwiping = true;
+            currentMessageEl = e.currentTarget;
+            currentMessageKey = currentMessageEl.dataset.msgKey;
+            currentMessageText = currentMessageEl.textContent;
+        }
+
+        function handleMouseMove(e) {
+            if (!isSwiping || !currentMessageEl) return;
+            
+            currentX = e.clientX;
+            const diffX = currentX - startX;
+            
+            if (diffX < 0) { // Only allow left swipe
+                currentMessageEl.style.transform = `translateX(${Math.max(diffX, -100)}px)`;
+                currentMessageEl.classList.add('swiping');
+            }
+        }
+
+        function handleMouseUp(e) {
+            if (!isSwiping || !currentMessageEl) return;
+            
+            const diffX = currentX - startX;
+            
+            if (Math.abs(diffX) > swipeThreshold) {
+                // Show action menu
+                showMessageActions(e, currentMessageEl, currentMessageKey, currentMessageText);
+            } else {
+                // Reset position
+                currentMessageEl.style.transform = '';
+                currentMessageEl.classList.remove('swiping');
+            }
+            
+            resetSwipeState();
+        }
+
+        function handleMouseLeave(e) {
+            if (currentMessageEl) {
+                currentMessageEl.style.transform = '';
+                currentMessageEl.classList.remove('swiping');
+            }
+            resetSwipeState();
+        }
+
+        function resetSwipeState() {
+            isSwiping = false;
+            currentMessageEl = null;
+            currentMessageKey = null;
+            currentMessageText = null;
+            startX = 0;
+            currentX = 0;
+        }
+
+        /* --- Send Message (with offline support) --- */
+        function autoResizeInput(field) {
+            field.style.height = 'auto';
+            field.style.height = field.scrollHeight + 'px';
+            const btn = document.getElementById('sendBtn');
+            if (field.value.trim().length > 0) btn.classList.add('visible');
+            else btn.classList.remove('visible');
+        }
+
+        async function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const text = input.value.trim();
+            if (!text || !currentFriendUid) return;
+            const key = sharedKeys[currentFriendUid];
+            if (!key) { toast('Security key missing'); return; }
+            const encrypted = CryptoJS.AES.encrypt(text, key).toString();
+
+            const tempTs = Date.now();
+            const localId = tempTs + Math.random();
+
+            const list = document.getElementById('messageList');
+            
+            // Create and append pending message
+            const el = createMessageElement(text, true, tempTs, localId, '', false);
+            list.appendChild(el);
+            list.scrollTop = list.scrollHeight;
+
+            input.value = '';
+            input.style.height = 'auto';
+            document.getElementById('sendBtn').classList.remove('visible');
+
+            // Cache pending message for offline support
+            await cacheMessage(currentRoomId, {
+                text: encrypted,
+                sender: currentUser.uid,
+                ts: tempTs,
+                pending: true,
+                localId: localId,
+                read: false
+            });
+
+            // Try to send to Firebase if online
+            if (navigator.onLine) {
+                try {
+                    const msgRef = await db.ref(`messages/${currentRoomId}`).push({
+                        text: encrypted, 
+                        sender: currentUser.uid, 
+                        ts: tempTs,
+                        read: false,
+                        localId: localId
+                    });
+
+                    const updates = {};
+                    updates[`users/${currentUser.uid}/chats/${currentFriendUid}/lastMsg`] = encrypted;
+                    updates[`users/${currentUser.uid}/chats/${currentFriendUid}/lastMsgSender`] = currentUser.uid;
+                    updates[`users/${currentUser.uid}/chats/${currentFriendUid}/ts`] = tempTs;
+                    updates[`users/${currentFriendUid}/chats/${currentUser.uid}/lastMsg`] = encrypted;
+                    updates[`users/${currentFriendUid}/chats/${currentUser.uid}/lastMsgSender`] = currentUser.uid;
+                    updates[`users/${currentFriendUid}/chats/${currentUser.uid}/ts`] = tempTs;
+                    updates[`users/${currentFriendUid}/chats/${currentUser.uid}/unreadCount`] = firebase.database.ServerValue.increment(1);
+
+                    await db.ref().update(updates);
+                } catch (e) {
+                    console.error("Send failed:", e);
+                    toast("Message will be sent when online");
+                }
+            } else {
+                toast("Message will be sent when online");
+            }
+        }
+
+        function createMessageElement(text, isSent, ts, localId = '', msgKey = '', isRead = false, reactions = {}) {
+            const el = document.createElement('div');
+            el.className = `message ${isSent ? 'sent' : 'received'} ${localId ? 'pending' : ''}`;
+            if (localId) el.dataset.localId = localId;
+            if (msgKey) el.dataset.msgKey = msgKey;
+            
+            // Build reactions HTML
+            let reactionsHtml = '';
+            if (reactions && Object.keys(reactions).length > 0) {
+                reactionsHtml = '<div class="message-reactions">';
+                Object.entries(reactions).forEach(([emoji, users]) => {
+                    if (users && users.length > 0) {
+                        const count = users.length;
+                        const userReacted = users.includes(currentUser.uid);
+                        reactionsHtml += `
+                            <div class="reaction-badge ${userReacted ? 'user-reacted' : ''}" 
+                                 data-emoji="${emoji}" 
+                                 data-key="${msgKey}"
+                                 onclick="toggleReaction('${msgKey}', '${emoji}')">
+                                <span class="emoji">${emoji}</span>
+                                ${count > 1 ? `<span class="count">${count}</span>` : ''}
+                            </div>
+                        `;
+                    }
+                });
+                reactionsHtml += '</div>';
+            }
+            
+            const ticks = isSent ? `<span class="message-ticks ${isRead ? 'read' : ''}">✓✓</span>` : '';
+            
+            // Wrap message content for better editing
+            el.innerHTML = `
+                <div class="message-content">${text}</div>
+                <div class="message-time">${formatMessageTime(ts)}${ticks}</div>
+                ${reactionsHtml}
+            `;
+            
+            // Add long press event for reactions
+            let longPressTimer;
+            el.addEventListener('touchstart', e => {
+                longPressTimer = setTimeout(() => showReactionPicker(e, el, msgKey), 500);
+            });
+            el.addEventListener('touchend', () => clearTimeout(longPressTimer));
+            el.addEventListener('touchmove', () => clearTimeout(longPressTimer));
+            el.addEventListener('contextmenu', e => {
+                e.preventDefault();
+                showReactionPicker(e, el, msgKey);
+            });
+            
+            // Add swipe listeners
+            addSwipeListeners(el);
+            
+            // Add pending class only for local messages that haven't been confirmed
+            if (localId && !msgKey) {
+                el.classList.add('pending');
+            }
+            
+            return el;
+        }
+
+        async function loadMessages() {
+            if (messagesListener) messagesListener.off();
+            const list = document.getElementById('messageList');
+            list.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-muted);">Loading messages...</div>';
+
+            // Clear any existing message elements completely
+            list.innerHTML = '';
+            const processedMessageKeys = new Set();
+
+            // If online, load from Firebase first
+            if (navigator.onLine) {
+                try {
+                    // Load messages from Firebase
+                    const messagesSnap = await db.ref(`messages/${currentRoomId}`).limitToLast(100).once('value');
+                    
+                    if (messagesSnap.exists()) {
+                        const messages = [];
+                        messagesSnap.forEach(child => {
+                            const msg = child.val();
+                            msg.key = child.key;
+                            messages.push(msg);
+                        });
+                        
+                        // Sort messages by timestamp
+                        messages.sort((a,b) => a.ts - b.ts);
+                        
+                        // Render Firebase messages
+                        messages.forEach(msg => {
+                            processedMessageKeys.add(msg.key);
+                            
+                            const isSent = msg.sender === currentUser.uid;
+                            const text = decrypt(msg.text, currentFriendUid);
+                            const isRead = msg.read || false;
+                            
+                            const el = createMessageElement(text, isSent, msg.ts, '', msg.key, isRead, msg.reactions || {});
+                            list.appendChild(el);
+                        });
+                        
+                        list.scrollTop = list.scrollHeight;
+                    }
+                } catch (error) {
+                    console.error("Error loading from Firebase:", error);
+                }
+            } else {
+                // If offline, load from cache
+                const cached = await getCachedMessages(currentRoomId);
+                if (cached.length > 0) {
+                    cached.sort((a,b) => a.ts - b.ts);
+                    cached.forEach(m => {
+                        if (m.key) processedMessageKeys.add(m.key);
+                        
+                        const isSent = m.sender === currentUser.uid;
+                        const text = decrypt(m.text, currentFriendUid);
+                        const isRead = m.read || false;
+                        
+                        const el = createMessageElement(text, isSent, m.ts, m.localId || '', m.key || '', isRead, m.reactions || {});
+                        list.appendChild(el);
+                    });
+                    list.scrollTop = list.scrollHeight;
+                }
+            }
+
+            // Realtime listener for new messages
+            messagesListener = db.ref(`messages/${currentRoomId}`).limitToLast(100);
+
+            messagesListener.on('child_added', async snap => {
+                const msg = snap.val();
+                msg.key = snap.key;
+
+                // Skip if already rendered
+                if (processedMessageKeys.has(msg.key)) return;
+                
+                processedMessageKeys.add(msg.key);
+
+                // Cache the message for offline use
+                await cacheMessage(currentRoomId, msg);
+
+                // Remove pending version if exists
+                if (msg.localId) {
+                    const pendingEl = list.querySelector(`[data-local-id="${msg.localId}"]`);
+                    if (pendingEl) pendingEl.remove();
+                }
+
+                // Add the new message
+                const isSent = msg.sender === currentUser.uid;
+                const text = decrypt(msg.text, currentFriendUid);
+                const isRead = msg.read || false;
+                
+                const el = createMessageElement(text, isSent, msg.ts, '', msg.key, isRead, msg.reactions || {});
+                list.appendChild(el);
+                list.scrollTop = list.scrollHeight;
+
+                // Mark as read if received message
+                if (!isSent && currentFriendUid) {
+                    await db.ref(`messages/${currentRoomId}/${msg.key}`).update({ read: true });
+                }
+            });
+
+            // Listen for read status updates
+            db.ref(`messages/${currentRoomId}`).on('child_changed', snap => {
+                const msg = snap.val();
+                const existingEl = list.querySelector(`[data-msg-key="${snap.key}"]`);
+                if (existingEl) {
+                    // Update reactions
+                    const reactionsContainer = existingEl.querySelector('.message-reactions');
+                    if (reactionsContainer) {
+                        reactionsContainer.remove();
+                    }
+                    
+                    if (msg.reactions && Object.keys(msg.reactions).length > 0) {
+                        let reactionsHtml = '<div class="message-reactions">';
+                        Object.entries(msg.reactions).forEach(([emoji, users]) => {
+                            if (users && users.length > 0) {
+                                const count = users.length;
+                                const userReacted = users.includes(currentUser.uid);
+                                reactionsHtml += `
+                                    <div class="reaction-badge ${userReacted ? 'user-reacted' : ''}" 
+                                         data-emoji="${emoji}" 
+                                         data-key="${snap.key}"
+                                         onclick="toggleReaction('${snap.key}', '${emoji}')">
+                                        <span class="emoji">${emoji}</span>
+                                        ${count > 1 ? `<span class="count">${count}</span>` : ''}
+                                    </div>
+                                `;
+                            }
+                        });
+                        reactionsHtml += '</div>';
+                        
+                        const timeDiv = existingEl.querySelector('.message-time');
+                        if (timeDiv) {
+                            timeDiv.insertAdjacentHTML('afterend', reactionsHtml);
+                        }
+                    }
+                    
+                    // Update read status
+                    const ticks = existingEl.querySelector('.message-ticks');
+                    if (ticks && msg.read) {
+                        ticks.classList.add('read');
+                        ticks.textContent = '✓✓';
+                    }
+                }
+            });
+
+            // Close reaction picker when clicking outside
+            document.addEventListener('click', function(e) {
+                const picker = document.getElementById('reactionPicker');
+                if (picker.style.display === 'flex' && !picker.contains(e.target) && !e.target.closest('.message')) {
+                    hideReactionPicker();
+                }
+            });
+        }
+
+        async function syncPendingMessages() {
+            if (!navigator.onLine) return;
+
+            const cached = await getCachedMessages(currentRoomId);
+            const pending = cached.filter(m => m.pending);
+
+            for (const msg of pending) {
+                try {
+                    // Push to Firebase
+                    await db.ref(`messages/${currentRoomId}`).push({
+                        text: msg.text,
+                        sender: currentUser.uid,
+                        ts: msg.ts,
+                        read: false
+                    });
+
+                    // Update chat timestamps if this is the first pending message
+                    if (pending.indexOf(msg) === 0) {
+                        const updates = {};
+                        updates[`users/${currentUser.uid}/chats/${currentFriendUid}/lastMsg`] = msg.text;
+                        updates[`users/${currentUser.uid}/chats/${currentFriendUid}/ts`] = msg.ts;
+                        updates[`users/${currentFriendUid}/chats/${currentUser.uid}/lastMsg`] = msg.text;
+                        updates[`users/${currentFriendUid}/chats/${currentUser.uid}/ts`] = msg.ts;
+                        updates[`users/${currentFriendUid}/chats/${currentUser.uid}/unreadCount`] = firebase.database.ServerValue.increment(1);
+                        await db.ref().update(updates);
+                    }
+
+                    // Update cache to remove pending status
+                    const tx = idb.transaction(STORE_NAME, 'readwrite');
+                    const store = tx.objectStore(STORE_NAME);
+                    const getReq = store.get(msg.localId);
+                    getReq.onsuccess = () => {
+                        const record = getReq.result;
+                        if (record) {
+                            delete record.pending;
+                            store.put(record);
+                        }
+                    };
+                } catch (e) {
+                    console.error("Sync failed for message:", e);
+                }
+            }
+        }
+
+        window.addEventListener('online', syncPendingMessages);
+
+        document.getElementById('sendBtn').addEventListener('click', sendMessage);
+        function handleEnter(e) {
+            if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+        }
+
+        async function markAsRead(friendUid) {
+            await db.ref(`users/${currentUser.uid}/chats/${friendUid}`).update({ unreadCount: 0 });
+            updateUnreadDot();
+        }
+
+        async function addFriendLogic() {
+            const raw = document.getElementById('friendVynixId').value.trim().toLowerCase();
+            const vid = raw.startsWith('@') ? raw.substring(1) : raw;
+            if(!vid) return;
+            const snap = await db.ref(`vynix_ids/${vid}`).once('value');
+            if (!snap.exists()) { toast('User ID not found'); return; }
+
+            const targetUid = snap.val();
+            if (targetUid === currentUser.uid) { toast("That's you!"); return; }
+
+            const existing = await db.ref(`users/${currentUser.uid}/chats/${targetUid}`).once('value');
+            if (existing.exists()) {
+                toast('Already added!');
+                closeAll();
+                openFullChat(targetUid);
+                return;
+            }
+
+            await db.ref(`users/${currentUser.uid}/chats/${targetUid}`).set({
+                lastMsg: null,
+                ts: Date.now(),
+                unreadCount: 0,
+                isFavourite: false,
+                isArchived: false
+            });
+            toast("Friend added! Tap their name to start chatting.");
+            closeAll();
+            document.getElementById('friendVynixId').value = "";
+        }
+
+        function searchFriends() {
+            const term = document.getElementById('friendSearch').value.toLowerCase();
+            document.querySelectorAll('.chat-card').forEach(c => {
+                const name = c.querySelector('.chat-name')?.textContent.toLowerCase() || '';
+                c.style.display = name.includes(term) ? 'flex' : 'none';
+            });
+        }
+
+        function formatTimeAgo(ts) {
+            if (!ts) return '';
+            const diff = Date.now() - ts;
+            if (diff < 86400000) return new Date(ts).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+            return new Date(ts).toLocaleDateString();
+        }
+
+        function formatMessageTime(ts) {
+            return new Date(ts).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+        }
+    </script>
 </body>
 </html>
