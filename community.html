@@ -1289,26 +1289,46 @@
 
         /* --- Friends Sheet (all added friends) --- */
         async function loadFriendsList() {
-            const list = document.getElementById('friendsList');
-            list.innerHTML = '';
-            const snap = await db.ref(`users/${currentUser.uid}/chats`).once('value');
-            if (!snap.exists()) {
-                list.innerHTML = '<p style="text-align:center;color:var(--text-muted);">No friends yet. Add one below!</p>';
-                return;
-            }
-            const friends = [];
-            snap.forEach(child => friends.push(child.key));
+    const list = document.getElementById('friendsList');
+    list.innerHTML = '';
+    const snap = await db.ref(`users/${currentUser.uid}/chats`).once('value');
+    if (!snap.exists()) {
+        list.innerHTML = '<p style="text-align:center;color:var(--text-muted);">No friends yet. Add one below!</p>';
+        return;
+    }
+    
+    const friends = [];
+    snap.forEach(child => friends.push(child.key));
+    
+    if (friends.length === 0) {
+        list.innerHTML = '<p style="text-align:center;color:var(--text-muted);">No friends yet. Add one below!</p>';
+        return;
+    }
 
-            for (const uid of friends) {
-                const profileSnap = await db.ref(`users/${uid}/profile`).once('value');
-                const profile = profileSnap.val() || { name: "User", photo: "" };
-                list.innerHTML += `
-                    <div class="friend-item" onclick="openFullChat('${uid}')">
-                        <img class="avatar" src="${profile.photo || generateLetterAvatar(profile.name)}">
-                        <div class="chat-name">${profile.name}</div>
-                    </div>`;
-            }
+    // Build HTML first, then set it once
+    let friendsHTML = '';
+    
+    for (const uid of friends) {
+        try {
+            const profileSnap = await db.ref(`users/${uid}/profile`).once('value');
+            const profile = profileSnap.val() || { name: "User", photo: "" };
+            friendsHTML += `
+                <div class="friend-item" onclick="openFullChat('${uid}')">
+                    <img class="avatar" src="${profile.photo || generateLetterAvatar(profile.name)}" alt="${profile.name}">
+                    <div class="chat-name">${profile.name}</div>
+                </div>`;
+        } catch (error) {
+            console.error(`Error loading profile for ${uid}:`, error);
+            friendsHTML += `
+                <div class="friend-item" onclick="openFullChat('${uid}')">
+                    <img class="avatar" src="${generateLetterAvatar('User')}">
+                    <div class="chat-name">User</div>
+                </div>`;
         }
+    }
+    
+    list.innerHTML = friendsHTML;
+}
 
         function openFriendsSheet() {
             loadFriendsList();
