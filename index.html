@@ -692,14 +692,15 @@
         </div>
     </div>
     <div class="overlay" id="overlay" onclick="closeAll()"></div>
-    <div class="bottom-sheet" id="friendsSheet">
-        <h3 style="margin-bottom:15px; font-weight:700;">Your Friends</h3>
-        <div id="friendsList"></div>
-        <div style="margin-top:20px;">
-            <input type="text" id="friendVynixId" class="v-input" placeholder="Enter Vynix ID (e.g. vnx_...)">
-            <button class="btn-primary" onclick="addFriendLogic()">Add Friend</button>
-        </div>
+ <div class="bottom-sheet" id="friendsSheet">
+     <div style="margin-top:20px;">
+        <input type="text" id="friendVynixId" class="v-input" placeholder="Enter Vynix ID (e.g. vnx_...)">
+        <button class="btn-primary" onclick="addFriendLogic()">Add Friend</button>
     </div>
+    <h3 style="margin-bottom:15px; font-weight:700;">All Users</h3>
+    <div id="friendsList"></div>
+    
+</div>
     <div id="fabAddFriend" onclick="openFriendsSheet()">
         <span class="material-symbols-rounded">person_add</span>
     </div>
@@ -1289,26 +1290,71 @@
 
         /* --- Friends Sheet (all added friends) --- */
         async function loadFriendsList() {
-            const list = document.getElementById('friendsList');
-            list.innerHTML = '';
-            const snap = await db.ref(`users/${currentUser.uid}/chats`).once('value');
-            if (!snap.exists()) {
-                list.innerHTML = '<p style="text-align:center;color:var(--text-muted);">No friends yet. Add one below!</p>';
-                return;
-            }
-            const friends = [];
-            snap.forEach(child => friends.push(child.key));
-
-            for (const uid of friends) {
-                const profileSnap = await db.ref(`users/${uid}/profile`).once('value');
-                const profile = profileSnap.val() || { name: "User", photo: "" };
-                list.innerHTML += `
-                    <div class="friend-item" onclick="openFullChat('${uid}')">
-                        <img class="avatar" src="${profile.photo || generateLetterAvatar(profile.name)}">
-                        <div class="chat-name">${profile.name}</div>
-                    </div>`;
-            }
+    const list = document.getElementById('friendsList');
+    list.innerHTML = '<div style="text-align:center;padding:20px;">Loading all users...</div>';
+    
+    try {
+        // Get all users except current user
+        const usersSnap = await db.ref('users').once('value');
+        if (!usersSnap.exists()) {
+            list.innerHTML = '<p style="text-align:center;color:var(--text-muted);">No users found</p>';
+            return;
         }
+        
+        list.innerHTML = '';
+        const users = [];
+        
+        usersSnap.forEach(child => {
+            const uid = child.key;
+            if (uid !== currentUser.uid) { // Exclude current user
+                const profile = child.val().profile || {};
+                users.push({
+                    uid: uid,
+                    name: profile.name || "User",
+                    photo: profile.photo || "",
+                    vynixId: profile.vynixId || ""
+                });
+            }
+        });
+        
+        // Sort users by name
+        users.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+        
+        if (users.length === 0) {
+            list.innerHTML = '<p style="text-align:center;color:var(--text-muted);">No other users found</p>';
+            return;
+        }
+        
+        // Display all users
+        for (const user of users) {
+            const friendEl = document.createElement('div');
+            friendEl.className = 'friend-item';
+            friendEl.style.cursor = 'pointer';
+            friendEl.style.padding = '12px 0';
+            friendEl.style.borderBottom = '1px solid var(--border-light)';
+            
+            friendEl.innerHTML = `
+                <img class="avatar" src="${user.photo || generateLetterAvatar(user.name)}" style="width:48px;height:48px;margin-right:15px;">
+                <div style="flex:1;">
+                    <div class="chat-name">${user.name}</div>
+                    ${user.vynixId ? `<div style="font-size:12px;color:var(--text-muted);">@${user.vynixId}</div>` : ''}
+                </div>
+                <span class="material-symbols-rounded" style="color:var(--primary);">chat_bubble</span>
+            `;
+            
+            friendEl.addEventListener('click', () => {
+                closeAll();
+                openFullChat(user.uid);
+            });
+            
+            list.appendChild(friendEl);
+        }
+        
+    } catch (error) {
+        console.error("Error loading users:", error);
+        list.innerHTML = '<p style="text-align:center;color:var(--text-muted);">Error loading users</p>';
+    }
+}
 
         function openFriendsSheet() {
             loadFriendsList();
