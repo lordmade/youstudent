@@ -632,6 +632,10 @@
     font-weight: 700;
     letter-spacing: 1px;
 }
+        .header-actions span:hover {
+    color: var(--danger);
+    transition: color .2s;
+}
     </style>
 </head>
 <body>
@@ -1323,35 +1327,42 @@ async function loadChats() {
         }
 
         async function executeClearAllChats() {
-            try {
-                const chatsSnap = await db.ref(`users/${currentUser.uid}/chats`).once('value');
-                if (!chatsSnap.exists()) {
-                    toast("No chats to delete");
-                    closeConfirm();
-                    return;
-                }
+    closeConfirm();
 
-                const deletePromises = [];
+    try {
+        /* 1. Get all chats of current user */
+        const myChatsSnap = await db.ref(`users/${currentUser.uid}/chats`).once('value');
+        if (!myChatsSnap.exists()) { toast('No chats to delete'); return; }
 
-                chatsSnap.forEach(child => {
-                    const friendUid = child.key;
-                    const roomId = currentUser.uid < friendUid ? currentUser.uid + "_" + friendUid : friendUid + "_" + currentUser.uid;
+        const deleteJobs = [];
 
-                    deletePromises.push(db.ref(`messages/${roomId}`).remove());
-                    deletePromises.push(db.ref(`users/${currentUser.uid}/chats/${friendUid}`).remove());
-                    deletePromises.push(db.ref(`users/${friendUid}/chats/${currentUser.uid}`).remove());
-                });
+        myChatsSnap.forEach(child => {
+            const friendUid = child.key;
+            const roomId = currentUser.uid < friendUid
+                ? `${currentUser.uid}_${friendUid}`
+                : `${friendUid}_${currentUser.uid}`;
 
-                await Promise.all(deletePromises);
-                await clearAllCachedMessages();
-                localStorage.removeItem('cached_chats');
-                toast("All chats and messages permanently deleted");
-            } catch (e) {
-                console.error(e);
-                toast("Failed to delete some chats");
-            }
-            closeConfirm();
-        }
+            /* 2. Wipe messages for both sides */
+            deleteJobs.push(db.ref(`messages/${roomId}`).remove());
+
+            /* 3. Remove chat metadata for both users */
+            deleteJobs.push(db.ref(`users/${currentUser.uid}/chats/${friendUid}`).remove());
+            deleteJobs.push(db.ref(`users/${friendUid}/chats/${currentUser.uid}`).remove());
+        });
+
+        /* 4. Execute wipe */
+        await Promise.all(deleteJobs);
+
+        /* 5. Local clean-up */
+        await clearAllCachedMessages();
+        localStorage.removeItem('cached_chats');
+        toast('All chats cleared ✓');
+
+    } catch (e) {
+        console.error(e);
+        toast('Could not clear some chats');
+    }
+}
 
         /* --- Friends Sheet (all added friends) --- */
         async function loadFriendsList() {
