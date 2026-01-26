@@ -14,6 +14,8 @@
       --text-dark: #0F1419;
       --text-light: #536471;
       --like-red: #F91880;
+      --danger: #e0245e;
+      --success: #10b981;
     }
     body {
       background: white;
@@ -21,6 +23,7 @@
       color: var(--text-dark);
       overflow-y: scroll;
     }
+
     * {
       -webkit-touch-callout: none;
       -webkit-user-select: none;
@@ -85,15 +88,8 @@
       justify-content: space-between;
       gap: 1rem;
     }
-    .feed-header-title {
-      font-weight: 800;
-      font-size: 1.25rem;
-      flex-shrink: 0;
-    }
-    .header-search {
-      flex: 1;
-      max-width: 420px;
-    }
+    .feed-header-title { font-weight: 800; font-size: 1.25rem; flex-shrink: 0; }
+    .header-search { flex: 1; max-width: 420px; }
     .header-search input {
       width: 100%;
       padding: 0.6rem 1.2rem;
@@ -104,11 +100,7 @@
       outline: none;
     }
 
-    .main-feed { 
-      border-right: 1px solid var(--border); 
-      max-width: 600px; 
-      width: 100%; 
-    }
+    .main-feed { border-right: 1px solid var(--border); max-width: 600px; width: 100%; }
 
     .tweet-box { padding: 1rem; border-bottom: 1px solid var(--border); display: flex; gap: 1rem; }
     .user-avatar { width: 48px; height: 48px; border-radius: 50%; background: #e1e8ed; object-fit: cover; }
@@ -164,9 +156,7 @@
       transition: background 0.15s;
     }
     .kebab-item:hover { background: var(--hover-bg); }
-    .kebab-item.delete-post {
-      color: #e0245e;
-    }
+    .kebab-item.delete-post { color: var(--danger); }
     .kebab-item.delete-post:hover { background: #ffeef0; }
 
     .right-sidebar { display: none; padding: 1rem; }
@@ -238,6 +228,7 @@
       .main-feed { padding-bottom: calc(5.5rem + env(safe-area-inset-bottom)); }
     }
 
+    /* Bottom sheet (comments + delete) */
     .sheet-overlay {
       position: fixed; top: 0; left: 0; width: 100%; height: 100%;
       background: rgba(0,0,0,0.5); z-index: 1000; display: none; opacity: 0; transition: opacity 0.3s;
@@ -264,12 +255,34 @@
     .comment-item { margin-bottom: 1rem; display: flex; gap: 0.75rem; font-size: 0.9rem; }
     .comment-content { background: #f0f2f5; padding: 0.5rem 1rem; border-radius: 12px; }
 
+    /* Loading */
     #loading-overlay {
       position: fixed; top: 0; left: 0; width: 100%; height: 100%;
       background: rgba(255,255,255,0.8); display: none; justify-content: center; align-items: center; z-index: 2000;
     }
     .spinner { border: 4px solid #f3f3f3; border-top: 4px solid var(--primary-color); border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; }
     @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+    /* Toast */
+    #toast {
+      position: fixed;
+      bottom: calc(80px + env(safe-area-inset-bottom));
+      left: 50%;
+      transform: translateX(-50%);
+      background: #333;
+      color: white;
+      padding: 12px 24px;
+      border-radius: 9999px;
+      z-index: 200;
+      opacity: 0;
+      transition: opacity 0.4s;
+      pointer-events: none;
+      white-space: nowrap;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    }
+    #toast.show { opacity: 1; }
+    #toast.success { background: var(--success); }
+    #toast.error { background: var(--danger); }
   </style>
 </head>
 <body>
@@ -277,6 +290,7 @@
     <div class="spinner"></div>
   </div>
 
+  <!-- Comments Sheet -->
   <div id="sheet-overlay" class="sheet-overlay"></div>
   <div id="comment-sheet" class="bottom-sheet">
     <div class="sheet-header">
@@ -291,6 +305,31 @@
       <button type="submit" style="color: var(--primary-color); font-weight:600;">Post</button>
     </form>
   </div>
+
+  <!-- Delete Confirmation Modal -->
+  <div id="delete-overlay" class="sheet-overlay"></div>
+  <div id="delete-modal" class="bottom-sheet">
+    <div class="sheet-header">
+      <span>Delete Post</span>
+      <button id="close-delete" style="padding:5px"><i data-feather="x"></i></button>
+    </div>
+    <div class="sheet-body" style="padding:1.5rem; text-align:center;">
+      <p style="margin-bottom:1.5rem; font-size:1.1rem; color:#333;">
+        This action cannot be undone.<br>Delete this post?
+      </p>
+      <div style="display:flex; gap:1rem; justify-content:center;">
+        <button id="cancel-delete" style="padding:0.7rem 1.5rem; border-radius:9999px; border:1px solid var(--border); background:white; cursor:pointer; font-weight:500;">
+          Cancel
+        </button>
+        <button id="confirm-delete" style="padding:0.7rem 1.5rem; border-radius:9999px; background:var(--danger); color:white; border:none; cursor:pointer; font-weight:600;">
+          Delete
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div id="toast"></div>
 
   <div class="layout-grid">
     <aside class="sidebar">
@@ -388,8 +427,8 @@
       measurementId: "G-V4W97VMSKL"
     };
 
-    const CLOUD_NAME = "YOUR_CLOUD_NAME";      // ← Replace with your Cloudinary cloud name
-    const UPLOAD_PRESET = "YOUR_UPLOAD_PRESET"; // ← Replace with your unsigned upload preset
+    const CLOUD_NAME = "YOUR_CLOUD_NAME";
+    const UPLOAD_PRESET = "YOUR_UPLOAD_PRESET";
 
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
@@ -398,7 +437,9 @@
     let currentUser = null;
     let currentUsername = "Guest";
     let activePostIdForComments = null;
+    let currentDeletePost = { key: null, element: null };
 
+    // DOM elements
     const feedStream = document.getElementById('feed-stream');
     const loadingOverlay = document.getElementById('loading-overlay');
     const sheetOverlay = document.getElementById('sheet-overlay');
@@ -408,18 +449,64 @@
     const commentForm = document.getElementById('comment-form');
     const commentInput = document.getElementById('comment-input');
 
+    const deleteOverlay = document.getElementById('delete-overlay');
+    const deleteModal = document.getElementById('delete-modal');
+    const closeDeleteBtn = document.getElementById('close-delete');
+    const cancelDeleteBtn = document.getElementById('cancel-delete');
+    const confirmDeleteBtn = document.getElementById('confirm-delete');
+    const toastEl = document.getElementById('toast');
+
     onAuthStateChanged(auth, async (user) => {
       if (user) {
         currentUser = user;
         const s = await get(ref(db, `users/${user.uid}`));
         if (s.exists()) currentUsername = s.val().username;
       } else {
-        window.location.href = "index.html"; // or your login page
+        window.location.href = "index.html";
       }
     });
 
     document.getElementById('logout-btn').addEventListener('click', () => signOut(auth));
 
+    // Toast function
+    function showToast(message, type = 'success') {
+      toastEl.textContent = message;
+      toastEl.className = `show ${type}`;
+      setTimeout(() => toastEl.classList.remove('show'), 2800);
+    }
+
+    // Delete modal controls
+    function closeDeleteModal() {
+      deleteOverlay.classList.remove('active');
+      deleteModal.classList.remove('active');
+      currentDeletePost = { key: null, element: null };
+    }
+
+    deleteOverlay?.addEventListener('click', closeDeleteModal);
+    closeDeleteBtn?.addEventListener('click', closeDeleteModal);
+    cancelDeleteBtn?.addEventListener('click', closeDeleteModal);
+
+    confirmDeleteBtn?.addEventListener('click', async () => {
+      if (!currentDeletePost.key) return;
+      const { key, element } = currentDeletePost;
+
+      try {
+        loadingOverlay.style.display = 'flex';
+        await remove(ref(db, `posts/${key}`));
+        await remove(ref(db, `postLikes/${key}`));
+        await remove(ref(db, `postComments/${key}`));
+        element.remove();
+        showToast("Post deleted", "success");
+      } catch (err) {
+        console.error("Delete failed:", err);
+        showToast("Failed to delete post", "error");
+      } finally {
+        loadingOverlay.style.display = 'none';
+        closeDeleteModal();
+      }
+    });
+
+    // Posting
     const tweetText = document.getElementById('tweet-text');
     const fileUpload = document.getElementById('file-upload');
     const imagePreview = document.getElementById('image-preview');
@@ -427,7 +514,7 @@
     let selectedFile = null;
 
     fileUpload.addEventListener('change', (e) => {
-      if (e.target.files[0]) {
+      if(e.target.files[0]) {
         selectedFile = e.target.files[0];
         imagePreview.src = URL.createObjectURL(selectedFile);
         imagePreview.style.display = 'block';
@@ -436,7 +523,7 @@
     });
 
     tweetText.addEventListener('input', () => {
-      if (tweetText.value.trim() || selectedFile) tweetBtn.classList.add('active');
+      if(tweetText.value.trim() || selectedFile) tweetBtn.classList.add('active');
       else tweetBtn.classList.remove('active');
     });
 
@@ -452,7 +539,7 @@
         try {
           const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`, { method: "POST", body: fd });
           const data = await res.json();
-          if (data.secure_url) imageUrl = data.secure_url;
+          imageUrl = data.secure_url;
         } catch (err) {
           console.error("Image upload failed", err);
         }
@@ -462,7 +549,7 @@
       await set(newPostRef, {
         uid: currentUser.uid,
         username: currentUsername,
-        text: tweetText.value.trim(),
+        text: tweetText.value,
         imageUrl,
         timestamp: Date.now(),
         likes: 0,
@@ -475,6 +562,7 @@
       loadingOverlay.style.display = 'none';
     });
 
+    // Feed
     const postsRef = ref(db, 'posts');
 
     onChildAdded(postsRef, (snapshot) => {
@@ -482,17 +570,17 @@
     });
 
     onValue(postsRef, (snapshot) => {
-      snapshot.forEach(child => updatePostStats(child.key, child.val()));
+      snapshot.forEach(childSnap => updatePostStats(childSnap.key, childSnap.val()));
     });
 
-    function getTimeAgo(ts) {
-      if (!ts) return '';
-      const diff = Math.floor((Date.now() - ts) / 1000);
+    function getTimeAgo(timestamp) {
+      if (!timestamp) return '';
+      const diff = Math.floor((Date.now() - timestamp) / 1000);
       if (diff < 60) return 'now';
       if (diff < 3600) return Math.floor(diff / 60) + 'm';
       if (diff < 86400) return Math.floor(diff / 3600) + 'h';
       if (diff < 604800) return Math.floor(diff / 86400) + 'd';
-      return new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      return new Date(timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     }
 
     function renderPost(key, post) {
@@ -536,7 +624,7 @@
         <div class="kebab-dropdown">
           <div class="kebab-item kebab-action" data-action="copy">Copy link</div>
           <div class="kebab-item kebab-action" data-action="share">Share via...</div>
-          ${isOwner ? `<div class="kebab-item kebab-action delete-post" data-action="delete">Delete</div>` : ''}
+          ${isOwner ? `<div class="kebab-item kebab-action delete-post">Delete</div>` : ''}
           <div class="kebab-item kebab-action" data-action="report">Report post</div>
         </div>
       `;
@@ -552,35 +640,28 @@
       const kebabBtn = el.querySelector('.kebab-menu');
       const dropdown = el.querySelector('.kebab-dropdown');
 
-      kebabBtn?.addEventListener('click', e => {
+      kebabBtn?.addEventListener('click', (e) => {
         e.stopPropagation();
         document.querySelectorAll('.kebab-dropdown.show').forEach(d => d !== dropdown && d.classList.remove('show'));
         dropdown.classList.toggle('show');
       });
 
       dropdown?.querySelectorAll('.kebab-action').forEach(item => {
-        item.addEventListener('click', e => {
+        item.addEventListener('click', (e) => {
           e.stopPropagation();
           const action = item.dataset.action;
+
           if (action === 'delete' && isOwner) {
-            if (confirm("Delete this post? This cannot be undone.")) {
-              loadingOverlay.style.display = 'flex';
-              remove(ref(db, `posts/${key}`))
-                .then(() => remove(ref(db, `postLikes/${key}`)))
-                .then(() => remove(ref(db, `postComments/${key}`)))
-                .then(() => el.remove())
-                .catch(err => {
-                  console.error(err);
-                  alert("Delete failed");
-                })
-                .finally(() => loadingOverlay.style.display = 'none');
-            }
+            currentDeletePost = { key, element: el };
+            deleteOverlay.classList.add('active');
+            deleteModal.classList.add('active');
           }
+
           dropdown.classList.remove('show');
         });
       });
 
-      document.addEventListener('click', e => {
+      document.addEventListener('click', (e) => {
         if (!e.target.closest('.kebab-menu') && !e.target.closest('.kebab-dropdown')) {
           document.querySelectorAll('.kebab-dropdown.show').forEach(d => d.classList.remove('show'));
         }
@@ -588,29 +669,39 @@
     }
 
     function updatePostStats(key, post) {
-      document.getElementById(`like-count-${key}`)?.update(post.likes || 0);
-      document.getElementById(`comment-count-${key}`)?.update(post.commentCount || 0);
+      const likeCount = document.getElementById(`like-count-${key}`);
+      const commentCount = document.getElementById(`comment-count-${key}`);
+      if (likeCount) likeCount.textContent = post.likes || 0;
+      if (commentCount) commentCount.textContent = post.commentCount || 0;
     }
 
     async function toggleLike(postId) {
       if (!currentUser) return;
       const likeRef = ref(db, `postLikes/${postId}/${currentUser.uid}`);
       const postRef = ref(db, `posts/${postId}`);
-      const snap = await get(likeRef);
-      if (snap.exists()) {
+
+      const snapshot = await get(likeRef);
+      if (snapshot.exists()) {
         await set(likeRef, null);
-        await runTransaction(postRef, p => { if (p) p.likes = (p.likes || 0) - 1; return p; });
+        await runTransaction(postRef, (post) => {
+          if (post) post.likes = (post.likes || 0) - 1;
+          return post;
+        });
         document.getElementById(`like-btn-${postId}`)?.classList.remove('liked');
       } else {
         await set(likeRef, true);
-        await runTransaction(postRef, p => { if (p) p.likes = (p.likes || 0) + 1; return p; });
+        await runTransaction(postRef, (post) => {
+          if (post) post.likes = (post.likes || 0) + 1;
+          return post;
+        });
         document.getElementById(`like-btn-${postId}`)?.classList.add('liked');
       }
     }
 
     async function checkIfLiked(postId) {
       if (!currentUser) return;
-      if ((await get(ref(db, `postLikes/${postId}/${currentUser.uid}`))).exists()) {
+      const snapshot = await get(ref(db, `postLikes/${postId}/${currentUser.uid}`));
+      if (snapshot.exists()) {
         document.getElementById(`like-btn-${postId}`)?.classList.add('liked');
       }
     }
@@ -621,25 +712,27 @@
       commentSheet.classList.add('active');
       commentsList.innerHTML = '<div style="padding:1rem; text-align:center">Loading...</div>';
 
-      onValue(ref(db, `postComments/${postId}`), snap => {
+      onValue(ref(db, `postComments/${postId}`), (snapshot) => {
         commentsList.innerHTML = '';
-        if (snap.exists()) {
-          snap.forEach(child => {
+        if (snapshot.exists()) {
+          snapshot.forEach(child => {
             const c = child.val();
-            commentsList.innerHTML += `
-              <div class="comment-item">
-                <img src="https://abs.twimg.com/sticky/default_profile_images/default_profile_normal.png" style="width:32px;height:32px;border-radius:50%">
-                <div>
-                  <div class="comment-content">
-                    <div style="font-weight:700;font-size:0.85rem">${c.username}</div>
-                    <div>${c.text}</div>
-                  </div>
+            const div = document.createElement('div');
+            div.className = 'comment-item';
+            div.innerHTML = `
+              <img src="https://abs.twimg.com/sticky/default_profile_images/default_profile_normal.png" style="width:32px; height:32px; border-radius:50%">
+              <div>
+                <div class="comment-content">
+                  <div style="font-weight:700; font-size:0.85rem">${c.username}</div>
+                  <div>${c.text}</div>
                 </div>
-              </div>`;
+              </div>
+            `;
+            commentsList.appendChild(div);
           });
           commentsList.scrollTop = commentsList.scrollHeight;
         } else {
-          commentsList.innerHTML = '<div style="text-align:center;color:#999;margin-top:20px;">No comments yet. Be the first!</div>';
+          commentsList.innerHTML = '<div style="text-align:center; color:#999; margin-top:20px;">No comments yet. Be the first!</div>';
         }
       });
     }
@@ -653,7 +746,7 @@
     closeSheetBtn.addEventListener('click', closeComments);
     sheetOverlay.addEventListener('click', closeComments);
 
-    commentForm.addEventListener('submit', async e => {
+    commentForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       const text = commentInput.value.trim();
       if (!text || !activePostIdForComments) return;
@@ -665,9 +758,9 @@
         timestamp: Date.now()
       });
 
-      await runTransaction(ref(db, `posts/${activePostIdForComments}`), p => {
-        if (p) p.commentCount = (p.commentCount || 0) + 1;
-        return p;
+      await runTransaction(ref(db, `posts/${activePostIdForComments}`), (post) => {
+        if (post) post.commentCount = (post.commentCount || 0) + 1;
+        return post;
       });
 
       commentInput.value = '';
