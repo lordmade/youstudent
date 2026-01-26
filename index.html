@@ -2715,6 +2715,36 @@ async function loadMessages() {
         function formatMessageTime(ts) {
             return new Date(ts).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
         }
+        async function debugEncryptionFor(uid = currentFriendUid) {
+    if (!uid) {
+        console.error("No UID provided and no currentFriendUid set");
+        return;
+    }
+
+    console.group(`🔐 Encryption Debug ── ${uid} ────────────────────────`);
+
+    console.log("My UID              :", currentUser?.uid);
+    console.log("Target UID          :", uid);
+    console.log("Shared key exists?  :", !!sharedKeys[uid]);
+    if (sharedKeys[uid]) {
+        console.log("Shared key (first 8):", sharedKeys[uid].substring(0,8) + "...");
+        console.log("Shared key length   :", sharedKeys[uid].length); // should be 64
+    }
+
+    const myPub = await db.ref(`users/${currentUser.uid}/profile/publicKey`).once('value').then(s => s.val() || "MISSING");
+    const friendPub = await db.ref(`users/${uid}/profile/publicKey`).once('value').then(s => s.val() || "MISSING");
+
+    console.log("My publicKey        :", myPub);
+    console.log("Friend publicKey    :", friendPub);
+    console.log("sharedKeys in localStorage:", localStorage.getItem('sharedKeys') || "empty");
+
+    console.groupEnd();
+}
+
+// Call it like:
+// debugEncryptionFor("paste-their-uid-here")
+// or just debugEncryptionFor() when you're inside a chat
+        
     </script>
 </body>
 </html>
