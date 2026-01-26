@@ -117,11 +117,31 @@
       opacity: 0.5; 
       pointer-events: none; 
       transition: 0.2s; 
+      position: relative;
     }
     .tweet-btn.active { 
       opacity: 1; 
       pointer-events: auto; 
       background: var(--primary-color);
+    }
+    .tweet-btn.loading {
+      opacity: 0.7;
+      pointer-events: none;
+      color: transparent;
+    }
+    .tweet-btn.loading::after {
+      content: '';
+      position: absolute;
+      width: 16px;
+      height: 16px;
+      top: 50%;
+      left: 50%;
+      margin-left: -8px;
+      margin-top: -8px;
+      border: 2px solid #ffffff;
+      border-radius: 50%;
+      border-top-color: transparent;
+      animation: spin 0.8s linear infinite;
     }
 
     .post { padding: 1rem; border-bottom: 1px solid var(--border); display: flex; gap: 1rem; transition: 0.2s; }
@@ -331,6 +351,22 @@
       border-radius: 2px;
       padding: 0 2px;
     }
+
+    .profile-loading-notice {
+      background: #fef3c7;
+      border: 1px solid #f59e0b;
+      color: #92400e;
+      padding: 0.75rem 1rem;
+      border-radius: 8px;
+      margin: 0.5rem 1rem;
+      font-size: 0.9rem;
+      display: none;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .profile-loading-notice.show {
+      display: flex;
+    }
   </style>
 </head>
 <body>
@@ -375,6 +411,11 @@
   </div>
 
   <div id="toast"></div>
+
+  <div id="profile-notice" class="profile-loading-notice">
+    <i data-feather="loader" style="width:16px;height:16px;animation:spin 1s linear infinite"></i>
+    <span>Loading your profile...</span>
+  </div>
 
   <div class="layout-grid">
     <aside class="sidebar">
@@ -481,6 +522,7 @@
 
     let currentUser = null;
     let currentUsername = null;
+    let isProfileLoading = false;
     let activePostIdForComments = null;
     let currentDeletePost = { key: null, element: null };
     let allPosts = [];
@@ -501,6 +543,7 @@
     const cancelDeleteBtn = document.getElementById('cancel-delete');
     const confirmDeleteBtn = document.getElementById('confirm-delete');
     const toastEl = document.getElementById('toast');
+    const profileNotice = document.getElementById('profile-notice');
 
     const tweetText = document.getElementById('tweet-text');
     const fileUpload = document.getElementById('file-upload');
@@ -509,7 +552,10 @@
     const searchInput = document.getElementById('header-search-input');
     let selectedFile = null;
 
-    // Redirect if not authenticated
+    // ==========================================
+    //  AUTHENTICATION & PROFILE LOADING
+    // ==========================================
+    
     onAuthStateChanged(auth, async (user) => {
       if (!user) {
         window.location.href = "signup.html";
@@ -517,34 +563,76 @@
       }
 
       currentUser = user;
-
-      const userRef = ref(db, `users/${user.uid}`);
-      const snapshot = await get(userRef);
-      if (snapshot.exists()) {
-        currentUsername = snapshot.val().username;
-      } else {
-        showToast("Profile not found. Please complete setup.", "error");
+      isProfileLoading = true;
+      updateTweetButtonState(); // Disable button while loading
+      profileNotice.classList.add('show');
+      
+      try {
+        const userRef = ref(db, `users/${user.uid}`);
+        const snapshot = await get(userRef);
+        
+        if (snapshot.exists()) {
+          const userData = snapshot.val();
+          currentUsername = userData.username || userData.displayName || user.email?.split('@')[0];
+          
+          if (!currentUsername) {
+            throw new Error("No username found in profile");
+          }
+          
+          // Update avatar if available
+          if (userData.photoURL) {
+            document.getElementById('current-user-avatar').src = userData.photoURL;
+          }
+          
+          showToast(`Welcome, ${currentUsername}!`, "success");
+        } else {
+          // Create basic profile if doesn't exist
+          currentUsername = user.email?.split('@')[0] || 'user_' + user.uid.substr(0, 6);
+          await set(userRef, {
+            username: currentUsername,
+            email: user.email,
+            createdAt: Date.now()
+          });
+          showToast("Profile created!", "success");
+        }
+        
+        isProfileLoading = false;
+        profileNotice.classList.remove('show');
+        updateTweetButtonState(); // Re-enable button if content exists
+        
+      } catch (error) {
+        console.error("Profile load error:", error);
+        isProfileLoading = false;
+        profileNotice.classList.remove('show');
+        showToast("Error loading profile. Please refresh.", "error");
+        
+        // Set fallback username
+        currentUsername = user.email?.split('@')[0] || 'anonymous';
+        updateTweetButtonState();
       }
     });
 
     document.getElementById('logout-btn').addEventListener('click', () => signOut(auth));
 
     // ==========================================
-    //  FIXED TWEET BUTTON - Now properly enables/disables
+    //  FIXED TWEET BUTTON - Checks profile loaded
     // ==========================================
     function updateTweetButtonState() {
       const hasContent = tweetText.value.trim().length > 0 || selectedFile !== null;
+      const canPost = hasContent && !isProfileLoading && currentUsername !== null;
       
-      if (hasContent) {
+      if (canPost) {
         tweetBtn.classList.add('active');
         tweetBtn.style.opacity = '1';
         tweetBtn.style.pointerEvents = 'auto';
         tweetBtn.style.cursor = 'pointer';
+        tweetBtn.textContent = 'Post';
       } else {
         tweetBtn.classList.remove('active');
         tweetBtn.style.opacity = '0.5';
         tweetBtn.style.pointerEvents = 'none';
         tweetBtn.style.cursor = 'not-allowed';
+        tweetBtn.textContent = isProfileLoading ? 'Loading...' : 'Post';
       }
     }
 
@@ -554,7 +642,6 @@
     // Event listeners for button state
     tweetText.addEventListener('input', updateTweetButtonState);
     tweetText.addEventListener('focus', updateTweetButtonState);
-    tweetText.addEventListener('blur', updateTweetButtonState);
 
     fileUpload.addEventListener('change', (e) => {
       if (e.target.files[0]) {
@@ -569,45 +656,34 @@
     //  SEARCH FUNCTIONALITY
     // ==========================================
     
-    // Extract hashtags from text
     function extractHashtags(text) {
       if (!text) return [];
       const hashtagRegex = /#[\w]+/g;
       return text.match(hashtagRegex) || [];
     }
 
-    // Check if post matches search query
     function matchesSearch(post, query) {
       const lowerQuery = query.toLowerCase().trim();
       if (!lowerQuery) return true;
       
-      // Search by username
       const usernameMatch = post.username && post.username.toLowerCase().includes(lowerQuery);
-      
-      // Search by caption/text content
       const textMatch = post.text && post.text.toLowerCase().includes(lowerQuery);
       
-      // Search by hashtags
       const hashtags = extractHashtags(post.text);
       let hashtagMatch = false;
       
       if (lowerQuery.startsWith('#')) {
-        // Exact hashtag search (e.g., #javascript)
         hashtagMatch = hashtags.some(tag => tag.toLowerCase() === lowerQuery);
       } else {
-        // Partial hashtag search (e.g., "javascript" matches #javascript, #javascripttips)
         hashtagMatch = hashtags.some(tag => tag.toLowerCase().includes('#' + lowerQuery));
       }
       
       return usernameMatch || textMatch || hashtagMatch;
     }
 
-    // Filter and render posts based on search
     function filterAndRenderPosts(query) {
-      // Clear current feed
       feedStream.innerHTML = '';
       
-      // Filter posts from memory
       const filteredPosts = allPosts.filter(post => matchesSearch(post.data, query));
       
       if (filteredPosts.length === 0) {
@@ -623,7 +699,6 @@
         return;
       }
       
-      // Render filtered posts
       filteredPosts.forEach(post => {
         renderPost(post.key, post.data, query);
       });
@@ -631,13 +706,10 @@
       feather.replace();
     }
 
-    // Search input event listeners
     searchInput.addEventListener('input', (e) => {
-      const query = e.target.value;
-      filterAndRenderPosts(query);
+      filterAndRenderPosts(e.target.value);
     });
 
-    // Clear search on Escape key
     searchInput.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
         searchInput.value = '';
@@ -701,7 +773,6 @@
         await remove(ref(db, `postLikes/${key}`));
         await remove(ref(db, `postComments/${key}`));
         
-        // Remove from local array
         allPosts = allPosts.filter(p => p.key !== key);
         
         element.remove();
@@ -716,22 +787,36 @@
     });
 
     // ==========================================
-    //  POSTING - FIXED TO ACTUALLY POST
+    //  POSTING - FIXED WITH PROPER PROFILE CHECK
     // ==========================================
     tweetBtn.addEventListener('click', async () => {
-      // Check if button is effectively disabled
-      if (!tweetBtn.classList.contains('active')) return;
-      if (!currentUser || !currentUsername) {
-        showToast("Please wait, loading profile...", "error");
+      // Double-check profile is loaded
+      if (isProfileLoading) {
+        showToast("Please wait, profile is still loading...", "error");
+        return;
+      }
+      
+      if (!currentUsername) {
+        showToast("Profile not loaded. Please refresh the page.", "error");
+        return;
+      }
+      
+      if (!currentUser) {
+        showToast("Please log in again", "error");
         return;
       }
 
+      const hasContent = tweetText.value.trim().length > 0 || selectedFile !== null;
+      if (!hasContent) return;
+
+      // Show loading state on button
+      tweetBtn.classList.add('loading');
+      tweetBtn.textContent = '';
       loadingOverlay.style.display = 'flex';
 
       try {
         let imageUrl = "";
         
-        // Upload image if selected
         if (selectedFile) {
           const fd = new FormData();
           fd.append("file", selectedFile);
@@ -751,7 +836,6 @@
           }
         }
 
-        // Create post object
         const postData = {
           uid: currentUser.uid,
           username: currentUsername,
@@ -762,7 +846,6 @@
           commentCount: 0
         };
 
-        // Push to Firebase
         const newPostRef = push(ref(db, 'posts'));
         await set(newPostRef, postData);
 
@@ -773,25 +856,24 @@
         updateTweetButtonState();
         
         showToast("Posted successfully!", "success");
-        
-        // Scroll to top to see new post
         window.scrollTo({ top: 0, behavior: 'smooth' });
         
       } catch (err) {
         console.error("Post failed:", err);
-        showToast("Failed to post. Please try again.", "error");
+        showToast("Failed to post: " + err.message, "error");
       } finally {
         loadingOverlay.style.display = 'none';
+        tweetBtn.classList.remove('loading');
+        tweetBtn.textContent = 'Post';
       }
     });
 
     // ==========================================
-    //  FEED LOADING WITH SEARCH SUPPORT
+    //  FEED LOADING
     // ==========================================
     const postsRef = ref(db, 'posts');
 
     onChildAdded(postsRef, (snapshot) => {
-      // Remove skeleton loaders on first post
       if (feedStream.querySelector('.skeleton-post')) {
         feedStream.innerHTML = '';
       }
@@ -799,10 +881,8 @@
       const postData = snapshot.val();
       const postKey = snapshot.key;
       
-      // Store in memory for search
       allPosts.unshift({ key: postKey, data: postData });
       
-      // Only render if no search query or matches search
       const searchQuery = searchInput.value;
       if (!searchQuery || matchesSearch(postData, searchQuery)) {
         renderPost(postKey, postData, searchQuery);
@@ -810,7 +890,6 @@
       }
     });
 
-    // Update allPosts when data changes
     onValue(postsRef, (snapshot) => {
       allPosts = [];
       snapshot.forEach(childSnap => {
@@ -820,13 +899,11 @@
         });
       });
       
-      // Re-apply current filter if searching
       if (searchInput.value) {
         filterAndRenderPosts(searchInput.value);
       }
     });
 
-    // Show empty state after timeout if no posts
     setTimeout(() => {
       if (feedStream.children.length === 0 && allPosts.length === 0) {
         feedStream.innerHTML = `
@@ -852,7 +929,6 @@
       return new Date(timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     }
 
-    // Highlight search terms in text
     function highlightText(text, query) {
       if (!query || !text) return text;
       const lowerQuery = query.toLowerCase().trim();
@@ -875,7 +951,6 @@
       const timeAgo = getTimeAgo(post.timestamp);
       const isOwner = currentUser && currentUser.uid === post.uid;
       
-      // Highlight search terms
       const highlightedText = highlightText(post.text, searchQuery);
       const highlightedUsername = highlightText(post.username, searchQuery);
 
@@ -916,7 +991,6 @@
         </div>
       `;
 
-      // Insert in correct position (newest first)
       if (feedStream.firstChild) {
         feedStream.insertBefore(el, feedStream.firstChild);
       } else {
@@ -967,7 +1041,6 @@
         });
       });
 
-      // Close dropdown when clicking outside
       setTimeout(() => {
         document.addEventListener('click', function closeDropdown(e) {
           if (!e.target.closest('.kebab-menu') && !e.target.closest('.kebab-dropdown')) {
@@ -976,13 +1049,6 @@
           }
         });
       }, 0);
-    }
-
-    function updatePostStats(key, post) {
-      const likeCount = document.getElementById(`like-count-${key}`);
-      const commentCount = document.getElementById(`comment-count-${key}`);
-      if (likeCount) likeCount.textContent = post.likes || 0;
-      if (commentCount) commentCount.textContent = post.commentCount || 0;
     }
 
     async function toggleLike(postId) {
@@ -1089,10 +1155,8 @@
       }
     });
 
-    // Initialize feather icons
     feather.replace();
 
-    // FAB button scroll to top and focus
     document.getElementById('fab-new')?.addEventListener('click', () => {
       if (!currentUser) {
         window.location.href = "signup.html";
@@ -1102,7 +1166,6 @@
       window.scrollTo({ top: 0, behavior: 'smooth' });
     });
 
-    // Bottom nav active state
     document.querySelector('#bottom-home')?.classList.add('active');
   </script>
 </body>
