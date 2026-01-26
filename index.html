@@ -277,7 +277,6 @@
     .spinner { border: 4px solid #f3f3f3; border-top: 4px solid var(--primary-color); border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; }
     @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
-    /* Toast */
     #toast {
       position: fixed;
       bottom: calc(80px + env(safe-area-inset-bottom));
@@ -298,7 +297,6 @@
     #toast.success { background: var(--success); }
     #toast.error { background: var(--danger); }
 
-    /* Shimmer Skeleton */
     .skeleton-post {
       padding: 1rem;
       border-bottom: 1px solid var(--border);
@@ -477,11 +475,11 @@
     const db = getDatabase(app);
 
     let currentUser = null;
-    let currentUsername = "Guest";
+    let currentUsername = null;
     let activePostIdForComments = null;
     let currentDeletePost = { key: null, element: null };
 
-    // DOM
+    // DOM elements
     const feedStream = document.getElementById('feed-stream');
     const loadingOverlay = document.getElementById('loading-overlay');
     const sheetOverlay = document.getElementById('sheet-overlay');
@@ -504,9 +502,29 @@
     const tweetBtn = document.getElementById('tweet-btn');
     let selectedFile = null;
 
-    // ────────────────────────────────────────────────
-    // Tweet button – disabled until focused + content
-    // ────────────────────────────────────────────────
+    // Redirect if not authenticated
+    onAuthStateChanged(auth, async (user) => {
+      if (!user) {
+        window.location.href = "signup.html";
+        return;
+      }
+
+      currentUser = user;
+
+      const userRef = ref(db, `users/${user.uid}`);
+      const snapshot = await get(userRef);
+      if (snapshot.exists()) {
+        currentUsername = snapshot.val().username;
+      } else {
+        showToast("Profile not found. Please complete setup.", "error");
+      }
+    });
+
+    document.getElementById('logout-btn').addEventListener('click', () => signOut(auth));
+
+    // ==========================================
+    //  Tweet Button - Disabled until focused + content
+    // ==========================================
     tweetBtn.disabled = true;
 
     function updateTweetButtonState() {
@@ -516,8 +534,6 @@
 
     tweetText.addEventListener('focus', updateTweetButtonState);
     tweetText.addEventListener('input', updateTweetButtonState);
-    // Optional: keep enabled after blur if content exists
-    // tweetText.addEventListener('blur', updateTweetButtonState);
 
     fileUpload.addEventListener('change', (e) => {
       if (e.target.files[0]) {
@@ -528,9 +544,9 @@
       }
     });
 
-    // ────────────────────────────────────────────────
-    // Skeleton loaders
-    // ────────────────────────────────────────────────
+    // ==========================================
+    //  Skeleton Loaders
+    // ==========================================
     function showSkeletonLoaders(count = 5) {
       for (let i = 0; i < count; i++) {
         const skeleton = document.createElement('div');
@@ -548,32 +564,20 @@
       }
     }
 
-    // Show skeletons right away
     showSkeletonLoaders();
 
-    // ────────────────────────────────────────────────
-    // Auth & basic setup
-    // ────────────────────────────────────────────────
-    onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        currentUser = user;
-        const s = await get(ref(db, `users/${user.uid}`));
-        if (s.exists()) currentUsername = s.val().username;
-      } else {
-        window.location.href = "index.html";
-      }
-    });
-
-    document.getElementById('logout-btn').addEventListener('click', () => signOut(auth));
-
-    // Toast
+    // ==========================================
+    //  Toast
+    // ==========================================
     function showToast(message, type = 'success') {
       toastEl.textContent = message;
       toastEl.className = `show ${type}`;
       setTimeout(() => toastEl.classList.remove('show'), 2800);
     }
 
-    // Delete modal
+    // ==========================================
+    //  Delete Modal
+    // ==========================================
     function closeDeleteModal() {
       deleteOverlay.classList.remove('active');
       deleteModal.classList.remove('active');
@@ -604,9 +608,11 @@
       }
     });
 
-    // Posting
+    // ==========================================
+    //  Posting
+    // ==========================================
     tweetBtn.addEventListener('click', async () => {
-      if (tweetBtn.disabled || !currentUser) return;
+      if (tweetBtn.disabled || !currentUser || !currentUsername) return;
       loadingOverlay.style.display = 'flex';
 
       let imageUrl = "";
@@ -627,7 +633,7 @@
       await set(newPostRef, {
         uid: currentUser.uid,
         username: currentUsername,
-        text: tweetText.value,
+        text: tweetText.value.trim(),
         imageUrl,
         timestamp: Date.now(),
         likes: 0,
@@ -641,11 +647,12 @@
       loadingOverlay.style.display = 'none';
     });
 
-    // Feed + skeletons removal
+    // ==========================================
+    //  Feed + Skeletons removal
+    // ==========================================
     const postsRef = ref(db, 'posts');
 
     onChildAdded(postsRef, (snapshot) => {
-      // Remove skeletons on first real post
       if (feedStream.querySelector('.skeleton-post')) {
         feedStream.innerHTML = '';
       }
@@ -656,9 +663,8 @@
       snapshot.forEach(childSnap => updatePostStats(childSnap.key, childSnap.val()));
     });
 
-    // Empty state fallback
     setTimeout(() => {
-      if (feedStream.children.length === 0) {
+      if (feedStream.children.length === 0 && currentUser) {
         feedStream.innerHTML = `
           <div style="text-align:center; padding:4rem 1rem; color:#536471;">
             <h3 style="font-size:1.4rem; margin-bottom:0.75rem;">No posts yet</h3>
@@ -667,6 +673,10 @@
         `;
       }
     }, 10000);
+
+    // ==========================================
+    //                  FUNCTIONS
+    // ==========================================
 
     function getTimeAgo(timestamp) {
       if (!timestamp) return '';
@@ -719,7 +729,7 @@
         <div class="kebab-dropdown">
           <div class="kebab-item kebab-action" data-action="copy">Copy link</div>
           <div class="kebab-item kebab-action" data-action="share">Share via...</div>
-          ${isOwner ? `<div class="kebab-item kebab-action delete-post">Delete</div>` : ''}
+          ${isOwner ? `<div class="kebab-item delete-post">Delete</div>` : ''}
           <div class="kebab-item kebab-action" data-action="report">Report post</div>
         </div>
       `;
@@ -864,6 +874,10 @@
     feather.replace();
 
     document.getElementById('fab-new')?.addEventListener('click', () => {
+      if (!currentUser) {
+        window.location.href = "signup.html";
+        return;
+      }
       tweetText.focus();
       window.scrollTo({ top: 0, behavior: 'smooth' });
     });
