@@ -1099,24 +1099,57 @@ document.getElementById('avatarInput').addEventListener('change', async (e) => {
             return Array.from(new Uint8Array(sharedSecret)).map(b => b.toString(16).padStart(2,'0')).join('');
         }
 
-      function decrypt(ciphertext, friendUid) {
+     function decrypt(ciphertext, friendUid) {
     if (!ciphertext) return "[Empty message]";
+
+    let key = sharedKeys[friendUid];
+
+    // ── AUTO-RECOVERY: Try to derive key if missing ────────────────────────
+    if (!key) {
+        console.warn(`[DECRYPT] No shared key for ${friendUid} — starting derivation`);
+
+        // Fire-and-forget async derivation (can't await in sync function)
+        (async () => {
+            try {
+                const profileSnap = await db.ref(`users/${friendUid}/profile`).once('value');
+                const pubKeyStr = profileSnap.val()?.publicKey;
+
+                if (!pubKeyStr) {
+                    console.error(`[DECRYPT] Friend ${friendUid} has no publicKey in database`);
+                    return;
+                }
+
+                const pubJwk = JSON.parse(pubKeyStr);
+                const secret = await deriveSharedSecret(pubJwk);
+
+                sharedKeys[friendUid] = secret;
+                localStorage.setItem('sharedKeys', JSON.stringify(sharedKeys));
+
+                console.log(`[DECRYPT AUTO] Successfully derived shared key for ${friendUid}: ${secret.substring(0, 8)}...`);
+                
+                // Optional: you could force-refresh the message list here if you want
+                // but usually next child_added will pick it up
+            } catch (err) {
+                console.error(`[DECRYPT AUTO] Key recovery failed for ${friendUid}:`, err);
+            }
+        })();
+
+        return "🔒 Setting up encryption... (try refreshing in a few seconds)";
+    }
+
     try {
-        const key = sharedKeys[friendUid];
-        if (!key) {
-            console.warn(`No shared key found for ${friendUid}`);
-            return "🔒 Decryption key missing";
-        }
         const bytes = CryptoJS.AES.decrypt(ciphertext, key);
         const decrypted = bytes.toString(CryptoJS.enc.Utf8);
+
         if (!decrypted) {
-            console.warn('Decryption returned empty string - wrong key or corrupted data');
-            return "🔒 Unable to decrypt";
+            console.warn(`[DECRYPT] Empty result after decryption — likely wrong key for ${friendUid}`);
+            return "🔒 Wrong encryption key or corrupted message";
         }
+
         return decrypted;
     } catch (e) {
-        console.error('Decryption error:', e);
-        return "🔒 Decryption error";
+        console.error(`[DECRYPT] CryptoJS error for ${friendUid}:`, e);
+        return "🔒 Decryption failed (possible key mismatch)";
     }
 }
 
@@ -2588,36 +2621,82 @@ async function loadMessages() {
             updateUnreadDot();
         }
 
-        async function addFriendLogic() {
-            const raw = document.getElementById('friendVynixId').value.trim().toLowerCase();
-            const vid = raw.startsWith('@') ? raw.substring(1) : raw;
-            if(!vid) return;
-            const snap = await db.ref(`vynix_ids/${vid}`).once('value');
-            if (!snap.exists()) { toast('User ID not found'); return; }
+      async function addFriendLogic() {
+    const raw = document.getElementById('friendVynixId').value.trim().toLowerCase();
+    const vid = raw.startsWith('@') ? raw.substring(1) : raw;
+    if (!vid) {
+        toast('Please enter a Vynix ID');
+        return;
+    }
 
-            const targetUid = snap.val();
-            if (targetUid === currentUser.uid) { toast("That's you!"); return; }
-
-            const existing = await db.ref(`users/${currentUser.uid}/chats/${targetUid}`).once('value');
-            if (existing.exists()) {
-                toast('Already added!');
-                closeAll();
-                openFullChat(targetUid);
-                return;
-            }
-
-            await db.ref(`users/${currentUser.uid}/chats/${targetUid}`).set({
-                lastMsg: null,
-                ts: Date.now(),
-                unreadCount: 0,
-                isFavourite: false,
-                isArchived: false
-            });
-            toast("Friend added! Tap their name to start chatting.");
-            closeAll();
-            document.getElementById('friendVynixId').value = "";
+    try {
+        const snap = await db.ref(`vynix_ids/${vid}`).once('value');
+        if (!snap.exists()) {
+            toast('User ID not found');
+            return;
         }
 
+        const targetUid = snap.val();
+        if (targetUid === currentUser.uid) {
+            toast("That's your own ID!");
+            return;
+        }
+
+        const existing = await db.ref(`users/${currentUser.uid}/chats/${targetUid}`).once('value');
+        if (existing.exists()) {
+            toast('Already in your chats!');
+            closeAll();
+            openFullChat(targetUid);
+            return;
+        }
+
+        // Create chat entry for current user
+        await db.ref(`users/${currentUser.uid}/chats/${targetUid}`).set({
+            lastMsg: null,
+            ts: Date.now(),
+            unreadCount: 0,
+            isFavourite: false,
+            isArchived: false
+        });
+
+        // Also create the reverse entry (good practice for two-way chat list)
+        await db.ref(`users/${targetUid}/chats/${currentUser.uid}`).update({
+            ts: Date.now() // at least set timestamp so they see you
+        });
+
+        toast("Friend added! Encryption setup in progress...");
+
+        // ── IMPORTANT: Derive shared key RIGHT NOW ─────────────────────────────
+        try {
+            const profileSnap = await db.ref(`users/${targetUid}/profile`).once('value');
+            const pubKeyStr = profileSnap.val()?.publicKey;
+
+            if (!pubKeyStr) {
+                console.warn(`[ADD FRIEND] ${targetUid} has no publicKey yet`);
+                toast("Friend added — encryption will be ready when they log in");
+            } else {
+                const pubJwk = JSON.parse(pubKeyStr);
+                const secret = await deriveSharedSecret(pubJwk);
+
+                sharedKeys[targetUid] = secret;
+                localStorage.setItem('sharedKeys', JSON.stringify(sharedKeys));
+
+                console.log(`[ADD FRIEND] Derived shared key for new friend ${targetUid}`);
+                toast("Friend added & encryption ready ✓");
+            }
+        } catch (keyErr) {
+            console.error("[ADD FRIEND] Key derivation failed:", keyErr);
+            toast("Friend added — but encryption setup failed (will retry later)");
+        }
+
+        closeAll();
+        document.getElementById('friendVynixId').value = "";
+
+    } catch (err) {
+        console.error("Add friend failed:", err);
+        toast("Could not add friend — please try again");
+    }
+}
         function searchFriends() {
             const term = document.getElementById('friendSearch').value.toLowerCase();
             document.querySelectorAll('.chat-card').forEach(c => {
