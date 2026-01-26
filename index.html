@@ -118,11 +118,10 @@
       pointer-events: none; 
       transition: 0.2s; 
     }
-    .tweet-btn.active { opacity: 1; pointer-events: auto; }
-    .tweet-btn:disabled { 
-      opacity: 0.4 !important; 
-      cursor: not-allowed !important; 
-      pointer-events: none !important; 
+    .tweet-btn.active { 
+      opacity: 1; 
+      pointer-events: auto; 
+      background: var(--primary-color);
     }
 
     .post { padding: 1rem; border-bottom: 1px solid var(--border); display: flex; gap: 1rem; transition: 0.2s; }
@@ -326,6 +325,12 @@
       0%   { background-position: 200% 0; }
       100% { background-position: -200% 0; }
     }
+    
+    .search-highlight {
+      background-color: rgba(99, 102, 241, 0.2);
+      border-radius: 2px;
+      padding: 0 2px;
+    }
   </style>
 </head>
 <body>
@@ -403,7 +408,7 @@
       <div class="feed-header">
         <span class="feed-header-title">Home</span>
         <div class="header-search">
-          <input type="text" placeholder="Search Nexus" id="header-search-input" />
+          <input type="text" placeholder="Search posts, users, #hashtags..." id="header-search-input" />
         </div>
       </div>
 
@@ -417,7 +422,7 @@
               <i data-feather="image"></i>
             </label>
             <input type="file" id="file-upload" accept="image/*" style="display: none;">
-            <button id="tweet-btn" class="tweet-btn" disabled>Post</button>
+            <button id="tweet-btn" class="tweet-btn">Post</button>
           </div>
         </div>
       </div>
@@ -478,6 +483,7 @@
     let currentUsername = null;
     let activePostIdForComments = null;
     let currentDeletePost = { key: null, element: null };
+    let allPosts = [];
 
     // DOM elements
     const feedStream = document.getElementById('feed-stream');
@@ -500,6 +506,7 @@
     const fileUpload = document.getElementById('file-upload');
     const imagePreview = document.getElementById('image-preview');
     const tweetBtn = document.getElementById('tweet-btn');
+    const searchInput = document.getElementById('header-search-input');
     let selectedFile = null;
 
     // Redirect if not authenticated
@@ -523,24 +530,31 @@
     document.getElementById('logout-btn').addEventListener('click', () => signOut(auth));
 
     // ==========================================
-    //  Tweet Button - Disabled until focused + content
+    //  FIXED TWEET BUTTON - Now properly enables/disables
     // ==========================================
-    tweetBtn.disabled = true;
+    function updateTweetButtonState() {
+      const hasContent = tweetText.value.trim().length > 0 || selectedFile !== null;
+      
+      if (hasContent) {
+        tweetBtn.classList.add('active');
+        tweetBtn.style.opacity = '1';
+        tweetBtn.style.pointerEvents = 'auto';
+        tweetBtn.style.cursor = 'pointer';
+      } else {
+        tweetBtn.classList.remove('active');
+        tweetBtn.style.opacity = '0.5';
+        tweetBtn.style.pointerEvents = 'none';
+        tweetBtn.style.cursor = 'not-allowed';
+      }
+    }
 
-   function updateTweetButtonState() {
-  const hasContent = tweetText.value.trim().length > 0 || selectedFile !== null;
-  
-  if (hasContent) {
-    tweetBtn.disabled = false;
-    tweetBtn.classList.add('active');
-  } else {
-    tweetBtn.disabled = true;
-    tweetBtn.classList.remove('active');
-  }
-}
+    // Initialize button state
+    updateTweetButtonState();
 
-    tweetText.addEventListener('focus', updateTweetButtonState);
+    // Event listeners for button state
     tweetText.addEventListener('input', updateTweetButtonState);
+    tweetText.addEventListener('focus', updateTweetButtonState);
+    tweetText.addEventListener('blur', updateTweetButtonState);
 
     fileUpload.addEventListener('change', (e) => {
       if (e.target.files[0]) {
@@ -552,9 +566,91 @@
     });
 
     // ==========================================
-    //  Skeleton Loaders
+    //  SEARCH FUNCTIONALITY
+    // ==========================================
+    
+    // Extract hashtags from text
+    function extractHashtags(text) {
+      if (!text) return [];
+      const hashtagRegex = /#[\w]+/g;
+      return text.match(hashtagRegex) || [];
+    }
+
+    // Check if post matches search query
+    function matchesSearch(post, query) {
+      const lowerQuery = query.toLowerCase().trim();
+      if (!lowerQuery) return true;
+      
+      // Search by username
+      const usernameMatch = post.username && post.username.toLowerCase().includes(lowerQuery);
+      
+      // Search by caption/text content
+      const textMatch = post.text && post.text.toLowerCase().includes(lowerQuery);
+      
+      // Search by hashtags
+      const hashtags = extractHashtags(post.text);
+      let hashtagMatch = false;
+      
+      if (lowerQuery.startsWith('#')) {
+        // Exact hashtag search (e.g., #javascript)
+        hashtagMatch = hashtags.some(tag => tag.toLowerCase() === lowerQuery);
+      } else {
+        // Partial hashtag search (e.g., "javascript" matches #javascript, #javascripttips)
+        hashtagMatch = hashtags.some(tag => tag.toLowerCase().includes('#' + lowerQuery));
+      }
+      
+      return usernameMatch || textMatch || hashtagMatch;
+    }
+
+    // Filter and render posts based on search
+    function filterAndRenderPosts(query) {
+      // Clear current feed
+      feedStream.innerHTML = '';
+      
+      // Filter posts from memory
+      const filteredPosts = allPosts.filter(post => matchesSearch(post.data, query));
+      
+      if (filteredPosts.length === 0) {
+        feedStream.innerHTML = `
+          <div style="text-align:center; padding:4rem 1rem; color:#536471;">
+            <h3 style="font-size:1.4rem; margin-bottom:0.75rem;">No posts found</h3>
+            <p>Try searching for something else</p>
+            <div style="margin-top:1rem; font-size:0.9rem; color:#888;">
+              <p>Search by: username, caption text, or #hashtag</p>
+            </div>
+          </div>
+        `;
+        return;
+      }
+      
+      // Render filtered posts
+      filteredPosts.forEach(post => {
+        renderPost(post.key, post.data, query);
+      });
+      
+      feather.replace();
+    }
+
+    // Search input event listeners
+    searchInput.addEventListener('input', (e) => {
+      const query = e.target.value;
+      filterAndRenderPosts(query);
+    });
+
+    // Clear search on Escape key
+    searchInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        searchInput.value = '';
+        filterAndRenderPosts('');
+        searchInput.blur();
+      }
+    });
+
+    // ==========================================
+    //  SKELETON LOADERS
     // ==========================================
     function showSkeletonLoaders(count = 5) {
+      feedStream.innerHTML = '';
       for (let i = 0; i < count; i++) {
         const skeleton = document.createElement('div');
         skeleton.className = 'skeleton-post';
@@ -574,7 +670,7 @@
     showSkeletonLoaders();
 
     // ==========================================
-    //  Toast
+    //  TOAST
     // ==========================================
     function showToast(message, type = 'success') {
       toastEl.textContent = message;
@@ -583,7 +679,7 @@
     }
 
     // ==========================================
-    //  Delete Modal
+    //  DELETE MODAL
     // ==========================================
     function closeDeleteModal() {
       deleteOverlay.classList.remove('active');
@@ -604,6 +700,10 @@
         await remove(ref(db, `posts/${key}`));
         await remove(ref(db, `postLikes/${key}`));
         await remove(ref(db, `postComments/${key}`));
+        
+        // Remove from local array
+        allPosts = allPosts.filter(p => p.key !== key);
+        
         element.remove();
         showToast("Post deleted", "success");
       } catch (err) {
@@ -616,62 +716,119 @@
     });
 
     // ==========================================
-    //  Posting
+    //  POSTING - FIXED TO ACTUALLY POST
     // ==========================================
     tweetBtn.addEventListener('click', async () => {
-      if (tweetBtn.disabled || !currentUser || !currentUsername) return;
-      loadingOverlay.style.display = 'flex';
-
-      let imageUrl = "";
-      if (selectedFile) {
-        const fd = new FormData();
-        fd.append("file", selectedFile);
-        fd.append("upload_preset", UPLOAD_PRESET);
-        try {
-          const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`, { method: "POST", body: fd });
-          const data = await res.json();
-          imageUrl = data.secure_url;
-        } catch (err) {
-          console.error("Image upload failed", err);
-        }
+      // Check if button is effectively disabled
+      if (!tweetBtn.classList.contains('active')) return;
+      if (!currentUser || !currentUsername) {
+        showToast("Please wait, loading profile...", "error");
+        return;
       }
 
-      const newPostRef = push(ref(db, 'posts'));
-      await set(newPostRef, {
-        uid: currentUser.uid,
-        username: currentUsername,
-        text: tweetText.value.trim(),
-        imageUrl,
-        timestamp: Date.now(),
-        likes: 0,
-        commentCount: 0
-      });
+      loadingOverlay.style.display = 'flex';
 
-      tweetText.value = '';
-      selectedFile = null;
-      imagePreview.style.display = 'none';
-      tweetBtn.disabled = true;
-      loadingOverlay.style.display = 'none';
+      try {
+        let imageUrl = "";
+        
+        // Upload image if selected
+        if (selectedFile) {
+          const fd = new FormData();
+          fd.append("file", selectedFile);
+          fd.append("upload_preset", UPLOAD_PRESET);
+          try {
+            const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`, { 
+              method: "POST", 
+              body: fd 
+            });
+            const data = await res.json();
+            if (data.secure_url) {
+              imageUrl = data.secure_url;
+            }
+          } catch (err) {
+            console.error("Image upload failed", err);
+            showToast("Image upload failed, posting without image", "error");
+          }
+        }
+
+        // Create post object
+        const postData = {
+          uid: currentUser.uid,
+          username: currentUsername,
+          text: tweetText.value.trim(),
+          imageUrl: imageUrl,
+          timestamp: Date.now(),
+          likes: 0,
+          commentCount: 0
+        };
+
+        // Push to Firebase
+        const newPostRef = push(ref(db, 'posts'));
+        await set(newPostRef, postData);
+
+        // Clear form
+        tweetText.value = '';
+        selectedFile = null;
+        imagePreview.style.display = 'none';
+        updateTweetButtonState();
+        
+        showToast("Posted successfully!", "success");
+        
+        // Scroll to top to see new post
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        
+      } catch (err) {
+        console.error("Post failed:", err);
+        showToast("Failed to post. Please try again.", "error");
+      } finally {
+        loadingOverlay.style.display = 'none';
+      }
     });
 
     // ==========================================
-    //  Feed + Skeletons removal
+    //  FEED LOADING WITH SEARCH SUPPORT
     // ==========================================
     const postsRef = ref(db, 'posts');
 
     onChildAdded(postsRef, (snapshot) => {
+      // Remove skeleton loaders on first post
       if (feedStream.querySelector('.skeleton-post')) {
         feedStream.innerHTML = '';
       }
-      renderPost(snapshot.key, snapshot.val());
+      
+      const postData = snapshot.val();
+      const postKey = snapshot.key;
+      
+      // Store in memory for search
+      allPosts.unshift({ key: postKey, data: postData });
+      
+      // Only render if no search query or matches search
+      const searchQuery = searchInput.value;
+      if (!searchQuery || matchesSearch(postData, searchQuery)) {
+        renderPost(postKey, postData, searchQuery);
+        feather.replace();
+      }
     });
 
+    // Update allPosts when data changes
     onValue(postsRef, (snapshot) => {
-      snapshot.forEach(childSnap => updatePostStats(childSnap.key, childSnap.val()));
+      allPosts = [];
+      snapshot.forEach(childSnap => {
+        allPosts.unshift({ 
+          key: childSnap.key, 
+          data: childSnap.val() 
+        });
+      });
+      
+      // Re-apply current filter if searching
+      if (searchInput.value) {
+        filterAndRenderPosts(searchInput.value);
+      }
     });
 
+    // Show empty state after timeout if no posts
     setTimeout(() => {
-      if (feedStream.children.length === 0 && currentUser) {
+      if (feedStream.children.length === 0 && allPosts.length === 0) {
         feedStream.innerHTML = `
           <div style="text-align:center; padding:4rem 1rem; color:#536471;">
             <h3 style="font-size:1.4rem; margin-bottom:0.75rem;">No posts yet</h3>
@@ -682,7 +839,7 @@
     }, 10000);
 
     // ==========================================
-    //                  FUNCTIONS
+    //  HELPER FUNCTIONS
     // ==========================================
 
     function getTimeAgo(timestamp) {
@@ -695,7 +852,21 @@
       return new Date(timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     }
 
-    function renderPost(key, post) {
+    // Highlight search terms in text
+    function highlightText(text, query) {
+      if (!query || !text) return text;
+      const lowerQuery = query.toLowerCase().trim();
+      if (!lowerQuery) return text;
+      
+      const regex = new RegExp(`(${escapeRegex(lowerQuery)})`, 'gi');
+      return text.replace(regex, '<span class="search-highlight">$1</span>');
+    }
+
+    function escapeRegex(string) {
+      return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+
+    function renderPost(key, post, searchQuery = '') {
       const el = document.createElement('div');
       el.className = 'post';
       el.id = `post-${key}`;
@@ -703,6 +874,10 @@
       const imgHtml = post.imageUrl ? `<img src="${post.imageUrl}" class="post-image" loading="lazy" />` : '';
       const timeAgo = getTimeAgo(post.timestamp);
       const isOwner = currentUser && currentUser.uid === post.uid;
+      
+      // Highlight search terms
+      const highlightedText = highlightText(post.text, searchQuery);
+      const highlightedUsername = highlightText(post.username, searchQuery);
 
       el.innerHTML = `
         <img src="https://abs.twimg.com/sticky/default_profile_images/default_profile_normal.png" class="user-avatar">
@@ -710,7 +885,7 @@
           <div class="post-header">
             <div class="post-meta">
               <div>
-                <span class="post-name">${post.username}</span>
+                <span class="post-name">${highlightedUsername}</span>
                 <span class="post-username">@${post.username.toLowerCase().replace(/\s/g,'')}</span>
               </div>
               <div class="post-timestamp">${timeAgo}</div>
@@ -719,7 +894,7 @@
               <i data-feather="more-horizontal" style="width:20px;height:20px;"></i>
             </div>
           </div>
-          <div class="post-text">${post.text}</div>
+          <div class="post-text">${highlightedText}</div>
           ${imgHtml}
           <div class="post-actions">
             <div class="action-item comment-trigger" data-id="${key}">
@@ -741,7 +916,13 @@
         </div>
       `;
 
-      feedStream.prepend(el);
+      // Insert in correct position (newest first)
+      if (feedStream.firstChild) {
+        feedStream.insertBefore(el, feedStream.firstChild);
+      } else {
+        feedStream.appendChild(el);
+      }
+      
       feather.replace();
 
       checkIfLiked(key);
@@ -767,17 +948,34 @@
             currentDeletePost = { key, element: el };
             deleteOverlay.classList.add('active');
             deleteModal.classList.add('active');
+          } else if (action === 'copy') {
+            navigator.clipboard.writeText(`${window.location.origin}/post/${key}`);
+            showToast("Link copied to clipboard");
+          } else if (action === 'share') {
+            if (navigator.share) {
+              navigator.share({
+                title: 'Nexus Post',
+                text: post.text,
+                url: `${window.location.origin}/post/${key}`
+              });
+            } else {
+              showToast("Sharing not supported on this device");
+            }
           }
 
           dropdown.classList.remove('show');
         });
       });
 
-      document.addEventListener('click', (e) => {
-        if (!e.target.closest('.kebab-menu') && !e.target.closest('.kebab-dropdown')) {
-          document.querySelectorAll('.kebab-dropdown.show').forEach(d => d.classList.remove('show'));
-        }
-      }, { once: true });
+      // Close dropdown when clicking outside
+      setTimeout(() => {
+        document.addEventListener('click', function closeDropdown(e) {
+          if (!e.target.closest('.kebab-menu') && !e.target.closest('.kebab-dropdown')) {
+            dropdown.classList.remove('show');
+            document.removeEventListener('click', closeDropdown);
+          }
+        });
+      }, 0);
     }
 
     function updatePostStats(key, post) {
@@ -792,29 +990,37 @@
       const likeRef = ref(db, `postLikes/${postId}/${currentUser.uid}`);
       const postRef = ref(db, `posts/${postId}`);
 
-      const snapshot = await get(likeRef);
-      if (snapshot.exists()) {
-        await set(likeRef, null);
-        await runTransaction(postRef, (post) => {
-          if (post) post.likes = (post.likes || 0) - 1;
-          return post;
-        });
-        document.getElementById(`like-btn-${postId}`)?.classList.remove('liked');
-      } else {
-        await set(likeRef, true);
-        await runTransaction(postRef, (post) => {
-          if (post) post.likes = (post.likes || 0) + 1;
-          return post;
-        });
-        document.getElementById(`like-btn-${postId}`)?.classList.add('liked');
+      try {
+        const snapshot = await get(likeRef);
+        if (snapshot.exists()) {
+          await set(likeRef, null);
+          await runTransaction(postRef, (post) => {
+            if (post) post.likes = Math.max((post.likes || 0) - 1, 0);
+            return post;
+          });
+          document.getElementById(`like-btn-${postId}`)?.classList.remove('liked');
+        } else {
+          await set(likeRef, true);
+          await runTransaction(postRef, (post) => {
+            if (post) post.likes = (post.likes || 0) + 1;
+            return post;
+          });
+          document.getElementById(`like-btn-${postId}`)?.classList.add('liked');
+        }
+      } catch (err) {
+        console.error("Like failed:", err);
       }
     }
 
     async function checkIfLiked(postId) {
       if (!currentUser) return;
-      const snapshot = await get(ref(db, `postLikes/${postId}/${currentUser.uid}`));
-      if (snapshot.exists()) {
-        document.getElementById(`like-btn-${postId}`)?.classList.add('liked');
+      try {
+        const snapshot = await get(ref(db, `postLikes/${postId}/${currentUser.uid}`));
+        if (snapshot.exists()) {
+          document.getElementById(`like-btn-${postId}`)?.classList.add('liked');
+        }
+      } catch (err) {
+        console.error("Check like failed:", err);
       }
     }
 
@@ -822,7 +1028,7 @@
       activePostIdForComments = postId;
       sheetOverlay.classList.add('active');
       commentSheet.classList.add('active');
-      commentsList.innerHTML = '<div style="padding:1rem; text-align:center">Loading...</div>';
+      commentsList.innerHTML = '<div style="padding:1rem; text-align:center">Loading comments...</div>';
 
       onValue(ref(db, `postComments/${postId}`), (snapshot) => {
         commentsList.innerHTML = '';
@@ -846,7 +1052,7 @@
         } else {
           commentsList.innerHTML = '<div style="text-align:center; color:#999; margin-top:20px;">No comments yet. Be the first!</div>';
         }
-      });
+      }, { onlyOnce: false });
     }
 
     function closeComments() {
@@ -861,25 +1067,32 @@
     commentForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       const text = commentInput.value.trim();
-      if (!text || !activePostIdForComments) return;
+      if (!text || !activePostIdForComments || !currentUser || !currentUsername) return;
 
-      await push(ref(db, `postComments/${activePostIdForComments}`), {
-        uid: currentUser.uid,
-        username: currentUsername,
-        text,
-        timestamp: Date.now()
-      });
+      try {
+        await push(ref(db, `postComments/${activePostIdForComments}`), {
+          uid: currentUser.uid,
+          username: currentUsername,
+          text,
+          timestamp: Date.now()
+        });
 
-      await runTransaction(ref(db, `posts/${activePostIdForComments}`), (post) => {
-        if (post) post.commentCount = (post.commentCount || 0) + 1;
-        return post;
-      });
+        await runTransaction(ref(db, `posts/${activePostIdForComments}`), (post) => {
+          if (post) post.commentCount = (post.commentCount || 0) + 1;
+          return post;
+        });
 
-      commentInput.value = '';
+        commentInput.value = '';
+      } catch (err) {
+        console.error("Comment failed:", err);
+        showToast("Failed to post comment", "error");
+      }
     });
 
+    // Initialize feather icons
     feather.replace();
 
+    // FAB button scroll to top and focus
     document.getElementById('fab-new')?.addEventListener('click', () => {
       if (!currentUser) {
         window.location.href = "signup.html";
@@ -889,6 +1102,7 @@
       window.scrollTo({ top: 0, behavior: 'smooth' });
     });
 
+    // Bottom nav active state
     document.querySelector('#bottom-home')?.classList.add('active');
   </script>
 </body>
