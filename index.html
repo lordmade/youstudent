@@ -383,6 +383,28 @@
     .profile-loading-notice.show {
       display: flex;
     }
+    /* Hashtag and link styling */
+.post-text a,
+.post-text .hashtag,
+.post-text .link {
+  color: var(--primary-color);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.post-text a:hover,
+.post-text .hashtag:hover,
+.post-text .link:hover {
+  text-decoration: underline;
+}
+
+.post-text .hashtag {
+  cursor: pointer;
+}
+
+.post-text .link {
+  word-break: break-all;
+}
   </style>
 </head>
 <body>
@@ -996,116 +1018,165 @@
       return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     }
 
-    async function renderPost(key, post, searchQuery = '') {
-      const el = document.createElement('div');
-      el.className = 'post';
-      el.id = `post-${key}`;
-
-      const avatarUrl = await getUserAvatar(post.uid);
-
-      const imgHtml = post.imageUrl ? `<img src="${post.imageUrl}" class="post-image" loading="lazy" />` : '';
-      const timeAgo = getTimeAgo(post.timestamp);
-      const isOwner = currentUser && currentUser.uid === post.uid;
-      
-      const highlightedText = highlightText(post.text, searchQuery);
-      const highlightedUsername = highlightText(post.username, searchQuery);
-
-      el.innerHTML = `
-        <img src="${avatarUrl}" class="user-avatar" onerror="this.src='${defaultAvatar}'">
-        <div class="post-content">
-          <div class="post-header">
-            <div class="post-meta">
-              <div>
-                <span class="post-name">${highlightedUsername}</span>
-                <span class="post-username">@${post.username.toLowerCase().replace(/\s/g,'')}</span>
-              </div>
-              <div class="post-timestamp">${timeAgo}</div>
-            </div>
-            <div class="kebab-menu">
-              <i data-feather="more-horizontal" style="width:20px;height:20px;"></i>
-            </div>
-          </div>
-          <div class="post-text">${highlightedText}</div>
-          ${imgHtml}
-          <div class="post-actions">
-            <div class="action-item comment-trigger" data-id="${key}">
-              <i data-feather="message-circle" style="width:18px"></i>
-              <span id="comment-count-${key}">${post.commentCount || 0}</span>
-            </div>
-            <div class="action-item like-trigger" id="like-btn-${key}" data-id="${key}">
-              <i data-feather="heart" style="width:18px"></i>
-              <span id="like-count-${key}">${post.likes || 0}</span>
-            </div>
-            <div class="action-item"><i data-feather="share" style="width:18px"></i></div>
-          </div>
-        </div>
-        <div class="kebab-dropdown">
-          <div class="kebab-item kebab-action" data-action="copy">Copy link</div>
-          <div class="kebab-item kebab-action" data-action="share">Share via...</div>
-          ${isOwner ? `<div class="kebab-item delete-post">Delete</div>` : ''}
-          <div class="kebab-item kebab-action" data-action="report">Report post</div>
-        </div>
-      `;
-
-      if (feedStream.firstChild) {
-        feedStream.insertBefore(el, feedStream.firstChild);
-      } else {
-        feedStream.appendChild(el);
-      }
-      
-      feather.replace();
-
-      checkIfLiked(key);
-
-      el.querySelector('.like-trigger')?.addEventListener('click', () => toggleLike(key));
-      el.querySelector('.comment-trigger')?.addEventListener('click', () => openComments(key));
-
-      const kebabBtn = el.querySelector('.kebab-menu');
-      const dropdown = el.querySelector('.kebab-dropdown');
-
-      kebabBtn?.addEventListener('click', (e) => {
-        e.stopPropagation();
-        document.querySelectorAll('.kebab-dropdown.show').forEach(d => d !== dropdown && d.classList.remove('show'));
-        dropdown.classList.toggle('show');
-      });
-
-      dropdown?.querySelectorAll('.kebab-action, .delete-post').forEach(item => {
-        item.addEventListener('click', (e) => {
-          e.stopPropagation();
-          const action = item.dataset.action || (item.classList.contains('delete-post') ? 'delete' : '');
-
-          if (action === 'delete' && isOwner) {
-            currentDeletePost = { key, element: el };
-            deleteOverlay.classList.add('active');
-            deleteModal.classList.add('active');
-          } else if (action === 'copy') {
-            navigator.clipboard.writeText(`${window.location.origin}/post/${key}`);
-            showToast("Link copied to clipboard");
-          } else if (action === 'share') {
-            if (navigator.share) {
-              navigator.share({
-                title: 'Nexus Post',
-                text: post.text,
-                url: `${window.location.origin}/post/${key}`
-              });
-            } else {
-              showToast("Sharing not supported on this device");
-            }
-          }
-
-          dropdown.classList.remove('show');
-        });
-      });
-
-      setTimeout(() => {
-        document.addEventListener('click', function closeDropdown(e) {
-          if (!e.target.closest('.kebab-menu') && !e.target.closest('.kebab-dropdown')) {
-            dropdown.classList.remove('show');
-            document.removeEventListener('click', closeDropdown);
-          }
-        });
-      }, 0);
+    // Parse text to highlight hashtags, links, and search terms
+function parseText(text, searchQuery = '') {
+  if (!text) return '';
+  
+  let parsedText = escapeHtml(text);
+  
+  // Highlight search terms first (wrap in span)
+  if (searchQuery) {
+    const lowerQuery = searchQuery.toLowerCase().trim();
+    if (lowerQuery) {
+      const regex = new RegExp(`(${escapeRegex(lowerQuery)})`, 'gi');
+      parsedText = parsedText.replace(regex, '<span class="search-highlight">$1</span>');
     }
+  }
+  
+  // Convert URLs to clickable links
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+  parsedText = parsedText.replace(urlRegex, '<a href="$1" target="_blank" rel="noopener noreferrer" class="link">$1</a>');
+  
+  // Convert hashtags to clickable spans
+  const hashtagRegex = /(#\w+)/g;
+  parsedText = parsedText.replace(hashtagRegex, '<span class="hashtag" data-hashtag="$1">$1</span>');
+  
+  // Convert mentions to clickable spans
+  const mentionRegex = /(@\w+)/g;
+  parsedText = parsedText.replace(mentionRegex, '<span class="mention" style="color:var(--primary-color);font-weight:500;">$1</span>');
+  
+  return parsedText;
+}
+
+// Escape HTML to prevent XSS
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+async function renderPost(key, post, searchQuery = '') {
+  const el = document.createElement('div');
+  el.className = 'post';
+  el.id = `post-${key}`;
+
+  const avatarUrl = await getUserAvatar(post.uid);
+
+  const imgHtml = post.imageUrl ? `<img src="${post.imageUrl}" class="post-image" loading="lazy" />` : '';
+  const timeAgo = getTimeAgo(post.timestamp);
+  const isOwner = currentUser && currentUser.uid === post.uid;
+  
+  // Use parseText instead of highlightText
+  const parsedText = parseText(post.text, searchQuery);
+  const highlightedUsername = highlightText(post.username, searchQuery);
+
+  el.innerHTML = `
+    <img src="${avatarUrl}" class="user-avatar" onerror="this.src='${defaultAvatar}'">
+    <div class="post-content">
+      <div class="post-header">
+        <div class="post-meta">
+          <div>
+            <span class="post-name">${highlightedUsername}</span>
+            <span class="post-username">@${post.username.toLowerCase().replace(/\s/g,'')}</span>
+          </div>
+          <div class="post-timestamp">${timeAgo}</div>
+        </div>
+        <div class="kebab-menu">
+          <i data-feather="more-horizontal" style="width:20px;height:20px;"></i>
+        </div>
+      </div>
+      <div class="post-text">${parsedText}</div>
+      ${imgHtml}
+      <div class="post-actions">
+        <div class="action-item comment-trigger" data-id="${key}">
+          <i data-feather="message-circle" style="width:18px"></i>
+          <span id="comment-count-${key}">${post.commentCount || 0}</span>
+        </div>
+        <div class="action-item like-trigger" id="like-btn-${key}" data-id="${key}">
+          <i data-feather="heart" style="width:18px"></i>
+          <span id="like-count-${key}">${post.likes || 0}</span>
+        </div>
+        <div class="action-item"><i data-feather="share" style="width:18px"></i></div>
+      </div>
+    </div>
+    <div class="kebab-dropdown">
+      <div class="kebab-item kebab-action" data-action="copy">Copy link</div>
+      <div class="kebab-item kebab-action" data-action="share">Share via...</div>
+      ${isOwner ? `<div class="kebab-item delete-post">Delete</div>` : ''}
+      <div class="kebab-item kebab-action" data-action="report">Report post</div>
+    </div>
+  `;
+
+  if (feedStream.firstChild) {
+    feedStream.insertBefore(el, feedStream.firstChild);
+  } else {
+    feedStream.appendChild(el);
+  }
+  
+  feather.replace();
+
+  // Add click handlers for hashtags
+  el.querySelectorAll('.hashtag').forEach(hashtagEl => {
+    hashtagEl.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const tag = hashtagEl.dataset.hashtag;
+      searchInput.value = tag;
+      filterAndRenderPosts(tag);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+  });
+
+  checkIfLiked(key);
+
+  el.querySelector('.like-trigger')?.addEventListener('click', () => toggleLike(key));
+  el.querySelector('.comment-trigger')?.addEventListener('click', () => openComments(key));
+
+  const kebabBtn = el.querySelector('.kebab-menu');
+  const dropdown = el.querySelector('.kebab-dropdown');
+
+  kebabBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    document.querySelectorAll('.kebab-dropdown.show').forEach(d => d !== dropdown && d.classList.remove('show'));
+    dropdown.classList.toggle('show');
+  });
+
+  dropdown?.querySelectorAll('.kebab-action, .delete-post').forEach(item => {
+    item.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const action = item.dataset.action || (item.classList.contains('delete-post') ? 'delete' : '');
+
+      if (action === 'delete' && isOwner) {
+        currentDeletePost = { key, element: el };
+        deleteOverlay.classList.add('active');
+        deleteModal.classList.add('active');
+      } else if (action === 'copy') {
+        navigator.clipboard.writeText(`${window.location.origin}/post/${key}`);
+        showToast("Link copied to clipboard");
+      } else if (action === 'share') {
+        if (navigator.share) {
+          navigator.share({
+            title: 'Nexus Post',
+            text: post.text,
+            url: `${window.location.origin}/post/${key}`
+          });
+        } else {
+          showToast("Sharing not supported on this device");
+        }
+      }
+
+      dropdown.classList.remove('show');
+    });
+  });
+
+  setTimeout(() => {
+    document.addEventListener('click', function closeDropdown(e) {
+      if (!e.target.closest('.kebab-menu') && !e.target.closest('.kebab-dropdown')) {
+        dropdown.classList.remove('show');
+        document.removeEventListener('click', closeDropdown);
+      }
+    });
+  }, 0);
+}
 
     async function toggleLike(postId) {
       if (!currentUser) return;
@@ -1160,23 +1231,24 @@
             comments.push({ key: child.key, val: child.val() });
           });
 
-          for (const comment of comments) {
-            const c = comment.val;
-            const commentAvatar = await getUserAvatar(c.uid);
-            
-            const div = document.createElement('div');
-            div.className = 'comment-item';
-            div.innerHTML = `
-              <img src="${commentAvatar}" class="comment-avatar" onerror="this.src='${defaultAvatar}'">
-              <div>
-                <div class="comment-content">
-                  <div style="font-weight:700; font-size:0.85rem">${c.username}</div>
-                  <div>${c.text}</div>
-                </div>
-              </div>
-            `;
-            commentsList.appendChild(div);
-          }
+         // Inside openComments function, replace the comment rendering:
+for (const comment of comments) {
+  const c = comment.val;
+  const commentAvatar = await getUserAvatar(c.uid);
+  
+  const div = document.createElement('div');
+  div.className = 'comment-item';
+  div.innerHTML = `
+    <img src="${commentAvatar}" class="comment-avatar" onerror="this.src='${defaultAvatar}'">
+    <div>
+      <div class="comment-content">
+        <div style="font-weight:700; font-size:0.85rem">${c.username}</div>
+        <div>${parseText(c.text)}</div>
+      </div>
+    </div>
+  `;
+  commentsList.appendChild(div);
+}
           commentsList.scrollTop = commentsList.scrollHeight;
         } else {
           commentsList.innerHTML = '<div style="text-align:center; color:#999; margin-top:20px;">No comments yet. Be the first!</div>';
