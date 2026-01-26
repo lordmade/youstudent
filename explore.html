@@ -2,753 +2,240 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>X Explore</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>Nexus – Explore</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/feather-icons"></script>
+
   <style>
     :root {
-      --twitter-blue: #1DA1F2;
-      --twitter-purple: #8A3FFC;
-      --text-dark: #0F1419;
-      --text-light: #536471;
-      --border: #D8D9DB;
-      --white: #FFFFFF;
-      --background: #F5F8FA;
-      --dark-bg: #15202B;
-      --dark-border: #2F3B43;
-      --dark-text: #FFFFFF;
-    }
-
-    [data-theme="dark"] {
-      --text-dark: var(--dark-text);
-      --border: var(--dark-border);
-      --white: var(--dark-bg);
-      --background: #1E2A3C;
+      --primary: #6366f1;
+      --bg: #000000;
+      --text: #ffffff;
+      --nav-bg: #ffffff;
+      --border: #e2e8f0;
     }
 
     body {
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
-      background: var(--white);
-      color: var(--text-dark);
-      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, sans-serif;
       margin: 0;
-      padding: 0;
-      transition: background 0.3s ease, color 0.3s ease;
+      overflow: hidden; /* Critical for scroll snap */
+      height: 100vh;
     }
 
-    body.fade-out {
-      opacity: 0;
+    /* Layout & Sidebar */
+    .layout { display: flex; height: 100vh; }
+
+    .sidebar {
+      display: none;
+      width: 280px; height: 100vh; padding: 1.5rem 1rem;
+      border-right: 1px solid #333; background: #0f172a;
+      color: white; z-index: 20;
+    }
+    @media (min-width: 768px) { .sidebar { display: flex; flex-direction: column; } }
+
+    .nav-item {
+      display: flex; align-items: center; gap: 1rem;
+      padding: 0.85rem 1.25rem; border-radius: 9999px;
+      font-size: 1.125rem; font-weight: 500; color: #94a3b8;
+      transition: all 0.2s; cursor: pointer;
+    }
+    .nav-item:hover { background: rgba(255, 255, 255, 0.1); color: white; }
+    .nav-item.active { color: var(--primary); font-weight: 600; }
+
+    /* Feed Container */
+    .feed-container {
+      flex: 1; height: 100vh; overflow-y: scroll;
+      scroll-snap-type: y mandatory; scrollbar-width: none;
+      position: relative; background: #000;
+    }
+    .feed-container::-webkit-scrollbar { display: none; }
+
+    /* Desktop Constraint */
+    @media (min-width: 768px) {
+      .feed-container { display: flex; flex-direction: column; align-items: center; background: #1e293b; }
+      .video-card-wrapper { width: 420px !important; border-left: 1px solid #333; border-right: 1px solid #333; }
     }
 
-    .navbar {
-      position: sticky;
-      top: 0;
-      left: 0;
-      right: 0;
-      background: var(--white);
-      border-bottom: 1px solid var(--border);
-      padding: 0.75rem 1rem;
-      z-index: 1000;
-      display: flex;
-      justify-content: center;
-      align-items: center;
+    /* Video Card */
+    .video-card-wrapper {
+      width: 100%; height: 100vh;
+      scroll-snap-align: start; scroll-snap-stop: always;
+      position: relative; background: #000; overflow: hidden;
     }
 
-    .navbar-links {
-      display: flex;
-      gap: 2rem;
-      align-items: center;
-      max-width: 600px;
-      width: 100%;
+    @media (max-width: 767px) {
+      .video-card-wrapper { height: calc(100vh - 56px); padding-bottom: 56px; }
     }
 
-    .navbar-links a, .navbar-links button {
-      color: var(--text-dark);
-      font-size: 1rem;
-      font-weight: 600;
-      text-decoration: none;
-      transition: color 0.2s ease;
-    }
+    video { width: 100%; height: 100%; object-fit: cover; display: block; }
 
-    .navbar-links a:hover, .navbar-links button:hover {
-      color: var(--twitter-blue);
-    }
-
-    .navbar-links a.active {
-      color: var(--twitter-blue);
-      border-bottom: 2px solid var(--twitter-blue);
-    }
-
-    .theme-toggle {
-      background: none;
-      border: none;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-    }
-
-    .theme-toggle svg {
-      width: 24px;
-      height: 24px;
-      fill: none;
-      stroke: var(--text-dark);
-      stroke-width: 2;
-    }
-
-    .loading-overlay {
-      position: fixed;
-      inset: 0;
-      background: rgba(0, 0, 0, 0.5);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      z-index: 2000;
-      opacity: 0;
+    /* UI Elements */
+    .overlay-gradient {
+      position: absolute; inset: 0;
+      background: linear-gradient(to top, rgba(0,0,0,0.8) 0%, transparent 30%);
       pointer-events: none;
-      transition: opacity 0.3s ease;
     }
 
-    .loading-overlay.active {
-      opacity: 1;
-      pointer-events: auto;
+    .actions-bar {
+      position: absolute; right: 16px; bottom: 100px;
+      display: flex; flex-direction: column; gap: 24px; align-items: center; z-index: 10;
     }
+    @media (max-width: 767px) { .actions-bar { bottom: 80px; } }
 
-    .spinner {
-      width: 48px;
-      height: 48px;
-      border: 4px solid transparent;
-      border-top-color: var(--twitter-blue);
-      border-right-color: var(--twitter-purple);
-      border-radius: 50%;
-      animation: spin 1s linear infinite;
+    .action-btn { display: flex; flex-direction: column; align-items: center; gap: 6px; cursor: pointer; transition: transform 0.2s; }
+    .action-btn:active { transform: scale(0.85); }
+    
+    .icon-wrapper {
+      width: 48px; height: 48px; background: rgba(255,255,255,0.15);
+      backdrop-filter: blur(4px); border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
     }
+    
+    .profile-thumb { width: 48px; height: 48px; border-radius: 50%; border: 2px solid white; object-fit: cover; }
 
-    @keyframes spin {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
+    .video-info {
+      position: absolute; left: 16px; bottom: 30px; right: 80px;
+      z-index: 10; text-shadow: 0 1px 3px rgba(0,0,0,0.8);
     }
+    @media (max-width: 767px) { .video-info { bottom: 20px; } }
 
-    .spinner-text {
-      color: var(--white);
-      font-size: 0.9rem;
-      font-weight: 500;
-      margin-top: 0.5rem;
-    }
-
-    @media (max-width: 640px) {
-      .navbar-links {
-        gap: 1rem;
-        justify-content: space-between;
-      }
-
-      .navbar-links a, .navbar-links button {
-        font-size: 0.9rem;
-      }
-
-      .spinner {
-        width: 40px;
-        height: 40px;
-      }
-
-      .spinner-text {
-        font-size: 0.8rem;
-      }
-    }
-
-    .container {
-      max-width: 600px;
-      width: 100%;
-      margin: 0 auto;
-      padding: 4.5rem 1rem 1rem;
-    }
-
-    .explore-search {
-      padding: 1rem;
-      border-bottom: 1px solid var(--border);
-      background: var(--white);
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-      border-radius: 12px;
-      margin-bottom: 1rem;
-      position: relative;
-    }
-
-    .explore-search input {
-      width: 100%;
-      padding: 0.75rem 2.5rem 0.75rem 1rem;
-      border: 1px solid var(--border);
-      border-radius: 20px;
-      font-size: 1rem;
-      color: var(--text-dark);
-      outline: none;
-      transition: border-color 0.2s ease;
-      background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%23536471" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>') no-repeat 95% center;
-      background-size: 20px;
-    }
-
-    .explore-search input:focus {
-      border-color: var(--twitter-blue);
-      box-shadow: 0 0 0 2px rgba(29, 161, 242, 0.2);
-    }
-
-    .trending-topics {
-      padding: 1rem;
-      border-bottom: 1px solid var(--border);
-      background: var(--white);
-      border-radius: 12px;
-      margin-bottom: 1rem;
-    }
-
-    .trending-topics h2 {
-      font-size: 1.2rem;
-      font-weight: 700;
-      color: var(--text-dark);
-      margin-bottom: 0.5rem;
-    }
-
-    .trending-topics ul {
-      list-style: none;
-      padding: 0;
-    }
-
-    .trending-topics li {
-      padding: 0.5rem 0;
-      font-size: 0.95rem;
-      color: var(--twitter-blue);
-      cursor: pointer;
-      transition: background 0.2s ease;
-    }
-
-    .trending-topics li:hover {
-      background: rgba(29, 161, 242, 0.1);
-    }
-
-    .tweet-feed {
-      margin-top: 1rem;
-    }
-
-    .tweet {
-      padding: 1rem;
-      border-bottom: 1px solid var(--border);
-      background: var(--white);
-      border-radius: 12px;
-      margin-bottom: 0.5rem;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-      animation: fadeIn 0.5s ease-out;
-    }
-
-    .tweet:focus {
-      outline: 2px solid var(--twitter-blue);
-      outline-offset: 2px;
-    }
-
-    .tweet:hover {
-      background: var(--background);
-    }
-
-    .tweet-header {
-      display: flex;
-      align-items: center;
-      gap: 0.75rem;
-      margin-bottom: 0.5rem;
-    }
-
-    .tweet-avatar, .comment-avatar {
-      width: 40px;
-      height: 40px;
-      border-radius: 50%;
-      background: var(--text-light);
-      color: var(--white);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 1rem;
-      font-weight: 600;
-      flex-shrink: 0;
-    }
-
-    .tweet-avatar img, .comment-avatar img {
-      width: 100%;
-      height: 100%;
-      border-radius: 50%;
-      object-fit: cover;
-    }
-
-    .tweet-user-info {
-      flex: 1;
-      display: flex;
-      align-items: center;
-      gap: 0.25rem;
-    }
-
-    .tweet-username {
-      font-weight: 700;
-      color: var(--text-dark);
-      font-size: 1rem;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    .tweet-username:hover {
-      text-decoration: underline;
-    }
-
-    .tweet-username .handle {
-      color: var(--text-light);
-      font-weight: 400;
-      font-size: 0.875rem;
-    }
-
-    .tweet-timestamp {
-      font-size: 0.8125rem;
-      color: var(--text-light);
-      margin-left: auto;
-    }
-
-    .tweet-content {
-      font-size: 1rem;
-      color: var(--text-dark);
-      word-break: break-word;
-      margin: 0.5rem 0;
-    }
-
-    .tweet-content a, .comment-content a {
-      color: var(--twitter-blue);
-      text-decoration: none;
-    }
-
-    .tweet-content a:hover, .comment-content a:hover {
-      text-decoration: underline;
-    }
-
-    .tweet-media img,
-    .tweet-media video {
-      max-width: 100%;
-      border-radius: 8px;
-      margin-top: 0.5rem;
-    }
-
-    .tweet-actions {
-      display: flex;
-      justify-content: space-between;
-      max-width: 360px;
-      margin-top: 0.5rem;
-    }
-
-    .tweet-action, .comment-action {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      color: var(--text-light);
-      font-size: 0.8125rem;
-      cursor: pointer;
-      transition: transform 0.2s ease;
-    }
-
-    .tweet-action.comment-btn span {
-      color: #000000;
-    }
-
-    .tweet-action:focus, .comment-action:focus {
-      outline: 2px solid var(--twitter-blue);
-      outline-offset: 2px;
-    }
-
-    .tweet-action svg, .comment-action svg {
-      width: 16px;
-      height: 16px;
-      fill: var(--text-light);
-      stroke: var(--text-light);
-      stroke-width: 1.5;
-      transition: transform 0.2s ease;
-    }
-
-    [data-theme="dark"] .tweet-action svg, [data-theme="dark"] .comment-action svg {
-      fill: var(--dark-text);
-      stroke: var(--dark-text);
-    }
-
-    .tweet-action:hover svg, .comment-action:hover svg {
-      fill: var(--text-light);
-      stroke: var(--text-light);
-      transform: scale(1.1);
-    }
-
-    [data-theme="dark"] .tweet-action:hover svg, [data-theme="dark"] .comment-action:hover svg {
-      fill: var(--dark-text);
-      stroke: var(--dark-text);
-    }
-
-    .tweet-action.clicked svg, .tweet-action.retweeted svg, .tweet-action.liked svg,
-    .tweet-action.delete-btn svg:hover,
-    .comment-action.clicked svg, .comment-action.delete-btn svg:hover {
-      fill: #000000;
-      stroke: #000000;
-      transform: scale(1.1);
-    }
-
-    .tweet-action:disabled, .comment-action:disabled {
-      cursor: not-allowed;
-      opacity: 0.5;
-    }
-
-    .comments-section {
-      margin-top: 0.5rem;
-      border-top: 1px solid var(--border);
-      padding-top: 0.5rem;
-    }
-
-    .comment {
-      padding: 0.5rem 0;
-      border-bottom: 1px solid var(--border);
-      margin-left: 48px;
-      display: flex;
-      gap: 0.75rem;
-    }
-
-    .comment.reply {
-      margin-left: 56px;
-    }
-
-    .comment.hidden {
-      display: none;
-    }
-
-    .comment-header {
-      display: flex;
-      justify-content: space-between;
-      font-size: 0.75rem;
-      flex: 1;
-    }
-
-    .comment-username {
-      font-weight: 600;
-      color: var(--text-dark);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      max-width: 50%;
-    }
-
-    .comment-username:hover {
-      text-decoration: underline;
-    }
-
-    .comment-username .handle {
-      color: var(--text-light);
-      font-weight: 400;
-    }
-
-    .comment-content {
-      font-size: 0.875rem;
-      color: var(--text-dark);
-      word-break: break-word;
-    }
-
-    .comment-actions {
-      display: flex;
-      gap: 1rem;
-      margin-top: 0.25rem;
-    }
-
-    .show-more-btn {
-      display: block;
-      margin: 0.5rem auto;
-      padding: 0.4rem 1rem;
-      background: none;
-      color: var(--twitter-blue);
-      border: 1px solid var(--twitter-blue);
-      border-radius: 20px;
-      font-size: 0.875rem;
-      font-weight: 600;
-      cursor: pointer;
-      transition: background 0.2s ease, transform 0.2s ease;
-    }
-
-    .show-more-btn:hover {
-      background: rgba(29, 161, 242, 0.1);
-      transform: scale(1.02);
-    }
-
-    .modal, .confirm-modal {
-      display: none;
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0, 0, 0, 0.5);
-      z-index: 1000;
-      justify-content: center;
-      align-items: center;
-    }
-
-    .modal.active, .confirm-modal.active {
-      display: flex;
-    }
+    .username { font-weight: 700; font-size: 1.1rem; margin-bottom: 8px; display:block; }
+    .caption { font-size: 0.95rem; line-height: 1.4; margin-bottom: 12px; }
 
-    .modal-content, .confirm-content {
-      background: var(--white);
-      padding: 1.5rem;
-      border-radius: 12px;
-      max-width: 90%;
-      width: 400px;
-      text-align: center;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-      animation: fadeIn 0.3s ease-out;
-      position: relative;
+    /* Upload Modal */
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 1000;
+      display: none; align-items: center; justify-content: center; padding: 1rem;
     }
-
-    .modal-content textarea {
-      width: 100%;
-      padding: 0.75rem;
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      font-size: 0.9rem;
-      color: var(--text-dark);
-      resize: none;
-      outline: none;
-      margin-bottom: 1rem;
-    }
-
-    .modal-content textarea:focus {
-      border-color: var(--twitter-blue);
-      box-shadow: 0 0 0 2px rgba(29, 161, 242, 0.2);
-    }
-
-    .modal-content button, .confirm-content button {
-      padding: 0.5rem 1rem;
-      margin: 0.5rem;
-      border: none;
-      border-radius: 20px;
-      font-size: 0.9rem;
-      font-weight: 600;
-      cursor: pointer;
-      transition: background 0.2s ease, transform 0.2s ease;
-    }
-
-    .cancel-btn, .comment-btn, .confirm-btn {
-      background: linear-gradient(45deg, var(--twitter-blue), var(--twitter-purple));
-      color: var(--white);
-    }
-
-    .cancel-btn:hover, .comment-btn:hover, .confirm-btn:hover {
-      transform: scale(1.02);
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-    }
-
-    .confirm-content p {
-      font-size: 1rem;
-      color: var(--text-dark);
-      margin-bottom: 1rem;
-    }
-
-    .custom-alert {
-      display: none;
-      position: fixed;
-      top: 1rem;
-      left: 50%;
-      transform: translateX(-50%);
-      background: var(--white);
-      padding: 1rem 2rem;
-      border-radius: 12px;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-      z-index: 1001;
-      color: var(--text-dark);
-      font-weight: 500;
-      text-align: center;
-      max-width: 90%;
-      width: 320px;
-      animation: fadeIn 0.3s ease-out forwards;
-      border: 1px solid var(--border);
-    }
-
-    .custom-alert.active {
-      display: block;
-    }
-
-    .custom-alert .close-btn {
-      position: absolute;
-      top: 0.75rem;
-      right: 0.75rem;
-      width: 24px;
-      height: 24px;
-      background: none;
-      border: none;
-      color: #000000;
-      cursor: pointer;
-      transition: transform 0.2s ease;
+    .modal-overlay.show { display: flex; }
+    
+    .modal-content {
+      background: #1e293b; color: white; border-radius: 20px;
+      width: 100%; max-width: 450px; padding: 1.5rem;
+      border: 1px solid #333;
     }
 
-    .custom-alert .close-btn:hover {
-      transform: scale(1.2);
+    .upload-area {
+      border: 2px dashed #475569; border-radius: 12px; padding: 2rem;
+      text-align: center; cursor: pointer; margin-bottom: 1rem;
+      transition: all 0.2s;
     }
+    .upload-area:hover { border-color: var(--primary); background: rgba(99, 102, 241, 0.1); }
 
-    .custom-alert .close-btn svg {
-      width: 100%;
-      height: 100%;
-      fill: none;
-      stroke: #000000;
-      stroke-width: 2;
+    .input-dark {
+      background: #0f172a; border: 1px solid #333; color: white;
+      width: 100%; padding: 0.8rem; border-radius: 8px; margin-bottom: 1rem;
     }
 
-    .suggestion-dropdown {
-      position: absolute;
-      background: var(--white);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-      max-height: 150px;
-      overflow-y: auto;
-      z-index: 1000;
-      width: 100%;
-      max-width: 300px;
-      display: none;
+    .btn-primary {
+      background: var(--primary); color: white; width: 100%;
+      padding: 0.8rem; border-radius: 9999px; font-weight: 600;
+      border: none; cursor: pointer;
     }
+    .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
 
-    .suggestion-dropdown.active {
-      display: block;
+    .progress-bar {
+      height: 4px; background: #333; border-radius: 2px;
+      margin-top: 10px; overflow: hidden; display: none;
     }
+    .progress-fill { height: 100%; background: var(--primary); width: 0%; transition: width 0.2s; }
 
-    .suggestion-item {
-      padding: 0.5rem 1rem;
-      font-size: 0.9rem;
-      color: var(--text-dark);
-      cursor: pointer;
-      transition: background 0.2s ease;
+    /* Mute & Loading */
+    .volume-toggle {
+      position: absolute; top: 20px; right: 20px;
+      background: rgba(0,0,0,0.5); padding: 8px; border-radius: 50%;
+      cursor: pointer; z-index: 15;
     }
-
-    .suggestion-item:hover, .suggestion-item.selected {
-      background: rgba(29, 161, 242, 0.1);
-    }
-
-    @keyframes fadeIn {
-      0% { opacity: 0; transform: translateX(-50%) translateY(-10px); }
-      100% { opacity: 1; transform: translateX(-50%) translateY(0); }
-    }
-
-    @media (max-width: 640px) {
-      .container {
-        padding: 4rem 0.75rem 0.75rem;
-      }
-
-      .explore-search {
-        padding: 0.75rem;
-      }
-
-      .explore-search input {
-        font-size: 0.95rem;
-      }
-
-      .trending-topics h2 {
-        font-size: 1.1rem;
-      }
-
-      .trending-topics li {
-        font-size: 0.9rem;
-      }
-
-      .tweet {
-        padding: 0.75rem;
-      }
-
-      .tweet-avatar, .comment-avatar {
-        width: 36px;
-        height: 36px;
-      }
-
-      .tweet-username {
-        font-size: 0.9375rem;
-      }
-
-      .tweet-username .handle {
-        font-size: 0.8125rem;
-      }
-
-      .tweet-timestamp {
-        font-size: 0.75rem;
-      }
-
-      .tweet-content {
-        font-size: 0.9375rem;
-      }
-
-      .tweet-action svg, .comment-action svg {
-        width: 14px;
-        height: 14px;
-      }
-
-      .comment {
-        margin-left: 40px;
-      }
-
-      .comment.reply {
-        margin-left: 48px;
-      }
 
-      .suggestion-dropdown {
-        max-width: 90%;
-      }
+    .loader-center {
+      display: flex; justify-content: center; align-items: center;
+      height: 100vh; color: #94a3b8; flex-direction: column; gap: 10px;
     }
   </style>
 </head>
 <body>
-  <nav class="navbar">
-    <div class="navbar-links">
-      <a href="home.html">Home</a>
-      <a href="explore.html" class="active">Explore</a>
-      <a href="profile.html">Profile</a>
-      <button class="logout-btn" aria-label="Log out">Logout</button>
-      <button class="theme-toggle" aria-label="Toggle dark mode">
-        <svg viewBox="0 0 24 24">
-          <path d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
+
+  <div id="upload-modal" class="modal-overlay">
+    <div class="modal-content">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+        <h2 style="font-size:1.25rem; font-weight:bold;">New Post</h2>
+        <button id="close-upload"><i data-feather="x"></i></button>
+      </div>
+
+      <div class="upload-area" id="drop-area">
+        <i data-feather="video" style="width:32px; height:32px; margin-bottom:0.5rem; color:#94a3b8;"></i>
+        <p id="file-label" style="color:#94a3b8; font-size:0.9rem;">Click to select video</p>
+        <input type="file" id="video-input" accept="video/*" style="display:none;">
+      </div>
+
+      <textarea id="caption-input" class="input-dark" placeholder="Write a caption..." rows="3"></textarea>
+
+      <div class="progress-bar" id="upload-progress">
+        <div class="progress-fill" id="progress-fill"></div>
+      </div>
+
+      <button id="submit-post-btn" class="btn-primary" disabled>Post Video</button>
+    </div>
+  </div>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="logo-box" style="padding: 0.75rem 0 1.5rem;">
+        <svg width="44" height="44" viewBox="0 0 40 40" fill="none">
+          <rect width="40" height="40" rx="12" fill="#6366F1"/>
+          <path d="M12 20L18 26L28 14" stroke="white" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
-      </button>
+      </div>
+      <div class="nav-item" onclick="window.location.href='index.html'">
+        <i data-feather="home"></i> <span>Home</span>
+      </div>
+      <div class="nav-item active">
+        <i data-feather="compass"></i> <span>Explore</span>
+      </div>
+      
+      <div class="nav-item" id="desktop-upload-btn" style="color:var(--primary);">
+        <i data-feather="plus-circle"></i> <span>New Post</span>
+      </div>
+
+      <div class="nav-item">
+        <i data-feather="bell"></i> <span>Notifications</span>
+      </div>
+      <div class="nav-item" onclick="window.location.href='profile.html'">
+        <i data-feather="user"></i> <span>Profile</span>
+      </div>
+    </aside>
+
+    <main class="feed-container" id="feed">
+      <div class="loader-center" id="feed-loader">
+        <div class="spinner"></div> <span>Loading Feed...</span>
+      </div>
+    </main>
+  </div>
+
+  <nav class="bottom-nav md:hidden" style="position:fixed; bottom:0; left:0; right:0; z-index:50; background:#0f172a; border-top:1px solid #333; padding-bottom: env(safe-area-inset-bottom);">
+    <div style="display:flex; justify-content:space-around; height:56px; max-width:500px; margin:0 auto;">
+      <a href="index.html" style="flex:1; display:flex; align-items:center; justify-content:center; color:#94a3b8;">
+        <i data-feather="home"></i>
+      </a>
+      <a href="#" style="flex:1; display:flex; align-items:center; justify-content:center; color:var(--primary);">
+        <i data-feather="compass"></i>
+      </a>
+      <a href="#" id="mobile-upload-btn" style="flex:1; display:flex; align-items:center; justify-content:center; color:white;">
+        <i data-feather="plus-square" style="fill:white; color:#0f172a;"></i>
+      </a>
+      <a href="profile.html" style="flex:1; display:flex; align-items:center; justify-content:center; color:#94a3b8;">
+        <i data-feather="user"></i>
+      </a>
     </div>
   </nav>
-  <div class="container">
-    <div class="custom-alert" id="alert">
-      <span id="alert-message"></span>
-      <button class="close-btn" aria-label="Close alert">
-        <svg viewBox="0 0 24 24">
-          <path d="M6 18L18 6M6 6l12 12"/>
-        </svg>
-      </button>
-    </div>
-    <div class="loading-overlay" id="loading-overlay">
-      <div class="spinner"></div>
-      <span class="spinner-text">Loading...</span>
-    </div>
-    <div class="explore-search">
-      <input type="text" id="search-input" placeholder="Search tweets or hashtags..." aria-label="Search tweets or hashtags">
-      <div class="suggestion-dropdown" id="search-suggestions"></div>
-    </div>
-    <div class="trending-topics">
-      <h2>Trending Topics</h2>
-      <ul id="trending-list"></ul>
-    </div>
-    <div class="tweet-feed" id="tweet-feed"></div>
-  </div>
-  <div class="modal" id="comment-modal">
-    <div class="modal-content">
-      <textarea id="comment-input" rows="4" placeholder="Write your comment..." aria-label="Compose comment"></textarea>
-      <div class="suggestion-dropdown" id="comment-suggestions"></div>
-      <button class="comment-btn" id="submit-comment" aria-label="Submit comment">Comment</button>
-      <button class="cancel-btn" id="cancel-comment" aria-label="Cancel">Cancel</button>
-    </div>
-  </div>
-  <div class="confirm-modal" id="confirm-modal">
-    <div class="confirm-content">
-      <p id="confirm-message"></p>
-      <button class="confirm-btn" id="confirm-btn" aria-label="Confirm">Confirm</button>
-      <button class="cancel-btn" id="cancel-confirm" aria-label="Cancel">Cancel</button>
-    </div>
-  </div>
+
   <script type="module">
-    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
-    import { getAuth, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
-    import { getDatabase, ref, get, push, set, remove } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js';
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
+    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
+    import { getDatabase, ref, push, set, onValue, get, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
@@ -761,664 +248,243 @@
       measurementId: "G-V4W97VMSKL"
     };
 
+    // Cloudinary Config
+    const CLOUD_NAME = "dqkujefxj";
+    const UPLOAD_PRESET = "banter_box"; 
+
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const db = getDatabase(app);
 
-    const searchInput = document.getElementById("search-input");
-    const searchSuggestions = document.getElementById("search-suggestions");
-    const trendingList = document.getElementById("trending-list");
-    const tweetFeed = document.getElementById("tweet-feed");
-    const commentModal = document.getElementById("comment-modal");
-    const commentInput = document.getElementById("comment-input");
-    const submitComment = document.getElementById("submit-comment");
-    const cancelComment = document.getElementById("cancel-comment");
-    const alert = document.getElementById("alert");
-    const alertMessage = document.getElementById("alert-message");
-    const confirmModal = document.getElementById("confirm-modal");
-    const confirmMessage = document.getElementById("confirm-message");
-    const confirmBtn = document.getElementById("confirm-btn");
-    const cancelConfirm = document.getElementById("cancel-confirm");
-    const loadingOverlay = document.getElementById("loading-overlay");
-    let currentTweetId = null;
-    let replyToCommentId = null;
-    let userHandles = {};
-    let currentSuggestions = [];
-    let selectedSuggestionIndex = -1;
     let currentUser = null;
+    let selectedFile = null;
+    let isMuted = true;
 
-    function showLoading() {
-      loadingOverlay.classList.add("active");
-    }
-
-    function hideLoading() {
-      loadingOverlay.classList.remove("active");
-    }
-
-    function getAvatarInitials(username) {
-      return username ? username.charAt(0).toUpperCase() : "A";
-    }
-
-    function formatTimestamp(timestamp) {
-      const now = Date.now();
-      const diff = now - timestamp;
-      const seconds = Math.floor(diff / 1000);
-      const minutes = Math.floor(seconds / 60);
-      const hours = Math.floor(minutes / 60);
-      const days = Math.floor(hours / 24);
-      if (days > 0) return `${days}d`;
-      if (hours > 0) return `${hours}h`;
-      if (minutes > 0) return `${minutes}m`;
-      return `${seconds}s`;
-    }
-
-    function showAlert(message, isSuccess) {
-      alertMessage.textContent = message;
-      alert.style.background = isSuccess ? "rgba(29, 161, 242, 0.1)" : "rgba(255, 0, 0, 0.1)";
-      alert.classList.add("active");
-      setTimeout(() => alert.classList.remove("active"), 3000);
-    }
-
-    function showCustomConfirm(message) {
-      return new Promise((resolve) => {
-        confirmMessage.textContent = message;
-        confirmModal.classList.add("active");
-        const onConfirm = () => {
-          confirmModal.classList.remove("active");
-          resolve(true);
-          confirmBtn.removeEventListener("click", onConfirm);
-          cancelConfirm.removeEventListener("click", onCancel);
-        };
-        const onCancel = () => {
-          confirmModal.classList.remove("active");
-          resolve(false);
-          confirmBtn.removeEventListener("click", onConfirm);
-          cancelConfirm.removeEventListener("click", onCancel);
-        };
-        confirmBtn.addEventListener("click", onConfirm);
-        cancelConfirm.addEventListener("click", onCancel);
-        confirmModal.addEventListener("keydown", (event) => {
-          if (event.key === "Enter") {
-            onConfirm();
-          } else if (event.key === "Escape") {
-            onCancel();
-          }
-        }, { once: true });
-      });
-    }
-
-    function toggleDarkMode() {
-      const theme = document.body.dataset.theme === "dark" ? "light" : "dark";
-      document.body.dataset.theme = theme;
-      localStorage.setItem("theme", theme);
-    }
-
-    function formatContentWithTags(text) {
-      return text.replace(/@(\w+)/g, (match, handle) => {
-        const uid = userHandles[handle.toLowerCase()];
-        return uid ? `<a href="profile.html?uid=${uid}" class="tagged-user">@${handle}</a>` : match;
-      }).replace(/#(\w+)/g, `<a href="explore.html?hashtag=$1" class="hashtag">#$1</a>`);
-    }
-
-    function showSuggestions(input, suggestionsDiv, query, isHashtag = false) {
-      suggestionsDiv.innerHTML = "";
-      currentSuggestions = isHashtag
-        ? Object.keys(hashtags).filter(tag => tag.toLowerCase().startsWith(query.toLowerCase())).slice(0, 5)
-        : Object.keys(userHandles).filter(handle => handle.toLowerCase().startsWith(query.toLowerCase())).slice(0, 5);
-      currentSuggestions.forEach((item, index) => {
-        const suggestionItem = document.createElement("div");
-        suggestionItem.className = `suggestion-item ${index === selectedSuggestionIndex ? 'selected' : ''}`;
-        suggestionItem.textContent = isHashtag ? `#${item}` : `@${item}`;
-        suggestionItem.addEventListener("click", () => selectSuggestion(input, suggestionsDiv, item, isHashtag));
-        suggestionsDiv.appendChild(suggestionItem);
-      });
-      suggestionsDiv.classList.toggle("active", currentSuggestions.length > 0);
-      selectedSuggestionIndex = -1;
-    }
-
-    function selectSuggestion(input, suggestionsDiv, item, isHashtag) {
-      const cursorPosition = input.selectionStart;
-      const textBeforeCursor = input.value.substring(0, cursorPosition);
-      const words = textBeforeCursor.split(/\s+/);
-      const lastWord = words[words.length - 1];
-      const prefix = isHashtag ? "#" : "@";
-      if (lastWord.startsWith(prefix)) {
-        const before = input.value.substring(0, cursorPosition - lastWord.length);
-        const after = input.value.substring(cursorPosition);
-        input.value = `${before}${prefix}${item}${after ? ' ' + after : ''}`;
-        input.focus();
-      }
-      suggestionsDiv.classList.remove("active");
-      currentSuggestions = [];
-      selectedSuggestionIndex = -1;
-    }
-
-    function handleInput(input, suggestionsDiv) {
-      const cursorPosition = input.selectionStart;
-      const textBeforeCursor = input.value.substring(0, cursorPosition);
-      const words = textBeforeCursor.split(/\s+/);
-      const lastWord = words[words.length - 1];
-      if (lastWord.startsWith("@") && lastWord.length > 1) {
-        const query = lastWord.substring(1);
-        showSuggestions(input, suggestionsDiv, query, false);
-      } else if (lastWord.startsWith("#") && lastWord.length > 1) {
-        const query = lastWord.substring(1);
-        showSuggestions(input, suggestionsDiv, query, true);
+    // --- Auth Check ---
+    onAuthStateChanged(auth, (user) => {
+      if (user) {
+        currentUser = user;
+        loadFeed(); // Load videos once we have auth
       } else {
-        suggestionsDiv.classList.remove("active");
-        currentSuggestions = [];
-        selectedSuggestionIndex = -1;
+        window.location.href = "signup.html";
       }
+    });
+
+    // --- Upload Modal Logic ---
+    const modal = document.getElementById('upload-modal');
+    const openModal = () => modal.classList.add('show');
+    const closeModal = () => {
+      modal.classList.remove('show');
+      resetForm();
+    };
+
+    document.getElementById('desktop-upload-btn').onclick = openModal;
+    document.getElementById('mobile-upload-btn').onclick = openModal;
+    document.getElementById('close-upload').onclick = closeModal;
+
+    const dropArea = document.getElementById('drop-area');
+    const fileInput = document.getElementById('video-input');
+    
+    dropArea.onclick = () => fileInput.click();
+    
+    fileInput.onchange = (e) => {
+      if(e.target.files[0]) {
+        selectedFile = e.target.files[0];
+        document.getElementById('file-label').textContent = selectedFile.name;
+        document.getElementById('submit-post-btn').disabled = false;
+      }
+    };
+
+    function resetForm() {
+      selectedFile = null;
+      document.getElementById('file-label').textContent = "Click to select video";
+      document.getElementById('caption-input').value = "";
+      document.getElementById('submit-post-btn').disabled = true;
+      document.getElementById('upload-progress').style.display = 'none';
+      document.getElementById('progress-fill').style.width = '0%';
+      document.getElementById('submit-post-btn').textContent = "Post Video";
     }
 
-    function handleKeyDown(event, input, suggestionsDiv) {
-      if (currentSuggestions.length === 0) return;
-      if (event.key === "ArrowDown") {
-        event.preventDefault();
-        selectedSuggestionIndex = (selectedSuggestionIndex + 1) % currentSuggestions.length;
-        updateSuggestionHighlight(suggestionsDiv);
-      } else if (event.key === "ArrowUp") {
-        event.preventDefault();
-        selectedSuggestionIndex = (selectedSuggestionIndex - 1 + currentSuggestions.length) % currentSuggestions.length;
-        updateSuggestionHighlight(suggestionsDiv);
-      } else if (event.key === "Enter" && selectedSuggestionIndex >= 0) {
-        event.preventDefault();
-        const isHashtag = input.value.substring(input.selectionStart).split(/\s+/)[0].startsWith("#");
-        selectSuggestion(input, suggestionsDiv, currentSuggestions[selectedSuggestionIndex], isHashtag);
-      } else if (event.key === "Escape") {
-        suggestionsDiv.classList.remove("active");
-        currentSuggestions = [];
-        selectedSuggestionIndex = -1;
-      }
-    }
+    // --- Upload Process (Cloudinary + Firebase) ---
+    document.getElementById('submit-post-btn').onclick = async () => {
+      if (!selectedFile || !currentUser) return;
 
-    function updateSuggestionHighlight(suggestionsDiv) {
-      const items = suggestionsDiv.querySelectorAll(".suggestion-item");
-      items.forEach((item, index) => {
-        item.classList.toggle("selected", index === selectedSuggestionIndex);
+      const btn = document.getElementById('submit-post-btn');
+      const progressBar = document.getElementById('upload-progress');
+      const progressFill = document.getElementById('progress-fill');
+
+      btn.disabled = true;
+      btn.textContent = "Uploading...";
+      progressBar.style.display = 'block';
+      progressFill.style.width = '30%';
+
+      try {
+        // 1. Upload to Cloudinary (Video)
+        const fd = new FormData();
+        fd.append("file", selectedFile);
+        fd.append("upload_preset", UPLOAD_PRESET);
+        fd.append("resource_type", "video"); // Important for videos
+
+        const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/video/upload`, {
+          method: "POST",
+          body: fd
+        });
+        
+        progressFill.style.width = '70%';
+        const data = await res.json();
+
+        if (data.error) throw new Error(data.error.message);
+
+        // 2. Save metadata to Firebase
+        const newVideoRef = push(ref(db, 'videos'));
+        await set(newVideoRef, {
+          videoUrl: data.secure_url,
+          caption: document.getElementById('caption-input').value.trim(),
+          userId: currentUser.uid,
+          createdAt: serverTimestamp(),
+          likes: 0,
+          comments: 0
+        });
+
+        progressFill.style.width = '100%';
+        
+        setTimeout(() => {
+          closeModal();
+          alert("Video posted!"); // Simple feedback
+          loadFeed(); // Refresh feed to see new video
+        }, 500);
+
+      } catch (err) {
+        console.error(err);
+        alert("Upload failed: " + err.message);
+        btn.disabled = false;
+        btn.textContent = "Post Video";
+      }
+    };
+
+    // --- Feed Logic ---
+    async function loadFeed() {
+      const feedContainer = document.getElementById('feed');
+      // Don't clear immediately if we want smooth updates, but for now simplest is clear & reload
+      
+      const videosRef = ref(db, 'videos');
+      const snapshot = await get(videosRef);
+      
+      if (!snapshot.exists()) {
+        feedContainer.innerHTML = '<div class="loader-center">No videos yet. Be the first!</div>';
+        return;
+      }
+
+      const videosData = [];
+      snapshot.forEach(child => {
+        videosData.push({ id: child.key, ...child.val() });
       });
+
+      // Shuffle for "Explore" feel
+      videosData.sort(() => Math.random() - 0.5);
+
+      feedContainer.innerHTML = ''; // Clear loader
+
+      // Get user data for these videos
+      for (const video of videosData) {
+        const userSnap = await get(ref(db, `users/${video.userId}`));
+        const userData = userSnap.exists() ? userSnap.val() : { username: 'unknown', photoURL: '' };
+        
+        const card = createVideoCard(video, userData);
+        feedContainer.appendChild(card);
+      }
+      
+      feather.replace();
+      setupObserver();
     }
 
-    function renderTweet(tweetData, tweetId, user, userProfiles) {
-      const tweetDiv = document.createElement("div");
-      tweetDiv.className = "tweet";
-      tweetDiv.dataset.tweetId = tweetId;
-      tweetDiv.tabIndex = 0;
-      let mediaHtml = "";
-      if (tweetData.mediaUrl && tweetData.mediaType) {
-        if (tweetData.mediaType === "image") {
-          mediaHtml = `<div class="tweet-media"><img src="${tweetData.mediaUrl}" alt="Tweet media" /></div>`;
-        } else if (tweetData.mediaType === "video") {
-          const posterUrl = tweetData.mediaUrl.replace(/\.mp4$|\.webm$/, '.jpg');
-          mediaHtml = `<div class="tweet-media"><video loop playsinline src="${tweetData.mediaUrl}" poster="${posterUrl}" class="tweet-video"></video></div>`;
-        }
-      }
-      const likeCount = tweetData.likes ? Object.keys(tweetData.likes).length : 0;
-      const isLiked = user && tweetData.likes && tweetData.likes[user.uid];
-      const commentCount = tweetData.comments ? Object.keys(tweetData.comments).length : 0;
-      const retweetCount = tweetData.retweetCount || 0;
-      const isGuest = user && user.isGuest;
-      const isRetweeted = user && tweetData.retweetUsers && tweetData.retweetUsers[user.uid];
-      const isOwnTweet = user && tweetData.userId === user.uid;
-      const username = tweetData.username || "Anonymous";
-      const handle = tweetData.handle ? `@${tweetData.handle}` : "";
-      const profilePicture = userProfiles[tweetData.userId]?.profilePicture;
-      tweetDiv.innerHTML = `
-        <div class="tweet-header">
-          <div class="tweet-avatar">${profilePicture ? `<img src="${profilePicture}" alt="${username}'s profile picture" />` : getAvatarInitials(username)}</div>
-          <div class="tweet-user-info">
-            <span class="tweet-username">${username} <span class="handle">${handle}</span></span>
-            <span class="tweet-timestamp">${formatTimestamp(tweetData.createdAt)}</span>
+    function createVideoCard(video, author) {
+      const div = document.createElement('div');
+      div.className = 'video-card-wrapper';
+      
+      // Default avatar if missing
+      const avatarSrc = author.photoURL || "https://abs.twimg.com/sticky/default_profile_images/default_profile_normal.png";
+
+      div.innerHTML = `
+        <video src="${video.videoUrl}" loop playsinline muted></video>
+        <div class="overlay-gradient"></div>
+        
+        <div class="volume-toggle" onclick="toggleMute()">
+           <i data-feather="volume-x"></i>
+        </div>
+
+        <div class="actions-bar">
+          <div class="action-btn">
+             <img src="${avatarSrc}" class="profile-thumb" alt="${author.username}">
+          </div>
+          <div class="action-btn">
+            <div class="icon-wrapper">
+              <i data-feather="heart"></i>
+            </div>
+            <span class="action-text">${video.likes || 0}</span>
+          </div>
+          <div class="action-btn">
+            <div class="icon-wrapper">
+              <i data-feather="message-circle"></i>
+            </div>
+            <span class="action-text">${video.comments || 0}</span>
           </div>
         </div>
-        <div class="tweet-content">${formatContentWithTags(tweetData.text || "")}</div>
-        ${mediaHtml}
-        <div class="tweet-actions">
-          <div class="tweet-action comment-btn" ${isGuest ? 'disabled' : ''} data-tweet-id="${tweetId}" aria-label="Comment">
-            <svg viewBox="0 0 24 24">
-              <path d="M1.751 10c0-4.42 3.584-8 8.005-8h4.366c4.49 0 8.129 3.64 8.129 8.13 0 2.96-1.607 5.68-4.196 7.11l-8.054 4.46v-3.69h-.067c-4.49.1-8.183-3.51-8.183-8.01zm8.005-6c-3.317 0-6.005 2.69-6.005 6 0 3.37 2.77 6.08 6.138 6.01l.351-.01h1.761v2.3l5.087-2.81c1.951-1.08 3.163-3.13 3.163-5.36 0-3.39-2.744-6.13-6.129-6.13H9.756z"/>
-            </svg>
-            <span>${commentCount}</span>
-          </div>
-          <div class="tweet-action retweet-btn ${isRetweeted ? 'retweeted' : ''}" ${isGuest ? 'disabled' : ''} data-tweet-id="${tweetId}" aria-label="${isRetweeted ? 'Unretweet' : 'Retweet'}">
-            <svg viewBox="0 0 24 24">
-              <path d="M4.5 3.88l4.432 4.14-1.364 1.46L5.5 7.55V16c0 1.1.896 2 2 2H13v2H7.5c-2.209 0-4-1.79-4-4V7.55L1.432 9.48.068 8.02 4.5 3.88zM16.5 6H11V4h5.5c2.209 0 4 1.79 4 4v8.45l2.068-1.93 1.364 1.46-4.432 4.14-4.432-4.14 1.364-1.46 2.068 1.93V8c0-1.1-.896-2-2-2z"/>
-            </svg>
-            <span>${retweetCount}</span>
-          </div>
-          <div class="tweet-action like-btn ${isLiked ? 'liked' : ''}" ${isGuest ? 'disabled' : ''} data-tweet-id="${tweetId}" aria-label="Like">
-            <svg viewBox="0 0 24 24">
-              <path d="M12 21.638h-.014C9.403 21.59 1.95 14.856 1.95 8.478c0-3.064 2.525-5.754 5.403-5.754 2.29 0 3.83 1.58 4.646 2.73.814-1.148 2.354-2.73 4.645-2.73 2.88 0 5.404 2.69 5.404 5.755 0 6.376-7.454 13.11-10.037 13.157H12z"/>
-            </svg>
-            <span>${likeCount}</span>
-          </div>
-          ${isOwnTweet ? `
-          <div class="tweet-action delete-btn" data-tweet-id="${tweetId}" aria-label="Delete tweet">
-            <svg viewBox="0 0 24 24">
-              <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
-            </svg>
-          </div>
-          ` : ''}
-        </div>
-        <div class="comments-section" id="comments-${tweetId}">
-          <div class="comments-list"></div>
+
+        <div class="video-info">
+          <span class="username">@${author.username}</span>
+          <p class="caption">${video.caption || ""}</p>
         </div>
       `;
-      tweetFeed.appendChild(tweetDiv);
 
-      const video = tweetDiv.querySelector(".tweet-video");
-      if (video) {
-        tweetDiv.addEventListener("focus", () => {
-          video.muted = false;
-          video.play().catch(error => {
-            console.error("Video playback failed:", error);
-            showAlert("Video playback failed. Try clicking the video.", false);
-          });
-        });
-        tweetDiv.addEventListener("blur", () => {
-          video.muted = true;
-          video.pause();
-          video.currentTime = 0;
-        });
-        video.addEventListener("click", () => {
-          if (video.paused) {
-            video.muted = false;
-            video.play().catch(error => console.error("Manual video playback failed:", error));
-          } else {
-            video.pause();
-            video.muted = true;
-            video.currentTime = 0;
-          }
-        });
-      }
+      // Video Click Play/Pause
+      const vidEl = div.querySelector('video');
+      div.onclick = (e) => {
+        // Prevent clicking buttons from pausing
+        if (e.target.closest('.actions-bar') || e.target.closest('.volume-toggle')) return;
+        
+        if (vidEl.paused) vidEl.play();
+        else vidEl.pause();
+      };
 
-      const commentBtn = tweetDiv.querySelector(".comment-btn");
-      const retweetBtn = tweetDiv.querySelector(".retweet-btn");
-      const likeBtn = tweetDiv.querySelector(".like-btn");
-      const deleteBtn = tweetDiv.querySelector(".delete-btn");
-
-      commentBtn.addEventListener("click", () => {
-        if (isGuest) {
-          showAlert("Guests cannot comment.", false);
-          return;
-        }
-        commentBtn.classList.add("clicked");
-        currentTweetId = tweetId;
-        replyToCommentId = null;
-        commentModal.classList.add("active");
-        setTimeout(() => commentBtn.classList.remove("clicked"), 300);
-        commentInput.value = "";
-      });
-
-      retweetBtn.addEventListener("click", async () => {
-        if (isGuest) {
-          showAlert("Guests cannot retweet.", false);
-          return;
-        }
-        showLoading();
-        try {
-          const userRef = ref(db, `users/${user.uid}`);
-          const userSnapshot = await get(userRef);
-          const userData = userSnapshot.val();
-          const username = userData?.username || "Anonymous";
-          const handle = userData?.handle || "";
-          const retweetRef = ref(db, "retweets");
-          const retweetSnapshot = await get(retweetRef);
-          const retweets = retweetSnapshot.val();
-          const userRetweet = retweets
-            ? Object.entries(retweets).find(([_, r]) => r.originalTweetId === tweetId && r.userId === user.uid)
-            : null;
-          if (userRetweet) {
-            await remove(ref(db, `retweets/${userRetweet[0]}`));
-            showAlert("Unretweeted successfully!", true);
-          } else {
-            await push(ref(db, "retweets"), {
-              originalTweetId: tweetId,
-              userId: user.uid,
-              username,
-              handle,
-              createdAt: Date.now()
-            });
-            showAlert("Retweeted successfully!", true);
-          }
-          await refreshExploreTweets(user, userProfiles);
-        } catch (error) {
-          showAlert("Failed to retweet. Please try again.", false);
-        } finally {
-          hideLoading();
-        }
-      });
-
-      likeBtn.addEventListener("click", async () => {
-        if (isGuest) {
-          showAlert("Guests cannot like tweets.", false);
-          return;
-        }
-        showLoading();
-        try {
-          const likeRef = ref(db, `tweets/${tweetId}/likes/${user.uid}`);
-          if (isLiked) {
-            await remove(likeRef);
-          } else {
-            await set(likeRef, true);
-          }
-          await refreshExploreTweets(user, userProfiles);
-        } catch (error) {
-          showAlert("Failed to update like. Please try again.", false);
-        } finally {
-          hideLoading();
-        }
-      });
-
-      if (deleteBtn) {
-        deleteBtn.addEventListener("click", async () => {
-          const confirmed = await showCustomConfirm("Are you sure you want to delete this tweet?");
-          if (confirmed) {
-            showLoading();
-            try {
-              await remove(ref(db, `tweets/${tweetId}`));
-              showAlert("Tweet deleted successfully!", true);
-              await refreshExploreTweets(user, userProfiles);
-            } catch (error) {
-              showAlert("Failed to delete tweet. Please try again.", false);
-            } finally {
-              hideLoading();
-            }
-          }
-        });
-      }
-
-      const commentsRef = ref(db, `tweets/${tweetId}/comments`);
-      get(commentsRef).then((snapshot) => {
-        const commentsList = tweetDiv.querySelector(".comments-list");
-        commentsList.innerHTML = "";
-        const comments = snapshot.val();
-        if (comments) {
-          const commentEntries = Object.entries(comments);
-          commentEntries.forEach(([commentId, comment], index) => {
-            const commentDiv = document.createElement("div");
-            commentDiv.className = `comment ${comment.parentCommentId ? 'reply' : ''} ${index > 2 ? 'hidden' : ''}`;
-            const commentUsername = comment.username || "Anonymous";
-            const commentHandle = comment.handle ? `@${comment.handle}` : "";
-            const isOwnComment = user && comment.userId === user.uid;
-            const commentProfilePicture = userProfiles[comment.userId]?.profilePicture;
-            commentDiv.innerHTML = `
-              <div class="comment-avatar">${commentProfilePicture ? `<img src="${commentProfilePicture}" alt="${commentUsername}'s profile picture" />` : getAvatarInitials(commentUsername)}</div>
-              <div style="flex: 1;">
-                <div class="comment-header">
-                  <span class="comment-username">${commentUsername} <span class="handle">${commentHandle}</span></span>
-                  <span class="comment-timestamp">${formatTimestamp(comment.createdAt)}</span>
-                </div>
-                <div class="comment-content">${formatContentWithTags(comment.text)}</div>
-                <div class="comment-actions">
-                  <div class="comment-action reply-btn" ${isGuest ? 'disabled' : ''} data-comment-id="${commentId}" data-username="${commentUsername}" aria-label="Reply to comment">
-                    <svg viewBox="0 0 24 24">
-                      <path d="M14.046 2.242l-4.148-.01h-.002c-4.374 0-7.8 3.427-7.8 7.802 0 4.098 3.186 7.206 7.465 7.37v3.828c0 .108.045.286.12.403.142.225.384.347.632.347.138 0 .277-.038.402-.118.264-.168 6.473-4.14 8.088-5.506 1.902-1.61 3.04-3.97 3.043-6.312v-.017c-.006-4.367-3.43-7.787-7.8-7.788zm3.787 12.972c-1.134.96-4.862 3.405-6.772 4.643V16.67c0-.414-.336-.75-.75-.75h-.396c-3.66 0-6.318-2.476-6.318-5.886 0-3.534 2.768-6.302 6.3-6.302l4.147.01h.002c3.532 0 6.3 2.766 6.302 6.296-.003 1.91-.942 3.844-2.514 5.176z"/>
-                    </svg>
-                  </div>
-                  ${isOwnComment ? `
-                  <div class="comment-action delete-btn" data-comment-id="${commentId}" aria-label="Delete comment">
-                    <svg viewBox="0 0 24 24">
-                      <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
-                    </svg>
-                  </div>
-                  ` : ''}
-                </div>
-              </div>
-            `;
-            commentsList.appendChild(commentDiv);
-          });
-
-          const replyButtons = commentsList.querySelectorAll(".reply-btn");
-          replyButtons.forEach(btn => {
-            btn.addEventListener("click", () => {
-              if (isGuest) {
-                showAlert("Guests cannot reply to comments.", false);
-                return;
-              }
-              replyToCommentId = btn.dataset.commentId;
-              commentModal.classList.add("active");
-              commentInput.value = `@${btn.dataset.username} `;
-              currentTweetId = tweetId;
-            });
-          });
-
-          const deleteButtons = commentsList.querySelectorAll(".delete-btn");
-          deleteButtons.forEach(btn => {
-            btn.addEventListener("click", async () => {
-              const confirmed = await showCustomConfirm("Are you sure you want to delete this comment?");
-              if (confirmed) {
-                showLoading();
-                try {
-                  await remove(ref(db, `tweets/${tweetId}/comments/${btn.dataset.commentId}`));
-                  showAlert("Comment deleted successfully!", true);
-                  await refreshExploreTweets(user, userProfiles);
-                } catch (error) {
-                  showAlert("Failed to delete comment. Please try again.", false);
-                } finally {
-                  hideLoading();
-                }
-              }
-            });
-          });
-
-          if (commentEntries.length > 3) {
-            const showMoreBtn = document.createElement("button");
-            showMoreBtn.className = "show-more-btn";
-            showMoreBtn.textContent = "Show More";
-            showMoreBtn.setAttribute("aria-label", "Show more comments");
-            showMoreBtn.addEventListener("click", () => {
-              const hiddenComments = commentsList.querySelectorAll(".comment.hidden");
-              hiddenComments.forEach(comment => comment.classList.remove("hidden"));
-              showMoreBtn.style.display = "none";
-            });
-            commentsList.appendChild(showMoreBtn);
-          }
-        }
-      });
+      return div;
     }
 
-    let hashtags = {};
-
-    async function loadTrendingHashtags() {
-      try {
-        const tweetsRef = ref(db, "tweets");
-        const tweetsSnapshot = await get(tweetsRef);
-        const tweets = tweetsSnapshot.val();
-        hashtags = {};
-        if (tweets) {
-          Object.values(tweets).forEach(tweet => {
-            if (tweet.text) {
-              const matches = tweet.text.match(/#(\w+)/g);
-              if (matches) {
-                matches.forEach(tag => {
-                  const cleanTag = tag.substring(1).toLowerCase();
-                  hashtags[cleanTag] = (hashtags[cleanTag] || 0) + 1;
-                });
-              }
-            }
-          });
-        }
-        const trending = Object.entries(hashtags)
-          .sort((a, b) => b[1] - a[1])
-          .slice(0, 5)
-          .map(([tag]) => tag);
-        trendingList.innerHTML = "";
-        trending.forEach(tag => {
-          const li = document.createElement("li");
-          li.innerHTML = `<a href="explore.html?hashtag=${tag}">#${tag}</a>`;
-          trendingList.appendChild(li);
-        });
-      } catch (error) {
-        console.error("Failed to load trending hashtags:", error);
-      }
-    }
-
-    async function refreshExploreTweets(user, userProfiles, query = "", isHashtag = false) {
-      showLoading();
-      try {
-        const tweetsRef = ref(db, "tweets");
-        const tweetsSnapshot = await get(tweetsRef);
-        const retweetsRef = ref(db, "retweets");
-        const retweetSnapshot = await get(retweetsRef);
-        tweetFeed.innerHTML = "";
-        const tweets = tweetsSnapshot.val();
-        const retweets = retweetSnapshot.val();
-        if (tweets) {
-          let tweetEntries = Object.entries(tweets).map(([id, tweet]) => {
-            const likeCount = tweet.likes ? Object.keys(tweet.likes).length : 0;
-            const commentCount = tweet.comments ? Object.keys(tweet.comments).length : 0;
-            const retweetCount = retweets
-              ? Object.values(retweets).filter(r => r.originalTweetId === id).length
-              : 0;
-            const engagementScore = likeCount + commentCount * 2 + retweetCount * 3;
-            return [id, { ...tweet, retweetCount, engagementScore, retweetUsers: retweets
-                ? Object.fromEntries(
-                    Object.entries(retweets).filter(([_, r]) => r.originalTweetId === id).map(([id, r]) => [r.userId, id])
-                  )
-                : {}
-            }];
-          });
-          if (query) {
-            const lowerQuery = query.toLowerCase();
-            tweetEntries = tweetEntries.filter(([_, tweet]) =>
-              isHashtag
-                ? tweet.text && tweet.text.toLowerCase().includes(`#${lowerQuery}`)
-                : tweet.text && tweet.text.toLowerCase().includes(lowerQuery)
-            );
+    // --- Observer (Auto Play) ---
+    function setupObserver() {
+      const options = { root: document.getElementById('feed'), threshold: 0.6 };
+      
+      const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+          const vid = entry.target.querySelector('video');
+          if (entry.isIntersecting) {
+            // Respect global mute state
+            vid.muted = isMuted; 
+            vid.play().catch(e => console.log("Autoplay blocked", e));
+          } else {
+            vid.pause();
+            vid.currentTime = 0;
           }
-          tweetEntries.sort((a, b) => b[1].engagementScore - a[1].engagementScore);
-          tweetEntries = tweetEntries.slice(0, 20); // Limit to top 20 tweets
-          tweetEntries.forEach(([id, tweet]) => {
-            renderTweet(tweet, id, user, userProfiles);
-          });
-        }
-        if (tweetEntries.length === 0) {
-          tweetFeed.innerHTML = '<p class="text-center text-gray-500">No results found.</p>';
-        }
-      } catch (error) {
-        showAlert("Failed to load tweets. Please try again.", false);
-      } finally {
-        hideLoading();
-      }
+        });
+      }, options);
+
+      document.querySelectorAll('.video-card-wrapper').forEach(card => observer.observe(card));
     }
 
-    onAuthStateChanged(auth, (user) => {
-      if (!user) {
-        document.body.classList.add("fade-out");
-        setTimeout(() => {
-          window.location.href = "signup.html";
-        }, 1500);
-        return;
-      }
-
-      currentUser = user;
-      showLoading();
-      const userRef = ref(db, `users/${user.uid}`);
-      get(userRef).then((snapshot) => {
-        const userData = snapshot.val();
-        const isGuest = userData && userData.isGuest;
-        user.isGuest = isGuest;
-
-        const usersRef = ref(db, "users");
-        get(usersRef).then((usersSnapshot) => {
-          const userProfiles = usersSnapshot.val() || {};
-          userHandles = {};
-          Object.entries(userProfiles).forEach(([uid, profile]) => {
-            if (profile.handle) {
-              userHandles[profile.handle.toLowerCase()] = uid;
-            }
-          });
-
-          const urlParams = new URLSearchParams(window.location.search);
-          const hashtag = urlParams.get("hashtag");
-          const query = hashtag || "";
-          refreshExploreTweets(user, userProfiles, query, !!hashtag);
-          loadTrendingHashtags();
-        }).catch(() => {
-          showAlert("Failed to load user profiles. Please try again.", false);
-          hideLoading();
-        });
-      }).catch(() => {
-        showAlert("Failed to load user data. Please try again.", false);
-        hideLoading();
+    // --- Global Mute Toggle ---
+    window.toggleMute = function() {
+      isMuted = !isMuted;
+      document.querySelectorAll('video').forEach(v => v.muted = isMuted);
+      
+      // Update all volume icons
+      const icon = isMuted ? 'volume-x' : 'volume-2';
+      document.querySelectorAll('.volume-toggle').forEach(btn => {
+        btn.innerHTML = `<i data-feather="${icon}"></i>`;
       });
-    });
+      feather.replace();
+    };
 
-    searchInput.addEventListener("input", () => {
-      handleInput(searchInput, searchSuggestions);
-      const query = searchInput.value.trim();
-      const isHashtag = query.startsWith("#");
-      const cleanQuery = isHashtag ? query.substring(1) : query;
-      refreshExploreTweets(currentUser, userHandles, cleanQuery, isHashtag);
-    });
-
-    searchInput.addEventListener("keydown", (event) => {
-      handleKeyDown(event, searchInput, searchSuggestions);
-    });
-
-    submitComment.addEventListener("click", async () => {
-      if (!commentInput.value.trim()) {
-        showAlert("Comment cannot be empty.", false);
-        return;
-      }
-      showLoading();
-      try {
-        const userRef = ref(db, `users/${auth.currentUser.uid}`);
-        const userSnapshot = await get(userRef);
-        const userData = userSnapshot.val();
-        const commentData = {
-          text: commentInput.value,
-          username: userData?.username || "Anonymous",
-          handle: userData?.handle || "",
-          createdAt: Date.now(),
-          userId: auth.currentUser.uid,
-          parentCommentId: replyToCommentId
-        };
-        await push(ref(db, `tweets/${currentTweetId}/comments`), commentData);
-        commentModal.classList.remove("active");
-        commentInput.value = "";
-        replyToCommentId = null;
-        showAlert("Comment posted successfully!", true);
-        const usersRef = ref(db, "users");
-        const usersSnapshot = await get(usersRef);
-        const userProfiles = usersSnapshot.val() || {};
-        await refreshExploreTweets(currentUser, userProfiles);
-      } catch (error) {
-        showAlert("Failed to post comment. Please try again.", false);
-      } finally {
-        hideLoading();
-      }
-    });
-
-    cancelComment.addEventListener("click", () => {
-      commentModal.classList.remove("active");
-      commentInput.value = "";
-      replyToCommentId = null;
-      commentSuggestions.classList.remove("active");
-    });
-
-    commentInput.addEventListener("input", () => {
-      handleInput(commentInput, commentSuggestions);
-    });
-
-    commentInput.addEventListener("keydown", (event) => {
-      handleKeyDown(event, commentInput, commentSuggestions);
-    });
-
-    document.querySelector(".logout-btn").addEventListener("click", () => {
-      showLoading();
-      signOut(auth).finally(() => hideLoading());
-    });
-
-    document.querySelector(".custom-alert .close-btn").addEventListener("click", () => {
-      alert.classList.remove("active");
-    });
-
-    document.querySelector(".theme-toggle").addEventListener("click", toggleDarkMode);
-
-    const savedTheme = localStorage.getItem("theme") || "light";
-    document.body.dataset.theme = savedTheme;
+    feather.replace();
   </script>
 </body>
 </html>
