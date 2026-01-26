@@ -1099,17 +1099,26 @@ document.getElementById('avatarInput').addEventListener('change', async (e) => {
             return Array.from(new Uint8Array(sharedSecret)).map(b => b.toString(16).padStart(2,'0')).join('');
         }
 
-        function decrypt(ciphertext, friendUid) {
-            if (!ciphertext) return "[Message]";
-            try {
-                const key = sharedKeys[friendUid];
-                if (!key) return "🔒 Encrypted";
-                const bytes = CryptoJS.AES.decrypt(ciphertext, key);
-                return bytes.toString(CryptoJS.enc.Utf8) || "🔒 Message";
-            } catch (e) {
-                return "🔒 Message";
-            }
+      function decrypt(ciphertext, friendUid) {
+    if (!ciphertext) return "[Empty message]";
+    try {
+        const key = sharedKeys[friendUid];
+        if (!key) {
+            console.warn(`No shared key found for ${friendUid}`);
+            return "🔒 Decryption key missing";
         }
+        const bytes = CryptoJS.AES.decrypt(ciphertext, key);
+        const decrypted = bytes.toString(CryptoJS.enc.Utf8);
+        if (!decrypted) {
+            console.warn('Decryption returned empty string - wrong key or corrupted data');
+            return "🔒 Unable to decrypt";
+        }
+        return decrypted;
+    } catch (e) {
+        console.error('Decryption error:', e);
+        return "🔒 Decryption error";
+    }
+}
 
         async function initApp() {
             await openIndexedDB();
@@ -1656,31 +1665,43 @@ async function loadChats() {
         }
 
         /* --- Full Chat View --- */
-        async function openFullChat(friendUid) {
-            currentFriendUid = friendUid;
-            currentRoomId = currentUser.uid < friendUid ? currentUser.uid + "_" + friendUid : friendUid + "_" + currentUser.uid;
-            const snap = await db.ref(`users/${friendUid}/profile`).once('value');
-            const profile = snap.val() || { name: "User", photo: "" };
-            document.getElementById('chatFriendName').textContent = profile.name;
-            document.getElementById('chatFriendAvatar').src = profile.photo || generateLetterAvatar(profile.name);
+async function openFullChat(friendUid) {
+    currentFriendUid = friendUid;
+    currentRoomId = currentUser.uid < friendUid ? currentUser.uid + "_" + friendUid : friendUid + "_" + currentUser.uid;
+    
+    const snap = await db.ref(`users/${friendUid}/profile`).once('value');
+    const profile = snap.val() || { name: "User", photo: "" };
+    
+    document.getElementById('chatFriendName').textContent = profile.name;
+    document.getElementById('chatFriendAvatar').src = profile.photo || generateLetterAvatar(profile.name);
 
-            if (!sharedKeys[friendUid] && profile.publicKey) {
-                const secret = await deriveSharedSecret(JSON.parse(profile.publicKey));
-                sharedKeys[friendUid] = secret;
-                localStorage.setItem('sharedKeys', JSON.stringify(sharedKeys));
-            }
-            document.getElementById('fullChatView').style.display = 'flex';
-            loadMessages();
-            markAsRead(friendUid);
-
-            db.ref(`users/${friendUid}/online`).on('value', s => {
-                const statusEl = document.getElementById('chatStatusInfo');
-                statusEl.textContent = s.val() === true ? 'Online' : 'Offline';
-                statusEl.style.color = s.val() === true ? 'var(--online)' : 'var(--text-muted)';
-            });
-
-            history.pushState({chatOpen: true}, '');
+    // Derive shared key if not already available (loadMessages will also do this as backup)
+    if (!sharedKeys[friendUid] && profile.publicKey) {
+        try {
+            const secret = await deriveSharedSecret(JSON.parse(profile.publicKey));
+            sharedKeys[friendUid] = secret;
+            localStorage.setItem('sharedKeys', JSON.stringify(sharedKeys));
+        } catch (error) {
+            console.error('Error deriving shared secret:', error);
+            toast('Encryption setup failed');
+            return;
         }
+    }
+
+    document.getElementById('fullChatView').style.display = 'flex';
+    loadMessages();
+    markAsRead(friendUid);
+
+    // Listen for online status
+    db.ref(`users/${friendUid}/online`).on('value', s => {
+        const statusEl = document.getElementById('chatStatusInfo');
+        const isOnline = s.val() === true;
+        statusEl.textContent = isOnline ? 'Online' : 'Offline';
+        statusEl.style.color = isOnline ? 'var(--online)' : 'var(--text-muted)';
+    });
+
+    history.pushState({chatOpen: true}, '');
+}
 
         function closeFullChat() {
     document.getElementById('fullChatView').style.display = 'none';
@@ -2355,157 +2376,161 @@ async function loadChats() {
             return el;
         }
 
-        async function loadMessages() {
-            if (messagesListener) messagesListener.off();
-            const list = document.getElementById('messageList');
-            list.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-muted);">Loading messages...</div>';
+// REPLACE your loadMessages function with this fixed version:
+async function loadMessages() {
+    if (messagesListener) messagesListener.off();
+    const list = document.getElementById('messageList');
+    list.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-muted);">Loading messages...</div>';
 
-            // Clear any existing message elements completely
-            list.innerHTML = '';
-            const processedMessageKeys = new Set();
-
-            // If online, load from Firebase first
-            if (navigator.onLine) {
-                try {
-                    // Load messages from Firebase
-                    const messagesSnap = await db.ref(`messages/${currentRoomId}`).limitToLast(100).once('value');
-                    
-                    if (messagesSnap.exists()) {
-                        const messages = [];
-                        messagesSnap.forEach(child => {
-                            const msg = child.val();
-                            msg.key = child.key;
-                            messages.push(msg);
-                        });
-                        
-                        // Sort messages by timestamp
-                        messages.sort((a,b) => a.ts - b.ts);
-                        
-                        // Render Firebase messages
-                        messages.forEach(msg => {
-                            processedMessageKeys.add(msg.key);
-                            
-                            const isSent = msg.sender === currentUser.uid;
-                            const text = decrypt(msg.text, currentFriendUid);
-                            const isRead = msg.read || false;
-                            
-                            const el = createMessageElement(text, isSent, msg.ts, '', msg.key, isRead, msg.reactions || {});
-                            list.appendChild(el);
-                        });
-                        
-                        list.scrollTop = list.scrollHeight;
-                    }
-                } catch (error) {
-                    console.error("Error loading from Firebase:", error);
-                }
+    // CRITICAL FIX: Ensure shared key is derived before loading messages
+    if (!sharedKeys[currentFriendUid]) {
+        try {
+            const profileSnap = await db.ref(`users/${currentFriendUid}/profile`).once('value');
+            const profile = profileSnap.val() || {};
+            
+            if (profile.publicKey) {
+                const secret = await deriveSharedSecret(JSON.parse(profile.publicKey));
+                sharedKeys[currentFriendUid] = secret;
+                localStorage.setItem('sharedKeys', JSON.stringify(sharedKeys));
             } else {
-                // If offline, load from cache
-                const cached = await getCachedMessages(currentRoomId);
-                if (cached.length > 0) {
-                    cached.sort((a,b) => a.ts - b.ts);
-                    cached.forEach(m => {
-                        if (m.key) processedMessageKeys.add(m.key);
-                        
-                        const isSent = m.sender === currentUser.uid;
-                        const text = decrypt(m.text, currentFriendUid);
-                        const isRead = m.read || false;
-                        
-                        const el = createMessageElement(text, isSent, m.ts, m.localId || '', m.key || '', isRead, m.reactions || {});
-                        list.appendChild(el);
-                    });
-                    list.scrollTop = list.scrollHeight;
-                }
+                console.error('Friend public key not found');
+                list.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-muted);">Unable to load messages: Encryption key missing</div>';
+                return;
             }
-
-            // Realtime listener for new messages
-            messagesListener = db.ref(`messages/${currentRoomId}`).limitToLast(100);
-
-            messagesListener.on('child_added', async snap => {
-                const msg = snap.val();
-                msg.key = snap.key;
-
-                // Skip if already rendered
-                if (processedMessageKeys.has(msg.key)) return;
-                
-                processedMessageKeys.add(msg.key);
-
-                // Cache the message for offline use
-                await cacheMessage(currentRoomId, msg);
-
-                // Remove pending version if exists
-                if (msg.localId) {
-                    const pendingEl = list.querySelector(`[data-local-id="${msg.localId}"]`);
-                    if (pendingEl) pendingEl.remove();
-                }
-
-                // Add the new message
-                const isSent = msg.sender === currentUser.uid;
-                const text = decrypt(msg.text, currentFriendUid);
-                const isRead = msg.read || false;
-                
-                const el = createMessageElement(text, isSent, msg.ts, '', msg.key, isRead, msg.reactions || {});
-                list.appendChild(el);
-                list.scrollTop = list.scrollHeight;
-
-                // Mark as read if received message
-                if (!isSent && currentFriendUid) {
-                    await db.ref(`messages/${currentRoomId}/${msg.key}`).update({ read: true });
-                }
-            });
-
-            // Listen for read status updates
-            db.ref(`messages/${currentRoomId}`).on('child_changed', snap => {
-                const msg = snap.val();
-                const existingEl = list.querySelector(`[data-msg-key="${snap.key}"]`);
-                if (existingEl) {
-                    // Update reactions
-                    const reactionsContainer = existingEl.querySelector('.message-reactions');
-                    if (reactionsContainer) {
-                        reactionsContainer.remove();
-                    }
-                    
-                    if (msg.reactions && Object.keys(msg.reactions).length > 0) {
-                        let reactionsHtml = '<div class="message-reactions">';
-                        Object.entries(msg.reactions).forEach(([emoji, users]) => {
-                            if (users && users.length > 0) {
-                                const count = users.length;
-                                const userReacted = users.includes(currentUser.uid);
-                                reactionsHtml += `
-                                    <div class="reaction-badge ${userReacted ? 'user-reacted' : ''}" 
-                                         data-emoji="${emoji}" 
-                                         data-key="${snap.key}"
-                                         onclick="toggleReaction('${snap.key}', '${emoji}')">
-                                        <span class="emoji">${emoji}</span>
-                                        ${count > 1 ? `<span class="count">${count}</span>` : ''}
-                                    </div>
-                                `;
-                            }
-                        });
-                        reactionsHtml += '</div>';
-                        
-                        const timeDiv = existingEl.querySelector('.message-time');
-                        if (timeDiv) {
-                            timeDiv.insertAdjacentHTML('afterend', reactionsHtml);
-                        }
-                    }
-                    
-                    // Update read status
-                    const ticks = existingEl.querySelector('.message-ticks');
-                    if (ticks && msg.read) {
-                        ticks.classList.add('read');
-                        ticks.textContent = '✓✓';
-                    }
-                }
-            });
-
-            // Close reaction picker when clicking outside
-            document.addEventListener('click', function(e) {
-                const picker = document.getElementById('reactionPicker');
-                if (picker.style.display === 'flex' && !picker.contains(e.target) && !e.target.closest('.message')) {
-                    hideReactionPicker();
-                }
-            });
+        } catch (error) {
+            console.error('Error deriving shared key:', error);
+            list.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-muted);">Error loading encryption key</div>';
+            return;
         }
+    }
+
+    // Clear the list after key is ready
+    list.innerHTML = '';
+    const processedMessageKeys = new Set();
+
+    // If online, load from Firebase first
+    if (navigator.onLine) {
+        try {
+            const messagesSnap = await db.ref(`messages/${currentRoomId}`).limitToLast(100).once('value');
+            
+            if (messagesSnap.exists()) {
+                const messages = [];
+                messagesSnap.forEach(child => {
+                    const msg = child.val();
+                    msg.key = child.key;
+                    messages.push(msg);
+                });
+                
+                messages.sort((a,b) => a.ts - b.ts);
+                
+                messages.forEach(msg => {
+                    processedMessageKeys.add(msg.key);
+                    
+                    const isSent = msg.sender === currentUser.uid;
+                    // Use currentFriendUid for both sent and received - same shared secret
+                    const text = decrypt(msg.text, currentFriendUid);
+                    const isRead = msg.read || false;
+                    
+                    const el = createMessageElement(text, isSent, msg.ts, '', msg.key, isRead, msg.reactions || {});
+                    list.appendChild(el);
+                });
+                
+                list.scrollTop = list.scrollHeight;
+            }
+        } catch (error) {
+            console.error("Error loading from Firebase:", error);
+        }
+    } else {
+        // Offline: load from cache
+        const cached = await getCachedMessages(currentRoomId);
+        if (cached.length > 0) {
+            cached.sort((a,b) => a.ts - b.ts);
+            cached.forEach(m => {
+                if (m.key) processedMessageKeys.add(m.key);
+                
+                const isSent = m.sender === currentUser.uid;
+                const text = decrypt(m.text, currentFriendUid);
+                const isRead = m.read || false;
+                
+                const el = createMessageElement(text, isSent, m.ts, m.localId || '', m.key || '', isRead, m.reactions || {});
+                list.appendChild(el);
+            });
+            list.scrollTop = list.scrollHeight;
+        }
+    }
+
+    // Realtime listener for new messages
+    messagesListener = db.ref(`messages/${currentRoomId}`).limitToLast(100);
+
+    messagesListener.on('child_added', async snap => {
+        const msg = snap.val();
+        msg.key = snap.key;
+
+        if (processedMessageKeys.has(msg.key)) return;
+        processedMessageKeys.add(msg.key);
+
+        await cacheMessage(currentRoomId, msg);
+
+        // Remove pending version if exists
+        if (msg.localId) {
+            const pendingEl = list.querySelector(`[data-local-id="${msg.localId}"]`);
+            if (pendingEl) pendingEl.remove();
+        }
+
+        const isSent = msg.sender === currentUser.uid;
+        const text = decrypt(msg.text, currentFriendUid);
+        const isRead = msg.read || false;
+        
+        const el = createMessageElement(text, isSent, msg.ts, '', msg.key, isRead, msg.reactions || {});
+        list.appendChild(el);
+        list.scrollTop = list.scrollHeight;
+
+        // Mark received messages as read
+        if (!isSent && currentFriendUid) {
+            await db.ref(`messages/${currentRoomId}/${msg.key}`).update({ read: true });
+        }
+    });
+
+    // Listen for read status and reaction updates
+    db.ref(`messages/${currentRoomId}`).on('child_changed', snap => {
+        const msg = snap.val();
+        const existingEl = list.querySelector(`[data-msg-key="${snap.key}"]`);
+        if (!existingEl) return;
+
+        // Update reactions
+        const reactionsContainer = existingEl.querySelector('.message-reactions');
+        if (reactionsContainer) reactionsContainer.remove();
+        
+        if (msg.reactions && Object.keys(msg.reactions).length > 0) {
+            let reactionsHtml = '<div class="message-reactions">';
+            Object.entries(msg.reactions).forEach(([emoji, users]) => {
+                if (users && users.length > 0) {
+                    const count = users.length;
+                    const userReacted = users.includes(currentUser.uid);
+                    reactionsHtml += `
+                        <div class="reaction-badge ${userReacted ? 'user-reacted' : ''}" 
+                             data-emoji="${emoji}" 
+                             data-key="${snap.key}"
+                             onclick="toggleReaction('${snap.key}', '${emoji}')">
+                            <span class="emoji">${emoji}</span>
+                            ${count > 1 ? `<span class="count">${count}</span>` : ''}
+                        </div>
+                    `;
+                }
+            });
+            reactionsHtml += '</div>';
+            
+            const timeDiv = existingEl.querySelector('.message-time');
+            if (timeDiv) timeDiv.insertAdjacentHTML('afterend', reactionsHtml);
+        }
+        
+        // Update read status
+        const ticks = existingEl.querySelector('.message-ticks');
+        if (ticks && msg.read && !existingEl.classList.contains('received')) {
+            ticks.classList.add('read');
+        }
+    });
+}
 
         async function syncPendingMessages() {
             if (!navigator.onLine) return;
