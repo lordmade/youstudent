@@ -1099,42 +1099,17 @@ document.getElementById('avatarInput').addEventListener('change', async (e) => {
             return Array.from(new Uint8Array(sharedSecret)).map(b => b.toString(16).padStart(2,'0')).join('');
         }
 
-     function decrypt(ciphertext, friendUid) {
+// REPLACE your entire decrypt() function with this fixed version:
+function decrypt(ciphertext, friendUid) {
     if (!ciphertext) return "[Empty message]";
 
     let key = sharedKeys[friendUid];
 
-    // ── AUTO-RECOVERY: Try to derive key if missing ────────────────────────
+    // If no key exists, return a loading indicator - DON'T try to derive here
+    // The key derivation should happen BEFORE messages are loaded
     if (!key) {
-        console.warn(`[DECRYPT] No shared key for ${friendUid} — starting derivation`);
-
-        // Fire-and-forget async derivation (can't await in sync function)
-        (async () => {
-            try {
-                const profileSnap = await db.ref(`users/${friendUid}/profile`).once('value');
-                const pubKeyStr = profileSnap.val()?.publicKey;
-
-                if (!pubKeyStr) {
-                    console.error(`[DECRYPT] Friend ${friendUid} has no publicKey in database`);
-                    return;
-                }
-
-                const pubJwk = JSON.parse(pubKeyStr);
-                const secret = await deriveSharedSecret(pubJwk);
-
-                sharedKeys[friendUid] = secret;
-                localStorage.setItem('sharedKeys', JSON.stringify(sharedKeys));
-
-                console.log(`[DECRYPT AUTO] Successfully derived shared key for ${friendUid}: ${secret.substring(0, 8)}...`);
-                
-                // Optional: you could force-refresh the message list here if you want
-                // but usually next child_added will pick it up
-            } catch (err) {
-                console.error(`[DECRYPT AUTO] Key recovery failed for ${friendUid}:`, err);
-            }
-        })();
-
-        return "🔒 Setting up encryption... (try refreshing in a few seconds)";
+        console.warn(`[DECRYPT] No shared key for ${friendUid}`);
+        return "🔒 Waiting for encryption key...";
     }
 
     try {
@@ -1142,17 +1117,16 @@ document.getElementById('avatarInput').addEventListener('change', async (e) => {
         const decrypted = bytes.toString(CryptoJS.enc.Utf8);
 
         if (!decrypted) {
-            console.warn(`[DECRYPT] Empty result after decryption — likely wrong key for ${friendUid}`);
+            console.warn(`[DECRYPT] Empty result after decryption for ${friendUid}`);
             return "🔒 Wrong encryption key or corrupted message";
         }
 
         return decrypted;
     } catch (e) {
         console.error(`[DECRYPT] CryptoJS error for ${friendUid}:`, e);
-        return "🔒 Decryption failed (possible key mismatch)";
+        return "🔒 Decryption failed";
     }
 }
-
         async function initApp() {
             await openIndexedDB();
 
@@ -1698,8 +1672,11 @@ async function loadChats() {
         }
 
         /* --- Full Chat View --- */
+// REPLACE your openFullChat() function with this fixed version:
 async function openFullChat(friendUid) {
     currentFriendUid = friendUid;
+    
+    // CRITICAL: Set currentRoomId BEFORE deriving key
     currentRoomId = currentUser.uid < friendUid ? currentUser.uid + "_" + friendUid : friendUid + "_" + currentUser.uid;
     
     const snap = await db.ref(`users/${friendUid}/profile`).once('value');
@@ -1708,16 +1685,23 @@ async function openFullChat(friendUid) {
     document.getElementById('chatFriendName').textContent = profile.name;
     document.getElementById('chatFriendAvatar').src = profile.photo || generateLetterAvatar(profile.name);
 
-    // Derive shared key if not already available (loadMessages will also do this as backup)
-    if (!sharedKeys[friendUid] && profile.publicKey) {
+    // CRITICAL FIX: Derive shared key BEFORE opening chat view
+    if (!sharedKeys[friendUid]) {
         try {
-            const secret = await deriveSharedSecret(JSON.parse(profile.publicKey));
-            sharedKeys[friendUid] = secret;
-            localStorage.setItem('sharedKeys', JSON.stringify(sharedKeys));
+            if (profile.publicKey) {
+                const secret = await deriveSharedSecret(JSON.parse(profile.publicKey));
+                sharedKeys[friendUid] = secret;
+                localStorage.setItem('sharedKeys', JSON.stringify(sharedKeys));
+                console.log(`[OPEN FULL CHAT] Derived shared key for ${friendUid}`);
+            } else {
+                console.error(`[OPEN FULL CHAT] Friend ${friendUid} has no publicKey`);
+                toast("Cannot open chat: Friend's encryption key not found. Ask them to log in first.");
+                return; // Don't open chat if we can't get the key
+            }
         } catch (error) {
-            console.error('Error deriving shared secret:', error);
-            toast('Encryption setup failed');
-            return;
+            console.error('[OPEN FULL CHAT] Error deriving shared secret:', error);
+            toast('Encryption setup failed. Please try again.');
+            return; // Don't open chat if encryption fails
         }
     }
 
@@ -2409,13 +2393,13 @@ async function openFullChat(friendUid) {
             return el;
         }
 
-// REPLACE your loadMessages function with this fixed version:
+// REPLACE your entire loadMessages() function with this fixed version:
 async function loadMessages() {
     if (messagesListener) messagesListener.off();
     const list = document.getElementById('messageList');
     list.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-muted);">Loading messages...</div>';
 
-    // CRITICAL FIX: Ensure shared key is derived before loading messages
+    // CRITICAL FIX: Ensure shared key is derived BEFORE loading messages
     if (!sharedKeys[currentFriendUid]) {
         try {
             const profileSnap = await db.ref(`users/${currentFriendUid}/profile`).once('value');
@@ -2425,71 +2409,52 @@ async function loadMessages() {
                 const secret = await deriveSharedSecret(JSON.parse(profile.publicKey));
                 sharedKeys[currentFriendUid] = secret;
                 localStorage.setItem('sharedKeys', JSON.stringify(sharedKeys));
+                console.log(`[LOAD MESSAGES] Derived shared key for ${currentFriendUid}`);
             } else {
-                console.error('Friend public key not found');
-                list.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-muted);">Unable to load messages: Encryption key missing</div>';
+                console.error('[LOAD MESSAGES] Friend public key not found');
+                list.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-muted);">Unable to load messages: Encryption key missing. Ask your friend to log in first.</div>';
                 return;
             }
         } catch (error) {
-            console.error('Error deriving shared key:', error);
-            list.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-muted);">Error loading encryption key</div>';
+            console.error('[LOAD MESSAGES] Error deriving shared key:', error);
+            list.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-muted);">Error loading encryption key. Please try again.</div>';
             return;
         }
     }
 
-    // Clear the list after key is ready
+    // Now load messages - key is guaranteed to exist
     list.innerHTML = '';
     const processedMessageKeys = new Set();
 
-    // If online, load from Firebase first
-    if (navigator.onLine) {
-        try {
-            const messagesSnap = await db.ref(`messages/${currentRoomId}`).limitToLast(100).once('value');
+    // Load from Firebase
+    try {
+        const messagesSnap = await db.ref(`messages/${currentRoomId}`).limitToLast(100).once('value');
+        
+        if (messagesSnap.exists()) {
+            const messages = [];
+            messagesSnap.forEach(child => {
+                const msg = child.val();
+                msg.key = child.key;
+                messages.push(msg);
+            });
             
-            if (messagesSnap.exists()) {
-                const messages = [];
-                messagesSnap.forEach(child => {
-                    const msg = child.val();
-                    msg.key = child.key;
-                    messages.push(msg);
-                });
+            messages.sort((a,b) => a.ts - b.ts);
+            
+            messages.forEach(msg => {
+                processedMessageKeys.add(msg.key);
                 
-                messages.sort((a,b) => a.ts - b.ts);
+                const isSent = msg.sender === currentUser.uid;
+                const text = decrypt(msg.text, currentFriendUid);
+                const isRead = msg.read || false;
                 
-                messages.forEach(msg => {
-                    processedMessageKeys.add(msg.key);
-                    
-                    const isSent = msg.sender === currentUser.uid;
-                    // Use currentFriendUid for both sent and received - same shared secret
-                    const text = decrypt(msg.text, currentFriendUid);
-                    const isRead = msg.read || false;
-                    
-                    const el = createMessageElement(text, isSent, msg.ts, '', msg.key, isRead, msg.reactions || {});
-                    list.appendChild(el);
-                });
-                
-                list.scrollTop = list.scrollHeight;
-            }
-        } catch (error) {
-            console.error("Error loading from Firebase:", error);
-        }
-    } else {
-        // Offline: load from cache
-        const cached = await getCachedMessages(currentRoomId);
-        if (cached.length > 0) {
-            cached.sort((a,b) => a.ts - b.ts);
-            cached.forEach(m => {
-                if (m.key) processedMessageKeys.add(m.key);
-                
-                const isSent = m.sender === currentUser.uid;
-                const text = decrypt(m.text, currentFriendUid);
-                const isRead = m.read || false;
-                
-                const el = createMessageElement(text, isSent, m.ts, m.localId || '', m.key || '', isRead, m.reactions || {});
+                const el = createMessageElement(text, isSent, msg.ts, '', msg.key, isRead, msg.reactions || {});
                 list.appendChild(el);
             });
-            list.scrollTop = list.scrollHeight;
         }
+    } catch (error) {
+        console.error("Error loading from Firebase:", error);
+        list.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-muted);">Error loading messages</div>';
+        return;
     }
 
     // Realtime listener for new messages
@@ -2564,7 +2529,6 @@ async function loadMessages() {
         }
     });
 }
-
         async function syncPendingMessages() {
             if (!navigator.onLine) return;
 
@@ -2621,7 +2585,8 @@ async function loadMessages() {
             updateUnreadDot();
         }
 
-      async function addFriendLogic() {
+// REPLACE your addFriendLogic() function with this fixed version:
+async function addFriendLogic() {
     const raw = document.getElementById('friendVynixId').value.trim().toLowerCase();
     const vid = raw.startsWith('@') ? raw.substring(1) : raw;
     if (!vid) {
@@ -2659,21 +2624,21 @@ async function loadMessages() {
             isArchived: false
         });
 
-        // Also create the reverse entry (good practice for two-way chat list)
+        // Also create the reverse entry
         await db.ref(`users/${targetUid}/chats/${currentUser.uid}`).update({
-            ts: Date.now() // at least set timestamp so they see you
+            ts: Date.now()
         });
 
-        toast("Friend added! Encryption setup in progress...");
+        toast("Friend added! Setting up encryption...");
 
-        // ── IMPORTANT: Derive shared key RIGHT NOW ─────────────────────────────
+        // Derive shared key for the new friend
         try {
             const profileSnap = await db.ref(`users/${targetUid}/profile`).once('value');
             const pubKeyStr = profileSnap.val()?.publicKey;
 
             if (!pubKeyStr) {
                 console.warn(`[ADD FRIEND] ${targetUid} has no publicKey yet`);
-                toast("Friend added — encryption will be ready when they log in");
+                toast("Friend added — they'll need to log in before you can chat securely");
             } else {
                 const pubJwk = JSON.parse(pubKeyStr);
                 const secret = await deriveSharedSecret(pubJwk);
@@ -2682,11 +2647,11 @@ async function loadMessages() {
                 localStorage.setItem('sharedKeys', JSON.stringify(sharedKeys));
 
                 console.log(`[ADD FRIEND] Derived shared key for new friend ${targetUid}`);
-                toast("Friend added & encryption ready ✓");
+                toast("Friend added! Encryption ready ✓");
             }
         } catch (keyErr) {
             console.error("[ADD FRIEND] Key derivation failed:", keyErr);
-            toast("Friend added — but encryption setup failed (will retry later)");
+            toast("Friend added — encryption will be set up when they log in");
         }
 
         closeAll();
