@@ -1099,32 +1099,62 @@ document.getElementById('avatarInput').addEventListener('change', async (e) => {
             return Array.from(new Uint8Array(sharedSecret)).map(b => b.toString(16).padStart(2,'0')).join('');
         }
 
-// REPLACE your entire decrypt() function with this fixed version:
+
+// PROPER DECRYPT FUNCTION - Replace your existing decrypt() with this
 function decrypt(ciphertext, friendUid) {
     if (!ciphertext) return "[Empty message]";
-
-    let key = sharedKeys[friendUid];
-
-    // If no key exists, return a loading indicator - DON'T try to derive here
-    // The key derivation should happen BEFORE messages are loaded
+    
+    const key = sharedKeys[friendUid];
     if (!key) {
-        console.warn(`[DECRYPT] No shared key for ${friendUid}`);
-        return "🔒 Waiting for encryption key...";
+        console.warn(`[DECRYPT] No shared key available for ${friendUid}`);
+        return "🔒 Encrypted message"; // Show lock icon when key unavailable
     }
-
+    
     try {
         const bytes = CryptoJS.AES.decrypt(ciphertext, key);
         const decrypted = bytes.toString(CryptoJS.enc.Utf8);
-
+        
         if (!decrypted) {
-            console.warn(`[DECRYPT] Empty result after decryption for ${friendUid}`);
-            return "🔒 Wrong encryption key or corrupted message";
+            console.error(`[DECRYPT] Decryption returned empty for ${friendUid}`);
+            return "🔒 Cannot decrypt message";
         }
-
+        
         return decrypted;
     } catch (e) {
-        console.error(`[DECRYPT] CryptoJS error for ${friendUid}:`, e);
-        return "🔒 Decryption failed";
+        console.error(`[DECRYPT] Decryption failed for ${friendUid}:`, e);
+        return "🔒 Decryption error";
+    }
+}
+        // Add this function after your deriveSharedSecret function
+async function ensureSharedKey(friendUid) {
+    // Return existing key if available
+    if (sharedKeys[friendUid]) {
+        return sharedKeys[friendUid];
+    }
+    
+    try {
+        // Fetch friend's public key from Firebase
+        const profileSnap = await db.ref(`users/${friendUid}/profile`).once('value');
+        const profile = profileSnap.val();
+        
+        if (!profile || !profile.publicKey) {
+            console.warn(`[ENSURE KEY] No publicKey found for ${friendUid}`);
+            return null;
+        }
+        
+        // Derive shared secret using ECDH
+        const friendPublicJwk = JSON.parse(profile.publicKey);
+        const secret = await deriveSharedSecret(friendPublicJwk);
+        
+        // Store and save the key
+        sharedKeys[friendUid] = secret;
+        localStorage.setItem('sharedKeys', JSON.stringify(sharedKeys));
+        
+        console.log(`[ENSURE KEY] Successfully derived key for ${friendUid}`);
+        return secret;
+    } catch (error) {
+        console.error(`[ENSURE KEY] Failed to derive key for ${friendUid}:`, error);
+        return null;
     }
 }
         async function initApp() {
@@ -1349,164 +1379,130 @@ function switchSubTab(tab) {
 
 
 /* ----------  FULL FIXED loadChats()  ---------- */
+// Replace your existing loadChats() with this improved version
 async function loadChats() {
     if (chatsListener) chatsListener.off();
-
+    
     chatsListener = db.ref(`users/${currentUser.uid}/chats`);
-
-    /* 🔒 Run once to draw initial list (or on tab change) */
-    let firstLoad = true;
-
+    
     chatsListener.on('value', async snap => {
         const list = document.getElementById('chatList');
-
+        
         if (!snap.exists()) {
             list.innerHTML = `<p style="text-align:center;padding:50px;color:var(--text-muted);">No chats yet.</p>`;
             updateUnreadDot();
             return;
         }
-
-        /* ----------  FIRST LOAD – draw everything  ---------- */
-        if (firstLoad) {
-            firstLoad = false;
-
-            const chats = [];
-            snap.forEach(child => {
-                const data = child.val();
-                if (data.lastMsg) { data.uid = child.key; chats.push(data); }
-            });
-            chats.sort((a, b) => (b.ts || 0) - (a.ts || 0));
-
-            let filtered = chats;
-            if (currentSubTab === 'favourite') filtered = chats.filter(c => c.isFavourite);
-            else if (currentSubTab === 'unread') filtered = chats.filter(c => c.unreadCount > 0);
-            else if (currentSubTab === 'archived') filtered = chats.filter(c => c.isArchived);
-
-            if (filtered.length === 0) {
-                let msg = '';
-                switch (currentSubTab) {
-                    case 'all': msg = 'No chats yet.'; break;
-                    case 'favourite': msg = 'No favourite chats.'; break;
-                    case 'unread': msg = 'No unread chats.'; break;
-                    case 'archived': msg = 'No archived chats.'; break;
-                }
-                list.innerHTML = `<p style="text-align:center;padding:50px;color:var(--text-muted);">${msg}</p>`;
-                updateUnreadDot();
-                return;
+        
+        // Collect all chats first
+        const chats = [];
+        snap.forEach(child => {
+            const data = child.val();
+            if (data.lastMsg) {
+                data.uid = child.key;
+                chats.push(data);
             }
-
-            /* clear only on first draw */
-            list.innerHTML = '';
-
-            for (const chat of filtered) {
-                const pSnap = await db.ref(`users/${chat.uid}/profile`).once('value');
-                const profile = pSnap.val() || { name: 'User', photo: '' };
-                const lastText = decrypt(chat.lastMsg, chat.uid);
-
-                let readStatus = '';
-                if (chat.lastMsgSender === currentUser.uid) {
-                    const roomId = currentUser.uid < chat.uid ? `${currentUser.uid}_${chat.uid}` : `${chat.uid}_${currentUser.uid}`;
-                    const lastMsgSnap = await db.ref(`messages/${roomId}`).orderByChild('ts').limitToLast(1).once('value');
-                    lastMsgSnap.forEach(child => {
-                        const msg = child.val();
-                        if (msg.read && msg.sender === currentUser.uid) readStatus = '<span style="color:var(--primary);margin-left:4px;">✓✓</span>';
-                        else if (msg.sender === currentUser.uid) readStatus = '<span style="color:var(--text-muted);margin-left:4px;">✓✓</span>';
-                    });
-                }
-
-                const card = document.createElement('div');
-                card.className = 'chat-card';
-                card.dataset.uid = chat.uid;
-                card.onclick = () => openFullChat(chat.uid);
-                card.innerHTML = `
-                    <div class="avatar-container">
-                        <img class="avatar" src="${profile.photo || generateLetterAvatar(profile.name)}">
-                        <div class="online-indicator" id="online_${chat.uid}" style="display:none"></div>
-                    </div>
-                    <div class="chat-info">
-                        <div class="chat-header-row">
-                            <div class="chat-name">${profile.name}</div>
-                            <div class="chat-time" data-ts="${chat.ts}">${formatTimeAgo(chat.ts)}</div>
-                        </div>
-                        <div class="chat-msg-row">
-                            <div class="chat-msg">${lastText}${readStatus}</div>
-                            ${chat.unreadCount > 0 ? `<div class="unread-badge">${chat.unreadCount > 99 ? '99+' : chat.unreadCount}</div>` : ''}
-                        </div>
-                    </div>`;
-                list.appendChild(card);
-
-                db.ref(`users/${chat.uid}/online`).on('value', s => {
-                    const el = document.getElementById(`online_${chat.uid}`);
-                    if (el) el.style.display = s.val() === true ? 'block' : 'none';
-                });
-
-                let longPressTimer;
-                card.addEventListener('touchstart', e => { longPressTimer = setTimeout(() => showContextMenu(e, chat.uid), 500); });
-                card.addEventListener('touchend', () => clearTimeout(longPressTimer));
-                card.addEventListener('touchmove', () => clearTimeout(longPressTimer));
-                card.addEventListener('contextmenu', e => { e.preventDefault(); showContextMenu(e, chat.uid); });
-
-                cachedChats[chat.uid] = {
-                    uid: chat.uid, name: profile.name, photo: profile.photo,
-                    lastMsgText: lastText, ts: chat.ts, unreadCount: chat.unreadCount || 0
-                };
-            }
-            localStorage.setItem('cached_chats', JSON.stringify(cachedChats));
+        });
+        chats.sort((a, b) => (b.ts || 0) - (a.ts || 0));
+        
+        // Filter by current tab
+        let filtered = chats;
+        if (currentSubTab === 'favourite') filtered = chats.filter(c => c.isFavourite);
+        else if (currentSubTab === 'unread') filtered = chats.filter(c => c.unreadCount > 0);
+        else if (currentSubTab === 'archived') filtered = chats.filter(c => c.isArchived);
+        
+        if (filtered.length === 0) {
+            let msg = 'No chats yet.';
+            if (currentSubTab === 'favourite') msg = 'No favourite chats.';
+            if (currentSubTab === 'unread') msg = 'No unread chats.';
+            if (currentSubTab === 'archived') msg = 'No archived chats.';
+            list.innerHTML = `<p style="text-align:center;padding:50px;color:var(--text-muted);">${msg}</p>`;
             updateUnreadDot();
             return;
         }
-
-        /* ----------  SUBSEQUENT UPDATES – patch only the changed card  ---------- */
-        snap.forEach(async child => {
-            const uid   = child.key;
-            const data  = child.val();
-            if (!data.lastMsg) return;                       // skip empty nodes
-
-            const card  = list.querySelector(`.chat-card[data-uid="${uid}"]`);
-            if (!card) return;                               // card not on screen (filter)
-
-            /* ----  fetch profile once  ---- */
-            const pSnap  = await db.ref(`users/${uid}/profile`).once('value');
-            const profile= pSnap.val() || { name:'User',photo:'' };
-            const lastText= decrypt(data.lastMsg, uid);
-
-            /* ----  read-status  ---- */
+        
+        // Pre-load all necessary encryption keys in parallel
+        const keyPromises = filtered.map(chat => ensureSharedKey(chat.uid));
+        await Promise.all(keyPromises);
+        
+        // Clear and rebuild list
+        list.innerHTML = '';
+        
+        for (const chat of filtered) {
+            const pSnap = await db.ref(`users/${chat.uid}/profile`).once('value');
+            const profile = pSnap.val() || { name: 'User', photo: '' };
+            
+            // Now decrypt safely with key guaranteed to exist (or show encrypted placeholder)
+            const lastText = decrypt(chat.lastMsg, chat.uid);
+            
+            // Check read status for sent messages
             let readStatus = '';
-            if (data.lastMsgSender === currentUser.uid) {
-                const roomId = currentUser.uid < uid ? `${currentUser.uid}_${uid}` : `${uid}_${currentUser.uid}`;
+            if (chat.lastMsgSender === currentUser.uid) {
+                const roomId = currentUser.uid < chat.uid 
+                    ? `${currentUser.uid}_${chat.uid}` 
+                    : `${chat.uid}_${currentUser.uid}`;
                 const lastMsgSnap = await db.ref(`messages/${roomId}`).orderByChild('ts').limitToLast(1).once('value');
-                lastMsgSnap.forEach(ch => {
-                    const msg = ch.val();
-                    if (msg.read && msg.sender === currentUser.uid)       readStatus = '<span style="color:var(--primary);margin-left:4px;">✓✓</span>';
-                    else if (msg.sender === currentUser.uid)              readStatus = '<span style="color:var(--text-muted);margin-left:4px;">✓✓</span>';
+                lastMsgSnap.forEach(child => {
+                    const msg = child.val();
+                    if (msg.read && msg.sender === currentUser.uid) {
+                        readStatus = '<span style="color:var(--primary);margin-left:4px;">✓✓</span>';
+                    } else if (msg.sender === currentUser.uid) {
+                        readStatus = '<span style="color:var(--text-muted);margin-left:4px;">✓✓</span>';
+                    }
                 });
             }
-
-            /* ----  update DOM  ---- */
-            card.querySelector('.chat-name').textContent = profile.name;
-            card.querySelector('.chat-msg').innerHTML  = `${lastText}${readStatus}`;
-            const timeEl = card.querySelector('.chat-time');
-            timeEl.textContent = formatTimeAgo(data.ts);
-            timeEl.dataset.ts  = data.ts;
-
-            const badgeEl = card.querySelector('.unread-badge');
-            if (data.unreadCount > 0) {
-                if (badgeEl) {
-                    badgeEl.textContent = data.unreadCount > 99 ? '99+' : data.unreadCount;
-                    badgeEl.style.display = 'flex';
-                } else {
-                    card.querySelector('.chat-msg-row').insertAdjacentHTML('beforeend',
-                        `<div class="unread-badge">${data.unreadCount > 99 ? '99+' : data.unreadCount}</div>`);
-                }
-            } else if (badgeEl) badgeEl.style.display = 'none';
-
-            /* ----  update cache  ---- */
-            cachedChats[uid] = {
-                uid, name: profile.name, photo: profile.photo,
-                lastMsgText: lastText, ts: data.ts, unreadCount: data.unreadCount || 0
+            
+            // Update cache
+            cachedChats[chat.uid] = {
+                uid: chat.uid,
+                name: profile.name,
+                photo: profile.photo,
+                lastMsgText: lastText,
+                ts: chat.ts,
+                unreadCount: chat.unreadCount || 0
             };
-        });
-
+            
+            const card = document.createElement('div');
+            card.className = 'chat-card';
+            card.dataset.uid = chat.uid;
+            card.onclick = () => openFullChat(chat.uid);
+            card.innerHTML = `
+                <div class="avatar-container">
+                    <img class="avatar" src="${profile.photo || generateLetterAvatar(profile.name)}">
+                    <div class="online-indicator" id="online_${chat.uid}" style="display:none"></div>
+                </div>
+                <div class="chat-info">
+                    <div class="chat-header-row">
+                        <div class="chat-name">${profile.name}</div>
+                        <div class="chat-time">${formatTimeAgo(chat.ts)}</div>
+                    </div>
+                    <div class="chat-msg-row">
+                        <div class="chat-msg">${lastText}${readStatus}</div>
+                        ${chat.unreadCount > 0 ? `<div class="unread-badge">${chat.unreadCount > 99 ? '99+' : chat.unreadCount}</div>` : ''}
+                    </div>
+                </div>`;
+            
+            list.appendChild(card);
+            
+            // Listen for online status
+            db.ref(`users/${chat.uid}/online`).on('value', s => {
+                const el = document.getElementById(`online_${chat.uid}`);
+                if (el) el.style.display = s.val() === true ? 'block' : 'none';
+            });
+            
+            // Long press for context menu
+            let longPressTimer;
+            card.addEventListener('touchstart', e => {
+                longPressTimer = setTimeout(() => showContextMenu(e, chat.uid), 500);
+            });
+            card.addEventListener('touchend', () => clearTimeout(longPressTimer));
+            card.addEventListener('touchmove', () => clearTimeout(longPressTimer));
+            card.addEventListener('contextmenu', e => {
+                e.preventDefault();
+                showContextMenu(e, chat.uid);
+            });
+        }
+        
         localStorage.setItem('cached_chats', JSON.stringify(cachedChats));
         updateUnreadDot();
     });
@@ -1671,44 +1667,48 @@ async function loadChats() {
             document.getElementById('friendsSheet').classList.remove('active');
         }
 
-        /* --- Full Chat View --- */
-// REPLACE your openFullChat() function with this fixed version:
+   
+// Replace your existing openFullChat() with this proper implementation
 async function openFullChat(friendUid) {
     currentFriendUid = friendUid;
+    currentRoomId = currentUser.uid < friendUid 
+        ? `${currentUser.uid}_${friendUid}` 
+        : `${friendUid}_${currentUser.uid}`;
     
-    // CRITICAL: Set currentRoomId BEFORE deriving key
-    currentRoomId = currentUser.uid < friendUid ? currentUser.uid + "_" + friendUid : friendUid + "_" + currentUser.uid;
-    
+    // Get friend profile
     const snap = await db.ref(`users/${friendUid}/profile`).once('value');
     const profile = snap.val() || { name: "User", photo: "" };
     
     document.getElementById('chatFriendName').textContent = profile.name;
     document.getElementById('chatFriendAvatar').src = profile.photo || generateLetterAvatar(profile.name);
-
-    // CRITICAL FIX: Derive shared key BEFORE opening chat view
+    
+    // CRITICAL: Ensure encryption key is ready BEFORE loading messages
     if (!sharedKeys[friendUid]) {
-        try {
-            if (profile.publicKey) {
-                const secret = await deriveSharedSecret(JSON.parse(profile.publicKey));
-                sharedKeys[friendUid] = secret;
-                localStorage.setItem('sharedKeys', JSON.stringify(sharedKeys));
-                console.log(`[OPEN FULL CHAT] Derived shared key for ${friendUid}`);
-            } else {
-                console.error(`[OPEN FULL CHAT] Friend ${friendUid} has no publicKey`);
-                toast("Cannot open chat: Friend's encryption key not found. Ask them to log in first.");
-                return; // Don't open chat if we can't get the key
-            }
-        } catch (error) {
-            console.error('[OPEN FULL CHAT] Error deriving shared secret:', error);
-            toast('Encryption setup failed. Please try again.');
-            return; // Don't open chat if encryption fails
+        console.log(`[OPEN CHAT] Deriving key for ${friendUid}...`);
+        const key = await ensureSharedKey(friendUid);
+        
+        if (!key) {
+            console.error(`[OPEN CHAT] Cannot establish secure connection with ${friendUid}`);
+            toast("Establishing secure connection...");
+            // Retry once after short delay
+            setTimeout(async () => {
+                const retryKey = await ensureSharedKey(friendUid);
+                if (retryKey) {
+                    toast("Secure connection established!");
+                    loadMessages();
+                } else {
+                    toast("Could not establish secure connection. Ask your friend to log in.");
+                }
+            }, 2000);
+            return; // Don't open chat yet
         }
     }
-
+    
+    // Now safe to show chat and load messages
     document.getElementById('fullChatView').style.display = 'flex';
     loadMessages();
     markAsRead(friendUid);
-
+    
     // Listen for online status
     db.ref(`users/${friendUid}/online`).on('value', s => {
         const statusEl = document.getElementById('chatStatusInfo');
@@ -1716,7 +1716,7 @@ async function openFullChat(friendUid) {
         statusEl.textContent = isOnline ? 'Online' : 'Offline';
         statusEl.style.color = isOnline ? 'var(--online)' : 'var(--text-muted)';
     });
-
+    
     history.pushState({chatOpen: true}, '');
 }
 
@@ -2393,88 +2393,101 @@ async function openFullChat(friendUid) {
             return el;
         }
 
-// REPLACE your entire loadMessages() function with this fixed version:
+
+// Replace your existing loadMessages() with this improved version
 async function loadMessages() {
     if (messagesListener) messagesListener.off();
+    
     const list = document.getElementById('messageList');
     list.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-muted);">Loading messages...</div>';
-
-    // CRITICAL FIX: Ensure shared key is derived BEFORE loading messages
+    
+    // CRITICAL: Verify key exists before proceeding
     if (!sharedKeys[currentFriendUid]) {
-        try {
-            const profileSnap = await db.ref(`users/${currentFriendUid}/profile`).once('value');
-            const profile = profileSnap.val() || {};
+        console.log(`[LOAD MESSAGES] Key missing for ${currentFriendUid}, attempting to derive...`);
+        const key = await ensureSharedKey(currentFriendUid);
+        
+        if (!key) {
+            console.error(`[LOAD MESSAGES] Cannot load messages without encryption key`);
+            list.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-muted);">Waiting for secure connection...</div>';
             
-            if (profile.publicKey) {
-                const secret = await deriveSharedSecret(JSON.parse(profile.publicKey));
-                sharedKeys[currentFriendUid] = secret;
-                localStorage.setItem('sharedKeys', JSON.stringify(sharedKeys));
-                console.log(`[LOAD MESSAGES] Derived shared key for ${currentFriendUid}`);
-            } else {
-                console.error('[LOAD MESSAGES] Friend public key not found');
-                list.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-muted);">Unable to load messages: Encryption key missing. Ask your friend to log in first.</div>';
-                return;
-            }
-        } catch (error) {
-            console.error('[LOAD MESSAGES] Error deriving shared key:', error);
-            list.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-muted);">Error loading encryption key. Please try again.</div>';
+            // Retry after delay
+            setTimeout(() => loadMessages(), 3000);
             return;
         }
     }
-
-    // Now load messages - key is guaranteed to exist
+    
+    // Clear loading message
     list.innerHTML = '';
     const processedMessageKeys = new Set();
-
-    // Load from Firebase
+    
+    // Load from Firebase or cache
     try {
-        const messagesSnap = await db.ref(`messages/${currentRoomId}`).limitToLast(100).once('value');
-        
-        if (messagesSnap.exists()) {
-            const messages = [];
-            messagesSnap.forEach(child => {
-                const msg = child.val();
-                msg.key = child.key;
-                messages.push(msg);
-            });
+        if (navigator.onLine) {
+            const messagesSnap = await db.ref(`messages/${currentRoomId}`).limitToLast(100).once('value');
             
-            messages.sort((a,b) => a.ts - b.ts);
-            
-            messages.forEach(msg => {
-                processedMessageKeys.add(msg.key);
+            if (messagesSnap.exists()) {
+                const messages = [];
+                messagesSnap.forEach(child => {
+                    const msg = child.val();
+                    msg.key = child.key;
+                    messages.push(msg);
+                });
                 
-                const isSent = msg.sender === currentUser.uid;
-                const text = decrypt(msg.text, currentFriendUid);
-                const isRead = msg.read || false;
+                messages.sort((a, b) => a.ts - b.ts);
                 
-                const el = createMessageElement(text, isSent, msg.ts, '', msg.key, isRead, msg.reactions || {});
-                list.appendChild(el);
-            });
+                messages.forEach(msg => {
+                    processedMessageKeys.add(msg.key);
+                    const isSent = msg.sender === currentUser.uid;
+                    const text = decrypt(msg.text, currentFriendUid);
+                    const isRead = msg.read || false;
+                    
+                    const el = createMessageElement(text, isSent, msg.ts, '', msg.key, isRead, msg.reactions || {});
+                    list.appendChild(el);
+                });
+                
+                list.scrollTop = list.scrollHeight;
+            }
+        } else {
+            // Load from cache when offline
+            const cached = await getCachedMessages(currentRoomId);
+            if (cached.length > 0) {
+                cached.sort((a, b) => a.ts - b.ts);
+                cached.forEach(m => {
+                    if (m.key) processedMessageKeys.add(m.key);
+                    const isSent = m.sender === currentUser.uid;
+                    const text = decrypt(m.text, currentFriendUid);
+                    const isRead = m.read || false;
+                    
+                    const el = createMessageElement(text, isSent, m.ts, m.localId || '', m.key || '', isRead, m.reactions || {});
+                    list.appendChild(el);
+                });
+                list.scrollTop = list.scrollHeight;
+            }
         }
     } catch (error) {
-        console.error("Error loading from Firebase:", error);
+        console.error("[LOAD MESSAGES] Error loading messages:", error);
         list.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-muted);">Error loading messages</div>';
-        return;
     }
-
-    // Realtime listener for new messages
+    
+    // Set up real-time listener for new messages
     messagesListener = db.ref(`messages/${currentRoomId}`).limitToLast(100);
-
+    
     messagesListener.on('child_added', async snap => {
         const msg = snap.val();
         msg.key = snap.key;
-
+        
         if (processedMessageKeys.has(msg.key)) return;
         processedMessageKeys.add(msg.key);
-
+        
+        // Cache for offline use
         await cacheMessage(currentRoomId, msg);
-
-        // Remove pending version if exists
+        
+        // Remove pending message if exists
         if (msg.localId) {
             const pendingEl = list.querySelector(`[data-local-id="${msg.localId}"]`);
             if (pendingEl) pendingEl.remove();
         }
-
+        
         const isSent = msg.sender === currentUser.uid;
         const text = decrypt(msg.text, currentFriendUid);
         const isRead = msg.read || false;
@@ -2482,19 +2495,19 @@ async function loadMessages() {
         const el = createMessageElement(text, isSent, msg.ts, '', msg.key, isRead, msg.reactions || {});
         list.appendChild(el);
         list.scrollTop = list.scrollHeight;
-
+        
         // Mark received messages as read
         if (!isSent && currentFriendUid) {
             await db.ref(`messages/${currentRoomId}/${msg.key}`).update({ read: true });
         }
     });
-
-    // Listen for read status and reaction updates
+    
+    // Listen for updates (read status, reactions)
     db.ref(`messages/${currentRoomId}`).on('child_changed', snap => {
         const msg = snap.val();
         const existingEl = list.querySelector(`[data-msg-key="${snap.key}"]`);
         if (!existingEl) return;
-
+        
         // Update reactions
         const reactionsContainer = existingEl.querySelector('.message-reactions');
         if (reactionsContainer) reactionsContainer.remove();
@@ -2585,28 +2598,30 @@ async function loadMessages() {
             updateUnreadDot();
         }
 
-// REPLACE your addFriendLogic() function with this fixed version:
+
+// Replace your existing addFriendLogic() with this improved version
 async function addFriendLogic() {
     const raw = document.getElementById('friendVynixId').value.trim().toLowerCase();
     const vid = raw.startsWith('@') ? raw.substring(1) : raw;
+    
     if (!vid) {
         toast('Please enter a Vynix ID');
         return;
     }
-
+    
     try {
         const snap = await db.ref(`vynix_ids/${vid}`).once('value');
         if (!snap.exists()) {
             toast('User ID not found');
             return;
         }
-
+        
         const targetUid = snap.val();
         if (targetUid === currentUser.uid) {
             toast("That's your own ID!");
             return;
         }
-
+        
         const existing = await db.ref(`users/${currentUser.uid}/chats/${targetUid}`).once('value');
         if (existing.exists()) {
             toast('Already in your chats!');
@@ -2614,8 +2629,8 @@ async function addFriendLogic() {
             openFullChat(targetUid);
             return;
         }
-
-        // Create chat entry for current user
+        
+        // Create chat entries
         await db.ref(`users/${currentUser.uid}/chats/${targetUid}`).set({
             lastMsg: null,
             ts: Date.now(),
@@ -2623,43 +2638,31 @@ async function addFriendLogic() {
             isFavourite: false,
             isArchived: false
         });
-
-        // Also create the reverse entry
+        
+        // Also create reverse entry
         await db.ref(`users/${targetUid}/chats/${currentUser.uid}`).update({
             ts: Date.now()
         });
-
+        
         toast("Friend added! Setting up encryption...");
-
-        // Derive shared key for the new friend
-        try {
-            const profileSnap = await db.ref(`users/${targetUid}/profile`).once('value');
-            const pubKeyStr = profileSnap.val()?.publicKey;
-
-            if (!pubKeyStr) {
-                console.warn(`[ADD FRIEND] ${targetUid} has no publicKey yet`);
-                toast("Friend added — they'll need to log in before you can chat securely");
-            } else {
-                const pubJwk = JSON.parse(pubKeyStr);
-                const secret = await deriveSharedSecret(pubJwk);
-
-                sharedKeys[targetUid] = secret;
-                localStorage.setItem('sharedKeys', JSON.stringify(sharedKeys));
-
-                console.log(`[ADD FRIEND] Derived shared key for new friend ${targetUid}`);
-                toast("Friend added! Encryption ready ✓");
-            }
-        } catch (keyErr) {
-            console.error("[ADD FRIEND] Key derivation failed:", keyErr);
-            toast("Friend added — encryption will be set up when they log in");
+        
+        // Attempt to derive shared key immediately
+        const key = await ensureSharedKey(targetUid);
+        if (key) {
+            toast("Secure connection ready!");
+        } else {
+            toast("Friend added - encryption will be ready when they come online");
         }
-
+        
         closeAll();
         document.getElementById('friendVynixId').value = "";
-
+        
+        // Refresh chat list
+        loadChats();
+        
     } catch (err) {
-        console.error("Add friend failed:", err);
-        toast("Could not add friend — please try again");
+        console.error("[ADD FRIEND] Error:", err);
+        toast("Could not add friend - please try again");
     }
 }
         function searchFriends() {
