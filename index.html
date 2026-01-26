@@ -3,115 +3,39 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Mini Twitter Clone – Firebase + Cloudinary</title>
+  <title>Post – Mini Twitter</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script type="module">
-    // Firebase SDK
+    // Firebase SDK – modular imports
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
-    import { 
-      getAuth, 
-      onAuthStateChanged, 
-      createUserWithEmailAndPassword, 
-      signInWithEmailAndPassword,
-      signOut
-    } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+    import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
     import { getFirestore, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 
-    window.firebaseModules = { 
-      initializeApp, getAuth, onAuthStateChanged, 
-      createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut,
-      getFirestore, collection, addDoc, serverTimestamp 
+    window.firebaseModules = {
+      initializeApp, getAuth, onAuthStateChanged, signOut,
+      getFirestore, collection, addDoc, serverTimestamp
     };
   </script>
   <style>
     textarea { resize: none; }
     .progress-bar { transition: width 0.3s ease; }
-    .page { display: none; }
-    .page.active { display: block; }
   </style>
 </head>
-<body class="bg-gray-50 min-h-screen">
+<body class="bg-gray-50 min-h-screen flex flex-col">
 
-  <!-- ── LOGIN PAGE ──────────────────────────────────────── -->
-  <div id="page-login" class="page min-h-screen flex items-center justify-center p-4">
-    <div class="w-full max-w-md bg-white rounded-2xl shadow-xl p-8">
-      <h1 class="text-3xl font-bold text-center mb-2">Welcome</h1>
-      <p class="text-center text-gray-600 mb-8">Sign in to start posting</p>
-
-      <div id="loginError" class="text-red-600 text-center mb-6 min-h-[1.5rem]"></div>
-
-      <form id="loginForm">
-        <div class="mb-5">
-          <label class="block text-gray-700 mb-2 font-medium">Email</label>
-          <input type="email" id="loginEmail" required autocomplete="email"
-                 class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                 placeholder="you@example.com"/>
-        </div>
-        <div class="mb-8">
-          <label class="block text-gray-700 mb-2 font-medium">Password</label>
-          <input type="password" id="loginPassword" required autocomplete="current-password"
-                 class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                 placeholder="••••••••"/>
-        </div>
-        <button type="submit" id="loginBtn"
-                class="w-full bg-blue-600 text-white py-3 rounded-full font-bold hover:bg-blue-700 transition disabled:opacity-50">
-          Sign In
-        </button>
-      </form>
-
-      <p class="text-center mt-6 text-gray-600">
-        Don't have an account? 
-        <button id="goToSignup" class="text-blue-600 font-medium hover:underline">Sign Up</button>
-      </p>
+  <!-- Header -->
+  <header class="bg-white border-b border-gray-200 px-4 py-3 flex justify-between items-center sticky top-0 z-10">
+    <h1 class="text-xl font-bold">Post</h1>
+    <div>
+      <span id="userDisplay" class="text-sm text-gray-600 mr-4 hidden"></span>
+      <button id="logoutBtn" class="text-sm text-red-600 hover:underline hidden">Logout</button>
     </div>
-  </div>
+  </header>
 
-  <!-- ── SIGNUP PAGE (same style, hidden initially) ─────── -->
-  <div id="page-signup" class="page min-h-screen flex items-center justify-center p-4">
-    <div class="w-full max-w-md bg-white rounded-2xl shadow-xl p-8">
-      <h1 class="text-3xl font-bold text-center mb-2">Create Account</h1>
-      <p class="text-center text-gray-600 mb-8">Join the conversation</p>
+  <!-- Main content -->
+  <main class="flex-1 p-4 max-w-lg mx-auto w-full">
 
-      <div id="signupError" class="text-red-600 text-center mb-6 min-h-[1.5rem]"></div>
-
-      <form id="signupForm">
-        <div class="mb-5">
-          <label class="block text-gray-700 mb-2 font-medium">Email</label>
-          <input type="email" id="signupEmail" required autocomplete="email"
-                 class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                 placeholder="you@example.com"/>
-        </div>
-        <div class="mb-8">
-          <label class="block text-gray-700 mb-2 font-medium">Password</label>
-          <input type="password" id="signupPassword" required autocomplete="new-password" minlength="6"
-                 class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                 placeholder="At least 6 characters"/>
-        </div>
-        <button type="submit" id="signupBtn"
-                class="w-full bg-blue-600 text-white py-3 rounded-full font-bold hover:bg-blue-700 transition disabled:opacity-50">
-          Create Account
-        </button>
-      </form>
-
-      <p class="text-center mt-6 text-gray-600">
-        Already have an account? 
-        <button id="goToLogin" class="text-blue-600 font-medium hover:underline">Sign In</button>
-      </p>
-    </div>
-  </div>
-
-  <!-- ── COMPOSER PAGE ───────────────────────────────────── -->
-  <div id="page-composer" class="page max-w-lg mx-auto p-4 pt-6">
-
-    <div class="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden">
-
-      <div class="px-5 py-4 border-b border-gray-200 flex justify-between items-center">
-        <h1 class="text-xl font-bold">Post</h1>
-        <div>
-          <span id="userDisplay" class="text-sm text-gray-600 mr-4"></span>
-          <button id="logoutBtn" class="text-sm text-red-600 hover:underline">Logout</button>
-        </div>
-      </div>
+    <div class="bg-white rounded-2xl shadow border border-gray-200 overflow-hidden">
 
       <div class="p-5">
 
@@ -120,7 +44,7 @@
           <div class="flex-1">
             <textarea
               id="tweetText"
-              rows="4"
+              rows="5"
               placeholder="What is happening?!"
               maxlength="280"
               class="w-full border-0 focus:ring-0 text-xl placeholder-gray-500 outline-none"
@@ -132,27 +56,31 @@
           </div>
         </div>
 
-        <div id="previewContainer" class="hidden mb-4 rounded-xl overflow-hidden border border-gray-200 bg-gray-50 relative">
+        <!-- Media Preview -->
+        <div id="previewContainer" class="hidden mb-4 rounded-xl overflow-hidden border border-gray-200 relative bg-gray-50">
           <img id="previewImage" class="hidden w-full max-h-80 object-contain" alt="Preview"/>
           <video id="previewVideo" class="hidden w-full max-h-80" controls></video>
-          <button id="removeMediaBtn" class="absolute top-2 right-2 bg-black bg-opacity-60 text-white rounded-full w-9 h-9 flex items-center justify-center text-xl hover:bg-opacity-80">×</button>
+          <button id="removeMediaBtn" class="absolute top-2 right-2 bg-black/70 text-white rounded-full w-9 h-9 flex items-center justify-center text-2xl hover:bg-black/90 transition">×</button>
         </div>
 
+        <!-- Upload Progress -->
         <div id="progressSection" class="hidden mb-5">
           <div class="w-full bg-gray-200 rounded-full h-2.5 overflow-hidden">
             <div id="progressBar" class="bg-blue-600 h-2.5 rounded-full progress-bar" style="width: 0%"></div>
           </div>
           <p class="text-center text-sm text-gray-600 mt-2">
-            Uploading... <span id="progressPercent">0</span>%
+            Uploading… <span id="progressPercent">0</span>%
           </p>
         </div>
 
-        <div id="message" class="text-center mb-5 min-h-[1.25rem] text-sm"></div>
+        <!-- Feedback message -->
+        <div id="message" class="text-center mb-5 min-h-[1.5rem] text-sm"></div>
 
+        <!-- Controls -->
         <div class="flex items-center justify-between">
           <label class="cursor-pointer hover:opacity-80 transition">
             <input type="file" id="mediaInput" accept="image/jpeg,image/png,image/gif,video/mp4,video/quicktime,video/webm" class="hidden" disabled/>
-            <span class="text-blue-600 text-3xl">📷</span>
+            <span class="text-blue-600 text-3xl font-bold">📷</span>
           </label>
 
           <button id="postBtn" class="px-8 py-3 bg-blue-600 text-white font-bold rounded-full hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed transition text-lg" disabled>
@@ -161,12 +89,12 @@
         </div>
       </div>
     </div>
-  </div>
+  </main>
 
   <script type="module">
-    const { initializeApp, getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, getFirestore, collection, addDoc, serverTimestamp } = window.firebaseModules;
+    const { initializeApp, getAuth, onAuthStateChanged, signOut, getFirestore, collection, addDoc, serverTimestamp } = window.firebaseModules;
 
-    // Your Firebase config
+    // ── Your Firebase config ─────────────────────────────────────
     const firebaseConfig = {
       apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
       authDomain: "fire-b-a8878.firebaseapp.com",
@@ -181,17 +109,11 @@
     const auth = getAuth(app);
     const db   = getFirestore(app);
 
-    // Cloudinary config – CHANGE THESE
-    const CLOUD_NAME    = "YOUR_CLOUDINARY_CLOUD_NAME_HERE";
-    const UPLOAD_PRESET = "YOUR_UNSIGNED_UPLOAD_PRESET_HERE";
+    // ── Cloudinary config – replace these ────────────────────────
+    const CLOUD_NAME    = "YOUR_CLOUD_NAME_HERE";
+    const UPLOAD_PRESET = "YOUR_UNSIGNED_PRESET_HERE";
 
-    // DOM elements
-    const pages = {
-      login: document.getElementById("page-login"),
-      signup: document.getElementById("page-signup"),
-      composer: document.getElementById("page-composer")
-    };
-
+    // ── DOM ──────────────────────────────────────────────────────
     const tweetText      = document.getElementById("tweetText");
     const charCount      = document.getElementById("charCount");
     const mediaInput     = document.getElementById("mediaInput");
@@ -210,119 +132,38 @@
     let selectedFile = null;
     let currentUser  = null;
 
-    // ── Simple hash-based routing ────────────────────────────────
-    function showPage(pageName) {
-      Object.values(pages).forEach(p => p.classList.remove("active"));
-      pages[pageName].classList.add("active");
-    }
-
-    function navigate(to) {
-      window.location.hash = to;
-    }
-
-    window.addEventListener("hashchange", () => {
-      const hash = window.location.hash.slice(1) || "login";
-      if (["login", "signup", "composer"].includes(hash)) {
-        showPage(hash);
-      }
-    });
-
-    // Initial navigation
-    if (window.location.hash) {
-      const initial = window.location.hash.slice(1);
-      if (["login", "signup", "composer"].includes(initial)) {
-        showPage(initial);
-      }
-    } else {
-      showPage("login");
-    }
-
-    // ── Auth listener ────────────────────────────────────────────
+    // ── Auth check & redirect if not logged in ───────────────────
     onAuthStateChanged(auth, (user) => {
       currentUser = user;
 
-      if (user) {
-        userDisplay.textContent = user.email.split('@')[0];
-        tweetText.disabled = false;
-        mediaInput.disabled = false;
-        postBtn.disabled = !(tweetText.value.trim() || selectedFile);
-        navigate("composer");
-      } else {
-        userDisplay.textContent = "";
-        tweetText.disabled = true;
-        mediaInput.disabled = true;
-        postBtn.disabled = true;
-        navigate("login");
+      if (!user) {
+        // Redirect to your existing login page
+        window.location.href = "login.html";  // ← change to your actual login filename/path
+        return;
       }
+
+      // User is authenticated → show content
+      userDisplay.textContent = user.email?.split('@')[0] || "User";
+      userDisplay.classList.remove("hidden");
+      logoutBtn.classList.remove("hidden");
+
+      tweetText.disabled = false;
+      mediaInput.disabled = false;
+      postBtn.disabled = true; // will enable when there's content
       updateUI();
     });
-
-    // ── Login form ───────────────────────────────────────────────
-    document.getElementById("loginForm").addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const email = document.getElementById("loginEmail").value.trim();
-      const password = document.getElementById("loginPassword").value;
-      const errorEl = document.getElementById("loginError");
-      const btn = document.getElementById("loginBtn");
-
-      errorEl.textContent = "";
-      btn.disabled = true;
-      btn.textContent = "Signing in...";
-
-      try {
-        await signInWithEmailAndPassword(auth, email, password);
-        // onAuthStateChanged will handle redirect
-      } catch (err) {
-        errorEl.textContent = err.code === "auth/wrong-password" ? "Incorrect password" :
-                              err.code === "auth/user-not-found" ? "No account found" :
-                              err.message || "Login failed";
-      } finally {
-        btn.disabled = false;
-        btn.textContent = "Sign In";
-      }
-    });
-
-    // ── Signup form ──────────────────────────────────────────────
-    document.getElementById("signupForm").addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const email = document.getElementById("signupEmail").value.trim();
-      const password = document.getElementById("signupPassword").value;
-      const errorEl = document.getElementById("signupError");
-      const btn = document.getElementById("signupBtn");
-
-      errorEl.textContent = "";
-      btn.disabled = true;
-      btn.textContent = "Creating...";
-
-      try {
-        await createUserWithEmailAndPassword(auth, email, password);
-        // onAuthStateChanged will handle redirect
-      } catch (err) {
-        errorEl.textContent = err.code === "auth/email-already-in-use" ? "Email already in use" :
-                              err.code === "auth/weak-password" ? "Password too weak (min 6 chars)" :
-                              err.message || "Signup failed";
-      } finally {
-        btn.disabled = false;
-        btn.textContent = "Create Account";
-      }
-    });
-
-    // ── Toggle between login & signup ────────────────────────────
-    document.getElementById("goToSignup").addEventListener("click", () => navigate("signup"));
-    document.getElementById("goToLogin").addEventListener("click", () => navigate("login"));
 
     // ── Logout ───────────────────────────────────────────────────
     logoutBtn.addEventListener("click", async () => {
       await signOut(auth);
-      navigate("login");
+      // Redirect happens automatically via onAuthStateChanged
     });
 
-    // ── Composer logic (same as before) ──────────────────────────
+    // ── UI logic ─────────────────────────────────────────────────
     function updateUI() {
       const len = tweetText.value.trim().length;
       charCount.textContent = len;
-      const hasContent = len > 0 || !!selectedFile;
-      postBtn.disabled = !hasContent || !currentUser;
+      postBtn.disabled = !currentUser || (!len && !selectedFile);
     }
 
     tweetText.addEventListener("input", updateUI);
@@ -330,13 +171,20 @@
     mediaInput.addEventListener("change", (e) => {
       const file = e.target.files?.[0];
       if (!file) return;
+
       selectedFile = file;
       const url = URL.createObjectURL(file);
+
       if (file.type.startsWith("image/")) {
-        previewImage.src = url; previewImage.classList.remove("hidden"); previewVideo.classList.add("hidden");
+        previewImage.src = url;
+        previewImage.classList.remove("hidden");
+        previewVideo.classList.add("hidden");
       } else if (file.type.startsWith("video/")) {
-        previewVideo.src = url; previewVideo.classList.remove("hidden"); previewImage.classList.add("hidden");
+        previewVideo.src = url;
+        previewVideo.classList.remove("hidden");
+        previewImage.classList.add("hidden");
       }
+
       previewCont.classList.remove("hidden");
       messageEl.textContent = "";
       updateUI();
@@ -345,13 +193,18 @@
     removeBtn.addEventListener("click", () => {
       selectedFile = null;
       previewCont.classList.add("hidden");
-      previewImage.src = ""; previewVideo.src = "";
+      previewImage.src = "";
+      previewVideo.src = "";
       mediaInput.value = "";
       updateUI();
     });
 
+    // ── Upload to Cloudinary ─────────────────────────────────────
     async function uploadToCloudinary(file) {
-      if (!CLOUD_NAME || !UPLOAD_PRESET) throw new Error("Cloudinary config missing");
+      if (!CLOUD_NAME || !UPLOAD_PRESET) {
+        throw new Error("Cloudinary configuration missing");
+      }
+
       const url = `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/auto/upload`;
       const formData = new FormData();
       formData.append("file", file);
@@ -360,6 +213,7 @@
       return new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();
         xhr.open("POST", url, true);
+
         xhr.upload.onprogress = (e) => {
           if (e.lengthComputable) {
             const percent = Math.round((e.loaded / e.total) * 100);
@@ -367,6 +221,7 @@
             progressText.textContent = percent;
           }
         };
+
         xhr.onload = () => {
           if (xhr.status >= 200 && xhr.status < 300) {
             resolve(JSON.parse(xhr.responseText));
@@ -374,12 +229,16 @@
             reject(new Error("Upload failed"));
           }
         };
+
         xhr.onerror = () => reject(new Error("Network error"));
         xhr.send(formData);
       });
     }
 
+    // ── Save to Firestore ────────────────────────────────────────
     async function saveTweet(text, media = null) {
+      if (!currentUser) throw new Error("Not authenticated");
+
       const tweetData = {
         text,
         authorId: currentUser.uid,
@@ -389,15 +248,22 @@
         retweetsCount: 0,
         repliesCount: 0
       };
+
       if (media) {
-        tweetData.media = [{ url: media.secure_url, public_id: media.public_id, resource_type: media.resource_type }];
+        tweetData.media = [{
+          url: media.secure_url,
+          public_id: media.public_id,
+          resource_type: media.resource_type
+        }];
       }
+
       await addDoc(collection(db, "tweets"), tweetData);
     }
 
+    // ── Post handler ─────────────────────────────────────────────
     postBtn.addEventListener("click", async () => {
       if (!currentUser) {
-        navigate("login");
+        window.location.href = "login.html";
         return;
       }
 
@@ -430,7 +296,7 @@
         setTimeout(() => { messageEl.textContent = ""; }, 3000);
       } catch (err) {
         messageEl.className = "text-red-600";
-        messageEl.textContent = err.message || "Failed to post";
+        messageEl.textContent = err.message || "Failed to post tweet";
       } finally {
         postBtn.disabled = false;
       }
