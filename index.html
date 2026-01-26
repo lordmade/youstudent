@@ -103,7 +103,15 @@
     .main-feed { border-right: 1px solid var(--border); max-width: 600px; width: 100%; }
 
     .tweet-box { padding: 1rem; border-bottom: 1px solid var(--border); display: flex; gap: 1rem; }
-    .user-avatar { width: 48px; height: 48px; border-radius: 50%; background: #e1e8ed; object-fit: cover; }
+    .user-avatar {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: #e1e8ed;
+      object-fit: cover;
+      flex-shrink: 0;
+      border: 1px solid var(--border);
+    }
     .tweet-textarea { width: 100%; border: none; outline: none; font-size: 1.2rem; resize: none; margin-top: 0.5rem; min-height: 50px; }
     .image-preview { width: 100%; max-height: 300px; object-fit: cover; border-radius: 16px; display: none; margin-top: 10px; }
     .tweet-btn { 
@@ -288,6 +296,14 @@
     .comment-input { flex: 1; padding: 0.5rem 1rem; border: 1px solid var(--border); border-radius: 20px; outline: none; }
     .comment-item { margin-bottom: 1rem; display: flex; gap: 0.75rem; font-size: 0.9rem; }
     .comment-content { background: #f0f2f5; padding: 0.5rem 1rem; border-radius: 12px; }
+    .comment-avatar {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      object-fit: cover;
+      flex-shrink: 0;
+      border: 1px solid var(--border);
+    }
 
     #loading-overlay {
       position: fixed; top: 0; left: 0; width: 100%; height: 100%;
@@ -553,9 +569,53 @@
     let selectedFile = null;
 
     // ==========================================
+    //  USER AVATAR HELPER
+    // ==========================================
+
+    const avatarCache = new Map();
+    const defaultAvatar = "https://abs.twimg.com/sticky/default_profile_images/default_profile_normal.png";
+
+    async function getUserAvatar(uid) {
+      if (avatarCache.has(uid)) {
+        return avatarCache.get(uid);
+      }
+      
+      try {
+        const userRef = ref(db, `users/${uid}`);
+        const snapshot = await get(userRef);
+        
+        if (snapshot.exists()) {
+          const userData = snapshot.val();
+          const avatarUrl = userData.photoURL || userData.avatarUrl || defaultAvatar;
+          avatarCache.set(uid, avatarUrl);
+          return avatarUrl;
+        }
+      } catch (err) {
+        console.error("Error fetching avatar:", err);
+      }
+      
+      return defaultAvatar;
+    }
+
+    async function getCurrentUserAvatar() {
+      if (!currentUser) return defaultAvatar;
+      
+      if (avatarCache.has(currentUser.uid)) {
+        return avatarCache.get(currentUser.uid);
+      }
+      
+      if (currentUser.photoURL) {
+        avatarCache.set(currentUser.uid, currentUser.photoURL);
+        return currentUser.photoURL;
+      }
+      
+      return await getUserAvatar(currentUser.uid);
+    }
+
+    // ==========================================
     //  AUTHENTICATION & PROFILE LOADING
     // ==========================================
-    
+
     onAuthStateChanged(auth, async (user) => {
       if (!user) {
         window.location.href = "signup.html";
@@ -564,7 +624,7 @@
 
       currentUser = user;
       isProfileLoading = true;
-      updateTweetButtonState(); // Disable button while loading
+      updateTweetButtonState();
       profileNotice.classList.add('show');
       
       try {
@@ -575,30 +635,29 @@
           const userData = snapshot.val();
           currentUsername = userData.username || userData.displayName || user.email?.split('@')[0];
           
-          if (!currentUsername) {
-            throw new Error("No username found in profile");
-          }
-          
-          // Update avatar if available
-          if (userData.photoURL) {
-            document.getElementById('current-user-avatar').src = userData.photoURL;
-          }
+          const currentAvatar = await getCurrentUserAvatar();
+          document.getElementById('current-user-avatar').src = currentAvatar;
           
           showToast(`Welcome, ${currentUsername}!`, "success");
         } else {
-          // Create basic profile if doesn't exist
           currentUsername = user.email?.split('@')[0] || 'user_' + user.uid.substr(0, 6);
           await set(userRef, {
             username: currentUsername,
             email: user.email,
-            createdAt: Date.now()
+            createdAt: Date.now(),
+            photoURL: user.photoURL || ""
           });
+          
+          const avatarUrl = user.photoURL || defaultAvatar;
+          document.getElementById('current-user-avatar').src = avatarUrl;
+          avatarCache.set(user.uid, avatarUrl);
+          
           showToast("Profile created!", "success");
         }
         
         isProfileLoading = false;
         profileNotice.classList.remove('show');
-        updateTweetButtonState(); // Re-enable button if content exists
+        updateTweetButtonState();
         
       } catch (error) {
         console.error("Profile load error:", error);
@@ -606,8 +665,8 @@
         profileNotice.classList.remove('show');
         showToast("Error loading profile. Please refresh.", "error");
         
-        // Set fallback username
         currentUsername = user.email?.split('@')[0] || 'anonymous';
+        document.getElementById('current-user-avatar').src = defaultAvatar;
         updateTweetButtonState();
       }
     });
@@ -615,7 +674,7 @@
     document.getElementById('logout-btn').addEventListener('click', () => signOut(auth));
 
     // ==========================================
-    //  FIXED TWEET BUTTON - Checks profile loaded
+    //  TWEET BUTTON STATE
     // ==========================================
     function updateTweetButtonState() {
       const hasContent = tweetText.value.trim().length > 0 || selectedFile !== null;
@@ -636,10 +695,8 @@
       }
     }
 
-    // Initialize button state
     updateTweetButtonState();
 
-    // Event listeners for button state
     tweetText.addEventListener('input', updateTweetButtonState);
     tweetText.addEventListener('focus', updateTweetButtonState);
 
@@ -681,7 +738,7 @@
       return usernameMatch || textMatch || hashtagMatch;
     }
 
-    function filterAndRenderPosts(query) {
+    async function filterAndRenderPosts(query) {
       feedStream.innerHTML = '';
       
       const filteredPosts = allPosts.filter(post => matchesSearch(post.data, query));
@@ -699,9 +756,9 @@
         return;
       }
       
-      filteredPosts.forEach(post => {
-        renderPost(post.key, post.data, query);
-      });
+      for (const post of filteredPosts) {
+        await renderPost(post.key, post.data, query);
+      }
       
       feather.replace();
     }
@@ -787,10 +844,9 @@
     });
 
     // ==========================================
-    //  POSTING - FIXED WITH PROPER PROFILE CHECK
+    //  POSTING
     // ==========================================
     tweetBtn.addEventListener('click', async () => {
-      // Double-check profile is loaded
       if (isProfileLoading) {
         showToast("Please wait, profile is still loading...", "error");
         return;
@@ -809,7 +865,6 @@
       const hasContent = tweetText.value.trim().length > 0 || selectedFile !== null;
       if (!hasContent) return;
 
-      // Show loading state on button
       tweetBtn.classList.add('loading');
       tweetBtn.textContent = '';
       loadingOverlay.style.display = 'flex';
@@ -849,7 +904,6 @@
         const newPostRef = push(ref(db, 'posts'));
         await set(newPostRef, postData);
 
-        // Clear form
         tweetText.value = '';
         selectedFile = null;
         imagePreview.style.display = 'none';
@@ -873,7 +927,7 @@
     // ==========================================
     const postsRef = ref(db, 'posts');
 
-    onChildAdded(postsRef, (snapshot) => {
+    onChildAdded(postsRef, async (snapshot) => {
       if (feedStream.querySelector('.skeleton-post')) {
         feedStream.innerHTML = '';
       }
@@ -885,7 +939,7 @@
       
       const searchQuery = searchInput.value;
       if (!searchQuery || matchesSearch(postData, searchQuery)) {
-        renderPost(postKey, postData, searchQuery);
+        await renderPost(postKey, postData, searchQuery);
         feather.replace();
       }
     });
@@ -942,10 +996,12 @@
       return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     }
 
-    function renderPost(key, post, searchQuery = '') {
+    async function renderPost(key, post, searchQuery = '') {
       const el = document.createElement('div');
       el.className = 'post';
       el.id = `post-${key}`;
+
+      const avatarUrl = await getUserAvatar(post.uid);
 
       const imgHtml = post.imageUrl ? `<img src="${post.imageUrl}" class="post-image" loading="lazy" />` : '';
       const timeAgo = getTimeAgo(post.timestamp);
@@ -955,7 +1011,7 @@
       const highlightedUsername = highlightText(post.username, searchQuery);
 
       el.innerHTML = `
-        <img src="https://abs.twimg.com/sticky/default_profile_images/default_profile_normal.png" class="user-avatar">
+        <img src="${avatarUrl}" class="user-avatar" onerror="this.src='${defaultAvatar}'">
         <div class="post-content">
           <div class="post-header">
             <div class="post-meta">
@@ -1090,21 +1146,28 @@
       }
     }
 
-    function openComments(postId) {
+    async function openComments(postId) {
       activePostIdForComments = postId;
       sheetOverlay.classList.add('active');
       commentSheet.classList.add('active');
       commentsList.innerHTML = '<div style="padding:1rem; text-align:center">Loading comments...</div>';
 
-      onValue(ref(db, `postComments/${postId}`), (snapshot) => {
+      onValue(ref(db, `postComments/${postId}`), async (snapshot) => {
         commentsList.innerHTML = '';
         if (snapshot.exists()) {
+          const comments = [];
           snapshot.forEach(child => {
-            const c = child.val();
+            comments.push({ key: child.key, val: child.val() });
+          });
+
+          for (const comment of comments) {
+            const c = comment.val;
+            const commentAvatar = await getUserAvatar(c.uid);
+            
             const div = document.createElement('div');
             div.className = 'comment-item';
             div.innerHTML = `
-              <img src="https://abs.twimg.com/sticky/default_profile_images/default_profile_normal.png" style="width:32px; height:32px; border-radius:50%">
+              <img src="${commentAvatar}" class="comment-avatar" onerror="this.src='${defaultAvatar}'">
               <div>
                 <div class="comment-content">
                   <div style="font-weight:700; font-size:0.85rem">${c.username}</div>
@@ -1113,7 +1176,7 @@
               </div>
             `;
             commentsList.appendChild(div);
-          });
+          }
           commentsList.scrollTop = commentsList.scrollHeight;
         } else {
           commentsList.innerHTML = '<div style="text-align:center; color:#999; margin-top:20px;">No comments yet. Be the first!</div>';
