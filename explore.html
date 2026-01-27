@@ -3,239 +3,344 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Nexus – Explore</title>
+  <title>Nexus - Explore</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/feather-icons"></script>
-
   <style>
     :root {
-      --primary: #6366f1;
-      --bg: #000000;
-      --text: #ffffff;
-      --nav-bg: #ffffff;
-      --border: #e2e8f0;
+      --primary-color: #6366F1;
+      --border: #EFF3F4;
+      --hover-bg: #F7F9F9;
+      --text-dark: #0F1419;
+      --text-light: #536471;
+      --like-red: #F91880;
+      --danger: #e0245e;
+      --success: #10b981;
     }
-
     body {
-      background: var(--bg);
-      color: var(--text);
-      font-family: system-ui, -apple-system, sans-serif;
-      margin: 0;
-      overflow: hidden; /* Critical for scroll snap */
-      height: 100vh;
+      background: white;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      color: var(--text-dark);
+      overflow-y: scroll;
     }
-
-    /* Layout & Sidebar */
-    .layout { display: flex; height: 100vh; }
-
+    * {
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
+      user-select: none;
+      touch-action: manipulation;
+    }
+    .post-text, .comment-content, .tweet-textarea {
+      -webkit-user-select: text;
+      user-select: text;
+    }
+    html { touch-action: pan-x pan-y; }
+    .layout-grid {
+      display: grid;
+      grid-template-columns: 80px 1fr;
+      max-width: 1265px;
+      margin: 0 auto;
+      min-height: 100vh;
+    }
+    @media (min-width: 640px) { .layout-grid { grid-template-columns: 275px 1fr; } }
+    @media (min-width: 1024px) { .layout-grid { grid-template-columns: 275px 600px 1fr; } }
     .sidebar {
-      display: none;
-      width: 280px; height: 100vh; padding: 1.5rem 1rem;
-      border-right: 1px solid #333; background: #0f172a;
-      color: white; z-index: 20;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      padding: 0.5rem 1rem;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      border-right: 1px solid var(--border);
     }
-    @media (min-width: 768px) { .sidebar { display: flex; flex-direction: column; } }
-
+    .logo-box { padding: 10px; margin-bottom: 10px; }
     .nav-item {
-      display: flex; align-items: center; gap: 1rem;
-      padding: 0.85rem 1.25rem; border-radius: 9999px;
-      font-size: 1.125rem; font-weight: 500; color: #94a3b8;
-      transition: all 0.2s; cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 1.25rem;
+      padding: 0.9rem;
+      border-radius: 9999px;
+      cursor: pointer;
+      font-size: 1.25rem;
+      color: var(--text-dark);
+      width: fit-content;
+      transition: 0.2s;
     }
-    .nav-item:hover { background: rgba(255, 255, 255, 0.1); color: white; }
-    .nav-item.active { color: var(--primary); font-weight: 600; }
-
-    /* Feed Container */
-    .feed-container {
-      flex: 1; height: 100vh; overflow-y: scroll;
-      scroll-snap-type: y mandatory; scrollbar-width: none;
-      position: relative; background: #000;
+    .nav-item:hover { background-color: var(--hover-bg); color: var(--primary-color); }
+    .nav-text { display: none; }
+    @media (min-width: 640px) { .nav-text { display: block; } }
+    .feed-header {
+      position: sticky;
+      top: 0;
+      background: rgba(255, 255, 255, 0.92);
+      backdrop-filter: blur(12px);
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid var(--border);
+      font-weight: 800;
+      font-size: 1.25rem;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
     }
-    .feed-container::-webkit-scrollbar { display: none; }
-
-    /* Desktop Constraint */
-    @media (min-width: 768px) {
-      .feed-container { display: flex; flex-direction: column; align-items: center; background: #1e293b; }
-      .video-card-wrapper { width: 420px !important; border-left: 1px solid #333; border-right: 1px solid #333; }
+    .feed-header-title { font-weight: 800; font-size: 1.25rem; flex-shrink: 0; }
+    .header-search { flex: 1; max-width: 420px; }
+    .header-search input {
+      width: 100%;
+      padding: 0.6rem 1.2rem;
+      background: #f7f9f9;
+      border: none;
+      border-radius: 9999px;
+      font-size: 1rem;
+      outline: none;
     }
-
-    /* Video Card */
-    .video-card-wrapper {
-      width: 100%; height: 100vh;
-      scroll-snap-align: start; scroll-snap-stop: always;
-      position: relative; background: #000; overflow: hidden;
+    .main-feed { border-right: 1px solid var(--border); max-width: 600px; width: 100%; }
+    .post { padding: 1rem; border-bottom: 1px solid var(--border); display: flex; gap: 1rem; transition: 0.2s; }
+    .post:hover { background-color: #fafafa; }
+    .post-content { width: 100%; }
+    .post-header { display: flex; justify-content: space-between; align-items: flex-start; position: relative; }
+    .post-meta { flex: 1; }
+    .post-name { font-weight: 700; }
+    .post-username, .post-timestamp { color: var(--text-light); }
+    .post-timestamp { font-size: 0.85rem; margin-top: 2px; }
+    .post-text { margin-top: 0.25rem; font-size: 1rem; white-space: pre-wrap; line-height: 1.5; }
+    .post-image { margin-top: 0.75rem; border-radius: 12px; border: 1px solid var(--border); max-width: 100%; }
+    .post-actions { display: flex; justify-content: space-between; margin-top: 0.75rem; max-width: 80%; color: var(--text-light); }
+    .action-item { display: flex; align-items: center; gap: 5px; cursor: pointer; transition: 0.2s; font-size: 0.85rem; }
+    .action-item:hover { color: var(--primary-color); }
+    .action-item.liked { color: var(--like-red); }
+    .action-item.liked svg { fill: var(--like-red); }
+    .kebab-menu {
+      padding: 8px;
+      border-radius: 50%;
+      cursor: pointer;
+      color: var(--text-light);
+      transition: background 0.2s;
     }
-
-    @media (max-width: 767px) {
-      .video-card-wrapper { height: calc(100vh - 56px); padding-bottom: 56px; }
+    .kebab-menu:hover { background: var(--hover-bg); }
+    .kebab-dropdown {
+      position: absolute;
+      top: 40px;
+      right: 4px;
+      background: white;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+      min-width: 160px;
+      z-index: 30;
+      display: none;
+      overflow: hidden;
     }
-
-    video { width: 100%; height: 100%; object-fit: cover; display: block; }
-
-    /* UI Elements */
-    .overlay-gradient {
-      position: absolute; inset: 0;
-      background: linear-gradient(to top, rgba(0,0,0,0.8) 0%, transparent 30%);
+    .kebab-dropdown.show { display: block; }
+    .kebab-item {
+      padding: 12px 16px;
+      cursor: pointer;
+      font-size: 0.95rem;
+      transition: background 0.15s;
+    }
+    .kebab-item:hover { background: var(--hover-bg); }
+    .kebab-item.delete-post { color: var(--danger); }
+    .kebab-item.delete-post:hover { background: #ffeef0; }
+    .right-sidebar { display: none; padding: 1rem; }
+    @media (min-width: 1024px) { .right-sidebar { display: block; } }
+    .bottom-nav {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: white;
+      border-top: 1px solid var(--border);
+      z-index: 50;
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+    .bottom-nav-inner {
+      display: flex;
+      justify-content: space-around;
+      align-items: center;
+      height: 56px;
+      max-width: 500px;
+      margin: 0 auto;
+    }
+    .nav-bottom-item {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 56px;
+      height: 56px;
+      color: var(--text-dark);
+      position: relative;
+      transition: color 0.2s;
+    }
+    .nav-bottom-item:hover, .nav-bottom-item:focus { color: var(--primary-color); }
+    .nav-bottom-item.active { color: var(--primary-color); }
+    .nav-bottom-item.active::after {
+      content: '';
+      position: absolute;
+      bottom: 6px;
+      width: 24px;
+      height: 3px;
+      background: var(--primary-color);
+      border-radius: 9999px;
+    }
+    #loading-overlay {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(255,255,255,0.8); display: none; justify-content: center; align-items: center; z-index: 2000;
+    }
+    .spinner { border: 4px solid #f3f3f3; border-top: 4px solid var(--primary-color); border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    #toast {
+      position: fixed;
+      bottom: calc(80px + env(safe-area-inset-bottom));
+      left: 50%;
+      transform: translateX(-50%);
+      background: #333;
+      color: white;
+      padding: 12px 24px;
+      border-radius: 9999px;
+      z-index: 200;
+      opacity: 0;
+      transition: opacity 0.4s;
       pointer-events: none;
+      white-space: nowrap;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
     }
-
-    .actions-bar {
-      position: absolute; right: 16px; bottom: 100px;
-      display: flex; flex-direction: column; gap: 24px; align-items: center; z-index: 10;
+    #toast.show { opacity: 1; }
+    #toast.success { background: var(--success); }
+    #toast.error { background: var(--danger); }
+    .search-highlight {
+      background-color: rgba(99, 102, 241, 0.2);
+      border-radius: 2px;
+      padding: 0 2px;
     }
-    @media (max-width: 767px) { .actions-bar { bottom: 80px; } }
-
-    .action-btn { display: flex; flex-direction: column; align-items: center; gap: 6px; cursor: pointer; transition: transform 0.2s; }
-    .action-btn:active { transform: scale(0.85); }
-    
-    .icon-wrapper {
-      width: 48px; height: 48px; background: rgba(255,255,255,0.15);
-      backdrop-filter: blur(4px); border-radius: 50%;
-      display: flex; align-items: center; justify-content: center;
+    /* ──────────────────────────────────────────────── */
+    /* Who to Follow styles                             */
+    /* ──────────────────────────────────────────────── */
+    .who-to-follow-card {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 0.75rem 1.25rem;
+      transition: background 0.2s;
     }
-    
-    .profile-thumb { width: 48px; height: 48px; border-radius: 50%; border: 2px solid white; object-fit: cover; }
-
-    .video-info {
-      position: absolute; left: 16px; bottom: 30px; right: 80px;
-      z-index: 10; text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+    .who-to-follow-card:hover {
+      background: var(--hover-bg);
     }
-    @media (max-width: 767px) { .video-info { bottom: 20px; } }
-
-    .username { font-weight: 700; font-size: 1.1rem; margin-bottom: 8px; display:block; }
-    .caption { font-size: 0.95rem; line-height: 1.4; margin-bottom: 12px; }
-
-    /* Upload Modal */
-    .modal-overlay {
-      position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 1000;
-      display: none; align-items: center; justify-content: center; padding: 1rem;
-    }
-    .modal-overlay.show { display: flex; }
-    
-    .modal-content {
-      background: #1e293b; color: white; border-radius: 20px;
-      width: 100%; max-width: 450px; padding: 1.5rem;
-      border: 1px solid #333;
-    }
-
-    .upload-area {
-      border: 2px dashed #475569; border-radius: 12px; padding: 2rem;
-      text-align: center; cursor: pointer; margin-bottom: 1rem;
+    .follow-btn {
+      margin-left: auto;
+      padding: 0.4rem 1rem;
+      border-radius: 9999px;
+      font-weight: 700;
+      font-size: 0.9rem;
+      cursor: pointer;
       transition: all 0.2s;
+      white-space: nowrap;
     }
-    .upload-area:hover { border-color: var(--primary); background: rgba(99, 102, 241, 0.1); }
-
-    .input-dark {
-      background: #0f172a; border: 1px solid #333; color: white;
-      width: 100%; padding: 0.8rem; border-radius: 8px; margin-bottom: 1rem;
+    .follow-btn.follow {
+      background: var(--primary-color);
+      color: white;
+      border: none;
     }
-
-    .btn-primary {
-      background: var(--primary); color: white; width: 100%;
-      padding: 0.8rem; border-radius: 9999px; font-weight: 600;
-      border: none; cursor: pointer;
+    .follow-btn.following {
+      background: white;
+      color: var(--text-dark);
+      border: 1px solid var(--border);
     }
-    .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
-
-    .progress-bar {
-      height: 4px; background: #333; border-radius: 2px;
-      margin-top: 10px; overflow: hidden; display: none;
+    .follow-btn.following:hover {
+      background: #f0f0f0;
     }
-    .progress-fill { height: 100%; background: var(--primary); width: 0%; transition: width 0.2s; }
-
-    /* Mute & Loading */
-    .volume-toggle {
-      position: absolute; top: 20px; right: 20px;
-      background: rgba(0,0,0,0.5); padding: 8px; border-radius: 50%;
-      cursor: pointer; z-index: 15;
-    }
-
-    .loader-center {
-      display: flex; justify-content: center; align-items: center;
-      height: 100vh; color: #94a3b8; flex-direction: column; gap: 10px;
+    .verified-badge {
+      color: #1d9bf0;
+      width: 1.2em;
+      height: 1.2em;
+      margin-left: 4px;
+      vertical-align: middle;
     }
   </style>
 </head>
 <body>
 
-  <div id="upload-modal" class="modal-overlay">
-    <div class="modal-content">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
-        <h2 style="font-size:1.25rem; font-weight:bold;">New Post</h2>
-        <button id="close-upload"><i data-feather="x"></i></button>
-      </div>
-
-      <div class="upload-area" id="drop-area">
-        <i data-feather="video" style="width:32px; height:32px; margin-bottom:0.5rem; color:#94a3b8;"></i>
-        <p id="file-label" style="color:#94a3b8; font-size:0.9rem;">Click to select video</p>
-        <input type="file" id="video-input" accept="video/*" style="display:none;">
-      </div>
-
-      <textarea id="caption-input" class="input-dark" placeholder="Write a caption..." rows="3"></textarea>
-
-      <div class="progress-bar" id="upload-progress">
-        <div class="progress-fill" id="progress-fill"></div>
-      </div>
-
-      <button id="submit-post-btn" class="btn-primary" disabled>Post Video</button>
-    </div>
+  <div id="loading-overlay">
+    <div class="spinner"></div>
   </div>
+  <div id="toast"></div>
 
-  <div class="layout">
+  <div class="layout-grid">
     <aside class="sidebar">
-      <div class="logo-box" style="padding: 0.75rem 0 1.5rem;">
-        <svg width="44" height="44" viewBox="0 0 40 40" fill="none">
-          <rect width="40" height="40" rx="12" fill="#6366F1"/>
-          <path d="M12 20L18 26L28 14" stroke="white" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
+      <div>
+        <div class="logo-box">
+          <svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect width="40" height="40" rx="12" fill="#6366F1"/>
+            <path d="M12 20L18 26L28 14" stroke="white" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+            <circle cx="28" cy="26" r="4" fill="white"/>
+          </svg>
+        </div>
+        <div class="nav-item">
+          <i data-feather="home"></i> <span class="nav-text">Home</span>
+        </div>
+        <div class="nav-item active">
+          <i data-feather="hash"></i> <span class="nav-text">Explore</span>
+        </div>
+        <div class="nav-item">
+          <i data-feather="bell"></i> <span class="nav-text">Notifications</span>
+        </div>
+        <div class="nav-item">
+          <i data-feather="user"></i> <span class="nav-text">Profile</span>
+        </div>
       </div>
-      <div class="nav-item" onclick="window.location.href='index.html'">
-        <i data-feather="home"></i> <span>Home</span>
-      </div>
-      <div class="nav-item active">
-        <i data-feather="compass"></i> <span>Explore</span>
-      </div>
-      
-      <div class="nav-item" id="desktop-upload-btn" style="color:var(--primary);">
-        <i data-feather="plus-circle"></i> <span>New Post</span>
-      </div>
-
-      <div class="nav-item">
-        <i data-feather="bell"></i> <span>Notifications</span>
-      </div>
-      <div class="nav-item" onclick="window.location.href='profile.html'">
-        <i data-feather="user"></i> <span>Profile</span>
+      <div class="nav-item" id="logout-btn">
+        <i data-feather="log-out"></i> <span class="nav-text">Logout</span>
       </div>
     </aside>
 
-    <main class="feed-container" id="feed">
-      <div class="loader-center" id="feed-loader">
-        <div class="spinner"></div> <span>Loading Feed...</span>
+    <main class="main-feed">
+      <div class="feed-header">
+        <span class="feed-header-title">Explore</span>
+        <div class="header-search">
+          <input type="text" placeholder="Search posts, users, #hashtags..." id="header-search-input" />
+        </div>
       </div>
+      <div id="feed-stream"></div>
     </main>
+
+    <aside class="right-sidebar">
+      <div style="position: sticky; top: 1rem;">
+        <input type="text" placeholder="Search users or topics" style="width:100%; padding:10px 20px; background:#f0f2f5; border-radius:9999px; border:none; outline:none; margin-bottom:1.5rem;" />
+
+        <div style="background:white; border:1px solid var(--border); border-radius:16px; overflow:hidden; margin-bottom:1.5rem;">
+          <div style="padding:1rem 1.25rem; border-bottom:1px solid var(--border);">
+            <h3 style="margin:0; font-size:1.25rem; font-weight:800;">Who to follow</h3>
+          </div>
+          <div id="who-to-follow-list" style="min-height:200px;"></div>
+          <div style="padding:1rem; text-align:center; border-top:1px solid var(--border);">
+            <button id="refresh-suggestions" style="background:none; border:none; color:var(--primary-color); font-weight:700; cursor:pointer;">Refresh</button>
+          </div>
+        </div>
+      </div>
+    </aside>
   </div>
 
-  <nav class="bottom-nav md:hidden" style="position:fixed; bottom:0; left:0; right:0; z-index:50; background:#0f172a; border-top:1px solid #333; padding-bottom: env(safe-area-inset-bottom);">
-    <div style="display:flex; justify-content:space-around; height:56px; max-width:500px; margin:0 auto;">
-      <a href="index.html" style="flex:1; display:flex; align-items:center; justify-content:center; color:#94a3b8;">
-        <i data-feather="home"></i>
+  <nav class="bottom-nav md:hidden">
+    <div class="bottom-nav-inner">
+      <a href="index.html" class="nav-bottom-item" id="bottom-home">
+        <i data-feather="home" class="w-7 h-7"></i>
       </a>
-      <a href="#" style="flex:1; display:flex; align-items:center; justify-content:center; color:var(--primary);">
-        <i data-feather="compass"></i>
+      <a href="explore.html" class="nav-bottom-item active" id="bottom-explore">
+        <i data-feather="hash" class="w-7 h-7"></i>
       </a>
-      <a href="#" id="mobile-upload-btn" style="flex:1; display:flex; align-items:center; justify-content:center; color:white;">
-        <i data-feather="plus-square" style="fill:white; color:#0f172a;"></i>
+      <a href="messages.html" class="nav-bottom-item" id="bottom-notifications">
+        <i data-feather="bell" class="w-7 h-7"></i>
       </a>
-      <a href="profile.html" style="flex:1; display:flex; align-items:center; justify-content:center; color:#94a3b8;">
-        <i data-feather="user"></i>
+      <a href="profile.html" class="nav-bottom-item" id="bottom-profile">
+        <i data-feather="user" class="w-7 h-7"></i>
       </a>
     </div>
   </nav>
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
-    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
-    import { getDatabase, ref, push, set, onValue, get, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
+    import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
+    import { getDatabase, ref, onValue, get, set, remove, runTransaction, push } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
@@ -248,241 +353,301 @@
       measurementId: "G-V4W97VMSKL"
     };
 
-    // Cloudinary Config
-    const CLOUD_NAME = "dqkujefxj";
-    const UPLOAD_PRESET = "banter_box"; 
-
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const db = getDatabase(app);
 
     let currentUser = null;
-    let selectedFile = null;
-    let isMuted = true;
+    let currentUsername = null;
+    let currentUserVerified = false;
+    let allPosts = [];
 
-    // --- Auth Check ---
-    onAuthStateChanged(auth, (user) => {
-      if (user) {
-        currentUser = user;
-        loadFeed(); // Load videos once we have auth
-      } else {
-        window.location.href = "signup.html";
-      }
-    });
+    const feedStream = document.getElementById('feed-stream');
+    const loadingOverlay = document.getElementById('loading-overlay');
+    const toastEl = document.getElementById('toast');
+    const searchInput = document.getElementById('header-search-input');
 
-    // --- Upload Modal Logic ---
-    const modal = document.getElementById('upload-modal');
-    const openModal = () => modal.classList.add('show');
-    const closeModal = () => {
-      modal.classList.remove('show');
-      resetForm();
-    };
+    const defaultAvatar = "https://abs.twimg.com/sticky/default_profile_images/default_profile_normal.png";
 
-    document.getElementById('desktop-upload-btn').onclick = openModal;
-    document.getElementById('mobile-upload-btn').onclick = openModal;
-    document.getElementById('close-upload').onclick = closeModal;
+    const avatarCache = new Map();
 
-    const dropArea = document.getElementById('drop-area');
-    const fileInput = document.getElementById('video-input');
-    
-    dropArea.onclick = () => fileInput.click();
-    
-    fileInput.onchange = (e) => {
-      if(e.target.files[0]) {
-        selectedFile = e.target.files[0];
-        document.getElementById('file-label').textContent = selectedFile.name;
-        document.getElementById('submit-post-btn').disabled = false;
-      }
-    };
-
-    function resetForm() {
-      selectedFile = null;
-      document.getElementById('file-label').textContent = "Click to select video";
-      document.getElementById('caption-input').value = "";
-      document.getElementById('submit-post-btn').disabled = true;
-      document.getElementById('upload-progress').style.display = 'none';
-      document.getElementById('progress-fill').style.width = '0%';
-      document.getElementById('submit-post-btn').textContent = "Post Video";
+    async function getUserAvatar(uid) {
+      if (avatarCache.has(uid)) return avatarCache.get(uid);
+      try {
+        const snap = await get(ref(db, `users/${uid}`));
+        if (snap.exists()) {
+          const url = snap.val().photoURL || defaultAvatar;
+          avatarCache.set(uid, url);
+          return url;
+        }
+      } catch {}
+      return defaultAvatar;
     }
 
-    // --- Upload Process (Cloudinary + Firebase) ---
-    document.getElementById('submit-post-btn').onclick = async () => {
-      if (!selectedFile || !currentUser) return;
+    function showToast(message, type = 'success') {
+      toastEl.textContent = message;
+      toastEl.className = `show ${type}`;
+      setTimeout(() => toastEl.classList.remove('show'), 2800);
+    }
 
-      const btn = document.getElementById('submit-post-btn');
-      const progressBar = document.getElementById('upload-progress');
-      const progressFill = document.getElementById('progress-fill');
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
 
-      btn.disabled = true;
-      btn.textContent = "Uploading...";
-      progressBar.style.display = 'block';
-      progressFill.style.width = '30%';
+    function formatNumber(num) {
+      if (typeof num !== 'number') return '0';
+      if (num >= 1_000_000) return (num / 1_000_000).toFixed(1) + 'M';
+      if (num >= 1_000) return (num / 1_000).toFixed(1) + 'K';
+      return num.toString();
+    }
 
-      try {
-        // 1. Upload to Cloudinary (Video)
-        const fd = new FormData();
-        fd.append("file", selectedFile);
-        fd.append("upload_preset", UPLOAD_PRESET);
-        fd.append("resource_type", "video"); // Important for videos
+    function VerifiedBadge() {
+      return `
+        <svg viewBox="0 0 24 24" class="verified-badge" aria-label="Verified account" role="img">
+          <g>
+            <path d="M20.396 11c-.018-.646-.215-1.275-.57-1.816-.354-.54-.852-.972-1.438-1.246.223-.607.27-1.264.14-1.897-.131-.634-.437-1.218-.882-1.687-.47-.445-1.053-.75-1.687-.882-.633-.13-1.29-.083-1.897.14-.273-.587-.704-1.086-1.246-1.44S11.646 2.62 11 2.604c-.646.017-1.273.213-1.813.568s-.969.854-1.24 1.44c-.608-.223-1.267-.272-1.902-.14-.635.13-1.22.436-1.69.882-.445.47-.749 1.055-.878 1.688-.13.633-.08 1.29.144 1.896-.587.274-1.087.705-1.443 1.245-.356.54-.555 1.17-.574 1.817.02.647.218 1.276.574 1.817.356.54.856.972 1.443 1.245-.224.606-.274 1.263-.144 1.896.13.634.433 1.218.877 1.688.47.445 1.054.747 1.687.878.633.132 1.29.084 1.897-.136.274.586.705 1.084 1.246 1.439.54.354 1.17.551 1.816.569.647-.016 1.276-.213 1.817-.567s.972-.854 1.245-1.44c.604.239 1.266.296 1.903.164.636-.132 1.22-.447 1.68-.907.46-.46.776-1.044.908-1.681s.075-1.299-.165-1.903c.586-.274 1.084-.705 1.439-1.246.354-.54.551-1.17.569-1.816zM9.662 14.85l-3.429-3.428 1.293-1.302 2.072 2.072 4.4-4.794 1.347 1.246z"></path>
+          </g>
+        </svg>
+      `;
+    }
 
-        const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/video/upload`, {
-          method: "POST",
-          body: fd
-        });
-        
-        progressFill.style.width = '70%';
-        const data = await res.json();
-
-        if (data.error) throw new Error(data.error.message);
-
-        // 2. Save metadata to Firebase
-        const newVideoRef = push(ref(db, 'videos'));
-        await set(newVideoRef, {
-          videoUrl: data.secure_url,
-          caption: document.getElementById('caption-input').value.trim(),
-          userId: currentUser.uid,
-          createdAt: serverTimestamp(),
-          likes: 0,
-          comments: 0
-        });
-
-        progressFill.style.width = '100%';
-        
-        setTimeout(() => {
-          closeModal();
-          alert("Video posted!"); // Simple feedback
-          loadFeed(); // Refresh feed to see new video
-        }, 500);
-
-      } catch (err) {
-        console.error(err);
-        alert("Upload failed: " + err.message);
-        btn.disabled = false;
-        btn.textContent = "Post Video";
-      }
-    };
-
-    // --- Feed Logic ---
-    async function loadFeed() {
-      const feedContainer = document.getElementById('feed');
-      // Don't clear immediately if we want smooth updates, but for now simplest is clear & reload
-      
-      const videosRef = ref(db, 'videos');
-      const snapshot = await get(videosRef);
-      
-      if (!snapshot.exists()) {
-        feedContainer.innerHTML = '<div class="loader-center">No videos yet. Be the first!</div>';
+    // ────────────────────────────────────────────────
+    // AUTH & BASIC SETUP
+    // ────────────────────────────────────────────────
+    onAuthStateChanged(auth, async (user) => {
+      if (!user) {
+        window.location.href = "signup.html";
         return;
       }
+      currentUser = user;
 
-      const videosData = [];
-      snapshot.forEach(child => {
-        videosData.push({ id: child.key, ...child.val() });
-      });
-
-      // Shuffle for "Explore" feel
-      videosData.sort(() => Math.random() - 0.5);
-
-      feedContainer.innerHTML = ''; // Clear loader
-
-      // Get user data for these videos
-      for (const video of videosData) {
-        const userSnap = await get(ref(db, `users/${video.userId}`));
-        const userData = userSnap.exists() ? userSnap.val() : { username: 'unknown', photoURL: '' };
-        
-        const card = createVideoCard(video, userData);
-        feedContainer.appendChild(card);
+      try {
+        const userSnap = await get(ref(db, `users/${user.uid}`));
+        if (userSnap.exists()) {
+          const data = userSnap.val();
+          currentUsername = data.username || user.email?.split('@')[0] || 'user';
+          currentUserVerified = !!data.verified;
+        } else {
+          currentUsername = user.email?.split('@')[0] || 'user';
+          currentUserVerified = false;
+        }
+      } catch (err) {
+        console.error("User profile load error", err);
+        currentUsername = 'user';
+        currentUserVerified = false;
       }
-      
-      feather.replace();
-      setupObserver();
+
+      loadFeed();
+      loadWhoToFollow();
+    });
+
+    document.getElementById('logout-btn')?.addEventListener('click', () => signOut(auth));
+
+    // ────────────────────────────────────────────────
+    // FEED (same as before – simplified version)
+    // ────────────────────────────────────────────────
+    async function loadFeed() {
+      feedStream.innerHTML = '<div style="text-align:center;padding:3rem;color:#536471;">Loading posts...</div>';
+
+      const postsRef = ref(db, 'posts');
+      onValue(postsRef, async (snapshot) => {
+        allPosts = [];
+        snapshot.forEach(child => {
+          allPosts.push({ key: child.key, data: child.val() });
+        });
+
+        allPosts.sort((a,b) => b.data.timestamp - a.data.timestamp); // newest first
+
+        feedStream.innerHTML = '';
+        if (allPosts.length === 0) {
+          feedStream.innerHTML = '<div style="text-align:center;padding:4rem;color:#536471;">No posts yet</div>';
+          return;
+        }
+
+        for (const post of allPosts) {
+          await renderPost(post.key, post.data);
+        }
+        feather.replace();
+      });
     }
 
-    function createVideoCard(video, author) {
-      const div = document.createElement('div');
-      div.className = 'video-card-wrapper';
-      
-      // Default avatar if missing
-      const avatarSrc = author.photoURL || "https://abs.twimg.com/sticky/default_profile_images/default_profile_normal.png";
+    async function renderPost(key, post) {
+      const el = document.createElement('div');
+      el.className = 'post';
+      const avatar = await getUserAvatar(post.uid);
+      const timeAgo = getTimeAgo(post.timestamp);
 
-      div.innerHTML = `
-        <video src="${video.videoUrl}" loop playsinline muted></video>
-        <div class="overlay-gradient"></div>
-        
-        <div class="volume-toggle" onclick="toggleMute()">
-           <i data-feather="volume-x"></i>
-        </div>
-
-        <div class="actions-bar">
-          <div class="action-btn">
-             <img src="${avatarSrc}" class="profile-thumb" alt="${author.username}">
-          </div>
-          <div class="action-btn">
-            <div class="icon-wrapper">
-              <i data-feather="heart"></i>
+      el.innerHTML = `
+        <img src="${avatar}" class="user-avatar" onerror="this.src='${defaultAvatar}'">
+        <div class="post-content">
+          <div class="post-header">
+            <div class="post-meta">
+              <div style="display:flex;align-items:center;gap:4px;">
+                <span class="post-name">${escapeHtml(post.username || 'User')}</span>
+                ${post.verified ? VerifiedBadge() : ''}
+              </div>
+              <div class="post-username">@${(post.username || '').toLowerCase()}</div>
+              <div class="post-timestamp">${timeAgo}</div>
             </div>
-            <span class="action-text">${video.likes || 0}</span>
           </div>
-          <div class="action-btn">
-            <div class="icon-wrapper">
-              <i data-feather="message-circle"></i>
-            </div>
-            <span class="action-text">${video.comments || 0}</span>
-          </div>
-        </div>
-
-        <div class="video-info">
-          <span class="username">@${author.username}</span>
-          <p class="caption">${video.caption || ""}</p>
+          <div class="post-text">${escapeHtml(post.text || '')}</div>
+          ${post.imageUrl ? `<img src="${post.imageUrl}" class="post-image" loading="lazy">` : ''}
         </div>
       `;
 
-      // Video Click Play/Pause
-      const vidEl = div.querySelector('video');
-      div.onclick = (e) => {
-        // Prevent clicking buttons from pausing
-        if (e.target.closest('.actions-bar') || e.target.closest('.volume-toggle')) return;
-        
-        if (vidEl.paused) vidEl.play();
-        else vidEl.pause();
-      };
-
-      return div;
+      feedStream.appendChild(el);
     }
 
-    // --- Observer (Auto Play) ---
-    function setupObserver() {
-      const options = { root: document.getElementById('feed'), threshold: 0.6 };
-      
-      const observer = new IntersectionObserver((entries) => {
-        entries.forEach(entry => {
-          const vid = entry.target.querySelector('video');
-          if (entry.isIntersecting) {
-            // Respect global mute state
-            vid.muted = isMuted; 
-            vid.play().catch(e => console.log("Autoplay blocked", e));
-          } else {
-            vid.pause();
-            vid.currentTime = 0;
-          }
+    function getTimeAgo(ts) {
+      if (!ts) return '';
+      const diff = Date.now() - ts;
+      const sec = Math.floor(diff / 1000);
+      if (sec < 60) return 'now';
+      if (sec < 3600) return Math.floor(sec/60) + 'm';
+      if (sec < 86400) return Math.floor(sec/3600) + 'h';
+      return new Date(ts).toLocaleDateString();
+    }
+
+    // ────────────────────────────────────────────────
+    // WHO TO FOLLOW + FOLLOWERS COUNT + VERIFIED
+    // ────────────────────────────────────────────────
+    const suggestionsContainer = document.getElementById('who-to-follow-list');
+    const refreshBtn = document.getElementById('refresh-suggestions');
+
+    async function loadWhoToFollow() {
+      if (!currentUser) return;
+
+      suggestionsContainer.innerHTML = '<div style="text-align:center;padding:2rem;color:#536471;">Loading...</div>';
+
+      try {
+        const usersSnap = await get(ref(db, 'users'));
+        if (!usersSnap.exists()) {
+          suggestionsContainer.innerHTML = '<div style="padding:2rem;color:#536471;">No users found</div>';
+          return;
+        }
+
+        const users = [];
+        usersSnap.forEach(child => {
+          const uid = child.key;
+          if (uid === currentUser.uid) return;
+
+          const data = child.val();
+          if (!data?.username) return;
+
+          users.push({
+            uid,
+            username: data.username,
+            displayName: data.displayName || data.username,
+            photoURL: data.photoURL || defaultAvatar,
+            bio: data.bio || '',
+            followersCount: Number(data.followersCount) || 0,
+            verified: !!data.verified
+          });
         });
-      }, options);
 
-      document.querySelectorAll('.video-card-wrapper').forEach(card => observer.observe(card));
+        // simple shuffle + limit
+        users.sort(() => 0.5 - Math.random());
+        const selected = users.slice(0, 5);
+
+        // get who current user follows
+        const followingSnap = await get(ref(db, `users/${currentUser.uid}/following`));
+        const following = followingSnap.exists() ? Object.keys(followingSnap.val() || {}) : [];
+
+        suggestionsContainer.innerHTML = '';
+
+        selected.forEach(user => {
+          const isFollowing = following.includes(user.uid);
+
+          const card = document.createElement('div');
+          card.className = 'who-to-follow-card';
+          card.innerHTML = `
+            <img src="${user.photoURL}" class="user-avatar" style="width:44px;height:44px;" onerror="this.src='${defaultAvatar}'">
+            <div style="flex:1;">
+              <div style="display:flex;align-items:center;gap:4px;font-weight:700;">
+                ${escapeHtml(user.displayName)}
+                ${user.verified ? VerifiedBadge() : ''}
+              </div>
+              <div style="color:var(--text-light);font-size:0.9rem;">@${user.username}</div>
+              <div style="color:var(--text-light);font-size:0.85rem;margin-top:2px;">
+                ${formatNumber(user.followersCount)} followers
+              </div>
+              ${user.bio ? `<div style="color:var(--text-light);font-size:0.85rem;margin-top:4px;line-height:1.3;">
+                ${escapeHtml(user.bio.slice(0,60))}${user.bio.length>60?'...':''}
+              </div>` : ''}
+            </div>
+            <button class="follow-btn ${isFollowing?'following':'follow'}" data-uid="${user.uid}">
+              ${isFollowing ? 'Following' : 'Follow'}
+            </button>
+          `;
+
+          suggestionsContainer.appendChild(card);
+
+          card.querySelector('.follow-btn').onclick = async (e) => {
+            const btn = e.target;
+            const targetUid = btn.dataset.uid;
+            const wasFollowing = following.includes(targetUid);
+            const nowFollowing = !wasFollowing;
+
+            try {
+              loadingOverlay.style.display = 'flex';
+
+              if (nowFollowing) {
+                await set(ref(db, `users/${currentUser.uid}/following/${targetUid}`), true);
+                await set(ref(db, `users/${targetUid}/followers/${currentUser.uid}`), true);
+                await updateFollowCounts(targetUid, true);
+                btn.textContent = 'Following';
+                btn.classList.replace('follow', 'following');
+              } else {
+                await remove(ref(db, `users/${currentUser.uid}/following/${targetUid}`));
+                await remove(ref(db, `users/${targetUid}/followers/${currentUser.uid}`));
+                await updateFollowCounts(targetUid, false);
+                btn.textContent = 'Follow';
+                btn.classList.replace('following', 'follow');
+              }
+
+              if (nowFollowing) following.push(targetUid);
+              else following.splice(following.indexOf(targetUid), 1);
+
+              showToast(nowFollowing ? `Following @${user.username}` : `Unfollowed @${user.username}`, 'success');
+            } catch (err) {
+              console.error(err);
+              showToast("Action failed", "error");
+            } finally {
+              loadingOverlay.style.display = 'none';
+            }
+          };
+        });
+
+      } catch (err) {
+        console.error(err);
+        suggestionsContainer.innerHTML = '<div style="padding:2rem;color:#e0245e;">Error loading suggestions</div>';
+      }
     }
 
-    // --- Global Mute Toggle ---
-    window.toggleMute = function() {
-      isMuted = !isMuted;
-      document.querySelectorAll('video').forEach(v => v.muted = isMuted);
-      
-      // Update all volume icons
-      const icon = isMuted ? 'volume-x' : 'volume-2';
-      document.querySelectorAll('.volume-toggle').forEach(btn => {
-        btn.innerHTML = `<i data-feather="${icon}"></i>`;
+    async function updateFollowCounts(targetUid, increment) {
+      const targetCountRef = ref(db, `users/${targetUid}/followersCount`);
+      await runTransaction(targetCountRef, (count) => {
+        count = Number(count) || 0;
+        return increment ? count + 1 : Math.max(0, count - 1);
       });
-      feather.replace();
-    };
+
+      const myCountRef = ref(db, `users/${currentUser.uid}/followingCount`);
+      await runTransaction(myCountRef, (count) => {
+        count = Number(count) || 0;
+        return increment ? count + 1 : Math.max(0, count - 1);
+      });
+    }
+
+    refreshBtn?.addEventListener('click', loadWhoToFollow);
+
+    // Initial loads
+    onAuthStateChanged(auth, user => {
+      if (user) {
+        loadWhoToFollow();
+      }
+    });
 
     feather.replace();
   </script>
