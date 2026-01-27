@@ -608,15 +608,20 @@
     let selectedFile = null;
 
     // ==========================================
-    //  USER AVATAR HELPER
+    //  USER DATA HELPERS (Avatar & Username)
     // ==========================================
 
     const avatarCache = new Map();
+    const usernameCache = new Map();
     const defaultAvatar = "https://abs.twimg.com/sticky/default_profile_images/default_profile_normal.png";
 
-    async function getUserAvatar(uid) {
-      if (avatarCache.has(uid)) {
-        return avatarCache.get(uid);
+    async function getUserInfo(uid) {
+      // Check caches first
+      const cachedAvatar = avatarCache.get(uid);
+      const cachedUsername = usernameCache.get(uid);
+      
+      if (cachedAvatar && cachedUsername) {
+        return { avatar: cachedAvatar, username: cachedUsername };
       }
       
       try {
@@ -626,29 +631,35 @@
         if (snapshot.exists()) {
           const userData = snapshot.val();
           const avatarUrl = userData.photoURL || userData.avatarUrl || defaultAvatar;
+          const username = userData.username || userData.displayName || 'user_' + uid.substr(0, 6);
+          
           avatarCache.set(uid, avatarUrl);
-          return avatarUrl;
+          usernameCache.set(uid, username);
+          
+          return { avatar: avatarUrl, username: username };
         }
       } catch (err) {
-        console.error("Error fetching avatar:", err);
+        console.error("Error fetching user info:", err);
       }
       
-      return defaultAvatar;
+      return { avatar: defaultAvatar, username: 'unknown' };
+    }
+
+    async function getUserAvatar(uid) {
+      const info = await getUserInfo(uid);
+      return info.avatar;
+    }
+
+    async function getUsername(uid) {
+      const info = await getUserInfo(uid);
+      return info.username;
     }
 
     async function getCurrentUserAvatar() {
       if (!currentUser) return defaultAvatar;
       
-      if (avatarCache.has(currentUser.uid)) {
-        return avatarCache.get(currentUser.uid);
-      }
-      
-      if (currentUser.photoURL) {
-        avatarCache.set(currentUser.uid, currentUser.photoURL);
-        return currentUser.photoURL;
-      }
-      
-      return await getUserAvatar(currentUser.uid);
+      const info = await getUserInfo(currentUser.uid);
+      return info.avatar;
     }
 
     // ==========================================
@@ -674,6 +685,10 @@
           const userData = snapshot.val();
           currentUsername = userData.username || userData.displayName || user.email?.split('@')[0];
           
+          // Update caches with current user info
+          avatarCache.set(user.uid, userData.photoURL || userData.avatarUrl || defaultAvatar);
+          usernameCache.set(user.uid, currentUsername);
+          
           const currentAvatar = await getCurrentUserAvatar();
           document.getElementById('current-user-avatar').src = currentAvatar;
           
@@ -690,6 +705,7 @@
           const avatarUrl = user.photoURL || defaultAvatar;
           document.getElementById('current-user-avatar').src = avatarUrl;
           avatarCache.set(user.uid, avatarUrl);
+          usernameCache.set(user.uid, currentUsername);
           
           showToast("Profile created!", "success");
         }
@@ -762,7 +778,15 @@
       const lowerQuery = query.toLowerCase().trim();
       if (!lowerQuery) return true;
       
-      const usernameMatch = post.username && post.username.toLowerCase().includes(lowerQuery);
+      // We'll check username dynamically if needed, but for performance
+      // we'll check the stored username and any cached username
+      const usernamesToCheck = [post.username?.toLowerCase()];
+      const cachedUsername = usernameCache.get(post.uid)?.toLowerCase();
+      if (cachedUsername && !usernamesToCheck.includes(cachedUsername)) {
+        usernamesToCheck.push(cachedUsername);
+      }
+      
+      const usernameMatch = usernamesToCheck.some(u => u && u.includes(lowerQuery));
       const textMatch = post.text && post.text.toLowerCase().includes(lowerQuery);
       
       const hashtags = extractHashtags(post.text);
@@ -932,7 +956,7 @@
 
         const postData = {
           uid: currentUser.uid,
-          username: currentUsername,
+          username: currentUsername, // Still store for backup/reference
           text: tweetText.value.trim(),
           imageUrl: imageUrl,
           timestamp: Date.now(),
@@ -1077,14 +1101,17 @@ async function renderPost(key, post, searchQuery = '') {
   el.className = 'post';
   el.id = `post-${key}`;
 
-  const avatarUrl = await getUserAvatar(post.uid);
+  // Fetch current user info (username and avatar) dynamically
+  const userInfo = await getUserInfo(post.uid);
+  const currentUsername = userInfo.username;
+  const avatarUrl = userInfo.avatar;
 
   const imgHtml = post.imageUrl ? `<img src="${post.imageUrl}" class="post-image" loading="lazy" />` : '';
   const timeAgo = getTimeAgo(post.timestamp);
   const isOwner = currentUser && currentUser.uid === post.uid;
   
   const parsedText = parseText(post.text, searchQuery);
-  const highlightedUsername = highlightText(post.username, searchQuery);
+  const highlightedUsername = highlightText(currentUsername, searchQuery);
 
   el.innerHTML = `
     <img src="${avatarUrl}" class="user-avatar" onerror="this.src='${defaultAvatar}'">
@@ -1093,7 +1120,7 @@ async function renderPost(key, post, searchQuery = '') {
         <div class="post-meta">
           <div>
             <span class="post-name">${highlightedUsername}</span>
-            <span class="post-username">@${post.username.toLowerCase().replace(/\s/g,'')}</span>
+            <span class="post-username">@${currentUsername.toLowerCase().replace(/\s/g,'')}</span>
           </div>
           <div class="post-timestamp">${timeAgo}</div>
         </div>
@@ -1251,18 +1278,20 @@ async function renderPost(key, post, searchQuery = '') {
             comments.push({ key: child.key, val: child.val() });
           });
 
-         // Inside openComments function, replace the comment rendering:
+         // Render comments with current usernames
 for (const comment of comments) {
   const c = comment.val;
-  const commentAvatar = await getUserAvatar(c.uid);
+  
+  // Fetch current user info for this comment author
+  const commentUserInfo = await getUserInfo(c.uid);
   
   const div = document.createElement('div');
   div.className = 'comment-item';
   div.innerHTML = `
-    <img src="${commentAvatar}" class="comment-avatar" onerror="this.src='${defaultAvatar}'">
+    <img src="${commentUserInfo.avatar}" class="comment-avatar" onerror="this.src='${defaultAvatar}'">
     <div>
       <div class="comment-content">
-        <div style="font-weight:700; font-size:0.85rem">${c.username}</div>
+        <div style="font-weight:700; font-size:0.85rem">${commentUserInfo.username}</div>
         <div>${parseText(c.text)}</div>
       </div>
     </div>
