@@ -6,6 +6,7 @@
   <title>Nexus – Messages</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/feather-icons"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
 
   <style>
     :root {
@@ -18,8 +19,22 @@
       --border: #e2e8f0;
       --online: #10b981;
       --encrypted: #10b981;
+      --error: #ef4444;
       --shimmer-base: #e2e8f0;
       --shimmer-highlight: #f1f5f9;
+      --chat-sent: #6366f1;
+      --chat-received: #ffffff;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0f172a;
+        --surface: #1e293b;
+        --text: #f1f5f9;
+        --text-secondary: #94a3b8;
+        --border: #334155;
+        --chat-received: #1e293b;
+      }
     }
 
     * {
@@ -28,6 +43,9 @@
       -webkit-user-select: none;
       user-select: none;
       touch-action: manipulation;
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
     }
 
     body {
@@ -134,6 +152,10 @@
       z-index: 10;
     }
 
+    @media (prefers-color-scheme: dark) {
+      .chat-header { background: rgba(30, 41, 59, 0.92); }
+    }
+
     .header-title {
       font-size: 1.5rem;
       font-weight: 800;
@@ -183,6 +205,10 @@
       box-shadow: 0 1px 3px rgba(0,0,0,0.1);
     }
 
+    @media (prefers-color-scheme: dark) {
+      .tab.active { background: var(--surface); }
+    }
+
     .search-box {
       margin-top: 1rem;
       position: relative;
@@ -197,11 +223,16 @@
       outline: none;
       transition: all 0.2s;
       background: var(--bg);
+      color: var(--text);
     }
 
     .search-input:focus {
       border-color: var(--primary);
       background: white;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      .search-input:focus { background: var(--surface); }
     }
 
     .search-icon {
@@ -217,7 +248,7 @@
       overflow-y: auto;
     }
 
-    .chat-item {
+    .friend-card {
       display: flex;
       align-items: center;
       gap: 1rem;
@@ -230,21 +261,22 @@
       position: relative;
     }
 
-    .chat-item:hover {
+    .friend-card:hover {
       background: var(--bg);
     }
 
-    .chat-item:active {
-      background: #e5e7eb;
+    .friend-card:active {
+      background: rgba(99, 102, 241, 0.1);
     }
 
-    .chat-avatar {
+    .friend-avatar {
       width: 48px;
       height: 48px;
       border-radius: 50%;
       object-fit: cover;
       border: 1px solid var(--border);
       position: relative;
+      flex-shrink: 0;
     }
 
     .avatar-container {
@@ -259,7 +291,7 @@
       width: 12px;
       height: 12px;
       background: var(--online);
-      border: 2px solid white;
+      border: 2px solid var(--surface);
       border-radius: 50%;
       display: none;
     }
@@ -273,7 +305,7 @@
       bottom: -2px;
       left: -2px;
       background: var(--encrypted);
-      border: 2px solid white;
+      border: 2px solid var(--surface);
       border-radius: 50%;
       width: 16px;
       height: 16px;
@@ -288,26 +320,22 @@
       display: flex;
     }
 
-    .encrypted-indicator svg {
-      width: 10px;
-      height: 10px;
-    }
-
-    .chat-info {
+    .friend-info {
       flex: 1;
       min-width: 0;
     }
 
-    .chat-name-row {
+    .friend-name-row {
       display: flex;
       justify-content: space-between;
       align-items: center;
       margin-bottom: 0.25rem;
     }
 
-    .chat-name {
+    .friend-name {
       font-weight: 700;
       color: var(--text);
+      font-size: 1rem;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -316,54 +344,15 @@
       gap: 0.25rem;
     }
 
-    .chat-time {
+    .friend-meta {
+      font-size: 0.875rem;
+      color: var(--text-secondary);
+    }
+
+    .start-chat-hint {
       font-size: 0.8rem;
-      color: var(--text-secondary);
-      flex-shrink: 0;
-    }
-
-    .chat-preview {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 0.5rem;
-    }
-
-    .chat-message {
-      font-size: 0.9rem;
-      color: var(--text-secondary);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      flex: 1;
-      display: flex;
-      align-items: center;
-      gap: 0.25rem;
-    }
-
-    .chat-message.unread {
-      color: var(--text);
+      color: var(--primary);
       font-weight: 500;
-    }
-
-    .chat-message.encrypted::before {
-      content: '🔒';
-      font-size: 0.8rem;
-    }
-
-    .unread-badge {
-      background: var(--primary);
-      color: white;
-      font-size: 0.75rem;
-      font-weight: 600;
-      min-width: 20px;
-      height: 20px;
-      border-radius: 10px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 0 6px;
-      flex-shrink: 0;
     }
 
     .empty-state {
@@ -377,6 +366,39 @@
       height: 64px;
       margin: 0 auto 1rem;
       opacity: 0.3;
+      color: var(--text-secondary);
+    }
+
+    .error-state {
+      text-align: center;
+      padding: 4rem 2rem;
+      color: var(--text-secondary);
+    }
+
+    .error-icon {
+      width: 64px;
+      height: 64px;
+      margin: 0 auto 1rem;
+      color: var(--error);
+      opacity: 0.5;
+    }
+
+    .retry-btn {
+      margin-top: 1rem;
+      padding: 0.5rem 1.5rem;
+      background: var(--primary);
+      color: white;
+      border: none;
+      border-radius: 9999px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .retry-btn:hover {
+      opacity: 0.9;
     }
 
     .bottom-nav {
@@ -384,7 +406,7 @@
       bottom: 0;
       left: 0;
       right: 0;
-      background: white;
+      background: var(--surface);
       border-top: 1px solid var(--border);
       z-index: 50;
       padding-bottom: env(safe-area-inset-bottom);
@@ -443,98 +465,226 @@
     #toast.show { visibility: visible; animation: fadein 0.5s, fadeout 0.5s 2.5s; }
     #toast.success { background-color: #10b981; }
     #toast.error { background-color: #ef4444; }
-    #toast.info { background-color: #3b82f6; }
 
     @keyframes fadein { from {bottom: 0; opacity: 0;} to {bottom: 100px; opacity: 1;} }
     @keyframes fadeout { from {bottom: 100px; opacity: 1;} to {bottom: 0; opacity: 0;} }
 
     .hidden { display: none !important; }
 
-    .key-setup-modal {
+    /* Full Chat View (Vynix Style merged with Nexus colors) */
+    #fullChatView {
       position: fixed;
-      inset: 0;
-      background: rgba(0,0,0,0.5);
-      z-index: 1000;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100dvh;
+      background: var(--bg);
       display: none;
+      flex-direction: column;
+      z-index: 2000;
+    }
+
+    #fullChatView.active {
+      display: flex;
+    }
+
+    .chat-view-header {
+      flex-shrink: 0;
+      height: 65px;
+      background: rgba(255,255,255,0.95);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      padding: 0 1rem;
+      z-index: 20;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      .chat-view-header { background: rgba(30, 41, 59, 0.95); }
+    }
+
+    .back-btn {
+      padding: 0.5rem;
+      margin-right: 0.75rem;
+      cursor: pointer;
+      color: var(--text);
+      border-radius: 50%;
+      display: flex;
       align-items: center;
       justify-content: center;
-      padding: 1rem;
     }
 
-    .key-setup-modal.show {
-      display: flex;
-    }
-
-    .key-setup-content {
-      background: white;
-      border-radius: 16px;
-      padding: 2rem;
-      max-width: 400px;
-      width: 100%;
-      text-align: center;
-    }
-
-    .key-setup-content h2 {
-      margin-bottom: 1rem;
-      font-size: 1.25rem;
-      font-weight: 700;
-    }
-
-    .key-setup-content p {
-      color: var(--text-secondary);
-      margin-bottom: 1.5rem;
-      line-height: 1.5;
-    }
-
-    .key-benefits {
-      text-align: left;
+    .back-btn:hover {
       background: var(--bg);
-      padding: 1rem;
-      border-radius: 12px;
-      margin-bottom: 1.5rem;
     }
 
-    .key-benefits li {
-      margin-bottom: 0.5rem;
+    .chat-friend-info {
       display: flex;
       align-items: center;
-      gap: 0.5rem;
-      font-size: 0.9rem;
+      flex: 1;
+      overflow: hidden;
     }
 
-    .btn-primary {
+    .chat-friend-avatar {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      margin-right: 0.75rem;
+      object-fit: cover;
+    }
+
+    .chat-friend-name {
+      font-weight: 700;
+      font-size: 1rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      color: var(--text);
+    }
+
+    .chat-status {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+    }
+
+    #messageList {
+      flex: 1;
+      overflow-y: auto;
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .message {
+      max-width: 75%;
+      padding: 0.75rem 1rem;
+      font-size: 0.95rem;
+      line-height: 1.4;
+      position: relative;
+      word-wrap: break-word;
+      border-radius: 1.125rem;
+      animation: messageSlide 0.3s ease;
+    }
+
+    @keyframes messageSlide {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .message.received {
+      align-self: flex-start;
+      background: var(--chat-received);
+      color: var(--text);
+      border-bottom-left-radius: 0.25rem;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    }
+
+    .message.sent {
+      align-self: flex-end;
+      background: var(--chat-sent);
+      color: white;
+      border-bottom-right-radius: 0.25rem;
+    }
+
+    .message-time {
+      font-size: 0.7rem;
+      margin-top: 0.25rem;
+      text-align: right;
+      opacity: 0.7;
+    }
+
+    .chat-input-area {
+      flex-shrink: 0;
+      background: var(--surface);
+      padding: 0.75rem 1rem;
+      display: flex;
+      align-items: flex-end;
+      gap: 0.5rem;
+      border-top: 1px solid var(--border);
+      z-index: 20;
+      padding-bottom: calc(0.75rem + env(safe-area-inset-bottom));
+    }
+
+    .input-wrapper {
+      flex: 1;
+      background: var(--bg);
+      border-radius: 1.5rem;
+      padding: 0.5rem 1rem;
+      display: flex;
+      align-items: center;
+      border: 1px solid var(--border);
+    }
+
+    .input-wrapper:focus-within {
+      border-color: var(--primary);
+    }
+
+    #messageInput {
+      flex: 1;
+      background: transparent;
+      border: none;
+      font-size: 0.95rem;
+      max-height: 120px;
+      resize: none;
+      color: var(--text);
+      padding: 0;
+      line-height: 1.3;
+      font-family: inherit;
+    }
+
+    #messageInput:focus { outline: none; }
+
+    #sendBtn {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
       background: var(--primary);
       color: white;
-      border: none;
-      padding: 0.75rem 1.5rem;
-      border-radius: 9999px;
-      font-weight: 600;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       cursor: pointer;
-      width: 100%;
+      flex-shrink: 0;
+      border: none;
+      opacity: 0.5;
+      pointer-events: none;
       transition: opacity 0.2s;
     }
 
-    .btn-primary:hover {
-      opacity: 0.9;
+    #sendBtn.active {
+      opacity: 1;
+      pointer-events: auto;
     }
 
-    .btn-primary:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
+    #sendBtn:hover {
+      transform: scale(1.05);
     }
 
-    .spinner {
-      display: inline-block;
-      width: 20px;
-      height: 20px;
-      border: 2px solid rgba(255,255,255,0.3);
+    .typing-indicator {
+      display: flex;
+      gap: 0.25rem;
+      padding: 1rem;
+      align-self: flex-start;
+      opacity: 0.6;
+    }
+
+    .typing-dot {
+      width: 8px;
+      height: 8px;
+      background: var(--text-secondary);
       border-radius: 50%;
-      border-top-color: white;
-      animation: spin 1s ease-in-out infinite;
+      animation: typingBounce 1.4s infinite ease-in-out both;
     }
 
-    @keyframes spin {
-      to { transform: rotate(360deg); }
+    .typing-dot:nth-child(1) { animation-delay: -0.32s; }
+    .typing-dot:nth-child(2) { animation-delay: -0.16s; }
+
+    @keyframes typingBounce {
+      0%, 80%, 100% { transform: scale(0); }
+      40% { transform: scale(1); }
     }
   </style>
 </head>
@@ -542,34 +692,13 @@
 
   <div id="toast"></div>
 
-  <!-- Key Setup Modal -->
-  <div id="key-setup-modal" class="key-setup-modal">
-    <div class="key-setup-content">
-      <div style="width:64px;height:64px;background:var(--primary-soft);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 1rem;">
-        <i data-feather="shield" style="color:var(--primary);width:32px;height:32px;"></i>
-      </div>
-      <h2>Enable End-to-End Encryption</h2>
-      <p>Your messages are currently not encrypted. Set up encryption keys to ensure only you and your recipients can read your messages.</p>
-      <ul class="key-benefits">
-        <li><i data-feather="check" style="color:var(--encrypted);"></i> No one else can read your messages</li>
-        <li><i data-feather="check" style="color:var(--encrypted);"></i> Not even Nexus can access your chats</li>
-        <li><i data-feather="check" style="color:var(--encrypted);"></i> Secure key storage on your device</li>
-      </ul>
-      <button id="setup-keys-btn" class="btn-primary" onclick="setupEncryptionKeys()">
-        Enable Encryption
-      </button>
-    </div>
-  </div>
-
   <div class="layout">
+    <!-- Sidebar (Desktop) -->
     <aside class="sidebar">
       <div>
-        <div class="logo-box" style="padding: 0.75rem 0 1.5rem;">
-          <svg width="44" height="44" viewBox="0 0 40 40" fill="none">
-            <rect width="40" height="40" rx="12" fill="#6366F1"/>
-            <path d="M12 20L18 26L28 14" stroke="white" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
-            <circle cx="28" cy="26" r="4" fill="white"/>
-          </svg>
+        <div class="logo-box" style="padding: 0.75rem 0 1.5rem; display: flex; align-items: center; gap: 0.75rem;">
+          <div style="width: 40px; height: 40px; background: var(--primary); border-radius: 12px; display: flex; align-items: center; justify-content: center; color: white; font-weight: 800; font-size: 20px;">N</div>
+          <div style="font-weight: 800; font-size: 1.25rem;">Nexus</div>
         </div>
 
         <div class="nav-item" onclick="window.location.href='index.html'">
@@ -584,7 +713,7 @@
           <i data-feather="bell"></i>
           <span class="nav-text">Notifications</span>
         </div>
-        <div class="nav-item active" onclick="window.location.href='messages.html'">
+        <div class="nav-item active">
           <i data-feather="message-circle"></i>
           <span class="nav-text">Messages</span>
         </div>
@@ -594,12 +723,13 @@
         </div>
       </div>
 
-      <div class="nav-item" onclick="handleLogout()" style="margin-top: auto; color: #ef4444;">
+      <div class="nav-item" onclick="handleLogout()" style="margin-top: auto; color: var(--error);">
         <i data-feather="log-out"></i>
         <span class="nav-text">Sign out</span>
       </div>
     </aside>
 
+    <!-- Main Content -->
     <main class="main-content">
       <div class="chat-header">
         <h1 class="header-title">
@@ -620,64 +750,104 @@
 
         <div class="search-box">
           <i data-feather="search" class="search-icon" style="width:18px;height:18px;"></i>
-          <input type="text" class="search-input" placeholder="Search conversations..." id="search-input">
+          <input type="text" class="search-input" placeholder="Search friends..." id="search-input" oninput="searchFriends()">
         </div>
       </div>
 
-      <div class="chat-list" id="chat-list">
+      <div class="chat-list" id="friend-list">
         <!-- Loading skeletons -->
-        <div class="chat-item" style="pointer-events:none;">
+        <div class="friend-card" style="pointer-events:none;">
           <div class="shimmer shimmer-avatar"></div>
-          <div class="chat-info" style="flex:1;">
+          <div class="friend-info" style="flex:1;">
             <div class="shimmer shimmer-text" style="width:40%;"></div>
             <div class="shimmer shimmer-text-short"></div>
           </div>
         </div>
-        <div class="chat-item" style="pointer-events:none;">
+        <div class="friend-card" style="pointer-events:none;">
           <div class="shimmer shimmer-avatar"></div>
-          <div class="chat-info" style="flex:1;">
+          <div class="friend-info" style="flex:1;">
             <div class="shimmer shimmer-text" style="width:60%;"></div>
             <div class="shimmer shimmer-text-short"></div>
           </div>
         </div>
-        <div class="chat-item" style="pointer-events:none;">
+        <div class="friend-card" style="pointer-events:none;">
           <div class="shimmer shimmer-avatar"></div>
-          <div class="chat-info" style="flex:1;">
+          <div class="friend-info" style="flex:1;">
             <div class="shimmer shimmer-text" style="width:35%;"></div>
             <div class="shimmer shimmer-text-short"></div>
           </div>
         </div>
       </div>
 
+      <!-- Empty State -->
       <div class="empty-state hidden" id="empty-state">
-        <i data-feather="message-square" class="empty-icon"></i>
-        <h3 style="margin-bottom:0.5rem;color:var(--text);">No messages yet</h3>
-        <p>Start a conversation with someone!</p>
+        <i data-feather="users" class="empty-icon"></i>
+        <h3 style="margin-bottom:0.5rem;color:var(--text); font-weight: 600;">No users found</h3>
+        <p>Follow people to start chatting with them!</p>
+      </div>
+
+      <!-- Error State -->
+      <div class="error-state hidden" id="error-state">
+        <i data-feather="alert-circle" class="error-icon"></i>
+        <h3 style="margin-bottom:0.5rem;color:var(--text); font-weight: 600;">Unable to load</h3>
+        <p id="error-message">Check your connection and try again.</p>
+        <button class="retry-btn" onclick="retryLoad()">
+          <i data-feather="refresh-cw" style="width:16px;height:16px;"></i>
+          Retry
+        </button>
       </div>
     </main>
   </div>
 
+  <!-- Mobile Bottom Nav -->
   <nav class="bottom-nav">
     <a href="index.html" class="nav-bottom-item">
-      <i data-feather="home" style="width:28px;height:28px;"></i>
+      <i data-feather="home" style="width:24px;height:24px;"></i>
     </a>
-    <a href="notifications.html" class="nav-bottom-item" id="bottom-notifications" style="position:relative;">
-        <i data-feather="bell" class="w-7 h-7"></i>
-        <span id="bottom-badge" class="bottom-badge" style="display:none;"></span>
-      </a>
+    <a href="explore.html" class="nav-bottom-item">
+      <i data-feather="hash" style="width:24px;height:24px;"></i>
+    </a>
     <a href="messages.html" class="nav-bottom-item active">
-      <i data-feather="message-circle" style="width:28px;height:28px;"></i>
+      <i data-feather="message-circle" style="width:24px;height:24px;"></i>
     </a>
     <a href="profile.html" class="nav-bottom-item">
-      <i data-feather="user" style="width:28px;height:28px;"></i>
+      <i data-feather="user" style="width:24px;height:24px;"></i>
     </a>
   </nav>
 
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
-    import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
-    import { getDatabase, ref, onValue, get, query, limitToLast, set, update } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
+  <!-- Full Chat View (Hidden by default) -->
+  <div id="fullChatView">
+    <div class="chat-view-header">
+      <div class="back-btn" onclick="closeFullChat()">
+        <i data-feather="arrow-left" style="width:24px;height:24px;"></i>
+      </div>
+      <div class="chat-friend-info">
+        <img id="chatFriendAvatar" src="" class="chat-friend-avatar">
+        <div>
+          <div id="chatFriendName" class="chat-friend-name"></div>
+          <div id="chatStatus" class="chat-status">Tap to view info</div>
+        </div>
+      </div>
+    </div>
 
+    <div id="messageList"></div>
+
+    <div class="chat-input-area">
+      <div class="input-wrapper">
+        <textarea id="messageInput" rows="1" placeholder="Type a message..." oninput="autoResize(this)" onkeypress="handleEnter(event)"></textarea>
+      </div>
+      <button id="sendBtn" onclick="sendMessage()">
+        <i data-feather="arrow-up" style="width:20px;height:20px;"></i>
+      </button>
+    </div>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+
+  <script>
+    // Firebase Config
     const firebaseConfig = {
       apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
       authDomain: "fire-b-a8878.firebaseapp.com",
@@ -685,266 +855,89 @@
       projectId: "fire-b-a8878",
       storageBucket: "fire-b-a8878.firebasestorage.app",
       messagingSenderId: "658673187627",
-      appId: "1:658673187627:web:6e4c29af661785f0afa36e",
-      measurementId: "G-V4W97VMSKL"
+      appId: "1:658673187627:web:6e4c29af661785f0afa36e"
     };
 
-    const app = initializeApp(firebaseConfig);
-    const auth = getAuth(app);
-    const db = getDatabase(app);
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.database();
 
     let currentUser = null;
     let currentTab = 'following';
     let usersList = [];
     let unsubscribeListeners = [];
+    let loadTimeout = null;
+    let sharedKeys = JSON.parse(localStorage.getItem('sharedKeys') || '{}');
+    
+    // Chat view state
+    let currentFriendUid = null;
+    let currentRoomId = null;
+    let messagesListener = null;
 
-    const DEFAULT_AVATAR = "https://abs.twimg.com/sticky/default_profile_images/default_profile_normal.png";
+    // ==================== CRYPTO MODULE (Vynix Style) ====================
+    
+    async function generateKeyPair() {
+      const keyPair = await crypto.subtle.generateKey(
+        { name: "ECDH", namedCurve: "P-256" },
+        true,
+        ["deriveBits"]
+      );
+      const pub = await crypto.subtle.exportKey("jwk", keyPair.publicKey);
+      const priv = await crypto.subtle.exportKey("jwk", keyPair.privateKey);
+      localStorage.setItem('privateKey', JSON.stringify(priv));
+      return pub;
+    }
 
-    // ==================== E2EE CRYPTO MODULE ====================
-    const CryptoModule = {
-      dbName: 'NexusCryptoDB',
-      storeName: 'keys',
-      
-      // Generate RSA key pair for user
-      async generateKeyPair() {
-        const keyPair = await window.crypto.subtle.generateKey(
-          {
-            name: "RSA-OAEP",
-            modulusLength: 2048,
-            publicExponent: new Uint8Array([1, 0, 1]),
-            hash: "SHA-256",
-          },
-          true, // extractable
-          ["encrypt", "decrypt"]
-        );
-        return keyPair;
-      },
-
-      // Export public key to share with others
-      async exportPublicKey(keyPair) {
-        const exported = await window.crypto.subtle.exportKey("spki", keyPair.publicKey);
-        return btoa(String.fromCharCode(...new Uint8Array(exported)));
-      },
-
-      // Import public key from string (received from others)
-      async importPublicKey(publicKeyBase64) {
-        try {
-          const binaryString = atob(publicKeyBase64);
-          const bytes = new Uint8Array(binaryString.length);
-          for (let i = 0; i < binaryString.length; i++) {
-            bytes[i] = binaryString.charCodeAt(i);
-          }
-          
-          return await window.crypto.subtle.importKey(
-            "spki",
-            bytes.buffer,
-            {
-              name: "RSA-OAEP",
-              hash: "SHA-256"
-            },
-            false,
-            ["encrypt"]
-          );
-        } catch (err) {
-          console.error("Error importing public key:", err);
-          throw new Error("Invalid public key format");
-        }
-      },
-
-      // Store private key securely in IndexedDB
-      async storePrivateKey(uid, keyPair) {
-        const exported = await window.crypto.subtle.exportKey("pkcs8", keyPair.privateKey);
+    async function deriveSharedSecret(friendPublicJwk) {
+      try {
+        const privateKeyJwk = JSON.parse(localStorage.getItem('privateKey'));
+        if (!privateKeyJwk) throw new Error('No private key');
         
-        return new Promise((resolve, reject) => {
-          const request = indexedDB.open(this.dbName, 1);
-          
-          request.onupgradeneeded = (event) => {
-            const db = event.target.result;
-            if (!db.objectStoreNames.contains(this.storeName)) {
-              db.createObjectStore(this.storeName, { keyPath: "uid" });
-            }
-          };
-          
-          request.onsuccess = (event) => {
-            const db = event.target.result;
-            const transaction = db.transaction([this.storeName], "readwrite");
-            const store = transaction.objectStore(this.storeName);
-            
-            const data = {
-              uid: uid,
-              privateKey: exported,
-              createdAt: Date.now()
-            };
-            
-            const addRequest = store.put(data);
-            addRequest.onsuccess = () => resolve();
-            addRequest.onerror = () => reject(addRequest.error);
-          };
-          
-          request.onerror = () => reject(request.error);
-        });
-      },
-
-      // Retrieve private key from IndexedDB
-      async getPrivateKey(uid) {
-        return new Promise((resolve, reject) => {
-          const request = indexedDB.open(this.dbName, 1);
-          
-          request.onsuccess = (event) => {
-            const db = event.target.result;
-            const transaction = db.transaction([this.storeName], "readonly");
-            const store = transaction.objectStore(this.storeName);
-            const getRequest = store.get(uid);
-            
-            getRequest.onsuccess = async () => {
-              if (getRequest.result) {
-                try {
-                  const privateKey = await window.crypto.subtle.importKey(
-                    "pkcs8",
-                    getRequest.result.privateKey,
-                    {
-                      name: "RSA-OAEP",
-                      hash: "SHA-256"
-                    },
-                    false,
-                    ["decrypt"]
-                  );
-                  resolve(privateKey);
-                } catch (err) {
-                  reject(err);
-                }
-              } else {
-                resolve(null);
-              }
-            };
-            
-            getRequest.onerror = () => reject(getRequest.error);
-          };
-          
-          request.onerror = () => reject(request.error);
-        });
-      },
-
-      // Generate AES key for message encryption (hybrid encryption)
-      async generateAESKey() {
-        return await window.crypto.subtle.generateKey(
-          {
-            name: "AES-GCM",
-            length: 256
-          },
-          true,
-          ["encrypt", "decrypt"]
+        const privateKey = await crypto.subtle.importKey(
+          "jwk", 
+          privateKeyJwk, 
+          { name: "ECDH", namedCurve: "P-256" }, 
+          false, 
+          ["deriveBits"]
         );
-      },
-
-      // Encrypt message using hybrid encryption (AES + RSA)
-      async encryptMessage(message, recipientPublicKeyBase64) {
-        try {
-          // Import recipient's public key
-          const publicKey = await this.importPublicKey(recipientPublicKeyBase64);
-          
-          // Generate AES key for this message
-          const aesKey = await this.generateAESKey();
-          
-          // Generate IV
-          const iv = window.crypto.getRandomValues(new Uint8Array(12));
-          
-          // Encrypt message with AES
-          const encoder = new TextEncoder();
-          const messageData = encoder.encode(message);
-          
-          const encryptedMessage = await window.crypto.subtle.encrypt(
-            {
-              name: "AES-GCM",
-              iv: iv
-            },
-            aesKey,
-            messageData
-          );
-          
-          // Export AES key
-          const exportedAESKey = await window.crypto.subtle.exportKey("raw", aesKey);
-          
-          // Encrypt AES key with recipient's RSA public key
-          const encryptedAESKey = await window.crypto.subtle.encrypt(
-            {
-              name: "RSA-OAEP"
-            },
-            publicKey,
-            exportedAESKey
-          );
-          
-          // Combine all data
-          return {
-            encryptedKey: btoa(String.fromCharCode(...new Uint8Array(encryptedAESKey))),
-            iv: btoa(String.fromCharCode(...iv)),
-            data: btoa(String.from charCode(...new Uint8Array(encryptedMessage))),
-            algorithm: "AES-GCM-RSA-OAEP"
-          };
-        } catch (err) {
-          console.error("Encryption error:", err);
-          throw new Error("Failed to encrypt message: " + err.message);
-        }
-      },
-
-      // Decrypt message using private key
-      async decryptMessage(encryptedPayload, uid) {
-        try {
-          const privateKey = await this.getPrivateKey(uid);
-          if (!privateKey) {
-            throw new Error("Private key not found");
-          }
-          
-          // Decode base64
-          const encryptedKey = Uint8Array.from(atob(encryptedPayload.encryptedKey), c => c.charCodeAt(0));
-          const iv = Uint8Array.from(atob(encryptedPayload.iv), c => c.charCodeAt(0));
-          const data = Uint8Array.from(atob(encryptedPayload.data), c => c.charCodeAt(0));
-          
-          // Decrypt AES key using RSA private key
-          const aesKeyBuffer = await window.crypto.subtle.decrypt(
-            {
-              name: "RSA-OAEP"
-            },
-            privateKey,
-            encryptedKey
-          );
-          
-          // Import AES key
-          const aesKey = await window.crypto.subtle.importKey(
-            "raw",
-          aesKeyBuffer,
-            {
-              name: "AES-GCM",
-              length: 256
-            },
-            false,
-            ["decrypt"]
-          );
-          
-          // Decrypt message
-          const decryptedData = await window.crypto.subtle.decrypt(
-            {
-              name: "AES-GCM",
-              iv: iv
-            },
-            aesKey,
-            data
-          );
-          
-          const decoder = new TextDecoder();
-          return decoder.decode(decryptedData);
-        } catch (err) {
-          console.error("Decryption error:", err);
-          throw new Error("Unable to decrypt message. Ensure your keys are valid.");
-        }
-      },
-
-      // Check if user has encryption keys
-      async hasKeys(uid) {
-        const key = await this.getPrivateKey(uid);
-        return !!key;
+        
+        const friendPublicKey = await crypto.subtle.importKey(
+          "jwk", 
+          friendPublicJwk, 
+          { name: "ECDH", namedCurve: "P-256" }, 
+          false, 
+          []
+        );
+        
+        const sharedSecret = await crypto.subtle.deriveBits(
+          { name: "ECDH", public: friendPublicKey },
+          privateKey,
+          256
+        );
+        
+        return Array.from(new Uint8Array(sharedSecret))
+          .map(b => b.toString(16).padStart(2, '0'))
+          .join('');
+      } catch (err) {
+        console.error('Key derivation failed:', err);
+        return null;
       }
-    };
+    }
+
+    function encrypt(text, key) {
+      if (!key) return null;
+      return CryptoJS.AES.encrypt(text, key).toString();
+    }
+
+    function decrypt(ciphertext, key) {
+      if (!ciphertext || !key) return "[Encrypted]";
+      try {
+        const bytes = CryptoJS.AES.decrypt(ciphertext, key);
+        return bytes.toString(CryptoJS.enc.Utf8) || "[Encrypted]";
+      } catch (e) {
+        return "[Encrypted]";
+      }
+    }
 
     // ==================== UI FUNCTIONS ====================
 
@@ -955,301 +948,466 @@
       setTimeout(() => t.className = '', 2800);
     }
 
-    function cleanupListeners() {
-      unsubscribeListeners.forEach(unsub => unsub && unsub());
-      unsubscribeListeners = [];
-    }
-
-    function getOrCreateChatId(uid1, uid2) {
-      return [uid1, uid2].sort().join('_');
-    }
-
-    async function getLastMessage(chatId) {
-      try {
-        const messagesRef = ref(db, `chats/${chatId}/messages`);
-        const lastMsgQuery = query(messagesRef, limitToLast(1));
-        const snapshot = await get(lastMsgQuery);
-        
-        if (snapshot.exists()) {
-          const messages = snapshot.val();
-          const msgKey = Object.keys(messages)[0];
-          return messages[msgKey];
-        }
-      } catch (err) {
-        console.error("Error getting last message:", err);
-      }
-      return null;
-    }
-
-    async function getUnreadCount(chatId) {
-      if (!currentUser) return 0;
-      try {
-        const unreadRef = ref(db, `chats/${chatId}/unread/${currentUser.uid}`);
-        const snapshot = await get(unreadRef);
-        return snapshot.exists() ? snapshot.val() : 0;
-      } catch (err) {
-        return 0;
-      }
-    }
-
-    async function getUserPublicKey(uid) {
-      try {
-        const pubKeyRef = ref(db, `users/${uid}/publicKey`);
-        const snapshot = await get(pubKeyRef);
-        return snapshot.exists() ? snapshot.val() : null;
-      } catch (err) {
-        return null;
-      }
-    }
-
-    async function renderUserItem(userId, userData) {
-      const chatId = getOrCreateChatId(currentUser.uid, userId);
-      const lastMsg = await getLastMessage(chatId);
-      const unreadCount = await getUnreadCount(chatId);
-      const recipientPubKey = await getUserPublicKey(userId);
-      const hasEncryption = await CryptoModule.hasKeys(currentUser.uid);
-      
-      let timeAgo = lastMsg ? getTimeAgo(lastMsg.timestamp) : '';
-      let messagePreview = 'Tap to start chatting';
-      let isEncrypted = false;
-
-      if (lastMsg) {
-        if (lastMsg.encrypted && hasEncryption) {
-          try {
-            messagePreview = await CryptoModule.decryptMessage(lastMsg.content, currentUser.uid);
-            isEncrypted = true;
-          } catch (err) {
-            messagePreview = '🔒 Encrypted message';
-            isEncrypted = true;
-          }
-        } else if (lastMsg.encrypted) {
-          messagePreview = '🔒 Encrypted message';
-          isEncrypted = true;
-        } else {
-          messagePreview = lastMsg.text || 'Sent an image';
-        }
-      }
-
-      const isOnline = userData.online || false;
-
-      const item = document.createElement('a');
-      item.className = 'chat-item';
-      item.href = `chat.html?uid=${userId}`;
-      
-      item.innerHTML = `
-        <div class="avatar-container">
-          <img src="${userData.photoURL || DEFAULT_AVATAR}" class="chat-avatar" onerror="this.src='${DEFAULT_AVATAR}'">
-          <div class="online-indicator ${isOnline ? 'show' : ''}"></div>
-          <div class="encrypted-indicator ${recipientPubKey ? 'show' : ''}">
-            <i data-feather="lock" style="width:8px;height:8px;"></i>
-          </div>
-        </div>
-        <div class="chat-info">
-          <div class="chat-name-row">
-            <span class="chat-name">
-              ${userData.displayName || userData.username || 'User'}
-              ${recipientPubKey ? '<i data-feather="lock" style="width:12px;height:12px;color:var(--encrypted);"></i>' : ''}
-            </span>
-            <span class="chat-time">${timeAgo}</span>
-          </div>
-          <div class="chat-preview">
-            <span class="chat-message ${unreadCount > 0 ? 'unread' : ''} ${isEncrypted ? 'encrypted' : ''}">${messagePreview}</span>
-            ${unreadCount > 0 ? `<span class="unread-badge">${unreadCount}</span>` : ''}
-          </div>
-        </div>
-      `;
-
-      return item;
-    }
-
-    function getTimeAgo(timestamp) {
-      if (!timestamp) return '';
-      const diff = Math.floor((Date.now() - timestamp) / 1000);
-      if (diff < 60) return 'now';
-      if (diff < 3600) return Math.floor(diff / 60) + 'm';
-      if (diff < 86400) return Math.floor(diff / 3600) + 'h';
-      if (diff < 604800) return Math.floor(diff / 86400) + 'd';
-      return new Date(timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-    }
-
-    async function loadUsers(listType) {
-      cleanupListeners();
-      const listContainer = document.getElementById('chat-list');
+    function showLoadingSkeleton() {
+      const list = document.getElementById('friend-list');
       const emptyState = document.getElementById('empty-state');
+      const errorState = document.getElementById('error-state');
       
-      // Show loading skeleton
-      listContainer.innerHTML = `
-        <div class="chat-item" style="pointer-events:none;">
+      emptyState.classList.add('hidden');
+      errorState.classList.add('hidden');
+      
+      list.innerHTML = `
+        <div class="friend-card" style="pointer-events:none;">
           <div class="shimmer shimmer-avatar"></div>
-          <div class="chat-info" style="flex:1;">
+          <div class="friend-info" style="flex:1;">
             <div class="shimmer shimmer-text" style="width:40%;"></div>
             <div class="shimmer shimmer-text-short"></div>
           </div>
         </div>
-        <div class="chat-item" style="pointer-events:none;">
+        <div class="friend-card" style="pointer-events:none;">
           <div class="shimmer shimmer-avatar"></div>
-          <div class="chat-info" style="flex:1;">
+          <div class="friend-info" style="flex:1;">
             <div class="shimmer shimmer-text" style="width:60%;"></div>
             <div class="shimmer shimmer-text-short"></div>
           </div>
         </div>
-        <div class="chat-item" style="pointer-events:none;">
+        <div class="friend-card" style="pointer-events:none;">
           <div class="shimmer shimmer-avatar"></div>
-          <div class="chat-info" style="flex:1;">
+          <div class="friend-info" style="flex:1;">
             <div class="shimmer shimmer-text" style="width:35%;"></div>
             <div class="shimmer shimmer-text-short"></div>
           </div>
         </div>
       `;
-      emptyState.classList.add('hidden');
-
-      const listRef = ref(db, `${listType}/${currentUser.uid}`);
-      
-      const unsubscribe = onValue(listRef, async (snapshot) => {
-        listContainer.innerHTML = '';
-        usersList = [];
-
-        if (!snapshot.exists()) {
-          emptyState.classList.remove('hidden');
-          listContainer.innerHTML = '';
-          return;
-        }
-
-        const userIds = Object.keys(snapshot.val());
-        
-        const userPromises = userIds.map(async (userId) => {
-          const userRef = ref(db, `users/${userId}`);
-          const userSnap = await get(userRef);
-          if (userSnap.exists()) {
-            return { uid: userId, ...userSnap.val() };
-          }
-          return null;
-        });
-
-        const users = (await Promise.all(userPromises)).filter(u => u !== null);
-        usersList = users;
-
-        const usersWithLastMsg = await Promise.all(users.map(async (user) => {
-          const chatId = getOrCreateChatId(currentUser.uid, user.uid);
-          const lastMsg = await getLastMessage(chatId);
-          return {
-            ...user,
-            lastMsgTimestamp: lastMsg ? lastMsg.timestamp : 0
-          };
-        }));
-
-        usersWithLastMsg.sort((a, b) => b.lastMsgTimestamp - a.lastMsgTimestamp);
-
-        for (const user of usersWithLastMsg) {
-          const item = await renderUserItem(user.uid, user);
-          listContainer.appendChild(item);
-        }
-
-        feather.replace();
-
-        users.forEach(user => {
-          const onlineRef = ref(db, `users/${user.uid}/online`);
-          const unsub = onValue(onlineRef, (snap) => {});
-          unsubscribeListeners.push(unsub);
-        });
-      });
-
-      unsubscribeListeners.push(unsubscribe);
     }
 
-    window.switchTab = function(tab) {
+    function showError(message) {
+      const list = document.getElementById('friend-list');
+      const emptyState = document.getElementById('empty-state');
+      const errorState = document.getElementById('error-state');
+      const errorMessage = document.getElementById('error-message');
+      
+      list.innerHTML = '';
+      emptyState.classList.add('hidden');
+      errorState.classList.remove('hidden');
+      errorMessage.textContent = message;
+    }
+
+    function cleanupListeners() {
+      unsubscribeListeners.forEach(unsub => unsub && unsub());
+      unsubscribeListeners = [];
+      if (loadTimeout) {
+        clearTimeout(loadTimeout);
+        loadTimeout = null;
+      }
+      if (messagesListener) {
+        messagesListener.off();
+        messagesListener = null;
+      }
+    }
+
+    // ==================== LOAD USERS ====================
+
+    async function loadUsers(listType) {
+      cleanupListeners();
+      showLoadingSkeleton();
+      
+      // Safety timeout - if Firebase doesn't respond in 8 seconds, show error
+      loadTimeout = setTimeout(() => {
+        showError('Connection timed out. Please check your internet and try again.');
+      }, 8000);
+
+      if (!currentUser) {
+        clearTimeout(loadTimeout);
+        showError('Not authenticated');
+        return;
+      }
+
+      const listRef = db.ref(`${listType}/${currentUser.uid}`);
+      
+      try {
+        const unsubscribe = listRef.on('value', async (snapshot) => {
+          clearTimeout(loadTimeout);
+          const listContainer = document.getElementById('friend-list');
+          const emptyState = document.getElementById('empty-state');
+          const errorState = document.getElementById('error-state');
+          
+          errorState.classList.add('hidden');
+          listContainer.innerHTML = '';
+          usersList = [];
+
+          if (!snapshot.exists()) {
+            emptyState.classList.remove('hidden');
+            feather.replace();
+            return;
+          }
+
+          const userIds = Object.keys(snapshot.val());
+          
+          if (userIds.length === 0) {
+            emptyState.classList.remove('hidden');
+            feather.replace();
+            return;
+          }
+
+          // Fetch user details
+          const userPromises = userIds.map(async (userId) => {
+            try {
+              const userSnap = await db.ref(`users/${userId}/profile`).once('value');
+              if (userSnap.exists()) {
+                return { uid: userId, ...userSnap.val() };
+              }
+              return null;
+            } catch (err) {
+              console.warn(`Failed to load user ${userId}:`, err);
+              return null;
+            }
+          });
+
+          const users = (await Promise.all(userPromises)).filter(u => u !== null);
+          usersList = users;
+
+          // Render friend cards
+          users.forEach(user => {
+            const card = document.createElement('div');
+            card.className = 'friend-card';
+            card.onclick = () => openFullChat(user.uid);
+            
+            const avatarUrl = user.photo || generateLetterAvatar(user.name || user.displayName || 'User');
+            const hasEncryption = !!user.publicKey;
+            
+            card.innerHTML = `
+              <div class="avatar-container">
+                <img src="${avatarUrl}" class="friend-avatar" onerror="this.src='${generateLetterAvatar(user.name || 'User')}'">
+                <div class="online-indicator" id="online_${user.uid}"></div>
+                ${hasEncryption ? `<div class="encrypted-indicator show"><i data-feather="lock" style="width:10px;height:10px;"></i></div>` : ''}
+              </div>
+              <div class="friend-info">
+                <div class="friend-name-row">
+                  <div class="friend-name">
+                    ${user.name || user.displayName || 'User'}
+                    ${hasEncryption ? '<i data-feather="lock" style="width:12px;height:12px;color:var(--encrypted);"></i>' : ''}
+                  </div>
+                </div>
+                <div class="friend-meta">
+                  <span class="start-chat-hint">Tap to chat</span>
+                </div>
+              </div>
+            `;
+            
+            listContainer.appendChild(card);
+            
+            // Listen to online status
+            const onlineRef = db.ref(`users/${user.uid}/online`);
+            const unsub = onlineRef.on('value', (s) => {
+              const indicator = document.getElementById(`online_${user.uid}`);
+              if (indicator) {
+                if (s.val() === true) {
+                  indicator.classList.add('show');
+                } else {
+                  indicator.classList.remove('show');
+                }
+              }
+            });
+            unsubscribeListeners.push(unsub);
+          });
+
+          feather.replace();
+        }, (error) => {
+          clearTimeout(loadTimeout);
+          console.error('Firebase error:', error);
+          
+          if (error.code === 'PERMISSION_DENIED') {
+            showError('Permission denied. Please check your Firebase rules.');
+          } else {
+            showError(`Error: ${error.message}`);
+          }
+        });
+
+        unsubscribeListeners.push(() => listRef.off('value', unsubscribe));
+      } catch (err) {
+        clearTimeout(loadTimeout);
+        showError(`Error: ${err.message}`);
+      }
+    }
+
+    function generateLetterAvatar(name) {
+      if (!name) name = 'U';
+      const initials = name.trim().split(/\s+/).map(w => w[0]).slice(0,2).join('').toUpperCase();
+      const colors = ['#6366f1','#10b981','#f59e0b','#ef4444','#8b5cf6','#ec4899'];
+      const hash = name.split('').reduce((a,b) => a + b.charCodeAt(0), 0);
+      const bg = colors[hash % colors.length];
+      
+      const canvas = document.createElement('canvas');
+      canvas.width = canvas.height = 100;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = bg;
+      ctx.fillRect(0,0,100,100);
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 40px system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(initials, 50, 50);
+      return canvas.toDataURL();
+    }
+
+    // ==================== CHAT VIEW ====================
+
+    async function openFullChat(friendUid) {
+      currentFriendUid = friendUid;
+      currentRoomId = currentUser.uid < friendUid ? 
+        currentUser.uid + "_" + friendUid : 
+        friendUid + "_" + currentUser.uid;
+      
+      // Get friend profile
+      const snap = await db.ref(`users/${friendUid}/profile`).once('value');
+      const profile = snap.val() || { name: "User", photo: "" };
+      
+      document.getElementById('chatFriendName').textContent = profile.name || profile.displayName || 'User';
+      document.getElementById('chatFriendAvatar').src = profile.photo || generateLetterAvatar(profile.name);
+      
+      // Init encryption if needed
+      if (!sharedKeys[friendUid] && profile.publicKey) {
+        const secret = await deriveSharedSecret(JSON.parse(profile.publicKey));
+        if (secret) {
+          sharedKeys[friendUid] = secret;
+          localStorage.setItem('sharedKeys', JSON.stringify(sharedKeys));
+        }
+      }
+      
+      // Show encryption badge
+      if (sharedKeys[friendUid]) {
+        document.getElementById('global-encrypt-badge').style.display = 'inline-flex';
+      }
+      
+      // Show chat view
+      document.getElementById('fullChatView').classList.add('active');
+      document.body.style.overflow = 'hidden'; // Prevent background scrolling
+      
+      // Load messages
+      loadMessages();
+      
+      // Listen to online status
+      db.ref(`users/${friendUid}/online`).on('value', (s) => {
+        const statusEl = document.getElementById('chatStatus');
+        if (s.val() === true) {
+          statusEl.textContent = 'Online';
+          statusEl.style.color = 'var(--online)';
+        } else {
+          statusEl.textContent = 'Offline';
+          statusEl.style.color = 'var(--text-secondary)';
+        }
+      });
+      
+      // Update read status
+      markAsRead(friendUid);
+    }
+
+    function closeFullChat() {
+      document.getElementById('fullChatView').classList.remove('active');
+      document.body.style.overflow = '';
+      
+      if (messagesListener) {
+        messagesListener.off();
+        messagesListener = null;
+      }
+      
+      currentFriendUid = null;
+      document.getElementById('messageList').innerHTML = '';
+      document.getElementById('global-encrypt-badge').style.display = 'none';
+    }
+
+    function loadMessages() {
+      const list = document.getElementById('messageList');
+      list.innerHTML = '';
+      
+      messagesListener = db.ref(`messages/${currentRoomId}`).limitToLast(50);
+      
+      messagesListener.on('child_added', (snap) => {
+        const msg = snap.val();
+        if (!msg) return;
+        
+        const isSent = msg.sender === currentUser.uid;
+        const key = sharedKeys[currentFriendUid];
+        const text = key ? decrypt(msg.text, key) : (isSent ? '[Encrypted]' : '🔒 Encrypted');
+        
+        const el = document.createElement('div');
+        el.className = `message ${isSent ? 'sent' : 'received'}`;
+        el.innerHTML = `
+          <div>${escapeHtml(text)}</div>
+          <div class="message-time">${formatTime(msg.ts)}</div>
+        `;
+        
+        list.appendChild(el);
+        list.scrollTop = list.scrollHeight;
+      });
+    }
+
+    async function sendMessage() {
+      const input = document.getElementById('messageInput');
+      const text = input.value.trim();
+      if (!text || !currentFriendUid) return;
+      
+      const key = sharedKeys[currentFriendUid];
+      if (!key) {
+        showToast('Encryption key not available', 'error');
+        return;
+      }
+      
+      const encrypted = encrypt(text, key);
+      if (!encrypted) {
+        showToast('Encryption failed', 'error');
+        return;
+      }
+      
+      const timestamp = Date.now();
+      
+      // Add to UI immediately (optimistic)
+      const list = document.getElementById('messageList');
+      const el = document.createElement('div');
+      el.className = 'message sent';
+      el.innerHTML = `
+        <div>${escapeHtml(text)}</div>
+        <div class="message-time">${formatTime(timestamp)}</div>
+      `;
+      list.appendChild(el);
+      list.scrollTop = list.scrollHeight;
+      
+      input.value = '';
+      input.style.height = 'auto';
+      document.getElementById('sendBtn').classList.remove('active');
+      
+      try {
+        // Send to Firebase
+        await db.ref(`messages/${currentRoomId}`).push({
+          text: encrypted,
+          sender: currentUser.uid,
+          ts: timestamp,
+          read: false
+        });
+        
+        // Update chat metadata for both users
+        const updates = {};
+        updates[`users/${currentUser.uid}/chats/${currentFriendUid}/lastMsg`] = encrypted;
+        updates[`users/${currentUser.uid}/chats/${currentFriendUid}/lastMsgSender`] = currentUser.uid;
+        updates[`users/${currentUser.uid}/chats/${currentFriendUid}/ts`] = timestamp;
+        updates[`users/${currentFriendUid}/chats/${currentUser.uid}/lastMsg`] = encrypted;
+        updates[`users/${currentFriendUid}/chats/${currentUser.uid}/lastMsgSender`] = currentUser.uid;
+        updates[`users/${currentFriendUid}/chats/${currentUser.uid}/ts`] = timestamp;
+        updates[`users/${currentFriendUid}/chats/${currentUser.uid}/unreadCount`] = firebase.database.ServerValue.increment(1);
+        
+        await db.ref().update(updates);
+      } catch (err) {
+        console.error('Send failed:', err);
+        showToast('Failed to send', 'error');
+      }
+    }
+
+    function markAsRead(friendUid) {
+      db.ref(`users/${currentUser.uid}/chats/${friendUid}`).update({ unreadCount: 0 });
+    }
+
+    // ==================== INPUT HANDLING ====================
+
+    function autoResize(field) {
+      field.style.height = 'auto';
+      field.style.height = field.scrollHeight + 'px';
+      
+      const btn = document.getElementById('sendBtn');
+      if (field.value.trim().length > 0) {
+        btn.classList.add('active');
+      } else {
+        btn.classList.remove('active');
+      }
+    }
+
+    function handleEnter(e) {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    function formatTime(timestamp) {
+      if (!timestamp) return '';
+      const date = new Date(timestamp);
+      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+
+    // ==================== NAVIGATION ====================
+
+    function switchTab(tab) {
       currentTab = tab;
       document.getElementById('tab-following').classList.remove('active');
       document.getElementById('tab-followers').classList.remove('active');
       document.getElementById(`tab-${tab}`).classList.add('active');
       loadUsers(tab);
-    };
+    }
 
-    document.getElementById('search-input')?.addEventListener('input', (e) => {
-      const query = e.target.value.toLowerCase();
-      const items = document.querySelectorAll('.chat-item');
+    function searchFriends() {
+      const query = document.getElementById('search-input').value.toLowerCase();
+      const cards = document.querySelectorAll('.friend-card');
       
-      items.forEach(item => {
-        const name = item.querySelector('.chat-name')?.textContent.toLowerCase() || '';
+      cards.forEach(card => {
+        const name = card.querySelector('.friend-name')?.textContent.toLowerCase() || '';
         if (name.includes(query)) {
-          item.style.display = 'flex';
+          card.style.display = 'flex';
         } else {
-          item.style.display = 'none';
+          card.style.display = 'none';
         }
       });
-    });
+    }
 
-    window.handleLogout = function() {
-      signOut(auth).then(() => {
-        showToast("Signed out", "success");
+    function retryLoad() {
+      loadUsers(currentTab);
+    }
+
+    function handleLogout() {
+      auth.signOut().then(() => {
+        showToast("Signed out");
         setTimeout(() => window.location.href = "login.html", 1000);
-      }).catch(() => showToast("Error signing out", "error"));
-    };
+      });
+    }
 
-    // Setup encryption keys for user
-    window.setupEncryptionKeys = async function() {
-      const btn = document.getElementById('setup-keys-btn');
-      btn.disabled = true;
-      btn.innerHTML = '<span class="spinner"></span> Generating keys...';
-      
-      try {
-        // Generate key pair
-        const keyPair = await CryptoModule.generateKeyPair();
-        
-        // Export public key
-        const publicKeyBase64 = await CryptoModule.exportPublicKey(keyPair);
-        
-        // Store private key locally
-        await CryptoModule.storePrivateKey(currentUser.uid, keyPair);
-        
-        // Upload public key to Firebase
-        const userRef = ref(db, `users/${currentUser.uid}`);
-        await update(userRef, {
-          publicKey: publicKeyBase64,
-          encryptionEnabled: true,
-          encryptionEnabledAt: Date.now()
-        });
-        
-        showToast("Encryption enabled successfully!", "success");
-        document.getElementById('key-setup-modal').classList.remove('show');
-        document.getElementById('global-encrypt-badge').style.display = 'inline-flex';
-        
-        // Reload to show encryption indicators
-        loadUsers(currentTab);
-      } catch (err) {
-        console.error("Key setup error:", err);
-        showToast("Failed to enable encryption: " + err.message, "error");
-        btn.disabled = false;
-        btn.textContent = 'Enable Encryption';
-      }
-    };
+    // ==================== INIT ====================
 
-    async function checkEncryptionStatus() {
-      if (!currentUser) return;
-      
-      const hasKeys = await CryptoModule.hasKeys(currentUser.uid);
-      const userRef = ref(db, `users/${currentUser.uid}/publicKey`);
-      const snapshot = await get(userRef);
-      const hasPublicKey = snapshot.exists();
-      
-      if (hasKeys && hasPublicKey) {
-        document.getElementById('global-encrypt-badge').style.display = 'inline-flex';
-      } else {
-        // Show setup modal if no keys
-        document.getElementById('key-setup-modal').classList.add('show');
-        feather.replace();
+    async function initEncryption() {
+      if (!localStorage.getItem('privateKey')) {
+        try {
+          const publicJwk = await generateKeyPair();
+          await db.ref(`users/${currentUser.uid}/profile`).update({ 
+            publicKey: JSON.stringify(publicJwk) 
+          });
+          console.log('Encryption keys generated');
+        } catch (err) {
+          console.error('Key generation failed:', err);
+        }
       }
     }
 
-    onAuthStateChanged(auth, async (user) => {
+    auth.onAuthStateChanged(user => {
       if (!user) {
-        window.location.href = "signup.html";
+        window.location.href = "login.html";
         return;
       }
-
+      
       currentUser = user;
+      initEncryption();
       loadUsers('following');
-      checkEncryptionStatus();
+    });
+
+    // Handle back button on mobile
+    window.addEventListener('popstate', (e) => {
+      if (document.getElementById('fullChatView').classList.contains('active')) {
+        closeFullChat();
+        e.preventDefault();
+      }
     });
 
     feather.replace();
