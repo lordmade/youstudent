@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Nexus - Explore</title>
+  <title>Nexus - Notifications</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/feather-icons"></script>
   <style>
@@ -18,6 +18,7 @@
       --success: #10b981;
       --skeleton-base: #f0f0f0;
       --skeleton-highlight: #e0e0e0;
+      --unread-bg: rgba(99, 102, 241, 0.05);
     }
     
     body {
@@ -34,14 +35,14 @@
       touch-action: manipulation;
     }
     
-    .search-input, .post-text, .trend-text {
+    .notification-text, .post-text {
       -webkit-user-select: text;
       user-select: text;
     }
     
     html { touch-action: pan-x pan-y; }
 
-    img, video, .user-avatar, .post-image, .trend-avatar {
+    img, .user-avatar, .notification-avatar {
       -webkit-user-select: none !important;
       -moz-user-select: none !important;
       -ms-user-select: none !important;
@@ -75,7 +76,7 @@
       border-right: 1px solid var(--border);
     }
     
-    .logo-box { padding: 10px; margin-bottom: 10px; }
+    .logo-box { padding: 10px; margin-bottom: 10px; position: relative; }
     
     .nav-item {
       display: flex;
@@ -88,6 +89,7 @@
       color: var(--text-dark);
       width: fit-content;
       transition: 0.2s;
+      position: relative;
     }
     
     .nav-item:hover { background-color: var(--hover-bg); color: var(--primary-color); }
@@ -96,7 +98,23 @@
     
     @media (min-width: 640px) { .nav-text { display: block; } }
 
-    .explore-header {
+    /* Notification Badge on Nav */
+    .nav-badge {
+      position: absolute;
+      top: 8px;
+      left: 32px;
+      background: var(--primary-color);
+      color: white;
+      font-size: 0.7rem;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 9999px;
+      min-width: 18px;
+      text-align: center;
+      border: 2px solid white;
+    }
+
+    .notifications-header {
       position: sticky;
       top: 0;
       background: rgba(255, 255, 255, 0.92);
@@ -104,66 +122,79 @@
       padding: 0.75rem 1rem;
       border-bottom: 1px solid var(--border);
       z-index: 10;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
     }
 
-    .search-container {
-      position: relative;
-      width: 100%;
-    }
-    
-    .search-box {
-      width: 100%;
-      padding: 0.75rem 1rem 0.75rem 2.5rem;
-      background: #f7f9f9;
-      border: 1px solid var(--border);
-      border-radius: 9999px;
-      font-size: 1rem;
-      outline: none;
-      transition: all 0.2s;
-    }
-    
-    .search-box:focus {
-      background: white;
-      border-color: var(--primary-color);
-      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
-    }
-    
-    .search-icon {
-      position: absolute;
-      left: 0.875rem;
-      top: 50%;
-      transform: translateY(-50%);
-      color: var(--text-light);
-      pointer-events: none;
+    .header-title {
+      font-size: 1.25rem;
+      font-weight: 800;
     }
 
-    .search-filters {
+    .header-actions {
       display: flex;
       gap: 0.5rem;
-      margin-top: 0.75rem;
+    }
+
+    .icon-btn {
+      padding: 0.5rem;
+      border-radius: 50%;
+      cursor: pointer;
+      color: var(--text-dark);
+      transition: 0.2s;
+      background: transparent;
+      border: none;
+    }
+
+    .icon-btn:hover { background: var(--hover-bg); color: var(--primary-color); }
+
+    /* Filter Tabs */
+    .filter-tabs {
+      display: flex;
+      border-bottom: 1px solid var(--border);
       overflow-x: auto;
       scrollbar-width: none;
     }
     
-    .search-filters::-webkit-scrollbar { display: none; }
+    .filter-tabs::-webkit-scrollbar { display: none; }
     
-    .filter-chip {
-      padding: 0.4rem 1rem;
-      background: transparent;
-      border: 1px solid var(--border);
-      border-radius: 9999px;
-      font-size: 0.9rem;
-      cursor: pointer;
-      white-space: nowrap;
-      transition: all 0.2s;
+    .filter-tab {
+      flex: 1;
+      min-width: 80px;
+      padding: 1rem;
+      background: none;
+      border: none;
+      font-size: 0.95rem;
+      font-weight: 600;
       color: var(--text-light);
+      cursor: pointer;
+      position: relative;
+      transition: color 0.2s;
+      white-space: nowrap;
     }
     
-    .filter-chip:hover { background: var(--hover-bg); }
-    .filter-chip.active {
+    .filter-tab:hover { color: var(--primary-color); }
+    .filter-tab.active { color: var(--text-dark); }
+    .filter-tab.active::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: var(--primary-color);
+      border-radius: 9999px 9999px 0 0;
+    }
+    
+    .filter-tab .count {
       background: var(--primary-color);
       color: white;
-      border-color: var(--primary-color);
+      font-size: 0.7rem;
+      padding: 2px 6px;
+      border-radius: 9999px;
+      margin-left: 4px;
+      font-weight: 700;
     }
 
     .main-content { 
@@ -173,170 +204,153 @@
       min-height: 100vh;
     }
 
-    /* Section Headers */
-    .section-header {
-      padding: 1rem;
-      font-size: 1.25rem;
-      font-weight: 800;
-      border-bottom: 1px solid var(--border);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-    
-    /* Trend Cards */
-    .trend-card {
-      padding: 1rem;
-      border-bottom: 1px solid var(--border);
-      cursor: pointer;
-      transition: background 0.2s;
-      display: flex;
-      align-items: center;
-      gap: 1rem;
-    }
-    
-    .trend-card:hover { background: var(--hover-bg); }
-    
-    .trend-rank {
-      font-size: 1.25rem;
-      font-weight: 700;
-      color: var(--text-light);
-      min-width: 1.5rem;
-    }
-    
-    .trend-info { flex: 1; }
-    
-    .trend-category {
-      font-size: 0.8rem;
-      color: var(--text-light);
-      margin-bottom: 0.25rem;
-    }
-    
-    .trend-title {
-      font-weight: 700;
-      font-size: 1rem;
-      margin-bottom: 0.25rem;
-      color: var(--text-dark);
-    }
-    
-    .trend-posts {
-      font-size: 0.8rem;
-      color: var(--text-light);
-    }
-    
-    .trend-image {
-      width: 80px;
-      height: 80px;
-      border-radius: 12px;
-      object-fit: cover;
-      background: #e1e8ed;
-    }
-
-    /* User Cards */
-    .user-card {
-      padding: 1rem;
-      border-bottom: 1px solid var(--border);
-      display: flex;
-      align-items: center;
-      gap: 0.75rem;
-      cursor: pointer;
-      transition: background 0.2s;
-    }
-    
-    .user-card:hover { background: var(--hover-bg); }
-    
-    .user-info { flex: 1; min-width: 0; }
-    
-    .user-name {
-      font-weight: 700;
-      font-size: 1rem;
-      color: var(--text-dark);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    
-    .user-handle {
-      font-size: 0.9rem;
-      color: var(--text-light);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    
-    .follow-btn {
-      padding: 0.4rem 1rem;
-      background: var(--text-dark);
-      color: white;
-      border: none;
-      border-radius: 9999px;
-      font-weight: 700;
-      font-size: 0.9rem;
-      cursor: pointer;
-      transition: 0.2s;
-      white-space: nowrap;
-    }
-    
-    .follow-btn:hover { background: rgba(0,0,0,0.8); }
-    
-    .follow-btn.following {
-      background: transparent;
-      color: var(--text-dark);
-      border: 1px solid var(--border);
-    }
-    
-    .follow-btn.following:hover {
-      background: rgba(255,0,0,0.1);
-      color: var(--danger);
-      border-color: var(--danger);
-    }
-
-    /* Search Results */
-    .search-results {
-      display: none;
-    }
-    
-    .search-results.active { display: block; }
-    
-    .result-section {
-      padding: 0.5rem 0;
-      border-bottom: 1px solid var(--border);
-    }
-    
-    .result-section-title {
+    /* Time Group Headers */
+    .time-group {
       padding: 0.75rem 1rem;
       font-size: 0.9rem;
       font-weight: 700;
-      color: var(--text-light);
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
+      color: var(--text-dark);
+      background: var(--hover-bg);
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 57px;
+      z-index: 5;
+      backdrop-filter: blur(8px);
     }
-    
-    .search-result-item {
-      padding: 0.75rem 1rem;
+
+    /* Notification Items */
+    .notification-item {
+      padding: 1rem;
+      border-bottom: 1px solid var(--border);
       display: flex;
-      align-items: center;
       gap: 0.75rem;
       cursor: pointer;
       transition: background 0.2s;
+      position: relative;
     }
     
-    .search-result-item:hover { background: var(--hover-bg); }
+    .notification-item:hover { background: var(--hover-bg); }
+    .notification-item.unread { background: var(--unread-bg); }
+    .notification-item.unread:hover { background: rgba(99, 102, 241, 0.08); }
     
-    .result-avatar {
+    .notification-icon-wrapper {
       width: 40px;
       height: 40px;
       border-radius: 50%;
-      object-fit: cover;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      margin-top: 4px;
     }
     
-    .result-content { flex: 1; }
+    .notification-icon-wrapper.like { background: rgba(249, 24, 128, 0.1); color: var(--like-red); }
+    .notification-icon-wrapper.follow { background: rgba(99, 102, 241, 0.1); color: var(--primary-color); }
+    .notification-icon-wrapper.comment { background: rgba(16, 185, 129, 0.1); color: var(--success); }
+    .notification-icon-wrapper.mention { background: rgba(99, 102, 241, 0.1); color: var(--primary-color); }
+    .notification-icon-wrapper.repost { background: rgba(16, 185, 129, 0.1); color: var(--success); }
+    .notification-icon-wrapper.system { background: rgba(83, 100, 113, 0.1); color: var(--text-light); }
+
+    .notification-content {
+      flex: 1;
+      min-width: 0;
+    }
     
-    .result-title { font-weight: 700; }
+    .notification-header {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-bottom: 0.25rem;
+    }
     
-    .result-subtitle { font-size: 0.9rem; color: var(--text-light); }
+    .notification-avatar {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      object-fit: cover;
+      cursor: pointer;
+      border: 2px solid white;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      transition: transform 0.2s;
+    }
     
-    .result-meta { font-size: 0.8rem; color: var(--text-light); margin-top: 0.25rem; }
+    .notification-avatar:hover { transform: scale(1.1); }
+    
+    .notification-avatars-stack {
+      display: flex;
+      margin-bottom: 0.5rem;
+    }
+    
+    .notification-avatars-stack .notification-avatar {
+      margin-right: -8px;
+      border: 2px solid white;
+    }
+    
+    .notification-avatars-stack .notification-avatar:last-child { margin-right: 0; }
+
+    .notification-text {
+      font-size: 0.95rem;
+      line-height: 1.4;
+      color: var(--text-dark);
+      margin-bottom: 0.25rem;
+    }
+    
+    .notification-text strong { font-weight: 700; cursor: pointer; }
+    .notification-text strong:hover { text-decoration: underline; }
+    
+    .notification-time {
+      font-size: 0.8rem;
+      color: var(--text-light);
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+    }
+    
+    .notification-post-preview {
+      margin-top: 0.5rem;
+      padding: 0.75rem;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      font-size: 0.9rem;
+      color: var(--text-light);
+      background: white;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+    }
+    
+    .notification-actions {
+      display: flex;
+      gap: 0.5rem;
+      margin-top: 0.5rem;
+    }
+    
+    .notification-action-btn {
+      padding: 0.4rem 1rem;
+      border-radius: 9999px;
+      border: 1px solid var(--border);
+      background: white;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .notification-action-btn:hover { background: var(--hover-bg); border-color: var(--primary-color); color: var(--primary-color); }
+    .notification-action-btn.primary { background: var(--text-dark); color: white; border-color: var(--text-dark); }
+    .notification-action-btn.primary:hover { background: rgba(0,0,0,0.8); }
+
+    .unread-dot {
+      position: absolute;
+      top: 1rem;
+      right: 1rem;
+      width: 8px;
+      height: 8px;
+      background: var(--primary-color);
+      border-radius: 50%;
+    }
 
     .right-sidebar { 
       display: none; 
@@ -354,6 +368,7 @@
       border-radius: 16px;
       margin-bottom: 1rem;
       overflow: hidden;
+      border: 1px solid var(--border);
     }
     
     .sidebar-card-header {
@@ -362,17 +377,6 @@
       font-weight: 800;
       border-bottom: 1px solid var(--border);
     }
-    
-    .sidebar-card-item {
-      padding: 1rem;
-      border-bottom: 1px solid var(--border);
-      cursor: pointer;
-      transition: background 0.2s;
-    }
-    
-    .sidebar-card-item:hover { background: rgba(0,0,0,0.03); }
-    
-    .sidebar-card-item:last-child { border-bottom: none; }
 
     .bottom-nav {
       position: fixed;
@@ -416,6 +420,17 @@
       background: var(--primary-color);
       border-radius: 9999px;
     }
+    
+    .bottom-badge {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      width: 8px;
+      height: 8px;
+      background: var(--primary-color);
+      border-radius: 50%;
+      border: 2px solid white;
+    }
 
     @media (max-width: 639px) {
       .sidebar { display: none; }
@@ -444,10 +459,7 @@
     #toast.success { background: var(--success); }
     #toast.error { background: var(--danger); }
 
-    /* ==========================================
-       SHIMMER / SKELETON STYLES
-       ========================================== */
-    
+    /* Shimmer Styles */
     @keyframes shimmer {
       0% { background-position: -200% 0; }
       100% { background-position: 200% 0; }
@@ -467,138 +479,43 @@
       border-radius: 50%;
     }
 
-    /* Trend Skeleton */
-    .trend-skeleton {
+    .notification-skeleton {
       padding: 1rem;
       border-bottom: 1px solid var(--border);
       display: flex;
-      align-items: center;
-      gap: 1rem;
-    }
-    
-    .trend-skeleton-rank {
-      width: 24px;
-      height: 24px;
-      border-radius: 4px;
-    }
-    
-    .trend-skeleton-content {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      gap: 0.5rem;
-    }
-    
-    .trend-skeleton-line-short {
-      height: 12px;
-      width: 30%;
-      border-radius: 4px;
-    }
-    
-    .trend-skeleton-line-medium {
-      height: 16px;
-      width: 60%;
-      border-radius: 4px;
-    }
-    
-    .trend-skeleton-line-long {
-      height: 12px;
-      width: 40%;
-      border-radius: 4px;
-    }
-    
-    .trend-skeleton-image {
-      width: 80px;
-      height: 80px;
-      border-radius: 12px;
-    }
-
-    /* User Skeleton */
-    .user-skeleton {
-      padding: 1rem;
-      border-bottom: 1px solid var(--border);
-      display: flex;
-      align-items: center;
       gap: 0.75rem;
     }
     
-    .user-skeleton-avatar {
-      width: 48px;
-      height: 48px;
-    }
-    
-    .user-skeleton-content {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      gap: 0.5rem;
-    }
-    
-    .user-skeleton-line-short {
-      height: 14px;
-      width: 40%;
-      border-radius: 4px;
-    }
-    
-    .user-skeleton-line-long {
-      height: 12px;
-      width: 60%;
-      border-radius: 4px;
-    }
-    
-    .user-skeleton-button {
-      width: 80px;
-      height: 32px;
-      border-radius: 9999px;
-    }
-
-    /* Search Result Skeleton */
-    .result-skeleton {
-      padding: 0.75rem 1rem;
-      display: flex;
-      align-items: center;
-      gap: 0.75rem;
-    }
-    
-    .result-skeleton-avatar {
+    .notification-skeleton-icon {
       width: 40px;
       height: 40px;
+      border-radius: 50%;
+      flex-shrink: 0;
     }
     
-    .result-skeleton-content {
+    .notification-skeleton-content {
       flex: 1;
       display: flex;
       flex-direction: column;
-      gap: 0.4rem;
+      gap: 0.5rem;
     }
     
-    .result-skeleton-line-short {
+    .notification-skeleton-line-short {
       height: 14px;
-      width: 35%;
-      border-radius: 4px;
-    }
-    
-    .result-skeleton-line-medium {
-      height: 12px;
-      width: 50%;
-      border-radius: 4px;
-    }
-
-    /* Sidebar Skeleton */
-    .sidebar-skeleton-item {
-      padding: 1rem;
-      border-bottom: 1px solid var(--border);
-    }
-    
-    .sidebar-skeleton-line {
-      height: 12px;
-      margin-bottom: 0.5rem;
-      border-radius: 4px;
-    }
-    
-    .sidebar-skeleton-line:last-child {
-      margin-bottom: 0;
       width: 60%;
+      border-radius: 4px;
+    }
+    
+    .notification-skeleton-line-medium {
+      height: 12px;
+      width: 80%;
+      border-radius: 4px;
+    }
+    
+    .notification-skeleton-line-long {
+      height: 12px;
+      width: 40%;
+      border-radius: 4px;
     }
 
     .empty-state {
@@ -614,39 +531,140 @@
       color: var(--border);
     }
 
-    .show-more {
-      padding: 1rem;
-      color: var(--primary-color);
-      cursor: pointer;
-      text-align: center;
+    .mark-all-btn {
       font-size: 0.9rem;
+      color: var(--primary-color);
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-weight: 600;
+      padding: 0.5rem;
+      border-radius: 8px;
+      transition: background 0.2s;
     }
     
-    .show-more:hover { background: var(--hover-bg); }
+    .mark-all-btn:hover { background: rgba(99, 102, 241, 0.1); }
+    .mark-all-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
-    /* Loading overlay for search */
-    .search-loading {
-      padding: 2rem;
-      text-align: center;
+    /* Settings Modal */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 1000;
+      display: none;
+      opacity: 0;
+      transition: opacity 0.3s;
     }
     
-    .search-loading-spinner {
-      width: 40px;
-      height: 40px;
-      border: 4px solid var(--border);
-      border-top-color: var(--primary-color);
+    .modal-overlay.active { display: flex; opacity: 1; align-items: center; justify-content: center; padding: 1rem; }
+    
+    .modal-content {
+      background: white;
+      border-radius: 16px;
+      width: 100%;
+      max-width: 400px;
+      max-height: 80vh;
+      overflow: hidden;
+      transform: scale(0.9);
+      transition: transform 0.3s;
+    }
+    
+    .modal-overlay.active .modal-content { transform: scale(1); }
+    
+    .modal-header {
+      padding: 1rem;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-weight: 800;
+      font-size: 1.1rem;
+    }
+    
+    .modal-body { padding: 1rem; }
+    
+    .setting-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 1rem 0;
+      border-bottom: 1px solid var(--border);
+    }
+    
+    .setting-item:last-child { border-bottom: none; }
+    
+    .toggle {
+      width: 48px;
+      height: 24px;
+      background: #ccc;
+      border-radius: 9999px;
+      position: relative;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+    
+    .toggle.active { background: var(--primary-color); }
+    
+    .toggle-dot {
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 20px;
+      height: 20px;
+      background: white;
       border-radius: 50%;
-      animation: spin 0.8s linear infinite;
-      margin: 0 auto;
+      transition: transform 0.3s;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
     }
     
-    @keyframes spin {
-      to { transform: rotate(360deg); }
-    }
+    .toggle.active .toggle-dot { transform: translateX(24px); }
   </style>
 </head>
 <body>
   <div id="toast"></div>
+  
+  <!-- Settings Modal -->
+  <div id="settings-modal" class="modal-overlay">
+    <div class="modal-content">
+      <div class="modal-header">
+        <span>Notification Settings</span>
+        <button onclick="closeSettings()" class="icon-btn"><i data-feather="x"></i></button>
+      </div>
+      <div class="modal-body">
+        <div class="setting-item">
+          <div>
+            <div style="font-weight:600;">Push Notifications</div>
+            <div style="font-size:0.85rem;color:var(--text-light);">Receive push notifications</div>
+          </div>
+          <div class="toggle active" onclick="this.classList.toggle('active')">
+            <div class="toggle-dot"></div>
+          </div>
+        </div>
+        <div class="setting-item">
+          <div>
+            <div style="font-weight:600;">Email Notifications</div>
+            <div style="font-size:0.85rem;color:var(--text-light);">Receive email updates</div>
+          </div>
+          <div class="toggle" onclick="this.classList.toggle('active')">
+            <div class="toggle-dot"></div>
+          </div>
+        </div>
+        <div class="setting-item">
+          <div>
+            <div style="font-weight:600;">Mute Mentions</div>
+            <div style="font-size:0.85rem;color:var(--text-light);">Pause mention notifications</div>
+          </div>
+          <div class="toggle" onclick="this.classList.toggle('active')">
+            <div class="toggle-dot"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <div class="layout-grid">
     <!-- Left Sidebar -->
@@ -658,15 +676,19 @@
             <path d="M12 20L18 26L28 14" stroke="white" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
             <circle cx="28" cy="26" r="4" fill="white"/>
           </svg>
+          <span id="nav-badge" class="nav-badge" style="display:none;">0</span>
         </div>
         <div class="nav-item" onclick="window.location.href='index.html'">
           <i data-feather="home"></i> <span class="nav-text">Home</span>
         </div>
-        <div class="nav-item active" onclick="window.location.href='explore.html'">
+        <div class="nav-item" onclick="window.location.href='explore.html'">
           <i data-feather="hash"></i> <span class="nav-text">Explore</span>
         </div>
         <div class="nav-item" onclick="window.location.href='messages.html'">
           <i data-feather="message-circle"></i> <span class="nav-text">Messages</span>
+        </div>
+        <div class="nav-item active" onclick="window.location.href='notifications.html'">
+          <i data-feather="bell"></i> <span class="nav-text">Notifications</span>
         </div>
         <div class="nav-item" onclick="window.location.href='profile.html'">
           <i data-feather="user"></i> <span class="nav-text">Profile</span>
@@ -679,152 +701,63 @@
 
     <!-- Main Content -->
     <main class="main-content">
-      <div class="explore-header">
-        <div class="search-container">
-          <i data-feather="search" class="search-icon" style="width:18px;height:18px;"></i>
-          <input type="text" class="search-box" id="search-input" placeholder="Search Nexus">
-        </div>
-        <div class="search-filters">
-          <button class="filter-chip active" data-filter="top">Top</button>
-          <button class="filter-chip" data-filter="latest">Latest</button>
-          <button class="filter-chip" data-filter="people">People</button>
-          <button class="filter-chip" data-filter="media">Media</button>
+      <div class="notifications-header">
+        <div class="header-title">Notifications</div>
+        <div class="header-actions">
+          <button class="mark-all-btn" id="mark-all-btn" onclick="markAllAsRead()" style="display:none;">
+            Mark all as read
+          </button>
+          <button class="icon-btn" onclick="openSettings()">
+            <i data-feather="settings" style="width:20px;height:20px;"></i>
+          </button>
         </div>
       </div>
 
-      <!-- Default Explore Content -->
-      <div id="explore-content">
-        <!-- Trending Section -->
-        <div class="section-header">
-          <span>Trends for you</span>
-          <i data-feather="settings" style="width:20px;height:20px;color:var(--primary-color);cursor:pointer;"></i>
-        </div>
-        <div id="trends-list">
-          <!-- Shimmer placeholders -->
-          <div class="trend-skeleton">
-            <div class="trend-skeleton-rank shimmer"></div>
-            <div class="trend-skeleton-content">
-              <div class="trend-skeleton-line-short shimmer"></div>
-              <div class="trend-skeleton-line-medium shimmer"></div>
-              <div class="trend-skeleton-line-long shimmer"></div>
-            </div>
-            <div class="trend-skeleton-image shimmer"></div>
-          </div>
-          <div class="trend-skeleton">
-            <div class="trend-skeleton-rank shimmer"></div>
-            <div class="trend-skeleton-content">
-              <div class="trend-skeleton-line-short shimmer"></div>
-              <div class="trend-skeleton-line-medium shimmer"></div>
-              <div class="trend-skeleton-line-long shimmer"></div>
-            </div>
-            <div class="trend-skeleton-image shimmer"></div>
-          </div>
-          <div class="trend-skeleton">
-            <div class="trend-skeleton-rank shimmer"></div>
-            <div class="trend-skeleton-content">
-              <div class="trend-skeleton-line-short shimmer"></div>
-              <div class="trend-skeleton-line-medium shimmer"></div>
-              <div class="trend-skeleton-line-long shimmer"></div>
-            </div>
-            <div class="trend-skeleton-image shimmer"></div>
-          </div>
-          <div class="trend-skeleton">
-            <div class="trend-skeleton-rank shimmer"></div>
-            <div class="trend-skeleton-content">
-              <div class="trend-skeleton-line-short shimmer"></div>
-              <div class="trend-skeleton-line-medium shimmer"></div>
-              <div class="trend-skeleton-line-long shimmer"></div>
-            </div>
-            <div class="trend-skeleton-image shimmer"></div>
-          </div>
-          <div class="trend-skeleton">
-            <div class="trend-skeleton-rank shimmer"></div>
-            <div class="trend-skeleton-content">
-              <div class="trend-skeleton-line-short shimmer"></div>
-              <div class="trend-skeleton-line-medium shimmer"></div>
-              <div class="trend-skeleton-line-long shimmer"></div>
-            </div>
-            <div class="trend-skeleton-image shimmer"></div>
-          </div>
-        </div>
-        <div class="show-more" onclick="loadMoreTrends()">Show more</div>
-
-        <!-- Who to Follow Section -->
-        <div class="section-header" style="margin-top:1rem;">
-          <span>Who to follow</span>
-        </div>
-        <div id="suggested-users">
-          <!-- Shimmer placeholders -->
-          <div class="user-skeleton">
-            <div class="user-skeleton-avatar shimmer-circle"></div>
-            <div class="user-skeleton-content">
-              <div class="user-skeleton-line-short shimmer"></div>
-              <div class="user-skeleton-line-long shimmer"></div>
-            </div>
-            <div class="user-skeleton-button shimmer"></div>
-          </div>
-          <div class="user-skeleton">
-            <div class="user-skeleton-avatar shimmer-circle"></div>
-            <div class="user-skeleton-content">
-              <div class="user-skeleton-line-short shimmer"></div>
-              <div class="user-skeleton-line-long shimmer"></div>
-            </div>
-            <div class="user-skeleton-button shimmer"></div>
-          </div>
-          <div class="user-skeleton">
-            <div class="user-skeleton-avatar shimmer-circle"></div>
-            <div class="user-skeleton-content">
-              <div class="user-skeleton-line-short shimmer"></div>
-              <div class="user-skeleton-line-long shimmer"></div>
-            </div>
-            <div class="user-skeleton-button shimmer"></div>
-          </div>
-        </div>
-        <div class="show-more" onclick="window.location.href='connect.html'">Show more</div>
+      <div class="filter-tabs">
+        <button class="filter-tab active" data-filter="all" onclick="setFilter('all')">
+          All
+        </button>
+        <button class="filter-tab" data-filter="mentions" onclick="setFilter('mentions')">
+          Mentions
+        </button>
+        <button class="filter-tab" data-filter="likes" onclick="setFilter('likes')">
+          Likes
+        </button>
+        <button class="filter-tab" data-filter="follows" onclick="setFilter('follows')">
+          Follows
+        </button>
       </div>
 
-      <!-- Search Results -->
-      <div id="search-results" class="search-results">
-        <div id="search-loading" class="search-loading" style="display:none;">
-          <div class="search-loading-spinner"></div>
+      <div id="notifications-container">
+        <!-- Shimmers while loading -->
+        <div class="notification-skeleton">
+          <div class="notification-skeleton-icon shimmer-circle"></div>
+          <div class="notification-skeleton-content">
+            <div class="notification-skeleton-line-short shimmer"></div>
+            <div class="notification-skeleton-line-medium shimmer"></div>
+            <div class="notification-skeleton-line-long shimmer"></div>
+          </div>
         </div>
-        <div id="search-content">
-          <div class="result-section" id="results-people" style="display:none;">
-            <div class="result-section-title">People</div>
-            <div id="people-list">
-              <!-- Shimmer placeholders for search results -->
-              <div class="result-skeleton">
-                <div class="result-skeleton-avatar shimmer-circle"></div>
-                <div class="result-skeleton-content">
-                  <div class="result-skeleton-line-short shimmer"></div>
-                  <div class="result-skeleton-line-medium shimmer"></div>
-                </div>
-              </div>
-              <div class="result-skeleton">
-                <div class="result-skeleton-avatar shimmer-circle"></div>
-                <div class="result-skeleton-content">
-                  <div class="result-skeleton-line-short shimmer"></div>
-                  <div class="result-skeleton-line-medium shimmer"></div>
-                </div>
-              </div>
-            </div>
+        <div class="notification-skeleton">
+          <div class="notification-skeleton-icon shimmer-circle"></div>
+          <div class="notification-skeleton-content">
+            <div class="notification-skeleton-line-short shimmer"></div>
+            <div class="notification-skeleton-line-medium shimmer"></div>
           </div>
-          <div class="result-section" id="results-posts" style="display:none;">
-            <div class="result-section-title">Posts</div>
-            <div id="posts-list">
-              <div class="result-skeleton">
-                <div class="result-skeleton-avatar shimmer-circle"></div>
-                <div class="result-skeleton-content">
-                  <div class="result-skeleton-line-short shimmer" style="width:90%;"></div>
-                  <div class="result-skeleton-line-medium shimmer"></div>
-                </div>
-              </div>
-            </div>
+        </div>
+        <div class="notification-skeleton">
+          <div class="notification-skeleton-icon shimmer-circle"></div>
+          <div class="notification-skeleton-content">
+            <div class="notification-skeleton-line-short shimmer"></div>
+            <div class="notification-skeleton-line-medium shimmer"></div>
+            <div class="notification-skeleton-line-long shimmer"></div>
           </div>
-          <div id="no-results" class="empty-state" style="display:none;">
-            <i data-feather="search" class="empty-state-icon"></i>
-            <h3 style="font-size:1.25rem;font-weight:700;margin-bottom:0.5rem;color:var(--text-dark);">No results found</h3>
-            <p>Try searching for something else</p>
+        </div>
+        <div class="notification-skeleton">
+          <div class="notification-skeleton-icon shimmer-circle"></div>
+          <div class="notification-skeleton-content">
+            <div class="notification-skeleton-line-short shimmer"></div>
+            <div class="notification-skeleton-line-medium shimmer"></div>
           </div>
         </div>
       </div>
@@ -832,58 +765,31 @@
 
     <!-- Right Sidebar -->
     <aside class="right-sidebar">
-      <div class="sidebar-card" id="sidebar-trends-card">
-        <div class="sidebar-card-header">What's happening</div>
-        <div id="sidebar-trends">
-          <!-- Shimmer placeholders -->
-          <div class="sidebar-skeleton-item">
-            <div class="sidebar-skeleton-line shimmer" style="width:40%;"></div>
-            <div class="sidebar-skeleton-line shimmer" style="width:70%;"></div>
-            <div class="sidebar-skeleton-line shimmer"></div>
+      <div class="sidebar-card">
+        <div class="sidebar-card-header">Notification Stats</div>
+        <div style="padding:1rem;">
+          <div style="display:flex;justify-content:space-between;margin-bottom:1rem;">
+            <span style="color:var(--text-light);">Unread</span>
+            <span id="sidebar-unread-count" style="font-weight:700;">0</span>
           </div>
-          <div class="sidebar-skeleton-item">
-            <div class="sidebar-skeleton-line shimmer" style="width:50%;"></div>
-            <div class="sidebar-skeleton-line shimmer" style="width:60%;"></div>
-            <div class="sidebar-skeleton-line shimmer"></div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:1rem;">
+            <span style="color:var(--text-light);">Today</span>
+            <span id="sidebar-today-count" style="font-weight:700;">0</span>
           </div>
-          <div class="sidebar-skeleton-item">
-            <div class="sidebar-skeleton-line shimmer" style="width:35%;"></div>
-            <div class="sidebar-skeleton-line shimmer" style="width:80%;"></div>
-            <div class="sidebar-skeleton-line shimmer"></div>
+          <div style="display:flex;justify-content:space-between;">
+            <span style="color:var(--text-light);">This Week</span>
+            <span id="sidebar-week-count" style="font-weight:700;">0</span>
           </div>
         </div>
       </div>
 
       <div class="sidebar-card">
-        <div class="sidebar-card-header">Topics to follow</div>
-        <div id="sidebar-topics">
-          <!-- Shimmer placeholders -->
-          <div class="sidebar-skeleton-item" style="display:flex;justify-content:space-between;align-items:center;">
-            <div style="flex:1;">
-              <div class="sidebar-skeleton-line shimmer" style="width:50%;margin-bottom:0.5rem;"></div>
-              <div class="sidebar-skeleton-line shimmer" style="width:70%;"></div>
-            </div>
-            <div class="shimmer" style="width:60px;height:28px;border-radius:9999px;"></div>
-          </div>
-          <div class="sidebar-skeleton-item" style="display:flex;justify-content:space-between;align-items:center;">
-            <div style="flex:1;">
-              <div class="sidebar-skeleton-line shimmer" style="width:40%;margin-bottom:0.5rem;"></div>
-              <div class="sidebar-skeleton-line shimmer" style="width:60%;"></div>
-            </div>
-            <div class="shimmer" style="width:60px;height:28px;border-radius:9999px;"></div>
-          </div>
-          <div class="sidebar-skeleton-item" style="display:flex;justify-content:space-between;align-items:center;">
-            <div style="flex:1;">
-              <div class="sidebar-skeleton-line shimmer" style="width:45%;margin-bottom:0.5rem;"></div>
-              <div class="sidebar-skeleton-line shimmer" style="width:75%;"></div>
-            </div>
-            <div class="shimmer" style="width:60px;height:28px;border-radius:9999px;"></div>
-          </div>
+        <div class="sidebar-card-header">Tips</div>
+        <div style="padding:1rem;font-size:0.9rem;color:var(--text-light);line-height:1.5;">
+          <p style="margin-bottom:0.75rem;">• Click the bell icon to mark notifications as read</p>
+          <p style="margin-bottom:0.75rem;">• Use filters to find specific notification types</p>
+          <p>• Mentions from people you follow are highlighted</p>
         </div>
-      </div>
-
-      <div style="padding:1rem;font-size:0.8rem;color:var(--text-light);">
-        © 2024 Nexus · Privacy · Terms · Cookies
       </div>
     </aside>
   </div>
@@ -894,11 +800,15 @@
       <a href="index.html" class="nav-bottom-item" id="bottom-home">
         <i data-feather="home" class="w-7 h-7"></i>
       </a>
-      <a href="explore.html" class="nav-bottom-item active" id="bottom-explore">
+      <a href="explore.html" class="nav-bottom-item" id="bottom-explore">
         <i data-feather="hash" class="w-7 h-7"></i>
       </a>
       <a href="messages.html" class="nav-bottom-item" id="bottom-messages">
         <i data-feather="message-circle" style="width:28px;height:28px;"></i>
+      </a>
+      <a href="notifications.html" class="nav-bottom-item active" id="bottom-notifications" style="position:relative;">
+        <i data-feather="bell" class="w-7 h-7"></i>
+        <span id="bottom-badge" class="bottom-badge" style="display:none;"></span>
       </a>
       <a href="profile.html" class="nav-bottom-item" id="bottom-profile">
         <i data-feather="user" class="w-7 h-7"></i>
@@ -909,7 +819,7 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
     import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
-    import { getDatabase, ref, onValue, get, query, orderByChild, limitToLast, set } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
+    import { getDatabase, ref, onValue, get, query, orderByChild, limitToLast, update, remove, set } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
@@ -927,19 +837,9 @@
     const db = getDatabase(app);
 
     let currentUser = null;
-    let searchFilter = 'top';
-    let allPosts = [];
-    let allUsers = [];
-    let searchTimeout = null;
-
-    // DOM Elements
-    const searchInput = document.getElementById('search-input');
-    const exploreContent = document.getElementById('explore-content');
-    const searchResults = document.getElementById('search-results');
-    const trendsList = document.getElementById('trends-list');
-    const suggestedUsers = document.getElementById('suggested-users');
-    const searchLoading = document.getElementById('search-loading');
-    const searchContent = document.getElementById('search-content');
+    let currentFilter = 'all';
+    let notifications = [];
+    let unreadCount = 0;
 
     // Auth State
     onAuthStateChanged(auth, (user) => {
@@ -948,365 +848,293 @@
         return;
       }
       currentUser = user;
-      loadTrends();
-      loadSuggestedUsers();
-      loadSidebarTrends();
-      loadAllData();
+      loadNotifications();
     });
 
     document.getElementById('logout-btn')?.addEventListener('click', () => signOut(auth));
 
-    // Load all posts and users for search
-    async function loadAllData() {
-      // Load posts
-      const postsRef = ref(db, 'posts');
-      onValue(postsRef, (snapshot) => {
-        allPosts = [];
-        snapshot.forEach(child => {
-          allPosts.push({ key: child.key, ...child.val() });
-        });
-      });
+    function loadNotifications() {
+      const notificationsRef = query(
+        ref(db, `notifications/${currentUser.uid}`), 
+        orderByChild('timestamp'), 
+        limitToLast(50)
+      );
 
-      // Load users
-      const usersRef = ref(db, 'users');
-      onValue(usersRef, (snapshot) => {
-        allUsers = [];
+      onValue(notificationsRef, (snapshot) => {
+        const notifs = [];
         snapshot.forEach(child => {
-          if (child.key !== currentUser?.uid) {
-            allUsers.push({ uid: child.key, ...child.val() });
-          }
+          notifs.unshift({ key: child.key, ...child.val() });
         });
+        
+        notifications = notifs;
+        updateUnreadCount();
+        
+        // Delay slightly to show shimmer effect
+        setTimeout(() => {
+          renderNotifications();
+          updateStats();
+        }, 600);
       });
     }
 
-    // Generate trending topics from actual posts with shimmer
-    async function loadTrends() {
-      // Show shimmer initially (already in HTML)
+    function updateUnreadCount() {
+      unreadCount = notifications.filter(n => !n.read).length;
+      const navBadge = document.getElementById('nav-badge');
+      const bottomBadge = document.getElementById('bottom-badge');
+      const markAllBtn = document.getElementById('mark-all-btn');
       
-      const postsRef = query(ref(db, 'posts'), limitToLast(100));
-      const snapshot = await get(postsRef);
+      if (unreadCount > 0) {
+        navBadge.textContent = unreadCount > 99 ? '99+' : unreadCount;
+        navBadge.style.display = 'block';
+        bottomBadge.style.display = 'block';
+        markAllBtn.style.display = 'block';
+      } else {
+        navBadge.style.display = 'none';
+        bottomBadge.style.display = 'none';
+        markAllBtn.style.display = 'none';
+      }
       
-      const hashtagCounts = {};
+      document.getElementById('sidebar-unread-count').textContent = unreadCount;
+    }
 
-      snapshot.forEach(child => {
-        const post = child.val();
-        if (post.text) {
-          const hashtags = post.text.match(/#[\w]+/g) || [];
-          hashtags.forEach(tag => {
-            hashtagCounts[tag.toLowerCase()] = (hashtagCounts[tag.toLowerCase()] || 0) + 1;
+    function updateStats() {
+      const now = Date.now();
+      const today = notifications.filter(n => now - n.timestamp < 86400000).length;
+      const week = notifications.filter(n => now - n.timestamp < 604800000).length;
+      
+      document.getElementById('sidebar-today-count').textContent = today;
+      document.getElementById('sidebar-week-count').textContent = week;
+    }
+
+    function getTimeGroup(timestamp) {
+      const now = Date.now();
+      const diff = now - timestamp;
+      const days = Math.floor(diff / 86400000);
+      
+      if (days === 0) return 'Today';
+      if (days === 1) return 'Yesterday';
+      if (days < 7) return 'This Week';
+      return 'Earlier';
+    }
+
+    function getNotificationIcon(type) {
+      switch(type) {
+        case 'like': return 'heart';
+        case 'follow': return 'user-plus';
+        case 'comment': return 'message-circle';
+        case 'mention': return 'at-sign';
+        case 'repost': return 'repeat';
+        default: return 'bell';
+      }
+    }
+
+    function getNotificationText(notification) {
+      const actor = notification.actorName || 'Someone';
+      
+      switch(notification.type) {
+        case 'like':
+          return `<strong>${actor}</strong> liked your post`;
+        case 'follow':
+          return `<strong>${actor}</strong> followed you`;
+        case 'comment':
+          return `<strong>${actor}</strong> commented on your post`;
+        case 'mention':
+          return `<strong>${actor}</strong> mentioned you in a post`;
+        case 'repost':
+          return `<strong>${actor}</strong> reposted your post`;
+        case 'system':
+          return notification.message || 'New system notification';
+        default:
+          return notification.message || 'New notification';
+      }
+    }
+
+    function renderNotifications() {
+      const container = document.getElementById('notifications-container');
+      
+      let filtered = notifications;
+      if (currentFilter !== 'all') {
+        filtered = notifications.filter(n => {
+          if (currentFilter === 'mentions') return n.type === 'mention' || n.type === 'comment';
+          return n.type === currentFilter.slice(0, -1); // remove 's'
+        });
+      }
+
+      if (filtered.length === 0) {
+        container.innerHTML = `
+          <div class="empty-state">
+            <i data-feather="bell-off" class="empty-state-icon"></i>
+            <h3 style="font-size:1.25rem;font-weight:700;margin-bottom:0.5rem;color:var(--text-dark);">No notifications yet</h3>
+            <p>When someone interacts with you, you'll see it here</p>
+          </div>
+        `;
+        feather.replace();
+        return;
+      }
+
+      // Group by time
+      const groups = {};
+      filtered.forEach(n => {
+        const group = getTimeGroup(n.timestamp);
+        if (!groups[group]) groups[group] = [];
+        groups[group].push(n);
+      });
+
+      let html = '';
+      const groupOrder = ['Today', 'Yesterday', 'This Week', 'Earlier'];
+      
+      groupOrder.forEach(groupName => {
+        if (groups[groupName]) {
+          html += `<div class="time-group">${groupName}</div>`;
+          
+          groups[groupName].forEach(notification => {
+            const icon = getNotificationIcon(notification.type);
+            const text = getNotificationText(notification);
+            const timeAgo = getTimeAgo(notification.timestamp);
+            const unreadClass = !notification.read ? 'unread' : '';
+            const unreadDot = !notification.read ? '<div class="unread-dot"></div>' : '';
+            
+            let avatarsHtml = '';
+            if (notification.actorAvatar) {
+              avatarsHtml = `
+                <div class="notification-avatars-stack">
+                  <img src="${notification.actorAvatar}" class="notification-avatar" 
+                       onerror="this.src='https://abs.twimg.com/sticky/default_profile_images/default_profile_normal.png'"
+                       onclick="event.stopPropagation(); window.location.href='profile.html?id=${notification.actorId}'">
+                </div>
+              `;
+            }
+
+            let previewHtml = '';
+            if (notification.postText) {
+              previewHtml = `<div class="notification-post-preview">${notification.postText}</div>`;
+            }
+
+            let actionsHtml = '';
+            if (notification.type === 'follow') {
+              actionsHtml = `
+                <div class="notification-actions">
+                  <button class="notification-action-btn primary" onclick="event.stopPropagation(); followBack('${notification.actorId}', this)">Follow back</button>
+                </div>
+              `;
+            }
+
+            html += `
+              <div class="notification-item ${unreadClass}" onclick="handleNotificationClick('${notification.key}', '${notification.type}', '${notification.postId || ''}')">
+                <div class="notification-icon-wrapper ${notification.type}">
+                  <i data-feather="${icon}" style="width:20px;height:20px;"></i>
+                </div>
+                <div class="notification-content">
+                  ${avatarsHtml}
+                  <div class="notification-text">${text}</div>
+                  <div class="notification-time">
+                    <i data-feather="clock" style="width:12px;height:12px;"></i>
+                    ${timeAgo}
+                  </div>
+                  ${previewHtml}
+                  ${actionsHtml}
+                </div>
+                ${unreadDot}
+              </div>
+            `;
           });
         }
       });
 
-      // Convert to array and sort
-      const sortedTrends = Object.entries(hashtagCounts)
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 5)
-        .map(([tag, count], index) => ({
-          rank: index + 1,
-          category: 'Trending in Nexus',
-          title: tag,
-          posts: count > 1000 ? `${(count / 1000).toFixed(1)}K` : `${count}`
-        }));
-
-      // Fallback trends if no hashtags found
-      if (sortedTrends.length === 0) {
-        sortedTrends.push(
-          { rank: 1, category: 'Technology', title: '#Programming', posts: '12.5K' },
-          { rank: 2, category: 'General', title: '#NexusApp', posts: '8.2K' },
-          { rank: 3, category: 'Lifestyle', title: '#MorningVibes', posts: '5.1K' },
-          { rank: 4, category: 'News', title: '#WorldNews', posts: '45K' },
-          { rank: 5, category: 'Entertainment', title: '#Weekend', posts: '3.2K' }
-        );
-      }
-
-      // Small delay to show shimmer effect (optional, for UX)
-      setTimeout(() => {
-        renderTrends(sortedTrends);
-      }, 600);
-    }
-
-    function renderTrends(trends) {
-      trendsList.innerHTML = trends.map(trend => `
-        <div class="trend-card" onclick="window.location.href='index.html?search=${encodeURIComponent(trend.title)}'">
-          <div class="trend-rank">${trend.rank}</div>
-          <div class="trend-info">
-            <div class="trend-category">${trend.category}</div>
-            <div class="trend-title">${trend.title}</div>
-            <div class="trend-posts">${trend.posts} posts</div>
-          </div>
-          <div style="margin-left:auto;">
-            <i data-feather="more-horizontal" style="width:18px;height:18px;color:var(--text-light);"></i>
-          </div>
-        </div>
-      `).join('');
+      container.innerHTML = html;
       feather.replace();
     }
 
-    // Load suggested users with shimmer
-    async function loadSuggestedUsers() {
-      // Shimmer already showing
+    function getTimeAgo(timestamp) {
+      const diff = Math.floor((Date.now() - timestamp) / 1000);
+      if (diff < 60) return 'now';
+      if (diff < 3600) return Math.floor(diff / 60) + 'm';
+      if (diff < 86400) return Math.floor(diff / 3600) + 'h';
+      if (diff < 604800) return Math.floor(diff / 86400) + 'd';
+      return new Date(timestamp).toLocaleDateString();
+    }
+
+    window.setFilter = function(filter) {
+      currentFilter = filter;
       
-      const usersRef = query(ref(db, 'users'), limitToLast(10));
-      const snapshot = await get(usersRef);
+      // Update UI
+      document.querySelectorAll('.filter-tab').forEach(tab => {
+        tab.classList.remove('active');
+        if (tab.dataset.filter === filter) tab.classList.add('active');
+      });
       
-      const users = [];
-      snapshot.forEach(child => {
-        if (child.key !== currentUser?.uid) {
-          users.push({ uid: child.key, ...child.val() });
+      // Show shimmer briefly
+      const container = document.getElementById('notifications-container');
+      container.innerHTML = `
+        <div class="notification-skeleton">
+          <div class="notification-skeleton-icon shimmer-circle"></div>
+          <div class="notification-skeleton-content">
+            <div class="notification-skeleton-line-short shimmer"></div>
+            <div class="notification-skeleton-line-medium shimmer"></div>
+          </div>
+        </div>
+        <div class="notification-skeleton">
+          <div class="notification-skeleton-icon shimmer-circle"></div>
+          <div class="notification-skeleton-content">
+            <div class="notification-skeleton-line-short shimmer"></div>
+            <div class="notification-skeleton-line-medium shimmer"></div>
+          </div>
+        </div>
+      `;
+      
+      setTimeout(() => renderNotifications(), 300);
+    };
+
+    window.handleNotificationClick = async function(key, type, postId) {
+      // Mark as read
+      await update(ref(db, `notifications/${currentUser.uid}/${key}`), { read: true });
+      
+      // Navigate based on type
+      if (postId) {
+        window.location.href = `index.html?post=${postId}`;
+      } else if (type === 'follow') {
+        // Get actor ID from notification
+        const notif = notifications.find(n => n.key === key);
+        if (notif && notif.actorId) {
+          window.location.href = `profile.html?id=${notif.actorId}`;
+        }
+      }
+    };
+
+    window.markAllAsRead = async function() {
+      const updates = {};
+      notifications.forEach(n => {
+        if (!n.read) {
+          updates[`notifications/${currentUser.uid}/${n.key}/read`] = true;
         }
       });
-
-      // Shuffle and take 3
-      const shuffled = users.sort(() => 0.5 - Math.random()).slice(0, 3);
       
-      setTimeout(() => {
-        renderSuggestedUsers(shuffled);
-      }, 800);
-    }
-
-    function renderSuggestedUsers(users) {
-      if (users.length === 0) {
-        suggestedUsers.innerHTML = '<div class="empty-state">No suggestions available</div>';
-        return;
+      if (Object.keys(updates).length > 0) {
+        await update(ref(db), updates);
+        showToast('All notifications marked as read', 'success');
       }
+    };
 
-      suggestedUsers.innerHTML = users.map(user => `
-        <div class="user-card" onclick="window.location.href='profile.html?id=${user.uid}'">
-          <img src="${user.photoURL || user.avatarUrl || 'https://abs.twimg.com/sticky/default_profile_images/default_profile_normal.png'}" 
-               class="user-avatar" 
-               style="width:48px;height:48px;border-radius:50%;object-fit:cover;"
-               onerror="this.src='https://abs.twimg.com/sticky/default_profile_images/default_profile_normal.png'">
-          <div class="user-info">
-            <div class="user-name">${user.username || user.displayName || 'Anonymous'}</div>
-            <div class="user-handle">@${(user.username || user.email?.split('@')[0] || 'user').toLowerCase()}</div>
-          </div>
-          <button class="follow-btn" onclick="event.stopPropagation(); toggleFollow(this, '${user.uid}')">Follow</button>
-        </div>
-      `).join('');
-      feather.replace();
-    }
-
-    // Load sidebar trends with shimmer
-    async function loadSidebarTrends() {
-      const sidebarTrends = [
-        { category: 'Technology · Trending', title: '#WebDevelopment', posts: '54.2K' },
-        { category: 'Entertainment · Trending', title: 'New Release', posts: '125K' },
-        { category: 'Sports · Trending', title: 'Champions League', posts: '892K' }
-      ];
-
-      setTimeout(() => {
-        document.getElementById('sidebar-trends').innerHTML = sidebarTrends.map(trend => `
-          <div class="sidebar-card-item">
-            <div style="font-size:0.8rem;color:var(--text-light);">${trend.category}</div>
-            <div style="font-weight:700;margin:0.25rem 0;">${trend.title}</div>
-            <div style="font-size:0.8rem;color:var(--text-light);">${trend.posts} posts</div>
-          </div>
-        `).join('');
-        
-        // Also update topics
-        const topics = [
-          { name: 'Technology', desc: 'All about tech' },
-          { name: 'Design', desc: 'UI/UX, Graphics' },
-          { name: 'Science', desc: 'Discoveries & Research' }
-        ];
-        
-        document.getElementById('sidebar-topics').innerHTML = topics.map(topic => `
-          <div class="sidebar-card-item" style="display:flex;align-items:center;justify-content:space-between;">
-            <div>
-              <div style="font-weight:700;">${topic.name}</div>
-              <div style="font-size:0.8rem;color:var(--text-light);">${topic.desc}</div>
-            </div>
-            <button class="follow-btn">Follow</button>
-          </div>
-        `).join('');
-      }, 500);
-    }
-
-    // Follow functionality
-    window.toggleFollow = async function(btn, userId) {
-      if (!currentUser) return;
-      
-      // Show loading state
-      const originalText = btn.textContent;
+    window.followBack = async function(userId, btn) {
       btn.textContent = '...';
       btn.disabled = true;
       
       const followRef = ref(db, `following/${currentUser.uid}/${userId}`);
-      const snapshot = await get(followRef);
+      await set(followRef, { timestamp: Date.now() });
       
-      if (snapshot.exists()) {
-        // Unfollow
-        await set(followRef, null);
-        btn.textContent = 'Follow';
-        btn.classList.remove('following');
-        showToast('Unfollowed user', 'success');
-      } else {
-        // Follow
-        await set(followRef, { timestamp: Date.now() });
-        btn.textContent = 'Following';
-        btn.classList.add('following');
-        showToast('Now following user', 'success');
-      }
-      
-      btn.disabled = false;
+      btn.textContent = 'Following';
+      btn.classList.add('following');
+      btn.classList.remove('primary');
+      showToast('Now following user', 'success');
     };
 
-    // Search functionality with shimmer
-    searchInput.addEventListener('input', (e) => {
-      const query = e.target.value.trim().toLowerCase();
-      
-      // Clear previous timeout
-      if (searchTimeout) clearTimeout(searchTimeout);
-      
-      if (query.length === 0) {
-        exploreContent.style.display = 'block';
-        searchResults.classList.remove('active');
-        return;
-      }
+    window.openSettings = function() {
+      document.getElementById('settings-modal').classList.add('active');
+    };
 
-      exploreContent.style.display = 'none';
-      searchResults.classList.add('active');
-      
-      // Show loading shimmer
-      showSearchShimmer();
-      
-      // Debounce search
-      searchTimeout = setTimeout(() => {
-        performSearch(query);
-      }, 500);
-    });
-
-    function showSearchShimmer() {
-      searchLoading.style.display = 'block';
-      searchContent.style.display = 'none';
-      
-      // Reset to shimmer state
-      document.getElementById('people-list').innerHTML = `
-        <div class="result-skeleton">
-          <div class="result-skeleton-avatar shimmer-circle"></div>
-          <div class="result-skeleton-content">
-            <div class="result-skeleton-line-short shimmer"></div>
-            <div class="result-skeleton-line-medium shimmer"></div>
-          </div>
-        </div>
-        <div class="result-skeleton">
-          <div class="result-skeleton-avatar shimmer-circle"></div>
-          <div class="result-skeleton-content">
-            <div class="result-skeleton-line-short shimmer"></div>
-            <div class="result-skeleton-line-medium shimmer"></div>
-          </div>
-        </div>
-      `;
-      
-      document.getElementById('posts-list').innerHTML = `
-        <div class="result-skeleton">
-          <div class="result-skeleton-avatar shimmer-circle"></div>
-          <div class="result-skeleton-content">
-            <div class="result-skeleton-line-short shimmer" style="width:90%;"></div>
-            <div class="result-skeleton-line-medium shimmer"></div>
-          </div>
-        </div>
-      `;
-    }
-
-    function performSearch(query) {
-      // Hide loading, show content
-      searchLoading.style.display = 'none';
-      searchContent.style.display = 'block';
-      
-      // Search users
-      const matchedUsers = allUsers.filter(user => {
-        const username = (user.username || '').toLowerCase();
-        const displayName = (user.displayName || '').toLowerCase();
-        const email = (user.email || '').toLowerCase();
-        return username.includes(query) || displayName.includes(query) || email.includes(query);
-      });
-
-      // Search posts
-      const matchedPosts = allPosts.filter(post => {
-        const text = (post.text || '').toLowerCase();
-        return text.includes(query);
-      });
-
-      // Render results
-      const peopleSection = document.getElementById('results-people');
-      const postsSection = document.getElementById('results-posts');
-      const noResults = document.getElementById('no-results');
-
-      if (matchedUsers.length === 0 && matchedPosts.length === 0) {
-        peopleSection.style.display = 'none';
-        postsSection.style.display = 'none';
-        noResults.style.display = 'block';
-      } else {
-        noResults.style.display = 'none';
-        
-        if (matchedUsers.length > 0 && (searchFilter === 'top' || searchFilter === 'people')) {
-          peopleSection.style.display = 'block';
-          document.getElementById('people-list').innerHTML = matchedUsers.slice(0, 5).map(user => `
-            <div class="search-result-item" onclick="window.location.href='profile.html?id=${user.uid}'">
-              <img src="${user.photoURL || user.avatarUrl || 'https://abs.twimg.com/sticky/default_profile_images/default_profile_normal.png'}" 
-                   class="result-avatar" 
-                   onerror="this.src='https://abs.twimg.com/sticky/default_profile_images/default_profile_normal.png'">
-              <div class="result-content">
-                <div class="result-title">${user.username || user.displayName || 'Anonymous'}</div>
-                <div class="result-subtitle">@${(user.username || user.email?.split('@')[0] || 'user').toLowerCase()}</div>
-                ${user.bio ? `<div class="result-meta">${user.bio}</div>` : ''}
-              </div>
-            </div>
-          `).join('');
-        } else {
-          peopleSection.style.display = 'none';
-        }
-
-        if (matchedPosts.length > 0 && (searchFilter === 'top' || searchFilter === 'latest' || searchFilter === 'media')) {
-          postsSection.style.display = 'block';
-          document.getElementById('posts-list').innerHTML = matchedPosts.slice(0, 5).map(post => `
-            <div class="search-result-item" onclick="window.location.href='index.html?post=${post.key}'" style="align-items:flex-start;">
-              <img src="${post.mediaUrl || 'https://abs.twimg.com/sticky/default_profile_images/default_profile_normal.png'}" 
-                   class="result-avatar" 
-                   style="${post.mediaUrl ? 'object-fit:cover;' : 'display:none;'}"
-                   onerror="this.style.display='none'">
-              <div class="result-content" style="flex:1;">
-                <div class="result-title" style="font-size:0.9rem;font-weight:400;color:var(--text-dark);line-height:1.4;">
-                  ${highlightText(post.text, query)}
-                </div>
-                <div class="result-meta" style="margin-top:0.5rem;display:flex;align-items:center;gap:1rem;">
-                  <span><i data-feather="heart" style="width:14px;height:14px;vertical-align:middle;"></i> ${post.likes || 0}</span>
-                  <span><i data-feather="message-circle" style="width:14px;height:14px;vertical-align:middle;"></i> ${post.commentCount || 0}</span>
-                  <span>${new Date(post.timestamp).toLocaleDateString()}</span>
-                </div>
-              </div>
-            </div>
-          `).join('');
-          feather.replace();
-        } else {
-          postsSection.style.display = 'none';
-        }
-      }
-    }
-
-    function highlightText(text, query) {
-      if (!text) return '';
-      const regex = new RegExp(`(${query})`, 'gi');
-      return text.replace(regex, '<mark style="background:rgba(99,102,241,0.2);color:inherit;padding:0 2px;border-radius:2px;">$1</mark>');
-    }
-
-    // Filter chips
-    document.querySelectorAll('.filter-chip').forEach(chip => {
-      chip.addEventListener('click', () => {
-        document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
-        chip.classList.add('active');
-        searchFilter = chip.dataset.filter;
-        
-        if (searchInput.value.trim()) {
-          showSearchShimmer();
-          setTimeout(() => {
-            performSearch(searchInput.value.trim().toLowerCase());
-          }, 300);
-        }
-      });
-    });
+    window.closeSettings = function() {
+      document.getElementById('settings-modal').classList.remove('active');
+    };
 
     function showToast(message, type = 'success') {
       const toast = document.getElementById('toast');
@@ -1315,26 +1143,10 @@
       setTimeout(() => toast.classList.remove('show'), 2800);
     }
 
-    window.loadMoreTrends = function() {
-      // Show shimmer for "loading more"
-      const originalContent = trendsList.innerHTML;
-      trendsList.innerHTML += `
-        <div class="trend-skeleton">
-          <div class="trend-skeleton-rank shimmer"></div>
-          <div class="trend-skeleton-content">
-            <div class="trend-skeleton-line-short shimmer"></div>
-            <div class="trend-skeleton-line-medium shimmer"></div>
-            <div class="trend-skeleton-line-long shimmer"></div>
-          </div>
-          <div class="trend-skeleton-image shimmer"></div>
-        </div>
-      `;
-      
-      setTimeout(() => {
-        trendsList.innerHTML = originalContent;
-        showToast('More trends coming soon!', 'success');
-      }, 1000);
-    };
+    // Close modal on overlay click
+    document.getElementById('settings-modal').addEventListener('click', (e) => {
+      if (e.target.id === 'settings-modal') closeSettings();
+    });
 
     // Initialize
     feather.replace();
