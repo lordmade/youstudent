@@ -17,6 +17,7 @@
       --text-secondary: #64748b;
       --border: #e2e8f0;
       --online: #10b981;
+      --encrypted: #10b981;
       --shimmer-base: #e2e8f0;
       --shimmer-highlight: #f1f5f9;
     }
@@ -39,7 +40,6 @@
       overscroll-behavior: none;
     }
 
-    /* Shimmer Animation */
     @keyframes shimmer {
       0% { background-position: -1000px 0; }
       100% { background-position: 1000px 0; }
@@ -138,6 +138,21 @@
       font-size: 1.5rem;
       font-weight: 800;
       margin-bottom: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .encryption-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+      padding: 0.25rem 0.5rem;
+      background: var(--primary-soft);
+      color: var(--encrypted);
+      font-size: 0.75rem;
+      font-weight: 600;
+      border-radius: 9999px;
     }
 
     .tab-container {
@@ -212,6 +227,7 @@
       transition: background 0.2s;
       text-decoration: none;
       color: inherit;
+      position: relative;
     }
 
     .chat-item:hover {
@@ -252,6 +268,31 @@
       display: block;
     }
 
+    .encrypted-indicator {
+      position: absolute;
+      bottom: -2px;
+      left: -2px;
+      background: var(--encrypted);
+      border: 2px solid white;
+      border-radius: 50%;
+      width: 16px;
+      height: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      display: none;
+    }
+
+    .encrypted-indicator.show {
+      display: flex;
+    }
+
+    .encrypted-indicator svg {
+      width: 10px;
+      height: 10px;
+    }
+
     .chat-info {
       flex: 1;
       min-width: 0;
@@ -270,6 +311,9 @@
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
     }
 
     .chat-time {
@@ -292,11 +336,19 @@
       overflow: hidden;
       text-overflow: ellipsis;
       flex: 1;
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
     }
 
     .chat-message.unread {
       color: var(--text);
       font-weight: 500;
+    }
+
+    .chat-message.encrypted::before {
+      content: '🔒';
+      font-size: 0.8rem;
     }
 
     .unread-badge {
@@ -391,16 +443,123 @@
     #toast.show { visibility: visible; animation: fadein 0.5s, fadeout 0.5s 2.5s; }
     #toast.success { background-color: #10b981; }
     #toast.error { background-color: #ef4444; }
+    #toast.info { background-color: #3b82f6; }
 
     @keyframes fadein { from {bottom: 0; opacity: 0;} to {bottom: 100px; opacity: 1;} }
     @keyframes fadeout { from {bottom: 100px; opacity: 1;} to {bottom: 0; opacity: 0;} }
 
     .hidden { display: none !important; }
+
+    .key-setup-modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 1000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+    }
+
+    .key-setup-modal.show {
+      display: flex;
+    }
+
+    .key-setup-content {
+      background: white;
+      border-radius: 16px;
+      padding: 2rem;
+      max-width: 400px;
+      width: 100%;
+      text-align: center;
+    }
+
+    .key-setup-content h2 {
+      margin-bottom: 1rem;
+      font-size: 1.25rem;
+      font-weight: 700;
+    }
+
+    .key-setup-content p {
+      color: var(--text-secondary);
+      margin-bottom: 1.5rem;
+      line-height: 1.5;
+    }
+
+    .key-benefits {
+      text-align: left;
+      background: var(--bg);
+      padding: 1rem;
+      border-radius: 12px;
+      margin-bottom: 1.5rem;
+    }
+
+    .key-benefits li {
+      margin-bottom: 0.5rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.9rem;
+    }
+
+    .btn-primary {
+      background: var(--primary);
+      color: white;
+      border: none;
+      padding: 0.75rem 1.5rem;
+      border-radius: 9999px;
+      font-weight: 600;
+      cursor: pointer;
+      width: 100%;
+      transition: opacity 0.2s;
+    }
+
+    .btn-primary:hover {
+      opacity: 0.9;
+    }
+
+    .btn-primary:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .spinner {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-radius: 50%;
+      border-top-color: white;
+      animation: spin 1s ease-in-out infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
   </style>
 </head>
 <body>
 
   <div id="toast"></div>
+
+  <!-- Key Setup Modal -->
+  <div id="key-setup-modal" class="key-setup-modal">
+    <div class="key-setup-content">
+      <div style="width:64px;height:64px;background:var(--primary-soft);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 1rem;">
+        <i data-feather="shield" style="color:var(--primary);width:32px;height:32px;"></i>
+      </div>
+      <h2>Enable End-to-End Encryption</h2>
+      <p>Your messages are currently not encrypted. Set up encryption keys to ensure only you and your recipients can read your messages.</p>
+      <ul class="key-benefits">
+        <li><i data-feather="check" style="color:var(--encrypted);"></i> No one else can read your messages</li>
+        <li><i data-feather="check" style="color:var(--encrypted);"></i> Not even Nexus can access your chats</li>
+        <li><i data-feather="check" style="color:var(--encrypted);"></i> Secure key storage on your device</li>
+      </ul>
+      <button id="setup-keys-btn" class="btn-primary" onclick="setupEncryptionKeys()">
+        Enable Encryption
+      </button>
+    </div>
+  </div>
 
   <div class="layout">
     <aside class="sidebar">
@@ -443,7 +602,12 @@
 
     <main class="main-content">
       <div class="chat-header">
-        <h1 class="header-title">Messages</h1>
+        <h1 class="header-title">
+          Messages
+          <span class="encryption-badge" id="global-encrypt-badge" style="display:none;">
+            <i data-feather="lock" style="width:12px;height:12px;"></i> E2EE
+          </span>
+        </h1>
         
         <div class="tab-container">
           <button class="tab active" onclick="switchTab('following')" id="tab-following">
@@ -512,7 +676,7 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
     import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
-    import { getDatabase, ref, onValue, get, query, limitToLast } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
+    import { getDatabase, ref, onValue, get, query, limitToLast, set, update } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
@@ -536,6 +700,254 @@
 
     const DEFAULT_AVATAR = "https://abs.twimg.com/sticky/default_profile_images/default_profile_normal.png";
 
+    // ==================== E2EE CRYPTO MODULE ====================
+    const CryptoModule = {
+      dbName: 'NexusCryptoDB',
+      storeName: 'keys',
+      
+      // Generate RSA key pair for user
+      async generateKeyPair() {
+        const keyPair = await window.crypto.subtle.generateKey(
+          {
+            name: "RSA-OAEP",
+            modulusLength: 2048,
+            publicExponent: new Uint8Array([1, 0, 1]),
+            hash: "SHA-256",
+          },
+          true, // extractable
+          ["encrypt", "decrypt"]
+        );
+        return keyPair;
+      },
+
+      // Export public key to share with others
+      async exportPublicKey(keyPair) {
+        const exported = await window.crypto.subtle.exportKey("spki", keyPair.publicKey);
+        return btoa(String.fromCharCode(...new Uint8Array(exported)));
+      },
+
+      // Import public key from string (received from others)
+      async importPublicKey(publicKeyBase64) {
+        try {
+          const binaryString = atob(publicKeyBase64);
+          const bytes = new Uint8Array(binaryString.length);
+          for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+          }
+          
+          return await window.crypto.subtle.importKey(
+            "spki",
+            bytes.buffer,
+            {
+              name: "RSA-OAEP",
+              hash: "SHA-256"
+            },
+            false,
+            ["encrypt"]
+          );
+        } catch (err) {
+          console.error("Error importing public key:", err);
+          throw new Error("Invalid public key format");
+        }
+      },
+
+      // Store private key securely in IndexedDB
+      async storePrivateKey(uid, keyPair) {
+        const exported = await window.crypto.subtle.exportKey("pkcs8", keyPair.privateKey);
+        
+        return new Promise((resolve, reject) => {
+          const request = indexedDB.open(this.dbName, 1);
+          
+          request.onupgradeneeded = (event) => {
+            const db = event.target.result;
+            if (!db.objectStoreNames.contains(this.storeName)) {
+              db.createObjectStore(this.storeName, { keyPath: "uid" });
+            }
+          };
+          
+          request.onsuccess = (event) => {
+            const db = event.target.result;
+            const transaction = db.transaction([this.storeName], "readwrite");
+            const store = transaction.objectStore(this.storeName);
+            
+            const data = {
+              uid: uid,
+              privateKey: exported,
+              createdAt: Date.now()
+            };
+            
+            const addRequest = store.put(data);
+            addRequest.onsuccess = () => resolve();
+            addRequest.onerror = () => reject(addRequest.error);
+          };
+          
+          request.onerror = () => reject(request.error);
+        });
+      },
+
+      // Retrieve private key from IndexedDB
+      async getPrivateKey(uid) {
+        return new Promise((resolve, reject) => {
+          const request = indexedDB.open(this.dbName, 1);
+          
+          request.onsuccess = (event) => {
+            const db = event.target.result;
+            const transaction = db.transaction([this.storeName], "readonly");
+            const store = transaction.objectStore(this.storeName);
+            const getRequest = store.get(uid);
+            
+            getRequest.onsuccess = async () => {
+              if (getRequest.result) {
+                try {
+                  const privateKey = await window.crypto.subtle.importKey(
+                    "pkcs8",
+                    getRequest.result.privateKey,
+                    {
+                      name: "RSA-OAEP",
+                      hash: "SHA-256"
+                    },
+                    false,
+                    ["decrypt"]
+                  );
+                  resolve(privateKey);
+                } catch (err) {
+                  reject(err);
+                }
+              } else {
+                resolve(null);
+              }
+            };
+            
+            getRequest.onerror = () => reject(getRequest.error);
+          };
+          
+          request.onerror = () => reject(request.error);
+        });
+      },
+
+      // Generate AES key for message encryption (hybrid encryption)
+      async generateAESKey() {
+        return await window.crypto.subtle.generateKey(
+          {
+            name: "AES-GCM",
+            length: 256
+          },
+          true,
+          ["encrypt", "decrypt"]
+        );
+      },
+
+      // Encrypt message using hybrid encryption (AES + RSA)
+      async encryptMessage(message, recipientPublicKeyBase64) {
+        try {
+          // Import recipient's public key
+          const publicKey = await this.importPublicKey(recipientPublicKeyBase64);
+          
+          // Generate AES key for this message
+          const aesKey = await this.generateAESKey();
+          
+          // Generate IV
+          const iv = window.crypto.getRandomValues(new Uint8Array(12));
+          
+          // Encrypt message with AES
+          const encoder = new TextEncoder();
+          const messageData = encoder.encode(message);
+          
+          const encryptedMessage = await window.crypto.subtle.encrypt(
+            {
+              name: "AES-GCM",
+              iv: iv
+            },
+            aesKey,
+            messageData
+          );
+          
+          // Export AES key
+          const exportedAESKey = await window.crypto.subtle.exportKey("raw", aesKey);
+          
+          // Encrypt AES key with recipient's RSA public key
+          const encryptedAESKey = await window.crypto.subtle.encrypt(
+            {
+              name: "RSA-OAEP"
+            },
+            publicKey,
+            exportedAESKey
+          );
+          
+          // Combine all data
+          return {
+            encryptedKey: btoa(String.fromCharCode(...new Uint8Array(encryptedAESKey))),
+            iv: btoa(String.fromCharCode(...iv)),
+            data: btoa(String.from charCode(...new Uint8Array(encryptedMessage))),
+            algorithm: "AES-GCM-RSA-OAEP"
+          };
+        } catch (err) {
+          console.error("Encryption error:", err);
+          throw new Error("Failed to encrypt message: " + err.message);
+        }
+      },
+
+      // Decrypt message using private key
+      async decryptMessage(encryptedPayload, uid) {
+        try {
+          const privateKey = await this.getPrivateKey(uid);
+          if (!privateKey) {
+            throw new Error("Private key not found");
+          }
+          
+          // Decode base64
+          const encryptedKey = Uint8Array.from(atob(encryptedPayload.encryptedKey), c => c.charCodeAt(0));
+          const iv = Uint8Array.from(atob(encryptedPayload.iv), c => c.charCodeAt(0));
+          const data = Uint8Array.from(atob(encryptedPayload.data), c => c.charCodeAt(0));
+          
+          // Decrypt AES key using RSA private key
+          const aesKeyBuffer = await window.crypto.subtle.decrypt(
+            {
+              name: "RSA-OAEP"
+            },
+            privateKey,
+            encryptedKey
+          );
+          
+          // Import AES key
+          const aesKey = await window.crypto.subtle.importKey(
+            "raw",
+          aesKeyBuffer,
+            {
+              name: "AES-GCM",
+              length: 256
+            },
+            false,
+            ["decrypt"]
+          );
+          
+          // Decrypt message
+          const decryptedData = await window.crypto.subtle.decrypt(
+            {
+              name: "AES-GCM",
+              iv: iv
+            },
+            aesKey,
+            data
+          );
+          
+          const decoder = new TextDecoder();
+          return decoder.decode(decryptedData);
+        } catch (err) {
+          console.error("Decryption error:", err);
+          throw new Error("Unable to decrypt message. Ensure your keys are valid.");
+        }
+      },
+
+      // Check if user has encryption keys
+      async hasKeys(uid) {
+        const key = await this.getPrivateKey(uid);
+        return !!key;
+      }
+    };
+
+    // ==================== UI FUNCTIONS ====================
+
     function showToast(msg, type = 'success') {
       const t = document.getElementById('toast');
       t.textContent = msg;
@@ -543,7 +955,6 @@
       setTimeout(() => t.className = '', 2800);
     }
 
-    // Cleanup listeners when switching tabs
     function cleanupListeners() {
       unsubscribeListeners.forEach(unsub => unsub && unsub());
       unsubscribeListeners = [];
@@ -581,13 +992,44 @@
       }
     }
 
+    async function getUserPublicKey(uid) {
+      try {
+        const pubKeyRef = ref(db, `users/${uid}/publicKey`);
+        const snapshot = await get(pubKeyRef);
+        return snapshot.exists() ? snapshot.val() : null;
+      } catch (err) {
+        return null;
+      }
+    }
+
     async function renderUserItem(userId, userData) {
       const chatId = getOrCreateChatId(currentUser.uid, userId);
       const lastMsg = await getLastMessage(chatId);
       const unreadCount = await getUnreadCount(chatId);
+      const recipientPubKey = await getUserPublicKey(userId);
+      const hasEncryption = await CryptoModule.hasKeys(currentUser.uid);
       
-      const timeAgo = lastMsg ? getTimeAgo(lastMsg.timestamp) : '';
-      const messagePreview = lastMsg ? (lastMsg.text || 'Sent an image') : 'Tap to start chatting';
+      let timeAgo = lastMsg ? getTimeAgo(lastMsg.timestamp) : '';
+      let messagePreview = 'Tap to start chatting';
+      let isEncrypted = false;
+
+      if (lastMsg) {
+        if (lastMsg.encrypted && hasEncryption) {
+          try {
+            messagePreview = await CryptoModule.decryptMessage(lastMsg.content, currentUser.uid);
+            isEncrypted = true;
+          } catch (err) {
+            messagePreview = '🔒 Encrypted message';
+            isEncrypted = true;
+          }
+        } else if (lastMsg.encrypted) {
+          messagePreview = '🔒 Encrypted message';
+          isEncrypted = true;
+        } else {
+          messagePreview = lastMsg.text || 'Sent an image';
+        }
+      }
+
       const isOnline = userData.online || false;
 
       const item = document.createElement('a');
@@ -598,14 +1040,20 @@
         <div class="avatar-container">
           <img src="${userData.photoURL || DEFAULT_AVATAR}" class="chat-avatar" onerror="this.src='${DEFAULT_AVATAR}'">
           <div class="online-indicator ${isOnline ? 'show' : ''}"></div>
+          <div class="encrypted-indicator ${recipientPubKey ? 'show' : ''}">
+            <i data-feather="lock" style="width:8px;height:8px;"></i>
+          </div>
         </div>
         <div class="chat-info">
           <div class="chat-name-row">
-            <span class="chat-name">${userData.displayName || userData.username || 'User'}</span>
+            <span class="chat-name">
+              ${userData.displayName || userData.username || 'User'}
+              ${recipientPubKey ? '<i data-feather="lock" style="width:12px;height:12px;color:var(--encrypted);"></i>' : ''}
+            </span>
             <span class="chat-time">${timeAgo}</span>
           </div>
           <div class="chat-preview">
-            <span class="chat-message ${unreadCount > 0 ? 'unread' : ''}">${messagePreview}</span>
+            <span class="chat-message ${unreadCount > 0 ? 'unread' : ''} ${isEncrypted ? 'encrypted' : ''}">${messagePreview}</span>
             ${unreadCount > 0 ? `<span class="unread-badge">${unreadCount}</span>` : ''}
           </div>
         </div>
@@ -669,7 +1117,6 @@
 
         const userIds = Object.keys(snapshot.val());
         
-        // Fetch user details for all
         const userPromises = userIds.map(async (userId) => {
           const userRef = ref(db, `users/${userId}`);
           const userSnap = await get(userRef);
@@ -682,7 +1129,6 @@
         const users = (await Promise.all(userPromises)).filter(u => u !== null);
         usersList = users;
 
-        // Sort by last message timestamp if available
         const usersWithLastMsg = await Promise.all(users.map(async (user) => {
           const chatId = getOrCreateChatId(currentUser.uid, user.uid);
           const lastMsg = await getLastMessage(chatId);
@@ -694,7 +1140,6 @@
 
         usersWithLastMsg.sort((a, b) => b.lastMsgTimestamp - a.lastMsgTimestamp);
 
-        // Render items
         for (const user of usersWithLastMsg) {
           const item = await renderUserItem(user.uid, user);
           listContainer.appendChild(item);
@@ -702,12 +1147,9 @@
 
         feather.replace();
 
-        // Set up online status listeners
         users.forEach(user => {
           const onlineRef = ref(db, `users/${user.uid}/online`);
-          const unsub = onValue(onlineRef, (snap) => {
-            // Could update online status in real-time here if needed
-          });
+          const unsub = onValue(onlineRef, (snap) => {});
           unsubscribeListeners.push(unsub);
         });
       });
@@ -717,16 +1159,12 @@
 
     window.switchTab = function(tab) {
       currentTab = tab;
-      
-      // Update UI
       document.getElementById('tab-following').classList.remove('active');
       document.getElementById('tab-followers').classList.remove('active');
       document.getElementById(`tab-${tab}`).classList.add('active');
-      
       loadUsers(tab);
     };
 
-    // Search functionality
     document.getElementById('search-input')?.addEventListener('input', (e) => {
       const query = e.target.value.toLowerCase();
       const items = document.querySelectorAll('.chat-item');
@@ -748,6 +1186,61 @@
       }).catch(() => showToast("Error signing out", "error"));
     };
 
+    // Setup encryption keys for user
+    window.setupEncryptionKeys = async function() {
+      const btn = document.getElementById('setup-keys-btn');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Generating keys...';
+      
+      try {
+        // Generate key pair
+        const keyPair = await CryptoModule.generateKeyPair();
+        
+        // Export public key
+        const publicKeyBase64 = await CryptoModule.exportPublicKey(keyPair);
+        
+        // Store private key locally
+        await CryptoModule.storePrivateKey(currentUser.uid, keyPair);
+        
+        // Upload public key to Firebase
+        const userRef = ref(db, `users/${currentUser.uid}`);
+        await update(userRef, {
+          publicKey: publicKeyBase64,
+          encryptionEnabled: true,
+          encryptionEnabledAt: Date.now()
+        });
+        
+        showToast("Encryption enabled successfully!", "success");
+        document.getElementById('key-setup-modal').classList.remove('show');
+        document.getElementById('global-encrypt-badge').style.display = 'inline-flex';
+        
+        // Reload to show encryption indicators
+        loadUsers(currentTab);
+      } catch (err) {
+        console.error("Key setup error:", err);
+        showToast("Failed to enable encryption: " + err.message, "error");
+        btn.disabled = false;
+        btn.textContent = 'Enable Encryption';
+      }
+    };
+
+    async function checkEncryptionStatus() {
+      if (!currentUser) return;
+      
+      const hasKeys = await CryptoModule.hasKeys(currentUser.uid);
+      const userRef = ref(db, `users/${currentUser.uid}/publicKey`);
+      const snapshot = await get(userRef);
+      const hasPublicKey = snapshot.exists();
+      
+      if (hasKeys && hasPublicKey) {
+        document.getElementById('global-encrypt-badge').style.display = 'inline-flex';
+      } else {
+        // Show setup modal if no keys
+        document.getElementById('key-setup-modal').classList.add('show');
+        feather.replace();
+      }
+    }
+
     onAuthStateChanged(auth, async (user) => {
       if (!user) {
         window.location.href = "signup.html";
@@ -756,6 +1249,7 @@
 
       currentUser = user;
       loadUsers('following');
+      checkEncryptionStatus();
     });
 
     feather.replace();
