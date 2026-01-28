@@ -177,40 +177,16 @@
       border-radius: 9999px;
     }
 
-    .tab-container {
-      display: flex;
-      gap: 0.5rem;
-      background: var(--bg);
-      padding: 4px;
-      border-radius: 12px;
-    }
-
-    .tab {
-      flex: 1;
-      padding: 0.6rem 1rem;
-      border-radius: 10px;
-      font-weight: 600;
-      font-size: 0.95rem;
-      cursor: pointer;
-      text-align: center;
-      transition: all 0.2s;
+    .friend-count {
+      font-size: 0.875rem;
       color: var(--text-secondary);
-      border: none;
-      background: transparent;
-    }
-
-    .tab.active {
-      background: white;
-      color: var(--primary);
-      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-    }
-
-    @media (prefers-color-scheme: dark) {
-      .tab.active { background: var(--surface); }
+      font-weight: 500;
+      margin-bottom: 0.75rem;
+      padding: 0 0.25rem;
     }
 
     .search-box {
-      margin-top: 1rem;
+      margin-top: 0.75rem;
       position: relative;
     }
 
@@ -344,9 +320,35 @@
       gap: 0.25rem;
     }
 
+    .relationship-badge {
+      font-size: 0.7rem;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      margin-left: 0.5rem;
+    }
+
+    .badge-mutual {
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      color: white;
+    }
+
+    .badge-following {
+      background: var(--primary-soft);
+      color: var(--primary);
+    }
+
+    .badge-follower {
+      background: #dcfce7;
+      color: #16a34a;
+    }
+
     .friend-meta {
       font-size: 0.875rem;
       color: var(--text-secondary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     .start-chat-hint {
@@ -739,14 +741,7 @@
           </span>
         </h1>
         
-        <div class="tab-container">
-          <button class="tab active" onclick="switchTab('following')" id="tab-following">
-            Following
-          </button>
-          <button class="tab" onclick="switchTab('followers')" id="tab-followers">
-            Followers
-          </button>
-        </div>
+        <div class="friend-count" id="friend-count">Loading friends...</div>
 
         <div class="search-box">
           <i data-feather="search" class="search-icon" style="width:18px;height:18px;"></i>
@@ -782,8 +777,8 @@
       <!-- Empty State -->
       <div class="empty-state hidden" id="empty-state">
         <i data-feather="users" class="empty-icon"></i>
-        <h3 style="margin-bottom:0.5rem;color:var(--text); font-weight: 600;">No users found</h3>
-        <p>Follow people to start chatting with them!</p>
+        <h3 style="margin-bottom:0.5rem;color:var(--text); font-weight: 600;">No friends yet</h3>
+        <p>Follow people or gain followers to start chatting!</p>
       </div>
 
       <!-- Error State -->
@@ -863,7 +858,6 @@
     const db = firebase.database();
 
     let currentUser = null;
-    let currentTab = 'following';
     let usersList = [];
     let unsubscribeListeners = [];
     let loadTimeout = null;
@@ -873,6 +867,9 @@
     let currentFriendUid = null;
     let currentRoomId = null;
     let messagesListener = null;
+
+    // Track following/follower status for each user
+    let userRelationships = new Map();
 
     // ==================== CRYPTO MODULE (Vynix Style) ====================
     
@@ -1006,13 +1003,13 @@
       }
     }
 
-    // ==================== LOAD USERS ====================
+    // ==================== LOAD FRIENDS (MERGED FOLLOWING + FOLLOWERS) ====================
 
-    async function loadUsers(listType) {
+    async function loadAllFriends() {
       cleanupListeners();
       showLoadingSkeleton();
       
-      // Safety timeout - if Firebase doesn't respond in 8 seconds, show error
+      // Safety timeout
       loadTimeout = setTimeout(() => {
         showError('Connection timed out. Please check your internet and try again.');
       }, 8000);
@@ -1023,112 +1020,158 @@
         return;
       }
 
-      const listRef = db.ref(`${listType}/${currentUser.uid}`);
-      
       try {
-        const unsubscribe = listRef.on('value', async (snapshot) => {
-          clearTimeout(loadTimeout);
-          const listContainer = document.getElementById('friend-list');
-          const emptyState = document.getElementById('empty-state');
-          const errorState = document.getElementById('error-state');
+        // Fetch both following and followers simultaneously
+        const [followingSnap, followersSnap] = await Promise.all([
+          db.ref(`following/${currentUser.uid}`).once('value'),
+          db.ref(`followers/${currentUser.uid}`).once('value')
+        ]);
+
+        clearTimeout(loadTimeout);
+
+        const followingIds = followingSnap.exists() ? Object.keys(followingSnap.val()) : [];
+        const followerIds = followersSnap.exists() ? Object.keys(followersSnap.val()) : [];
+        
+        // Merge unique UIDs and track relationship types
+        const uniqueUserIds = [...new Set([...followingIds, ...followerIds])];
+        
+        // Track relationships for badges
+        userRelationships = new Map();
+        uniqueUserIds.forEach(uid => {
+          const isFollowing = followingIds.includes(uid);
+          const isFollower = followerIds.includes(uid);
           
-          errorState.classList.add('hidden');
-          listContainer.innerHTML = '';
-          usersList = [];
-
-          if (!snapshot.exists()) {
-            emptyState.classList.remove('hidden');
-            feather.replace();
-            return;
-          }
-
-          const userIds = Object.keys(snapshot.val());
-          
-          if (userIds.length === 0) {
-            emptyState.classList.remove('hidden');
-            feather.replace();
-            return;
-          }
-
-          // Fetch user details
-          const userPromises = userIds.map(async (userId) => {
-            try {
-              const userSnap = await db.ref(`users/${userId}/profile`).once('value');
-              if (userSnap.exists()) {
-                return { uid: userId, ...userSnap.val() };
-              }
-              return null;
-            } catch (err) {
-              console.warn(`Failed to load user ${userId}:`, err);
-              return null;
-            }
-          });
-
-          const users = (await Promise.all(userPromises)).filter(u => u !== null);
-          usersList = users;
-
-          // Render friend cards
-          users.forEach(user => {
-            const card = document.createElement('div');
-            card.className = 'friend-card';
-            card.onclick = () => openFullChat(user.uid);
-            
-            const avatarUrl = user.photo || generateLetterAvatar(user.name || user.displayName || 'User');
-            const hasEncryption = !!user.publicKey;
-            
-            card.innerHTML = `
-              <div class="avatar-container">
-                <img src="${avatarUrl}" class="friend-avatar" onerror="this.src='${generateLetterAvatar(user.name || 'User')}'">
-                <div class="online-indicator" id="online_${user.uid}"></div>
-                ${hasEncryption ? `<div class="encrypted-indicator show"><i data-feather="lock" style="width:10px;height:10px;"></i></div>` : ''}
-              </div>
-              <div class="friend-info">
-                <div class="friend-name-row">
-                  <div class="friend-name">
-                    ${user.name || user.displayName || 'User'}
-                    ${hasEncryption ? '<i data-feather="lock" style="width:12px;height:12px;color:var(--encrypted);"></i>' : ''}
-                  </div>
-                </div>
-                <div class="friend-meta">
-                  <span class="start-chat-hint">Tap to chat</span>
-                </div>
-              </div>
-            `;
-            
-            listContainer.appendChild(card);
-            
-            // Listen to online status
-            const onlineRef = db.ref(`users/${user.uid}/online`);
-            const unsub = onlineRef.on('value', (s) => {
-              const indicator = document.getElementById(`online_${user.uid}`);
-              if (indicator) {
-                if (s.val() === true) {
-                  indicator.classList.add('show');
-                } else {
-                  indicator.classList.remove('show');
-                }
-              }
-            });
-            unsubscribeListeners.push(unsub);
-          });
-
-          feather.replace();
-        }, (error) => {
-          clearTimeout(loadTimeout);
-          console.error('Firebase error:', error);
-          
-          if (error.code === 'PERMISSION_DENIED') {
-            showError('Permission denied. Please check your Firebase rules.');
+          if (isFollowing && isFollower) {
+            userRelationships.set(uid, 'mutual');
+          } else if (isFollowing) {
+            userRelationships.set(uid, 'following');
           } else {
-            showError(`Error: ${error.message}`);
+            userRelationships.set(uid, 'follower');
           }
         });
 
-        unsubscribeListeners.push(() => listRef.off('value', unsubscribe));
+        // Update count display
+        const countEl = document.getElementById('friend-count');
+        if (uniqueUserIds.length === 0) {
+          countEl.textContent = 'No friends yet';
+        } else if (uniqueUserIds.length === 1) {
+          countEl.textContent = '1 friend';
+        } else {
+          countEl.textContent = `${uniqueUserIds.length} friends`;
+        }
+
+        if (uniqueUserIds.length === 0) {
+          document.getElementById('friend-list').innerHTML = '';
+          document.getElementById('empty-state').classList.remove('hidden');
+          feather.replace();
+          return;
+        }
+
+        // Fetch user details for all IDs
+        const userPromises = uniqueUserIds.map(async (userId) => {
+          try {
+            // Try profile path first, then root user path
+            let userSnap = await db.ref(`users/${userId}/profile`).once('value');
+            if (!userSnap.exists()) {
+              userSnap = await db.ref(`users/${userId}`).once('value');
+            }
+            
+            if (userSnap.exists()) {
+              const data = userSnap.val();
+              return { 
+                uid: userId, 
+                ...data,
+                photo: data.photo || data.photoURL || null
+              };
+            }
+            return null;
+          } catch (err) {
+            console.warn(`Failed to load user ${userId}:`, err);
+            return null;
+          }
+        });
+
+        const users = (await Promise.all(userPromises)).filter(u => u !== null);
+        usersList = users;
+
+        renderFriendList(users);
+        
       } catch (err) {
         clearTimeout(loadTimeout);
+        console.error('Error loading friends:', err);
         showError(`Error: ${err.message}`);
       }
+    }
+
+    function renderFriendList(users) {
+      const listContainer = document.getElementById('friend-list');
+      listContainer.innerHTML = '';
+      
+      if (users.length === 0) {
+        document.getElementById('empty-state').classList.remove('hidden');
+        return;
+      }
+
+      users.forEach(user => {
+        const card = document.createElement('div');
+        card.className = 'friend-card';
+        card.onclick = () => openFullChat(user.uid);
+        
+        const avatarUrl = user.photo || generateLetterAvatar(user.name || user.displayName || 'User');
+        const hasEncryption = !!user.publicKey;
+        const relationship = userRelationships.get(user.uid);
+        
+        let badgeHTML = '';
+        if (relationship === 'mutual') {
+          badgeHTML = '<span class="relationship-badge badge-mutual">Mutual</span>';
+        } else if (relationship === 'following') {
+          badgeHTML = '<span class="relationship-badge badge-following">Following</span>';
+        } else if (relationship === 'follower') {
+          badgeHTML = '<span class="relationship-badge badge-follower">Follower</span>';
+        }
+        
+        let relationshipText = '';
+        if (relationship === 'mutual') relationshipText = 'You follow each other';
+        else if (relationship === 'following') relationshipText = 'You follow them';
+        else if (relationship === 'follower') relationshipText = 'Follows you';
+        
+        card.innerHTML = `
+          <div class="avatar-container">
+            <img src="${avatarUrl}" class="friend-avatar" onerror="this.src='${generateLetterAvatar(user.name || 'User')}'">
+            <div class="online-indicator" id="online_${user.uid}"></div>
+            ${hasEncryption ? `<div class="encrypted-indicator show"><i data-feather="lock" style="width:10px;height:10px;"></i></div>` : ''}
+          </div>
+          <div class="friend-info">
+            <div class="friend-name-row">
+              <div class="friend-name">
+                ${user.name || user.displayName || 'User'}
+                ${badgeHTML}
+              </div>
+            </div>
+            <div class="friend-meta">
+              <span class="start-chat-hint">${relationshipText} • Tap to chat</span>
+            </div>
+          </div>
+        `;
+        
+        listContainer.appendChild(card);
+        
+        // Listen to online status
+        const onlineRef = db.ref(`users/${user.uid}/online`);
+        const unsub = onlineRef.on('value', (s) => {
+          const indicator = document.getElementById(`online_${user.uid}`);
+          if (indicator) {
+            if (s.val() === true) {
+              indicator.classList.add('show');
+            } else {
+              indicator.classList.remove('show');
+            }
+          }
+        });
+        unsubscribeListeners.push(unsub);
+      });
+
+      feather.replace();
     }
 
     function generateLetterAvatar(name) {
@@ -1160,11 +1203,24 @@
         friendUid + "_" + currentUser.uid;
       
       // Get friend profile
-      const snap = await db.ref(`users/${friendUid}/profile`).once('value');
-      const profile = snap.val() || { name: "User", photo: "" };
+      let profile = usersList.find(u => u.uid === friendUid);
+      if (!profile) {
+        // Fetch if not in cached list
+        let snap = await db.ref(`users/${friendUid}/profile`).once('value');
+        if (!snap.exists()) snap = await db.ref(`users/${friendUid}`).once('value');
+        profile = snap.val() || { name: "User", photo: "" };
+        profile.uid = friendUid;
+      }
       
       document.getElementById('chatFriendName').textContent = profile.name || profile.displayName || 'User';
       document.getElementById('chatFriendAvatar').src = profile.photo || generateLetterAvatar(profile.name);
+      
+      // Update chat subtitle with relationship
+      const relationship = userRelationships.get(friendUid);
+      const statusEl = document.getElementById('chatStatus');
+      if (relationship === 'mutual') statusEl.textContent = 'Mutual friend';
+      else if (relationship === 'following') statusEl.textContent = 'You follow them';
+      else if (relationship === 'follower') statusEl.textContent = 'Follows you';
       
       // Init encryption if needed
       if (!sharedKeys[friendUid] && profile.publicKey) {
@@ -1182,25 +1238,32 @@
       
       // Show chat view
       document.getElementById('fullChatView').classList.add('active');
-      document.body.style.overflow = 'hidden'; // Prevent background scrolling
+      document.body.style.overflow = 'hidden';
       
       // Load messages
       loadMessages();
       
       // Listen to online status
       db.ref(`users/${friendUid}/online`).on('value', (s) => {
-        const statusEl = document.getElementById('chatStatus');
-        if (s.val() === true) {
+        const isOnline = s.val() === true;
+        if (isOnline) {
           statusEl.textContent = 'Online';
           statusEl.style.color = 'var(--online)';
         } else {
-          statusEl.textContent = 'Offline';
+          // Revert to relationship text
+          const rel = userRelationships.get(friendUid);
+          if (rel === 'mutual') statusEl.textContent = 'Mutual friend';
+          else if (rel === 'following') statusEl.textContent = 'You follow them';
+          else if (rel === 'follower') statusEl.textContent = 'Follows you';
           statusEl.style.color = 'var(--text-secondary)';
         }
       });
       
       // Update read status
       markAsRead(friendUid);
+      
+      // Focus input
+      setTimeout(() => document.getElementById('messageInput').focus(), 300);
     }
 
     function closeFullChat() {
@@ -1342,30 +1405,19 @@
 
     // ==================== NAVIGATION ====================
 
-    function switchTab(tab) {
-      currentTab = tab;
-      document.getElementById('tab-following').classList.remove('active');
-      document.getElementById('tab-followers').classList.remove('active');
-      document.getElementById(`tab-${tab}`).classList.add('active');
-      loadUsers(tab);
-    }
-
     function searchFriends() {
       const query = document.getElementById('search-input').value.toLowerCase();
-      const cards = document.querySelectorAll('.friend-card');
       
-      cards.forEach(card => {
-        const name = card.querySelector('.friend-name')?.textContent.toLowerCase() || '';
-        if (name.includes(query)) {
-          card.style.display = 'flex';
-        } else {
-          card.style.display = 'none';
-        }
+      const filtered = usersList.filter(user => {
+        const name = (user.name || user.displayName || '').toLowerCase();
+        return name.includes(query);
       });
+      
+      renderFriendList(filtered);
     }
 
     function retryLoad() {
-      loadUsers(currentTab);
+      loadAllFriends();
     }
 
     function handleLogout() {
@@ -1399,7 +1451,7 @@
       
       currentUser = user;
       initEncryption();
-      loadUsers('following');
+      loadAllFriends();
     });
 
     // Handle back button on mobile
