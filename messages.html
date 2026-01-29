@@ -477,16 +477,21 @@
       height: 14px;
       border-radius: 50%;
       border: 3px solid white;
-      background: var(--online);
+      background: var(--offline);
+      transition: background 0.3s;
     }
 
-    .status-indicator.online { background: var(--online); }
+    .status-indicator.online { 
+      background: var(--online); 
+      box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.3);
+    }
     .status-indicator.offline { background: var(--offline); }
     .status-indicator.away { background: var(--away); }
 
     .contact-info {
       flex: 1;
       min-width: 0;
+      margin-right: 0.5rem;
     }
 
     .contact-name {
@@ -497,6 +502,9 @@
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
     }
 
     .contact-handle {
@@ -508,32 +516,55 @@
       text-overflow: ellipsis;
     }
 
+    .last-message-preview {
+      font-size: 0.875rem;
+      color: var(--text-secondary);
+      margin-top: 0.25rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 200px;
+      font-weight: 500;
+    }
+
+    .last-message-preview.unread {
+      color: var(--text);
+      font-weight: 600;
+    }
+
     .contact-meta {
       display: flex;
       flex-direction: column;
       align-items: flex-end;
-      gap: 0.5rem;
-    }
-
-    .message-btn {
-      width: 40px;
-      height: 40px;
-      border-radius: 12px;
-      border: none;
-      background: var(--primary-soft);
-      color: var(--primary);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      transition: all 0.2s;
+      gap: 0.25rem;
       flex-shrink: 0;
     }
 
-    .message-btn:hover {
+    .last-message-time {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    .unread-count {
       background: var(--primary);
       color: white;
-      transform: scale(1.1);
+      font-size: 0.75rem;
+      font-weight: 700;
+      min-width: 20px;
+      height: 20px;
+      border-radius: 9999px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 6px;
+    }
+
+    .typing-indicator {
+      font-size: 0.75rem;
+      color: var(--primary);
+      font-weight: 600;
+      font-style: italic;
     }
 
     /* Empty State */
@@ -624,13 +655,33 @@
       min-width: 0;
     }
 
+    .chat-avatar-wrapper {
+      position: relative;
+    }
+
     .chat-avatar {
-      width: 40px;
-      height: 40px;
+      width: 44px;
+      height: 44px;
       border-radius: 50%;
       object-fit: cover;
       border: 2px solid white;
       box-shadow: var(--shadow-sm);
+    }
+
+    .chat-status-indicator {
+      position: absolute;
+      bottom: 0;
+      right: 0;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      border: 2px solid white;
+      background: var(--offline);
+    }
+
+    .chat-status-indicator.online { 
+      background: var(--online);
+      box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.3);
     }
 
     .chat-user-details {
@@ -653,6 +704,7 @@
       display: flex;
       align-items: center;
       gap: 0.25rem;
+      font-weight: 500;
     }
 
     .status-dot {
@@ -1023,12 +1075,15 @@
         <i data-feather="arrow-left" style="width:24px;height:24px;"></i>
       </button>
       <div class="chat-user-info">
-        <img id="chat-header-avatar" src="" alt="" class="chat-avatar">
+        <div class="chat-avatar-wrapper">
+          <img id="chat-header-avatar" src="" alt="" class="chat-avatar">
+          <div id="chat-header-status-dot" class="chat-status-indicator offline"></div>
+        </div>
         <div class="chat-user-details">
           <h3 id="chat-header-name" class="chat-user-name">User</h3>
-          <div class="chat-user-status">
+          <div class="chat-user-status" id="chat-header-status-text">
             <span class="status-dot"></span>
-            <span id="chat-header-status">Online</span>
+            <span>Offline</span>
           </div>
         </div>
       </div>
@@ -1043,7 +1098,6 @@
     </div>
 
     <div class="chat-messages" id="chat-messages">
-      <!-- Messages will be loaded here -->
       <div class="date-separator">
         <span>Today</span>
       </div>
@@ -1170,7 +1224,7 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
     import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
-    import { getDatabase, ref, get, onValue, push, set, serverTimestamp, query, limitToLast } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
+    import { getDatabase, ref, get, onValue, push, set, serverTimestamp, query, limitToLast, onDisconnect } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
@@ -1196,6 +1250,8 @@
     let searchQuery = '';
     let currentChatUser = null;
     let messagesListener = null;
+    let presenceListeners = new Map(); // Track presence listeners
+    let lastMessageListeners = new Map(); // Track last message listeners
 
     // Chat Overlay Elements
     const chatOverlay = document.getElementById('chat-overlay');
@@ -1215,6 +1271,106 @@
       document.getElementById('main-content').classList.add('loaded');
     }
 
+    // Format relative time
+    function formatRelativeTime(timestamp) {
+      if (!timestamp) return '';
+      const now = Date.now();
+      const diff = now - timestamp;
+      const seconds = Math.floor(diff / 1000);
+      const minutes = Math.floor(seconds / 60);
+      const hours = Math.floor(minutes / 60);
+      const days = Math.floor(hours / 24);
+
+      if (seconds < 60) return 'now';
+      if (minutes < 60) return `${minutes}m`;
+      if (hours < 24) return `${hours}h`;
+      if (days < 7) return `${days}d`;
+      return new Date(timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    }
+
+    // Format last seen time for header
+    function formatLastSeen(timestamp) {
+      if (!timestamp) return 'Offline';
+      const now = Date.now();
+      const diff = now - timestamp;
+      const seconds = Math.floor(diff / 1000);
+      const minutes = Math.floor(seconds / 60);
+      const hours = Math.floor(minutes / 60);
+      const days = Math.floor(hours / 24);
+
+      if (seconds < 60) return 'Last seen just now';
+      if (minutes < 60) return `Last seen ${minutes} minute${minutes > 1 ? 's' : ''} ago`;
+      if (hours < 24) return `Last seen ${hours} hour${hours > 1 ? 's' : ''} ago`;
+      if (days < 7) return `Last seen ${days} day${days > 1 ? 's' : ''} ago`;
+      return `Last seen ${new Date(timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+    }
+
+    // Initialize presence system for current user
+    function initPresence() {
+      if (!currentUser) return;
+      
+      const userStatusRef = ref(db, `status/${currentUser.uid}`);
+      const connectedRef = ref(db, '.info/connected');
+
+      onValue(connectedRef, (snap) => {
+        if (snap.val() === true) {
+          // Set online status
+          set(userStatusRef, {
+            state: 'online',
+            last_changed: serverTimestamp()
+          });
+          
+          // Set onDisconnect to offline
+          onDisconnect(userStatusRef).set({
+            state: 'offline',
+            last_changed: serverTimestamp()
+          });
+        }
+      });
+    }
+
+    // Listen to user's presence
+    function listenToPresence(userId, callback) {
+      const statusRef = ref(db, `status/${userId}`);
+      const listener = onValue(statusRef, (snap) => {
+        if (snap.exists()) {
+          const data = snap.val();
+          callback({
+            online: data.state === 'online',
+            lastChanged: data.last_changed
+          });
+        } else {
+          callback({ online: false, lastChanged: null });
+        }
+      });
+      
+      presenceListeners.set(userId, listener);
+      return listener;
+    }
+
+    // Listen to last message in chat
+    function listenToLastMessage(otherUserId, callback) {
+      if (!currentUser) return;
+      
+      const chatId = getChatId(currentUser.uid, otherUserId);
+      const lastMessageRef = query(ref(db, `chats/${chatId}/messages`), limitToLast(1));
+      
+      const listener = onValue(lastMessageRef, (snap) => {
+        if (snap.exists()) {
+          let lastMsg = null;
+          snap.forEach(child => {
+            lastMsg = { id: child.key, ...child.val() };
+          });
+          callback(lastMsg);
+        } else {
+          callback(null);
+        }
+      });
+      
+      lastMessageListeners.set(otherUserId, listener);
+      return listener;
+    }
+
     // Get user details
     async function getUserDetails(userId) {
       try {
@@ -1229,39 +1385,97 @@
       }
     }
 
-    // Load followers
+    // Load followers with presence and last message
     async function loadFollowers() {
       if (!currentUser) return;
       
       const followersRef = ref(db, `followers/${currentUser.uid}`);
       onValue(followersRef, async (snap) => {
+        // Clear old listeners
+        presenceListeners.forEach((listener, uid) => {
+          if (snap.exists() && !snap.val()[uid]) {
+            listener();
+            presenceListeners.delete(uid);
+          }
+        });
+        
         followers.clear();
         if (snap.exists()) {
           const followerIds = Object.keys(snap.val());
-          const promises = followerIds.map(id => getUserDetails(id));
-          const users = await Promise.all(promises);
-          users.forEach(user => {
-            if (user) followers.set(user.uid, { ...user, type: 'follower' });
+          const promises = followerIds.map(async (id) => {
+            const user = await getUserDetails(id);
+            if (user) {
+              followers.set(user.uid, { ...user, type: 'follower' });
+              
+              // Listen to presence
+              listenToPresence(id, (presence) => {
+                const user = followers.get(id) || following.get(id);
+                if (user) {
+                  user.online = presence.online;
+                  user.lastSeen = presence.lastChanged;
+                  updateUI();
+                }
+              });
+              
+              // Listen to last message
+              listenToLastMessage(id, (msg) => {
+                const user = followers.get(id) || following.get(id);
+                if (user) {
+                  user.lastMessage = msg;
+                  updateUI();
+                }
+              });
+            }
           });
+          await Promise.all(promises);
         }
         updateUI();
       });
     }
 
-    // Load following
+    // Load following with presence and last message
     async function loadFollowing() {
       if (!currentUser) return;
       
       const followingRef = ref(db, `following/${currentUser.uid}`);
       onValue(followingRef, async (snap) => {
+        // Clear old listeners
+        presenceListeners.forEach((listener, uid) => {
+          if (snap.exists() && !snap.val()[uid]) {
+            listener();
+            presenceListeners.delete(uid);
+          }
+        });
+        
         following.clear();
         if (snap.exists()) {
           const followingIds = Object.keys(snap.val());
-          const promises = followingIds.map(id => getUserDetails(id));
-          const users = await Promise.all(promises);
-          users.forEach(user => {
-            if (user) following.set(user.uid, { ...user, type: 'following' });
+          const promises = followingIds.map(async (id) => {
+            const user = await getUserDetails(id);
+            if (user) {
+              following.set(user.uid, { ...user, type: 'following' });
+              
+              // Listen to presence
+              listenToPresence(id, (presence) => {
+                const user = followers.get(id) || following.get(id);
+                if (user) {
+                  user.online = presence.online;
+                  user.lastSeen = presence.lastChanged;
+                  updateUI();
+                }
+              });
+              
+              // Listen to last message
+              listenToLastMessage(id, (msg) => {
+                const user = followers.get(id) || following.get(id);
+                if (user) {
+                  user.lastMessage = msg;
+                  updateUI();
+                }
+              });
+            }
           });
+          await Promise.all(promises);
         }
         updateUI();
       });
@@ -1279,6 +1493,13 @@
       } else if (currentTab === 'following') {
         contacts = Array.from(following.values());
       }
+
+      // Sort by last message timestamp (most recent first)
+      contacts.sort((a, b) => {
+        const timeA = a.lastMessage?.timestamp || 0;
+        const timeB = b.lastMessage?.timestamp || 0;
+        return timeB - timeA;
+      });
 
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
@@ -1298,7 +1519,9 @@
       // Update header
       document.getElementById('chat-header-name').textContent = user.displayName || user.username || 'User';
       document.getElementById('chat-header-avatar').src = user.photoURL || DEFAULT_AVATAR;
-      document.getElementById('chat-header-status').textContent = user.online ? 'Online' : 'Offline';
+      
+      // Update status
+      updateChatHeaderStatus(user);
       
       // Clear messages
       chatMessages.innerHTML = '<div class="date-separator"><span>Today</span></div>';
@@ -1314,6 +1537,20 @@
       
       // Focus input
       setTimeout(() => messageInput.focus(), 300);
+    }
+
+    // Update chat header status
+    function updateChatHeaderStatus(user) {
+      const statusDot = document.getElementById('chat-header-status-dot');
+      const statusText = document.getElementById('chat-header-status-text');
+      
+      if (user.online) {
+        statusDot.className = 'chat-status-indicator online';
+        statusText.innerHTML = '<span class="status-dot"></span><span>Online</span>';
+      } else {
+        statusDot.className = 'chat-status-indicator offline';
+        statusText.innerHTML = `<span>${formatLastSeen(user.lastSeen)}</span>`;
+      }
     }
 
     // Close chat
@@ -1352,6 +1589,10 @@
         });
         
         renderMessages(messages);
+        
+        // Update header status in case it changed
+        const user = followers.get(otherUserId) || following.get(otherUserId);
+        if (user) updateChatHeaderStatus(user);
       });
     }
 
@@ -1362,7 +1603,6 @@
 
     // Render messages
     function renderMessages(messages) {
-      // Keep only the date separator if no messages
       if (messages.length === 0) {
         chatMessages.innerHTML = '<div class="date-separator"><span>Today</span></div>';
         return;
@@ -1372,11 +1612,11 @@
       
       messages.forEach(msg => {
         const isSent = msg.senderId === currentUser.uid;
-        const time = new Date(msg.timestamp).toLocaleTimeString('en-US', { 
+        const time = msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString('en-US', { 
           hour: 'numeric', 
           minute: '2-digit',
           hour12: true 
-        });
+        }) : '';
         
         const msgEl = document.createElement('div');
         msgEl.className = `message ${isSent ? 'sent' : 'received'}`;
@@ -1389,7 +1629,6 @@
         chatMessages.appendChild(msgEl);
       });
       
-      // Scroll to bottom
       chatMessages.scrollTop = chatMessages.scrollHeight;
     }
 
@@ -1423,11 +1662,20 @@
       }
     }
 
-    // Render contact card
+    // Render contact card with last message preview
     function renderContactCard(user) {
       const avatarUrl = user.photoURL || DEFAULT_AVATAR;
       const displayName = user.displayName || user.username || 'User';
       const username = user.username || 'unknown';
+      
+      // Get last message info
+      const lastMsg = user.lastMessage;
+      const lastMessageText = lastMsg ? lastMsg.text : 'No messages yet';
+      const lastMessageTime = lastMsg ? formatRelativeTime(lastMsg.timestamp) : '';
+      const isLastMessageFromThem = lastMsg && lastMsg.senderId !== currentUser?.uid;
+      const unreadCount = 0; // TODO: Implement unread count logic
+      
+      const messagePreviewClass = isLastMessageFromThem && unreadCount > 0 ? 'last-message-preview unread' : 'last-message-preview';
       
       return `
         <div class="contact-card" onclick="window.openChatHandler('${user.uid}')">
@@ -1436,13 +1684,16 @@
             <div class="status-indicator ${user.online ? 'online' : 'offline'}"></div>
           </div>
           <div class="contact-info">
-            <h3 class="contact-name">${displayName}</h3>
+            <h3 class="contact-name">
+              ${displayName}
+              ${user.online ? '<span style="color:var(--online);font-size:0.75rem;">●</span>' : ''}
+            </h3>
             <p class="contact-handle">@${username}</p>
+            <p class="${messagePreviewClass}">${escapeHtml(lastMessageText)}</p>
           </div>
           <div class="contact-meta">
-            <button class="message-btn" onclick="event.stopPropagation(); window.openChatHandler('${user.uid}')">
-              <i data-feather="message-circle" style="width:20px;height:20px;"></i>
-            </button>
+            ${lastMessageTime ? `<span class="last-message-time">${lastMessageTime}</span>` : ''}
+            ${unreadCount > 0 ? `<span class="unread-count">${unreadCount}</span>` : ''}
           </div>
         </div>
       `;
@@ -1473,6 +1724,14 @@
         emptyState.classList.add('hidden');
         listContainer.innerHTML = contacts.map(renderContactCard).join('');
         feather.replace();
+      }
+
+      // Update chat header if chat is open
+      if (currentChatUser) {
+        const user = followers.get(currentChatUser.uid) || following.get(currentChatUser.uid);
+        if (user) {
+          updateChatHeaderStatus(user);
+        }
       }
 
       hideSkeleton();
@@ -1522,7 +1781,6 @@
     // Handle hash on load
     if (window.location.hash.startsWith('#chat=')) {
       const userId = window.location.hash.split('=')[1];
-      // Will open chat once users are loaded
       window.pendingChatUserId = userId;
     }
 
@@ -1534,6 +1792,11 @@
       }
 
       currentUser = user;
+      
+      // Initialize presence
+      initPresence();
+      
+      // Load connections
       loadFollowers();
       loadFollowing();
       
