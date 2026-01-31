@@ -2162,160 +2162,316 @@
       }
     });
 
-    async function renderPost(key, post, searchQuery = '') {
-      const el = document.createElement('div');
-      el.className = 'post';
-      el.id = `post-${key}`;
+// Store active listeners to clean up later
+const activeListeners = new Map();
 
-      const userInfo = await getUserInfo(post.uid);
-      const currentUsername = userInfo.username;
-      const avatarUrl = userInfo.avatar;
+async function renderPost(key, post, searchQuery = '') {
+  const el = document.createElement('div');
+  el.className = 'post';
+  el.id = `post-${key}`;
 
-      const timeAgo = getTimeAgo(post.timestamp);
-      const isOwner = currentUser && currentUser.uid === post.uid;
-      
-      const parsedText = parseText(post.text, searchQuery);
-      const highlightedUsername = searchQuery ? 
-        currentUsername.replace(new RegExp(`(${searchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'), 
-        '<span class="search-highlight">$1</span>') : currentUsername;
+  const userInfo = await getUserInfo(post.uid);
+  const currentUsername = userInfo.username;
+  const avatarUrl = userInfo.avatar;
 
-      let mediaHtml = '';
-      if (post.mediaUrl) {
-        if (post.mediaType === 'video') {
-          mediaHtml = `
-            <div class="post-media video-container" id="video-container-${key}" style="margin-top:0.75rem;" onclick="openVideoModal('${post.mediaUrl}')">
-              <video src="${post.mediaUrl}" loop playsinline muted preload="metadata" id="video-${key}" onclick="event.stopPropagation()"></video>
-              
-              <!-- Centered Play Overlay -->
-              <div class="video-play-overlay" id="play-overlay-${key}">
-                <div class="play-button-large">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-left: 4px;">
-                    <polygon points="5 3 19 12 5 21 5 3"></polygon>
-                  </svg>
-                </div>
-              </div>
-              
-              <div class="mute-indicator"><i data-feather="volume-x" style="width:32px;height:32px;"></i></div>
-              <div class="video-controls">
-                <button class="video-btn play-btn" data-video="${key}" onclick="event.stopPropagation()">
-                  <i data-feather="play" style="width:20px;height:20px;"></i>
-                </button>
-                <div class="video-progress" data-video="${key}">
-                  <div class="video-progress-bar" id="progress-${key}"></div>
-                </div>
-                <span class="video-time" id="time-${key}">0:00</span>
-                <button class="video-btn mute-btn" data-video="${key}" onclick="event.stopPropagation()">
-                  <i data-feather="volume-x" style="width:18px;height:18px;"></i>
-                </button>
-              </div>
-            </div>
-          `;
-        } else {
-          mediaHtml = `
-            <div class="post-media" style="margin-top:0.75rem;" onclick="openImageModal('${post.mediaUrl}')">
-              <img src="${post.mediaUrl}" class="post-image" loading="lazy" style="border-radius:16px;" />
-            </div>
-          `;
-        }
-      }
+  const timeAgo = getTimeAgo(post.timestamp);
+  const isOwner = currentUser && currentUser.uid === post.uid;
+  
+  const parsedText = parseText(post.text, searchQuery);
+  const highlightedUsername = searchQuery ? 
+    currentUsername.replace(new RegExp(`(${searchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'), 
+    '<span class="search-highlight">$1</span>') : currentUsername;
 
-      el.innerHTML = `
-        <img src="${avatarUrl}" class="user-avatar" onerror="this.src='${defaultAvatar}'">
-        <div class="post-content">
-          <div class="post-header">
-            <div class="post-meta">
-              <div style="display:flex; align-items:center; gap:0.25rem; flex-wrap:wrap;">
-                <span class="post-name" style="cursor:pointer;" onclick="window.location.href='profile.html?id=${post.uid}'">${highlightedUsername}</span>
-                <span class="post-username">@${currentUsername.toLowerCase().replace(/\s/g,'')}</span>
-                <span class="post-timestamp">${timeAgo}</span>
-              </div>
-            </div>
-            <div class="kebab-menu">
-              <i data-feather="more-horizontal" style="width:20px;height:20px;"></i>
+  let mediaHtml = '';
+  if (post.mediaUrl) {
+    if (post.mediaType === 'video') {
+      mediaHtml = `
+        <div class="post-media video-container" id="video-container-${key}" style="margin-top:0.75rem;" onclick="openVideoModal('${post.mediaUrl}')">
+          <video src="${post.mediaUrl}" loop playsinline muted preload="metadata" id="video-${key}" onclick="event.stopPropagation()"></video>
+          
+          <div class="video-play-overlay" id="play-overlay-${key}">
+            <div class="play-button-large">
+              <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-left: 4px;">
+                <polygon points="5 3 19 12 5 21 5 3"></polygon>
+              </svg>
             </div>
           </div>
-          <div class="post-text" style="margin-top:0.25rem; margin-bottom:0.25rem;">${parsedText}</div>
-          ${mediaHtml}
-          <div class="post-actions">
-            <div class="action-item comment-trigger" data-id="${key}">
-              <i data-feather="message-circle" style="width:20px;height:20px;"></i>
-              <span id="comment-count-${key}">${post.commentCount || 0}</span>
+          
+          <div class="mute-indicator"><i data-feather="volume-x" style="width:32px;height:32px;"></i></div>
+          <div class="video-controls">
+            <button class="video-btn play-btn" data-video="${key}" onclick="event.stopPropagation()">
+              <i data-feather="play" style="width:20px;height:20px;"></i>
+            </button>
+            <div class="video-progress" data-video="${key}">
+              <div class="video-progress-bar" id="progress-${key}"></div>
             </div>
-            <div class="action-item like-trigger" id="like-btn-${key}" data-id="${key}">
-              <i data-feather="heart" style="width:20px;height:20px;"></i>
-              <span id="like-count-${key}">${post.likes || 0}</span>
-            </div>
-            <div class="action-item"><i data-feather="share-2" style="width:20px;height:20px;"></i></div>
-          </div>
-        </div>
-        <div class="kebab-dropdown">
-          <div class="kebab-item kebab-action" data-action="copy">
-            <i data-feather="link" style="width:16px;height:16px;"></i> Copy link
-          </div>
-          <div class="kebab-item kebab-action" data-action="share">
-            <i data-feather="share" style="width:16px;height:16px;"></i> Share via...
-          </div>
-          ${isOwner ? `<div class="kebab-item delete-post"><i data-feather="trash-2" style="width:16px;height:16px;"></i> Delete</div>` : ''}
-          <div class="kebab-item kebab-action" data-action="report">
-            <i data-feather="flag" style="width:16px;height:16px;"></i> Report
+            <span class="video-time" id="time-${key}">0:00</span>
+            <button class="video-btn mute-btn" data-video="${key}" onclick="event.stopPropagation()">
+              <i data-feather="volume-x" style="width:18px;height:18px;"></i>
+            </button>
           </div>
         </div>
       `;
-
-      if (feedStream.firstChild && feedMode === 'latest' && !searchQuery) {
-        feedStream.insertBefore(el, feedStream.firstChild);
-      } else {
-        feedStream.appendChild(el);
-      }
-      
-      el.querySelectorAll('.hashtag').forEach(hashtagEl => {
-        hashtagEl.addEventListener('click', (e) => {
-          e.stopPropagation();
-          const tag = hashtagEl.dataset.hashtag;
-          searchInput.value = tag;
-          filterAndRenderPosts(tag);
-          window.scrollTo({ top: 0, behavior: 'smooth' });
-        });
-      });
-
-      checkIfLiked(key);
-      el.querySelector('.like-trigger')?.addEventListener('click', () => toggleLike(key));
-      el.querySelector('.comment-trigger')?.addEventListener('click', () => openComments(key));
-      
-      const kebabBtn = el.querySelector('.kebab-menu');
-      const dropdown = el.querySelector('.kebab-dropdown');
-
-      kebabBtn?.addEventListener('click', (e) => {
-        e.stopPropagation();
-        document.querySelectorAll('.kebab-dropdown.show').forEach(d => {
-          if (d !== dropdown) d.classList.remove('show');
-        });
-        dropdown.classList.toggle('show');
-      });
-
-      dropdown?.querySelectorAll('.kebab-action, .delete-post').forEach(item => {
-        item.addEventListener('click', (e) => {
-          e.stopPropagation();
-          const action = item.dataset.action || (item.classList.contains('delete-post') ? 'delete' : '');
-
-          if (action === 'delete' && isOwner) {
-            currentDeletePost = { key, element: el };
-            deleteOverlay.classList.add('active');
-            deleteModal.classList.add('active');
-          } else if (action === 'copy') {
-            navigator.clipboard.writeText(`${window.location.origin}/post/${key}`);
-            showToast("Link copied to clipboard");
-          } else if (action === 'share') {
-            if (navigator.share) {
-              navigator.share({ title: 'Nexus Post', text: post.text, url: `${window.location.origin}/post/${key}` });
-            } else {
-              showToast("Sharing not supported");
-            }
-          }
-          dropdown.classList.remove('show');
-        });
-      });
+    } else {
+      mediaHtml = `
+        <div class="post-media" style="margin-top:0.75rem;" onclick="openImageModal('${post.mediaUrl}')">
+          <img src="${post.mediaUrl}" class="post-image" loading="lazy" style="border-radius:16px;" />
+        </div>
+      `;
     }
+  }
+
+  el.innerHTML = `
+    <img src="${avatarUrl}" class="user-avatar" onerror="this.src='${defaultAvatar}'">
+    <div class="post-content">
+      <div class="post-header">
+        <div class="post-meta">
+          <div style="display:flex; align-items:center; gap:0.25rem; flex-wrap:wrap;">
+            <span class="post-name" style="cursor:pointer;" onclick="window.location.href='profile.html?id=${post.uid}'">${highlightedUsername}</span>
+            <span class="post-username">@${currentUsername.toLowerCase().replace(/\s/g,'')}</span>
+            <span class="post-timestamp">${timeAgo}</span>
+          </div>
+        </div>
+        <div class="kebab-menu">
+          <i data-feather="more-horizontal" style="width:20px;height:20px;"></i>
+        </div>
+      </div>
+      <div class="post-text" style="margin-top:0.25rem; margin-bottom:0.25rem;">${parsedText}</div>
+      ${mediaHtml}
+      <div class="post-actions">
+        <div class="action-item comment-trigger" data-id="${key}">
+          <i data-feather="message-circle" style="width:20px;height:20px;"></i>
+          <span id="comment-count-${key}" class="count-anim">${post.commentCount || 0}</span>
+        </div>
+        <div class="action-item like-trigger" id="like-btn-${key}" data-id="${key}">
+          <i data-feather="heart" style="width:20px;height:20px;"></i>
+          <span id="like-count-${key}" class="count-anim">0</span>
+        </div>
+        <div class="action-item"><i data-feather="share-2" style="width:20px;height:20px;"></i></div>
+      </div>
+    </div>
+    <div class="kebab-dropdown">
+      <div class="kebab-item kebab-action" data-action="copy">
+        <i data-feather="link" style="width:16px;height:16px;"></i> Copy link
+      </div>
+      <div class="kebab-item kebab-action" data-action="share">
+        <i data-feather="share" style="width:16px;height:16px;"></i> Share via...
+      </div>
+      ${isOwner ? `<div class="kebab-item delete-post"><i data-feather="trash-2" style="width:16px;height:16px;"></i> Delete</div>` : ''}
+      <div class="kebab-item kebab-action" data-action="report">
+        <i data-feather="flag" style="width:16px;height:16px;"></i> Report
+      </div>
+    </div>
+  `;
+
+  if (feedStream.firstChild && feedMode === 'latest' && !searchQuery) {
+    feedStream.insertBefore(el, feedStream.firstChild);
+  } else {
+    feedStream.appendChild(el);
+  }
+  
+  // Set up real-time listeners
+  setupRealtimeListeners(key, el);
+  
+  el.querySelectorAll('.hashtag').forEach(hashtagEl => {
+    hashtagEl.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const tag = hashtagEl.dataset.hashtag;
+      searchInput.value = tag;
+      filterAndRenderPosts(tag);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+  });
+
+  el.querySelector('.like-trigger')?.addEventListener('click', () => toggleLike(key));
+  el.querySelector('.comment-trigger')?.addEventListener('click', () => openComments(key));
+  
+  const kebabBtn = el.querySelector('.kebab-menu');
+  const dropdown = el.querySelector('.kebab-dropdown');
+
+  kebabBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    document.querySelectorAll('.kebab-dropdown.show').forEach(d => {
+      if (d !== dropdown) d.classList.remove('show');
+    });
+    dropdown.classList.toggle('show');
+  });
+
+  dropdown?.querySelectorAll('.kebab-action, .delete-post').forEach(item => {
+    item.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const action = item.dataset.action || (item.classList.contains('delete-post') ? 'delete' : '');
+
+      if (action === 'delete' && isOwner) {
+        currentDeletePost = { key, element: el };
+        deleteOverlay.classList.add('active');
+        deleteModal.classList.add('active');
+      } else if (action === 'copy') {
+        navigator.clipboard.writeText(`${window.location.origin}/post/${key}`);
+        showToast("Link copied to clipboard");
+      } else if (action === 'share') {
+        if (navigator.share) {
+          navigator.share({ title: 'Nexus Post', text: post.text, url: `${window.location.origin}/post/${key}` });
+        } else {
+          showToast("Sharing not supported");
+        }
+      }
+      dropdown.classList.remove('show');
+    });
+  });
+}
+
+function setupRealtimeListeners(postId, element) {
+  // Clean up existing listeners for this post if any
+  cleanupListeners(postId);
+  
+  const listeners = [];
+  
+  // Real-time like count listener
+  const likesRef = ref(db, `posts/${postId}/likes`);
+  const likesUnsubscribe = onValue(likesRef, (snapshot) => {
+    const count = snapshot.val() || 0;
+    const countEl = document.getElementById(`like-count-${postId}`);
+    if (countEl) {
+      const oldVal = parseInt(countEl.textContent) || 0;
+      countEl.textContent = count;
+      
+      // Animate if value changed
+      if (oldVal !== count) {
+        countEl.style.transform = 'scale(1.3)';
+        countEl.style.color = count > oldVal ? 'var(--like-red)' : 'var(--text-light)';
+        setTimeout(() => {
+          countEl.style.transform = 'scale(1)';
+          countEl.style.color = '';
+        }, 200);
+      }
+    }
+  });
+  listeners.push(likesUnsubscribe);
+  
+  // Real-time comment count listener
+  const commentsRef = ref(db, `posts/${postId}/commentCount`);
+  const commentsUnsubscribe = onValue(commentsRef, (snapshot) => {
+    const count = snapshot.val() || 0;
+    const countEl = document.getElementById(`comment-count-${postId}`);
+    if (countEl) {
+      const oldVal = parseInt(countEl.textContent) || 0;
+      countEl.textContent = count;
+      
+      if (oldVal !== count) {
+        countEl.style.transform = 'scale(1.2)';
+        setTimeout(() => countEl.style.transform = 'scale(1)', 200);
+      }
+    }
+  });
+  listeners.push(commentsUnsubscribe);
+  
+  // Real-time user like status listener (updates heart fill)
+  if (currentUser) {
+    const userLikeRef = ref(db, `postLikes/${postId}/${currentUser.uid}`);
+    const userLikeUnsubscribe = onValue(userLikeRef, (snapshot) => {
+      const likeBtn = document.getElementById(`like-btn-${postId}`);
+      if (likeBtn) {
+        const icon = likeBtn.querySelector('i');
+        if (snapshot.exists()) {
+          likeBtn.classList.add('liked');
+          if (icon) {
+            icon.style.fill = 'var(--like-red)';
+            icon.style.color = 'var(--like-red)';
+          }
+        } else {
+          likeBtn.classList.remove('liked');
+          if (icon) {
+            icon.style.fill = 'none';
+            icon.style.color = '';
+          }
+        }
+      }
+    });
+    listeners.push(userLikeUnsubscribe);
+  }
+  
+  // Store unsubscribe functions
+  activeListeners.set(postId, listeners);
+}
+
+function cleanupListeners(postId) {
+  if (activeListeners.has(postId)) {
+    const unsubscribes = activeListeners.get(postId);
+    unsubscribes.forEach(unsub => unsub());
+    activeListeners.delete(postId);
+  }
+}
+
+async function toggleLike(postId) {
+  if (!currentUser) {
+    showToast("Please login to like posts", "error");
+    return;
+  }
+  
+  const likeRef = ref(db, `postLikes/${postId}/${currentUser.uid}`);
+  const postRef = ref(db, `posts/${postId}`);
+
+  try {
+    const snapshot = await get(likeRef);
+    if (snapshot.exists()) {
+      // Unlike
+      await set(likeRef, null);
+      await runTransaction(postRef, (post) => {
+        if (post) {
+          post.likes = Math.max((post.likes || 0) - 1, 0);
+        }
+        return post;
+      });
+    } else {
+      // Like
+      await set(likeRef, true);
+      await runTransaction(postRef, (post) => {
+        if (post) {
+          post.likes = (post.likes || 0) + 1;
+        }
+        return post;
+      });
+      
+      // Add heart burst animation
+      const likeBtn = document.getElementById(`like-btn-${postId}`);
+      if (likeBtn) {
+        likeBtn.style.transform = 'scale(1.2)';
+        setTimeout(() => likeBtn.style.transform = 'scale(1)', 200);
+      }
+    }
+  } catch (err) {
+    console.error("Like failed:", err);
+    showToast("Failed to update like", "error");
+  }
+}
+
+// Update your delete confirmation handler
+confirmDeleteBtn?.addEventListener('click', async () => {
+  if (!currentDeletePost.key) return;
+  const { key, element } = currentDeletePost;
+
+  try {
+    loadingOverlay.style.display = 'flex';
+    
+    // Clean up listeners first
+    cleanupListeners(key);
+    
+    await remove(ref(db, `posts/${key}`));
+    await remove(ref(db, `postLikes/${key}`));
+    await remove(ref(db, `postComments/${key}`));
+    
+    allPosts = allPosts.filter(p => p.key !== key);
+    
+    element.remove();
+    showToast("Post deleted", "success");
+  } catch (err) {
+    showToast("Failed to delete post", "error");
+  } finally {
+    loadingOverlay.style.display = 'none';
+    closeDeleteModal();
+  }
+});
 
     function initializeVideoControls() {
       document.querySelectorAll('.video-container').forEach(container => {
