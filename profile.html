@@ -48,7 +48,6 @@
       -webkit-font-smoothing: antialiased;
     }
 
-    /* Layout Grid - Matches Home/Messages */
     .layout-grid {
       display: grid;
       grid-template-columns: 80px 1fr;
@@ -60,7 +59,6 @@
     @media (min-width: 640px) { .layout-grid { grid-template-columns: 280px 1fr; gap: 2rem; } }
     @media (min-width: 1024px) { .layout-grid { grid-template-columns: 280px 600px 340px; } }
 
-    /* Sidebar - Matches other pages */
     .sidebar {
       position: sticky;
       top: 0;
@@ -151,7 +149,6 @@
       border-top: 1px solid var(--border);
     }
 
-    /* Mobile Top Nav - Facebook Style */
     .top-nav-mobile {
       position: fixed;
       top: 0;
@@ -225,7 +222,6 @@
       border-radius: 3px 3px 0 0;
     }
 
-    /* Main Feed Container */
     .main-feed { 
       border-right: 1px solid var(--border);
       max-width: 600px; 
@@ -241,7 +237,6 @@
       padding: 1.5rem;
     }
 
-    /* Profile Hero */
     .profile-hero {
       background: var(--surface);
       border-radius: 24px;
@@ -369,7 +364,6 @@
       background: var(--border);
     }
 
-    /* Stats */
     .stats-pill {
       display: flex;
       gap: 2rem;
@@ -404,7 +398,6 @@
       font-weight: 500;
     }
 
-    /* Settings Groups */
     .settings-group {
       background: var(--surface);
       border-radius: 20px;
@@ -462,7 +455,6 @@
 
     .text-red { color: var(--danger); }
 
-    /* Modal */
     .modal-overlay {
       position: fixed;
       inset: 0;
@@ -565,7 +557,6 @@
       cursor: not-allowed;
     }
 
-    /* Toast */
     #toast {
       position: fixed;
       bottom: calc(20px + env(safe-area-inset-bottom));
@@ -587,17 +578,18 @@
       transform: translateX(-50%) translateY(-10px);
     }
 
-    /* MOBILE FULL WIDTH */
+    #toast.error {
+      background: #ef4444;
+    }
+
     @media (max-width: 639px) {
       .sidebar { display: none; }
-      
       .layout-grid { 
         grid-template-columns: 1fr; 
         padding: 0;
         gap: 0;
         width: 100%;
       }
-      
       .main-feed { 
         border-radius: 0; 
         border: none;
@@ -609,25 +601,21 @@
         box-shadow: none;
         padding: 0.75rem 0;
       }
-
       .profile-hero {
         border-radius: 0;
         border-left: none;
         border-right: none;
         margin-bottom: 0.75rem;
       }
-
       .settings-group {
         border-radius: 0;
         border-left: none;
         border-right: none;
         margin-bottom: 0.5rem;
       }
-
       .action-buttons {
         flex-wrap: wrap;
       }
-
       .btn {
         flex: 1;
         min-width: 120px;
@@ -643,25 +631,12 @@
     ::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 4px; }
 
     .hidden { display: none !important; }
-    
-    /* Shimmer */
-    .shimmer {
-      background: linear-gradient(90deg, #E2E8F0 25%, #F1F5F9 50%, #E2E8F0 75%);
-      background-size: 200% 100%;
-      animation: shimmer 1.5s infinite;
-      border-radius: 4px;
-      color: transparent !important;
-    }
-    @keyframes shimmer {
-      0% { background-position: -200% 0; }
-      100% { background-position: 200% 0; }
-    }
   </style>
 </head>
 <body>
   <div id="toast"></div>
 
-  <!-- Mobile Top Navigation - Notifications REMOVED -->
+  <!-- Mobile Top Navigation -->
   <nav class="top-nav-mobile">
     <div class="top-nav-inner">
       <span class="top-nav-logo">Nexus</span>
@@ -683,7 +658,7 @@
   </nav>
 
   <div class="layout-grid">
-    <!-- Sidebar - Notifications REMOVED -->
+    <!-- Sidebar -->
     <aside class="sidebar">
       <div>
         <div class="logo-box">
@@ -772,7 +747,7 @@
       </div>
 
       <!-- Own Profile Settings -->
-      <div id="own-profile-sections">
+      <div id="own-profile-sections" class="hidden">
         <div class="settings-group">
           <div class="settings-item" id="edit-profile-btn">
             <div class="item-icon-box icon-primary">
@@ -915,23 +890,38 @@
     function showToast(msg, type = 'success') {
       const t = document.getElementById('toast');
       t.textContent = msg;
-      t.className = `show ${type}`;
-      setTimeout(() => t.classList.remove('show'), 3000);
+      t.className = `show ${type === 'error' ? 'error' : ''}`;
+      setTimeout(() => t.className = '', 3200);
     }
+
+    // Global modal controls
+    window.openModal = () => {
+      document.getElementById('edit-modal').classList.add('show');
+      feather.replace();
+    };
+
+    window.closeModal = () => {
+      document.getElementById('edit-modal').classList.remove('show');
+      selectedFile = null;
+      if (currentProfile) {
+        document.getElementById('preview-avatar').src = currentProfile.photoURL || DEFAULT_AVATAR;
+      }
+    };
 
     onAuthStateChanged(auth, async (user) => {
       if (!user) {
         window.location.href = "signup.html";
         return;
       }
+
       currentUser = user;
-      
       const params = new URLSearchParams(window.location.search);
       targetUserId = params.get('id') || currentUser.uid;
       isOwnProfile = targetUserId === currentUser.uid;
-      
+
       setupUI();
       await loadProfile();
+      feather.replace();
     });
 
     function setupUI() {
@@ -946,27 +936,28 @@
       if (isOwnProfile) {
         ownSections.classList.remove('hidden');
         otherInfo.classList.add('hidden');
-        editBtn?.classList.remove('hidden');
-        editMobile?.classList.remove('hidden');
-        camera?.classList.remove('hidden');
-        followBtn?.classList.add('hidden');
-        messageBtn?.classList.add('hidden');
+        if (editBtn) editBtn.classList.remove('hidden');
+        if (editMobile) editMobile.classList.remove('hidden');
+        if (camera) camera.classList.remove('hidden');
+        if (followBtn) followBtn.classList.add('hidden');
+        if (messageBtn) messageBtn.classList.add('hidden');
       } else {
         ownSections.classList.add('hidden');
         otherInfo.classList.remove('hidden');
-        editBtn?.classList.add('hidden');
-        editMobile?.classList.add('hidden');
-        camera?.classList.add('hidden');
-        followBtn?.classList.remove('hidden');
-        messageBtn?.classList.remove('hidden');
+        if (editBtn) editBtn.classList.add('hidden');
+        if (editMobile) editMobile.classList.add('hidden');
+        if (camera) camera.classList.add('hidden');
+        if (followBtn) followBtn.classList.remove('hidden');
+        if (messageBtn) messageBtn.classList.remove('hidden');
         setupFollowListener();
       }
     }
 
     function setupFollowListener() {
-      const followRef = ref(db, `followers/${targetUserId}/${currentUser.uid}`);
-      onValue(followRef, (snap) => {
+      const followerRef = ref(db, `followers/\( {targetUserId}/ \){currentUser.uid}`);
+      onValue(followerRef, (snap) => {
         const btn = document.getElementById('follow-btn');
+        if (!btn) return;
         const isFollowing = snap.exists();
         btn.classList.toggle('following', isFollowing);
         btn.innerHTML = isFollowing 
@@ -977,41 +968,147 @@
     }
 
     async function loadProfile() {
-      const snap = await get(ref(db, `users/${targetUserId}`));
-      if (!snap.exists()) return;
-      
-      currentProfile = snap.val();
-      
-      document.getElementById('profile-name').textContent = currentProfile.displayName || 'User';
-      document.getElementById('profile-username').textContent = `@${currentProfile.username || 'unknown'}`;
-      document.getElementById('profile-bio').textContent = currentProfile.bio || 'No bio yet.';
-      document.getElementById('profile-avatar').src = currentProfile.photoURL || DEFAULT_AVATAR;
-      
-      // Load stats
-      onValue(ref(db, `following/${targetUserId}`), (s) => {
-        document.getElementById('following-count').textContent = s.exists() ? Object.keys(s.val()).length : 0;
-      });
-      onValue(ref(db, `followers/${targetUserId}`), (s) => {
-        document.getElementById('followers-count').textContent = s.exists() ? Object.keys(s.val()).length : 0;
-      });
-      
-      // Setup edit form
-      if (isOwnProfile) {
-        document.getElementById('edit-name').value = currentProfile.displayName || '';
-        document.getElementById('edit-username').value = currentProfile.username || '';
-        document.getElementById('edit-bio').value = currentProfile.bio || '';
-        document.getElementById('preview-avatar').src = currentProfile.photoURL || DEFAULT_AVATAR;
-        updateCharCounts();
+      try {
+        const snap = await get(ref(db, `users/${targetUserId}`));
+        if (!snap.exists()) {
+          showToast("Profile not found", "error");
+          return;
+        }
+        
+        currentProfile = snap.val();
+        
+        document.getElementById('profile-name').textContent = currentProfile.displayName || 'User';
+        document.getElementById('profile-username').textContent = currentProfile.username ? `@${currentProfile.username}` : '@unknown';
+        document.getElementById('profile-bio').textContent = currentProfile.bio || 'No bio yet.';
+        document.getElementById('profile-avatar').src = currentProfile.photoURL || DEFAULT_AVATAR;
+        
+        onValue(ref(db, `following/${targetUserId}`), (s) => {
+          document.getElementById('following-count').textContent = s.exists() ? Object.keys(s.val()).length : 0;
+        });
+        onValue(ref(db, `followers/${targetUserId}`), (s) => {
+          document.getElementById('followers-count').textContent = s.exists() ? Object.keys(s.val()).length : 0;
+        });
+        
+        if (isOwnProfile) {
+          document.getElementById('edit-name').value = currentProfile.displayName || '';
+          document.getElementById('edit-username').value = currentProfile.username || '';
+          document.getElementById('edit-bio').value = currentProfile.bio || '';
+          document.getElementById('preview-avatar').src = currentProfile.photoURL || DEFAULT_AVATAR;
+          updateCharCounts();
+        }
+
+        feather.replace();
+      } catch (err) {
+        console.error(err);
+        showToast("Failed to load profile", "error");
       }
-      
-      feather.replace();
     }
 
-    document.getElementById('follow-btn')?.addEventListener('click', async () => {
-      const followerRef = ref(db, `followers/${targetUserId}/${currentUser.uid}`);
-      const followingRef = ref(db, `following/${currentUser.uid}/${targetUserId}`);
-      const isFollowing = (await get(followerRef)).exists();
+    function updateCharCounts() {
+      const nameEl = document.getElementById('edit-name');
+      const usernameEl = document.getElementById('edit-username');
+      const bioEl = document.getElementById('edit-bio');
       
+      if (nameEl) document.getElementById('name-count').textContent = 50 - nameEl.value.length;
+      if (usernameEl) document.getElementById('username-count').textContent = 30 - usernameEl.value.length;
+      if (bioEl) document.getElementById('bio-count').textContent = 160 - bioEl.value.length;
+    }
+
+    ['edit-name', 'edit-username', 'edit-bio'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.addEventListener('input', updateCharCounts);
+    });
+
+    document.getElementById('avatar-upload')?.addEventListener('change', (e) => {
+      if (e.target.files?.[0]) {
+        selectedFile = e.target.files[0];
+        document.getElementById('preview-avatar').src = URL.createObjectURL(selectedFile);
+      }
+    });
+
+    window.saveProfile = async function() {
+      const btn = document.getElementById('save-btn');
+      if (!btn) return;
+
+      btn.disabled = true;
+      btn.textContent = 'Saving...';
+
+      try {
+        let photoURL = currentProfile?.photoURL || DEFAULT_AVATAR;
+
+        // Optional: Cloudinary upload (uncomment when ready)
+        /*
+        if (selectedFile) {
+          const fd = new FormData();
+          fd.append('file', selectedFile);
+          fd.append('upload_preset', 'banter_box'); // ← make sure this preset exists!
+          const res = await fetch('https://api.cloudinary.com/v1_1/dqkujefxj/image/upload', {
+            method: 'POST',
+            body: fd
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error?.message || 'Upload failed');
+          if (data.secure_url) photoURL = data.secure_url;
+        }
+        */
+
+        const newUsername = document.getElementById('edit-username').value
+          .trim()
+          .toLowerCase()
+          .replace(/[^a-z0-9_]/g, '');
+
+        // Optional: Check username availability
+        if (newUsername && newUsername !== currentProfile?.username) {
+          const usernameSnap = await get(ref(db, `usernames/${newUsername}`));
+          if (usernameSnap.exists() && usernameSnap.val() !== currentUser.uid) {
+            throw new Error("Username already taken");
+          }
+        }
+
+        const updates = {
+          displayName: document.getElementById('edit-name').value.trim(),
+          username: newUsername,
+          bio: document.getElementById('edit-bio').value.trim(),
+          photoURL,
+          updatedAt: Date.now()
+        };
+
+        await update(ref(db, `users/${currentUser.uid}`), updates);
+
+        // Update current profile cache
+        currentProfile = { ...currentProfile, ...updates };
+
+        // Refresh UI
+        document.getElementById('profile-name').textContent = updates.displayName || 'User';
+        document.getElementById('profile-username').textContent = updates.username ? `@${updates.username}` : '@unknown';
+        document.getElementById('profile-bio').textContent = updates.bio || 'No bio yet.';
+        document.getElementById('profile-avatar').src = photoURL;
+        document.getElementById('preview-avatar').src = photoURL;
+
+        closeModal();
+        showToast('Profile updated successfully!');
+      } catch (err) {
+        console.error(err);
+        showToast(err.message || 'Failed to save profile', 'error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Save Changes';
+      }
+    };
+
+    // Event listeners
+    document.getElementById('edit-profile-btn')?.addEventListener('click', openModal);
+    document.getElementById('edit-profile-mobile')?.addEventListener('click', openModal);
+    document.getElementById('avatar-trigger')?.addEventListener('click', () => {
+      document.getElementById('avatar-upload')?.click();
+    });
+
+    document.getElementById('follow-btn')?.addEventListener('click', async () => {
+      if (!targetUserId || !currentUser) return;
+      const followerRef = ref(db, `followers/\( {targetUserId}/ \){currentUser.uid}`);
+      const followingRef = ref(db, `following/\( {currentUser.uid}/ \){targetUserId}`);
+      const isFollowing = (await get(followerRef)).exists();
+
       if (isFollowing) {
         await set(followerRef, null);
         await set(followingRef, null);
@@ -1027,21 +1124,14 @@
       window.location.href = `messages.html?chat=${targetUserId}`;
     });
 
-    document.getElementById('edit-profile-btn')?.addEventListener('click', openModal);
-    document.getElementById('edit-profile-mobile')?.addEventListener('click', openModal);
-    document.getElementById('avatar-trigger')?.addEventListener('click', () => document.getElementById('avatar-upload').click());
-    
-    document.getElementById('avatar-upload')?.addEventListener('change', (e) => {
-      if (e.target.files?.[0]) {
-        selectedFile = e.target.files[0];
-        document.getElementById('preview-avatar').src = URL.createObjectURL(selectedFile);
-      }
-    });
-
     document.getElementById('share-profile-btn')?.addEventListener('click', async () => {
-      const url = `${window.location.origin}/profile.html?id=${targetUserId}`;
-      await navigator.clipboard.writeText(url);
-      showToast('Link copied!');
+      const url = `\( {window.location.origin}/profile.html?id= \){targetUserId}`;
+      try {
+        await navigator.clipboard.writeText(url);
+        showToast('Profile link copied!');
+      } catch {
+        showToast('Failed to copy link', 'error');
+      }
     });
 
     document.getElementById('signout-btn')?.addEventListener('click', () => {
@@ -1052,80 +1142,12 @@
       signOut(auth).then(() => window.location.href = 'signup.html');
     });
 
-    // Edit Modal Functions
-    window.openModal = function() {
-      document.getElementById('edit-modal').classList.add('show');
-    };
-
-    window.closeModal = function() {
-      document.getElementById('edit-modal').classList.remove('show');
-      selectedFile = null;
-      if (currentProfile) {
-        document.getElementById('preview-avatar').src = currentProfile.photoURL || DEFAULT_AVATAR;
-      }
-    };
-
-    function updateCharCounts() {
-      document.getElementById('name-count').textContent = 50 - document.getElementById('edit-name').value.length;
-      document.getElementById('username-count').textContent = 30 - document.getElementById('edit-username').value.length;
-      document.getElementById('bio-count').textContent = 160 - document.getElementById('edit-bio').value.length;
-    }
-
-    ['edit-name', 'edit-username', 'edit-bio'].forEach(id => {
-      document.getElementById(id)?.addEventListener('input', updateCharCounts);
-    });
-
-    window.saveProfile = async function() {
-      const btn = document.getElementById('save-btn');
-      btn.disabled = true;
-      btn.textContent = 'Saving...';
-      
-      try {
-        let photoURL = currentProfile.photoURL || DEFAULT_AVATAR;
-        
-        if (selectedFile) {
-          const fd = new FormData();
-          fd.append('file', selectedFile);
-          fd.append('upload_preset', 'banter_box');
-          const res = await fetch(`https://api.cloudinary.com/v1_1/dqkujefxj/image/upload`, {
-            method: 'POST',
-            body: fd
-          });
-          const data = await res.json();
-          if (data.secure_url) photoURL = data.secure_url;
-        }
-        
-        const updates = {
-          displayName: document.getElementById('edit-name').value.trim(),
-          username: document.getElementById('edit-username').value.trim().toLowerCase().replace(/[^a-z0-9_]/g, ''),
-          bio: document.getElementById('edit-bio').value.trim(),
-          photoURL,
-          updatedAt: Date.now()
-        };
-        
-        await update(ref(db, `users/${currentUser.uid}`), updates);
-        
-        // Update UI
-        document.getElementById('profile-name').textContent = updates.displayName;
-        document.getElementById('profile-username').textContent = `@${updates.username}`;
-        document.getElementById('profile-bio').textContent = updates.bio;
-        document.getElementById('profile-avatar').src = photoURL;
-        
-        closeModal();
-        showToast('Profile updated!');
-      } catch (err) {
-        showToast('Error saving', 'error');
-      } finally {
-        btn.disabled = false;
-        btn.textContent = 'Save Changes';
-      }
-    };
-
-    // Close modal on outside click
+    // Close modal when clicking outside content
     document.getElementById('edit-modal')?.addEventListener('click', (e) => {
       if (e.target.id === 'edit-modal') closeModal();
     });
 
+    // Initial feather icons
     feather.replace();
   </script>
 </body>
