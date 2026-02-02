@@ -206,6 +206,7 @@
       position: relative;
       transition: all 0.2s;
       text-decoration: none;
+      cursor: pointer;
     }
 
     .top-nav-item:hover {
@@ -864,7 +865,12 @@
     /* MOBILE OPTIMIZATIONS - FULL WIDTH */
     @media (max-width: 639px) {
       .sidebar { display: none; }
-      .top-nav-mobile { display: block; }
+      .top-nav-mobile { 
+        display: block; 
+        z-index: 1000;
+        -webkit-transform: translate3d(0,0,0);
+        transform: translate3d(0,0,0);
+      }
       
       .layout-grid { 
         grid-template-columns: 1fr; 
@@ -943,6 +949,27 @@
       .chat-header {
         padding: 0.5rem;
       }
+
+      /* FIXED: Mobile nav touch optimizations */
+      .top-nav-center {
+        position: relative;
+        z-index: 1002;
+      }
+
+      .top-nav-item {
+        cursor: pointer;
+        -webkit-tap-highlight-color: transparent;
+        position: relative;
+        z-index: 1001;
+        touch-action: manipulation;
+        -webkit-touch-callout: none;
+        -webkit-user-select: none;
+        user-select: none;
+      }
+
+      .top-nav-item svg {
+        pointer-events: none;
+      }
     }
 
     @media (min-width: 640px) {
@@ -965,47 +992,6 @@
     }
 
     .hidden { display: none !important; }
-    .top-nav-item {
-  cursor: pointer; /* Add this */
-  -webkit-tap-highlight-color: transparent; /* Add this for mobile */
-  position: relative; /* Ensure proper stacking */
-  z-index: 101; /* Above the nav container */
-}
-
-/* Ensure the nav items are clickable */
-.top-nav-center {
-  position: relative;
-  z-index: 102;
-}
-
-/* Fix for empty right section causing layout issues */
-.top-nav-right {
-  min-width: 36px; /* Match the search button width */
-}
-
-/* Ensure feather icons don't block clicks */
-.top-nav-item svg {
-  pointer-events: none; /* Clicks pass through to the <a> tag */
-  position: relative;
-  z-index: 1;
-}
-
-/* Active state indicator fix */
-.top-nav-item.active::after {
-  z-index: 103;
-}
-
-/* Mobile touch optimization */
-@media (max-width: 639px) {
-  .top-nav-mobile {
-    z-index: 1000; /* Higher than chat overlay */
-  }
-  
-  .top-nav-item {
-    min-width: 48px; /* Ensure adequate touch target */
-    min-height: 40px;
-  }
-}
   </style>
 </head>
 <body>
@@ -1028,21 +1014,25 @@
     <div class="top-nav-inner">
       <span class="top-nav-logo">Vynix</span>
       <div class="top-nav-center">
-        <a href="index.html" class="top-nav-item">
+        <a href="index.html" class="top-nav-item" data-nav="home">
           <i data-feather="home" style="width:22px;height:22px;"></i>
         </a>
-        <a href="explore.html" class="top-nav-item">
+        <a href="explore.html" class="top-nav-item" data-nav="explore">
           <i data-feather="compass" style="width:22px;height:22px;"></i>
         </a>
-        <a href="messages.html" class="top-nav-item active">
+        <a href="messages.html" class="top-nav-item active" data-nav="messages">
           <i data-feather="message-circle" style="width:22px;height:22px;"></i>
           <span class="nav-badge-mobile" id="mobile-badge"></span>
         </a>
-        <a href="profile.html" class="top-nav-item">
+        <a href="profile.html" class="top-nav-item" data-nav="profile">
           <i data-feather="user" style="width:22px;height:22px;"></i>
         </a>
       </div>
-     
+      <div class="top-nav-right">
+        <button class="top-nav-search-btn" onclick="focusSearch()">
+          <i data-feather="search" style="width:20px;height:20px;"></i>
+        </button>
+      </div>
     </div>
   </nav>
 
@@ -1187,7 +1177,7 @@
 
     let currentUser = null;
     let currentChatUser = null;
-    let usersMap = new Map(); // uid -> user data
+    let usersMap = new Map();
     let messagesListeners = new Map();
     let currentTab = 'all';
     let unreadCounts = new Map();
@@ -1196,7 +1186,6 @@
 
     const DEFAULT_AVATAR = "https://abs.twimg.com/sticky/default_profile_images/default_profile_normal.png";
 
-    // UI Elements
     const chatOverlay = document.getElementById('chat-overlay');
     const chatMessages = document.getElementById('chat-messages');
     const messageInput = document.getElementById('message-input');
@@ -1208,11 +1197,10 @@
       setTimeout(() => toast.classList.remove('show'), 3000);
     }
 
-    function focusSearch() {
+    window.focusSearch = function() {
       document.getElementById('search-input').focus();
     }
 
-    // Toast notification functions
     function showToastNotification(user, message) {
       toastUser = user;
       const toast = document.getElementById('message-toast');
@@ -1220,12 +1208,10 @@
       document.getElementById('toast-name').textContent = user.displayName || user.username || 'User';
       document.getElementById('toast-text').textContent = message.text;
       toast.classList.add('show');
-      
-      // Auto hide after 5 seconds
       setTimeout(() => hideToastNotification(), 5000);
     }
 
-    function hideToastNotification() {
+    window.hideToastNotification = function() {
       document.getElementById('message-toast').classList.remove('show');
       toastUser = null;
     }
@@ -1268,7 +1254,6 @@
       return div.innerHTML;
     }
 
-    // Presence system
     function initPresence() {
       if (!currentUser) return;
       const userStatusRef = ref(db, `status/${currentUser.uid}`);
@@ -1295,7 +1280,6 @@
       });
     }
 
-    // Listen for new messages across all chats
     function listenToMessages(uid) {
       if (!currentUser || messagesListeners.has(uid)) return;
       
@@ -1316,7 +1300,6 @@
             
             user.lastMessage = msg;
             
-            // Show toast if new message from them and not currently chatting with them
             if (isNew && isFromThem && currentChatUser?.uid !== uid) {
               showToastNotification(user, msg);
               const current = unreadCounts.get(uid) || 0;
@@ -1335,7 +1318,6 @@
     async function loadUsers() {
       if (!currentUser) return;
       
-      // Load followers
       onValue(ref(db, `followers/${currentUser.uid}`), async (snap) => {
         if (snap.exists()) {
           for (const uid of Object.keys(snap.val())) {
@@ -1359,12 +1341,10 @@
         }
       });
       
-      // Load following
       onValue(ref(db, `following/${currentUser.uid}`), async (snap) => {
         if (snap.exists()) {
           for (const uid of Object.keys(snap.val())) {
             if (usersMap.has(uid)) {
-              // Update existing to 'all' if both follow each other
               usersMap.get(uid).type = 'all';
             } else {
               const userSnap = await get(ref(db, `users/${uid}`));
@@ -1396,14 +1376,12 @@
         users = users.filter(u => u.type === 'following' || u.type === 'all');
       }
       
-      // Sort by last message timestamp
       users.sort((a, b) => {
         const timeA = a.lastMessage?.timestamp || 0;
         const timeB = b.lastMessage?.timestamp || 0;
         return timeB - timeA;
       });
       
-      // Search filter
       const searchTerm = document.getElementById('search-input').value.toLowerCase();
       if (searchTerm) {
         users = users.filter(u => 
@@ -1418,13 +1396,11 @@
     function updateBadges() {
       totalUnread = Array.from(unreadCounts.values()).reduce((a, b) => a + b, 0);
       
-      // Mobile badge (dot)
       const mobileBadge = document.getElementById('mobile-badge');
       if (mobileBadge) {
         mobileBadge.style.display = totalUnread > 0 ? 'block' : 'none';
       }
       
-      // Sidebar badge (count)
       const sidebarBadge = document.getElementById('sidebar-badge');
       if (sidebarBadge) {
         sidebarBadge.textContent = totalUnread > 99 ? '99+' : totalUnread;
@@ -1437,7 +1413,6 @@
       const container = document.getElementById('contacts-list');
       const emptyState = document.getElementById('empty-state');
       
-      // Update counts
       document.getElementById('all-count').textContent = usersMap.size;
       document.getElementById('followers-count').textContent = 
         Array.from(usersMap.values()).filter(u => u.type === 'follower' || u.type === 'all').length;
@@ -1485,26 +1460,21 @@
       
       currentChatUser = user;
       
-      // Clear unread
       if (unreadCounts.has(uid)) {
         unreadCounts.delete(uid);
         updateBadges();
         renderUsers();
       }
       
-      // Update header
       document.getElementById('chat-name').textContent = user.displayName || user.username || 'User';
       document.getElementById('chat-avatar').src = user.photoURL || DEFAULT_AVATAR;
       updateChatHeader();
       
-      // Show overlay
       chatOverlay.classList.add('active');
       document.body.style.overflow = 'hidden';
       
-      // Load messages
       loadMessages(uid);
       
-      // Focus input
       setTimeout(() => messageInput.focus(), 300);
     };
 
@@ -1571,7 +1541,6 @@
       messageInput.style.height = 'auto';
     }
 
-    // Event listeners
     document.querySelectorAll('.feed-tab').forEach(btn => {
       btn.addEventListener('click', () => {
         document.querySelectorAll('.feed-tab').forEach(b => b.classList.remove('active'));
@@ -1602,7 +1571,6 @@
       signOut(auth);
     });
 
-    // Auth state
     onAuthStateChanged(auth, (user) => {
       if (!user) {
         window.location.href = 'signup.html';
@@ -1613,25 +1581,31 @@
       loadUsers();
     });
 
-    // Add this at the end of your script, before feather.replace()
-document.querySelectorAll('.top-nav-item').forEach(link => {
-  link.addEventListener('click', (e) => {
-    // Debug log
-    console.log('Navigating to:', link.href);
-    
-    // Ensure the href is valid
-    if (!link.href || link.href === window.location.href) {
-      e.preventDefault();
-      return;
-    }
-    
-    // Allow default navigation but add visual feedback
-    link.style.opacity = '0.6';
-    setTimeout(() => {
-      link.style.opacity = '';
-    }, 150);
-  });
-});
+    // FIXED: Mobile navigation click handlers with iOS Safari support
+    document.querySelectorAll('.top-nav-item').forEach(link => {
+      // Prevent double-tap zoom on iOS
+      link.addEventListener('touchstart', function(e) {
+        this.style.opacity = '0.7';
+      }, {passive: true});
+      
+      link.addEventListener('touchend', function(e) {
+        this.style.opacity = '';
+      }, {passive: true});
+      
+      // Handle click with visual feedback
+      link.addEventListener('click', function(e) {
+        console.log('Nav clicked:', this.href);
+        
+        // Don't prevent default - let the link work naturally
+        if (this.href && this.href !== window.location.href) {
+          this.style.transform = 'scale(0.95)';
+          setTimeout(() => {
+            this.style.transform = '';
+          }, 100);
+        }
+      });
+    });
+
     feather.replace();
   </script>
 </body>
