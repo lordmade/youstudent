@@ -2535,13 +2535,11 @@ async function renderPost(key, post, searchQuery = '') {
     listeners.push(userLikeUnsubscribe);
     
     // 4. Real-time follow status listener for this post's author
-        // 4. Real-time follow status listener for this post's author
     if (!isOwnPost) {
       const followRef = ref(db, `following/${currentUser.uid}/${post.uid}`);
       const followUnsubscribe = onValue(followRef, (snapshot) => {
         const followBtn = el.querySelector('.follow-btn');
-        // Only update if not currently being processed by user click
-        if (followBtn && followBtn.dataset.processing !== 'true') {
+        if (followBtn) {
           const isFollowing = snapshot.exists();
           const btnText = followBtn.querySelector('.btn-text');
           
@@ -2639,10 +2637,6 @@ window.toggleFollow = async function(targetUid, btnElement) {
     return;
   }
   
-  // Prevent double-clicks while processing
-  if (btnElement.dataset.processing === 'true') return;
-  btnElement.dataset.processing = 'true';
-  
   const isCurrentlyFollowing = btnElement.dataset.following === 'true';
   const followingRef = ref(db, `following/${currentUser.uid}/${targetUid}`);
   const followersRef = ref(db, `followers/${targetUid}/${currentUser.uid}`);
@@ -2655,6 +2649,13 @@ window.toggleFollow = async function(targetUid, btnElement) {
       await set(followersRef, null);
       
       followingCache.set(cacheKey, false);
+      
+      // Update UI immediately for better UX
+      btnElement.dataset.following = 'false';
+      btnElement.classList.remove('following');
+      const btnText = btnElement.querySelector('.btn-text');
+      if (btnText) btnText.textContent = 'Follow';
+      
       showToast("Unfollowed user", "success");
     } else {
       // Follow
@@ -2665,6 +2666,8 @@ window.toggleFollow = async function(targetUid, btnElement) {
       };
       
       await set(followingRef, followData);
+      
+      // Add to target's followers
       await set(followersRef, {
         timestamp: Date.now(),
         username: currentUsername,
@@ -2673,24 +2676,24 @@ window.toggleFollow = async function(targetUid, btnElement) {
       
       followingCache.set(cacheKey, true);
       
+      // Update UI immediately
+      btnElement.dataset.following = 'true';
+      btnElement.classList.add('following');
+      const btnText = btnElement.querySelector('.btn-text');
+      if (btnText) btnText.textContent = 'Following';
+      
+      // Add animation
+      btnElement.style.transform = 'scale(1.1)';
+      setTimeout(() => btnElement.style.transform = 'scale(1)', 200);
+      
       // Create notification for the followed user
       await createNotification('follow', targetUid);
+      
       showToast(`Now following ${btnElement.closest('.post').querySelector('.post-name').textContent}`, "success");
     }
   } catch (err) {
     console.error("Follow action failed:", err);
     showToast("Failed to update follow status", "error");
-    
-    // Revert optimistic UI on error
-    btnElement.dataset.following = isCurrentlyFollowing ? 'true' : 'false';
-    btnElement.classList.toggle('following', isCurrentlyFollowing);
-    const btnText = btnElement.querySelector('.btn-text');
-    if (btnText) btnText.textContent = isCurrentlyFollowing ? 'Following' : 'Follow';
-  } finally {
-    // Remove processing lock after a short delay to prevent immediate re-clicks
-    setTimeout(() => {
-      btnElement.dataset.processing = 'false';
-    }, 500);
   }
 };
 
