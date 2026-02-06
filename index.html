@@ -1467,6 +1467,51 @@
 #toast {
   bottom: calc(20px + env(safe-area-inset-bottom));
 }
+    .follow-btn {
+  padding: 0.35rem 1rem;
+  border-radius: 9999px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 1.5px solid var(--primary-color);
+  background: transparent;
+  color: var(--primary-color);
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  white-space: nowrap;
+}
+
+.follow-btn:hover {
+  background: rgba(99, 102, 241, 0.08);
+  transform: scale(1.02);
+}
+
+.follow-btn.following {
+  background: var(--primary-color);
+  color: white;
+  border-color: var(--primary-color);
+}
+
+.follow-btn.following:hover {
+  background: var(--primary-dark);
+  border-color: var(--primary-dark);
+}
+
+.follow-btn .btn-text {
+  min-width: 50px;
+  text-align: center;
+}
+
+.follow-btn:active {
+  transform: scale(0.98);
+}
+
+/* Hide follow button on own posts */
+.post[data-own-post="true"] .follow-btn {
+  display: none;
+}
   </style>
 </head>
 <body>
@@ -2298,229 +2343,272 @@
     });
 
     // REAL-TIME RENDERPOST FUNCTION WITH LIVE LIKE COUNTS
-    async function renderPost(key, post, searchQuery = '') {
-      const el = document.createElement('div');
-      el.className = 'post';
-      el.id = `post-${key}`;
+async function renderPost(key, post, searchQuery = '') {
+  const el = document.createElement('div');
+  el.className = 'post';
+  el.id = `post-${key}`;
+  
+  // Check if this is the current user's own post
+  const isOwnPost = currentUser && currentUser.uid === post.uid;
+  if (isOwnPost) {
+    el.dataset.ownPost = "true";
+  }
 
-      const userInfo = await getUserInfo(post.uid);
-      const currentUsername = userInfo.username;
-      const avatarUrl = userInfo.avatar;
+  const userInfo = await getUserInfo(post.uid);
+  const currentUsername = userInfo.username;
+  const avatarUrl = userInfo.avatar;
 
-      const timeAgo = getTimeAgo(post.timestamp);
-      const isOwner = currentUser && currentUser.uid === post.uid;
-      
-      const parsedText = parseText(post.text, searchQuery);
-      const highlightedUsername = searchQuery ? 
-        currentUsername.replace(new RegExp(`(${searchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'), 
-        '<span class="search-highlight">$1</span>') : currentUsername;
+  const timeAgo = getTimeAgo(post.timestamp);
+  const isOwner = currentUser && currentUser.uid === post.uid;
+  
+  // Check follow status for non-own posts
+  let followButtonHtml = '';
+  if (currentUser && !isOwnPost) {
+    const isFollowing = await checkFollowingStatus(post.uid);
+    followButtonHtml = `
+      <button class="follow-btn ${isFollowing ? 'following' : ''}" 
+              data-uid="${post.uid}" 
+              data-following="${isFollowing}"
+              onclick="event.stopPropagation(); toggleFollow('${post.uid}', this)">
+        <span class="btn-text">${isFollowing ? 'Following' : 'Follow'}</span>
+      </button>
+    `;
+  }
+  
+  const parsedText = parseText(post.text, searchQuery);
+  const highlightedUsername = searchQuery ? 
+    currentUsername.replace(new RegExp(`(${searchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'), 
+    '<span class="search-highlight">$1</span>') : currentUsername;
 
-      let mediaHtml = '';
-      if (post.mediaUrl) {
-        if (post.mediaType === 'video') {
-          mediaHtml = `
-            <div class="post-media video-container" id="video-container-${key}" style="margin-top:0.75rem;" onclick="openVideoModal('${post.mediaUrl}')">
-              <video src="${post.mediaUrl}" loop playsinline muted preload="metadata" id="video-${key}" onclick="event.stopPropagation()"></video>
-              
-              <div class="video-play-overlay" id="play-overlay-${key}">
-                <div class="play-button-large">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-left: 4px;">
-                    <polygon points="5 3 19 12 5 21 5 3"></polygon>
-                  </svg>
-                </div>
-              </div>
-              
-              <div class="mute-indicator"><i data-feather="volume-x" style="width:32px;height:32px;"></i></div>
-              <div class="video-controls">
-                <button class="video-btn play-btn" data-video="${key}" onclick="event.stopPropagation()">
-                  <i data-feather="play" style="width:20px;height:20px;"></i>
-                </button>
-                <div class="video-progress" data-video="${key}">
-                  <div class="video-progress-bar" id="progress-${key}"></div>
-                </div>
-                <span class="video-time" id="time-${key}">0:00</span>
-                <button class="video-btn mute-btn" data-video="${key}" onclick="event.stopPropagation()">
-                  <i data-feather="volume-x" style="width:18px;height:18px;"></i>
-                </button>
-              </div>
-            </div>
-          `;
-        } else {
-          mediaHtml = `
-            <div class="post-media" style="margin-top:0.75rem;" onclick="openImageModal('${post.mediaUrl}')">
-              <img src="${post.mediaUrl}" class="post-image" loading="lazy" style="border-radius:16px;" />
-            </div>
-          `;
-        }
-      }
-
-      el.innerHTML = `
-        <img src="${avatarUrl}" class="user-avatar" onerror="this.src='${defaultAvatar}'">
-        <div class="post-content">
-          <div class="post-header">
-            <div class="post-meta">
-              <div style="display:flex; align-items:center; gap:0.25rem; flex-wrap:wrap;">
-                <span class="post-name" style="cursor:pointer;" onclick="window.location.href='profile.html?id=${post.uid}'">${highlightedUsername}</span>
-                <span class="post-username">@${currentUsername.toLowerCase().replace(/\s/g,'')}</span>
-                <span class="post-timestamp">${timeAgo}</span>
-              </div>
-            </div>
-            <div class="kebab-menu">
-              <i data-feather="more-horizontal" style="width:20px;height:20px;"></i>
+  let mediaHtml = '';
+  if (post.mediaUrl) {
+    if (post.mediaType === 'video') {
+      mediaHtml = `
+        <div class="post-media video-container" id="video-container-${key}" style="margin-top:0.75rem;" onclick="openVideoModal('${post.mediaUrl}')">
+          <video src="${post.mediaUrl}" loop playsinline muted preload="metadata" id="video-${key}" onclick="event.stopPropagation()"></video>
+          
+          <div class="video-play-overlay" id="play-overlay-${key}">
+            <div class="play-button-large">
+              <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-left: 4px;">
+                <polygon points="5 3 19 12 5 21 5 3"></polygon>
+              </svg>
             </div>
           </div>
-          <div class="post-text" style="margin-top:0.25rem; margin-bottom:0.25rem;">${parsedText}</div>
-          ${mediaHtml}
-          <div class="post-actions">
-            <div class="action-item comment-trigger" data-id="${key}">
-              <i data-feather="message-circle" style="width:20px;height:20px;"></i>
-              <span id="comment-count-${key}" class="count-anim">${post.commentCount || 0}</span>
+          
+          <div class="mute-indicator"><i data-feather="volume-x" style="width:32px;height:32px;"></i></div>
+          <div class="video-controls">
+            <button class="video-btn play-btn" data-video="${key}" onclick="event.stopPropagation()">
+              <i data-feather="play" style="width:20px;height:20px;"></i>
+            </button>
+            <div class="video-progress" data-video="${key}">
+              <div class="video-progress-bar" id="progress-${key}"></div>
             </div>
-            <div class="action-item like-trigger" id="like-btn-${key}" data-id="${key}">
-              <i data-feather="heart" style="width:20px;height:20px;"></i>
-              <span id="like-count-${key}" class="count-anim">0</span>
-            </div>
-            <div class="action-item"><i data-feather="share-2" style="width:20px;height:20px;"></i></div>
-          </div>
-        </div>
-        <div class="kebab-dropdown">
-          <div class="kebab-item kebab-action" data-action="copy">
-            <i data-feather="link" style="width:16px;height:16px;"></i> Copy link
-          </div>
-          <div class="kebab-item kebab-action" data-action="share">
-            <i data-feather="share" style="width:16px;height:16px;"></i> Share via...
-          </div>
-          ${isOwner ? `<div class="kebab-item delete-post"><i data-feather="trash-2" style="width:16px;height:16px;"></i> Delete</div>` : ''}
-          <div class="kebab-item kebab-action" data-action="report">
-            <i data-feather="flag" style="width:16px;height:16px;"></i> Report
+            <span class="video-time" id="time-${key}">0:00</span>
+            <button class="video-btn mute-btn" data-video="${key}" onclick="event.stopPropagation()">
+              <i data-feather="volume-x" style="width:18px;height:18px;"></i>
+            </button>
           </div>
         </div>
       `;
-
-      if (feedStream.firstChild && feedMode === 'latest' && !searchQuery) {
-        feedStream.insertBefore(el, feedStream.firstChild);
-      } else {
-        feedStream.appendChild(el);
-      }
-      
-      // SET UP REAL-TIME LISTENERS FOR THIS POST
-      const listeners = [];
-      
-      // 1. Real-time like count listener
-      const likesRef = ref(db, `posts/${key}/likes`);
-      const likesUnsubscribe = onValue(likesRef, (snapshot) => {
-        const count = snapshot.val() || 0;
-        const countEl = document.getElementById(`like-count-${key}`);
-        if (countEl) {
-          const oldVal = parseInt(countEl.textContent) || 0;
-          countEl.textContent = count;
-          
-          // Animate if value changed
-          if (oldVal !== count) {
-            countEl.style.transform = 'scale(1.3)';
-            setTimeout(() => {
-              countEl.style.transform = 'scale(1)';
-            }, 200);
-          }
-        }
-      });
-      listeners.push(likesUnsubscribe);
-      
-      // 2. Real-time comment count listener
-      const commentsRef = ref(db, `posts/${key}/commentCount`);
-      const commentsUnsubscribe = onValue(commentsRef, (snapshot) => {
-        const count = snapshot.val() || 0;
-        const countEl = document.getElementById(`comment-count-${key}`);
-        if (countEl) {
-          const oldVal = parseInt(countEl.textContent) || 0;
-          countEl.textContent = count;
-          
-          if (oldVal !== count) {
-            countEl.style.transform = 'scale(1.2)';
-            setTimeout(() => {
-              countEl.style.transform = 'scale(1)';
-            }, 200);
-          }
-        }
-      });
-      listeners.push(commentsUnsubscribe);
-      
-      // 3. Real-time user like status listener (updates heart fill)
-      if (currentUser) {
-        const userLikeRef = ref(db, `postLikes/${key}/${currentUser.uid}`);
-        const userLikeUnsubscribe = onValue(userLikeRef, (snapshot) => {
-          const likeBtn = document.getElementById(`like-btn-${key}`);
-          if (likeBtn) {
-            const icon = likeBtn.querySelector('i');
-            if (snapshot.exists()) {
-              likeBtn.classList.add('liked');
-              if (icon) {
-                icon.style.fill = 'var(--like-red)';
-                icon.style.color = 'var(--like-red)';
-              }
-            } else {
-              likeBtn.classList.remove('liked');
-              if (icon) {
-                icon.style.fill = 'none';
-                icon.style.color = '';
-              }
-            }
-          }
-        });
-        listeners.push(userLikeUnsubscribe);
-      }
-      
-      // Store listeners for cleanup
-      postListeners.set(key, listeners);
-      
-      // Event listeners for interactions
-      el.querySelectorAll('.hashtag').forEach(hashtagEl => {
-        hashtagEl.addEventListener('click', (e) => {
-          e.stopPropagation();
-          const tag = hashtagEl.dataset.hashtag;
-          searchInput.value = tag;
-          filterAndRenderPosts(tag);
-          window.scrollTo({ top: 0, behavior: 'smooth' });
-        });
-      });
-
-      el.querySelector('.like-trigger')?.addEventListener('click', () => toggleLike(key));
-      el.querySelector('.comment-trigger')?.addEventListener('click', () => openComments(key));
-      
-      const kebabBtn = el.querySelector('.kebab-menu');
-      const dropdown = el.querySelector('.kebab-dropdown');
-
-      kebabBtn?.addEventListener('click', (e) => {
-        e.stopPropagation();
-        document.querySelectorAll('.kebab-dropdown.show').forEach(d => {
-          if (d !== dropdown) d.classList.remove('show');
-        });
-        dropdown.classList.toggle('show');
-      });
-
-      dropdown?.querySelectorAll('.kebab-action, .delete-post').forEach(item => {
-        item.addEventListener('click', (e) => {
-          e.stopPropagation();
-          const action = item.dataset.action || (item.classList.contains('delete-post') ? 'delete' : '');
-
-          if (action === 'delete' && isOwner) {
-            currentDeletePost = { key, element: el };
-            deleteOverlay.classList.add('active');
-            deleteModal.classList.add('active');
-          } else if (action === 'copy') {
-            navigator.clipboard.writeText(`${window.location.origin}/post/${key}`);
-            showToast("Link copied to clipboard");
-          } else if (action === 'share') {
-            if (navigator.share) {
-              navigator.share({ title: 'Nexus Post', text: post.text, url: `${window.location.origin}/post/${key}` });
-            } else {
-              showToast("Sharing not supported");
-            }
-          }
-          dropdown.classList.remove('show');
-        });
-      });
+    } else {
+      mediaHtml = `
+        <div class="post-media" style="margin-top:0.75rem;" onclick="openImageModal('${post.mediaUrl}')">
+          <img src="${post.mediaUrl}" class="post-image" loading="lazy" style="border-radius:16px;" />
+        </div>
+      `;
     }
+  }
+
+  el.innerHTML = `
+    <img src="${avatarUrl}" class="user-avatar" onerror="this.src='${defaultAvatar}'">
+    <div class="post-content">
+      <div class="post-header">
+        <div class="post-meta">
+          <div style="display:flex; align-items:center; gap:0.25rem; flex-wrap:wrap;">
+            <span class="post-name" style="cursor:pointer;" onclick="window.location.href='profile.html?id=${post.uid}'">${highlightedUsername}</span>
+            <span class="post-username">@${currentUsername.toLowerCase().replace(/\s/g,'')}</span>
+            <span class="post-timestamp">${timeAgo}</span>
+          </div>
+          ${followButtonHtml}
+        </div>
+        <div class="kebab-menu">
+          <i data-feather="more-horizontal" style="width:20px;height:20px;"></i>
+        </div>
+      </div>
+      <div class="post-text" style="margin-top:0.25rem; margin-bottom:0.25rem;">${parsedText}</div>
+      ${mediaHtml}
+      <div class="post-actions">
+        <div class="action-item comment-trigger" data-id="${key}">
+          <i data-feather="message-circle" style="width:20px;height:20px;"></i>
+          <span id="comment-count-${key}" class="count-anim">${post.commentCount || 0}</span>
+        </div>
+        <div class="action-item like-trigger" id="like-btn-${key}" data-id="${key}">
+          <i data-feather="heart" style="width:20px;height:20px;"></i>
+          <span id="like-count-${key}" class="count-anim">0</span>
+        </div>
+        <div class="action-item"><i data-feather="share-2" style="width:20px;height:20px;"></i></div>
+      </div>
+    </div>
+    <div class="kebab-dropdown">
+      <div class="kebab-item kebab-action" data-action="copy">
+        <i data-feather="link" style="width:16px;height:16px;"></i> Copy link
+      </div>
+      <div class="kebab-item kebab-action" data-action="share">
+        <i data-feather="share" style="width:16px;height:16px;"></i> Share via...
+      </div>
+      ${isOwner ? `<div class="kebab-item delete-post"><i data-feather="trash-2" style="width:16px;height:16px;"></i> Delete</div>` : ''}
+      <div class="kebab-item kebab-action" data-action="report">
+        <i data-feather="flag" style="width:16px;height:16px;"></i> Report
+      </div>
+    </div>
+  `;
+
+  if (feedStream.firstChild && feedMode === 'latest' && !searchQuery) {
+    feedStream.insertBefore(el, feedStream.firstChild);
+  } else {
+    feedStream.appendChild(el);
+  }
+  
+  // SET UP REAL-TIME LISTENERS FOR THIS POST
+  const listeners = [];
+  
+  // 1. Real-time like count listener
+  const likesRef = ref(db, `posts/${key}/likes`);
+  const likesUnsubscribe = onValue(likesRef, (snapshot) => {
+    const count = snapshot.val() || 0;
+    const countEl = document.getElementById(`like-count-${key}`);
+    if (countEl) {
+      const oldVal = parseInt(countEl.textContent) || 0;
+      countEl.textContent = count;
+      
+      if (oldVal !== count) {
+        countEl.style.transform = 'scale(1.3)';
+        setTimeout(() => {
+          countEl.style.transform = 'scale(1)';
+        }, 200);
+      }
+    }
+  });
+  listeners.push(likesUnsubscribe);
+  
+  // 2. Real-time comment count listener
+  const commentsRef = ref(db, `posts/${key}/commentCount`);
+  const commentsUnsubscribe = onValue(commentsRef, (snapshot) => {
+    const count = snapshot.val() || 0;
+    const countEl = document.getElementById(`comment-count-${key}`);
+    if (countEl) {
+      const oldVal = parseInt(countEl.textContent) || 0;
+      countEl.textContent = count;
+      
+      if (oldVal !== count) {
+        countEl.style.transform = 'scale(1.2)';
+        setTimeout(() => {
+          countEl.style.transform = 'scale(1)';
+        }, 200);
+      }
+    }
+  });
+  listeners.push(commentsUnsubscribe);
+  
+  // 3. Real-time user like status listener (updates heart fill)
+  if (currentUser) {
+    const userLikeRef = ref(db, `postLikes/${key}/${currentUser.uid}`);
+    const userLikeUnsubscribe = onValue(userLikeRef, (snapshot) => {
+      const likeBtn = document.getElementById(`like-btn-${key}`);
+      if (likeBtn) {
+        const icon = likeBtn.querySelector('i');
+        if (snapshot.exists()) {
+          likeBtn.classList.add('liked');
+          if (icon) {
+            icon.style.fill = 'var(--like-red)';
+            icon.style.color = 'var(--like-red)';
+          }
+        } else {
+          likeBtn.classList.remove('liked');
+          if (icon) {
+            icon.style.fill = 'none';
+            icon.style.color = '';
+          }
+        }
+      }
+    });
+    listeners.push(userLikeUnsubscribe);
+    
+    // 4. Real-time follow status listener for this post's author
+    if (!isOwnPost) {
+      const followRef = ref(db, `following/${currentUser.uid}/${post.uid}`);
+      const followUnsubscribe = onValue(followRef, (snapshot) => {
+        const followBtn = el.querySelector('.follow-btn');
+        if (followBtn) {
+          const isFollowing = snapshot.exists();
+          const btnText = followBtn.querySelector('.btn-text');
+          
+          followBtn.dataset.following = isFollowing;
+          followBtn.classList.toggle('following', isFollowing);
+          if (btnText) {
+            btnText.textContent = isFollowing ? 'Following' : 'Follow';
+          }
+          
+          // Update cache
+          const cacheKey = `${currentUser.uid}_${post.uid}`;
+          followingCache.set(cacheKey, isFollowing);
+        }
+      });
+      listeners.push(followUnsubscribe);
+    }
+  }
+  
+  // Store listeners for cleanup
+  postListeners.set(key, listeners);
+  
+  // Event listeners for interactions
+  el.querySelectorAll('.hashtag').forEach(hashtagEl => {
+    hashtagEl.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const tag = hashtagEl.dataset.hashtag;
+      searchInput.value = tag;
+      filterAndRenderPosts(tag);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+  });
+
+  el.querySelector('.like-trigger')?.addEventListener('click', () => toggleLike(key));
+  el.querySelector('.comment-trigger')?.addEventListener('click', () => openComments(key));
+  
+  const kebabBtn = el.querySelector('.kebab-menu');
+  const dropdown = el.querySelector('.kebab-dropdown');
+
+  kebabBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    document.querySelectorAll('.kebab-dropdown.show').forEach(d => {
+      if (d !== dropdown) d.classList.remove('show');
+    });
+    dropdown.classList.toggle('show');
+  });
+
+  dropdown?.querySelectorAll('.kebab-action, .delete-post').forEach(item => {
+    item.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const action = item.dataset.action || (item.classList.contains('delete-post') ? 'delete' : '');
+
+      if (action === 'delete' && isOwner) {
+        currentDeletePost = { key, element: el };
+        deleteOverlay.classList.add('active');
+        deleteModal.classList.add('active');
+      } else if (action === 'copy') {
+        navigator.clipboard.writeText(`${window.location.origin}/post/${key}`);
+        showToast("Link copied to clipboard");
+      } else if (action === 'share') {
+        if (navigator.share) {
+          navigator.share({ title: 'Nexus Post', text: post.text, url: `${window.location.origin}/post/${key}` });
+        } else {
+          showToast("Sharing not supported");
+        }
+      }
+      dropdown.classList.remove('show');
+    });
+  });
+}
 
     async function createNotification(type, recipientId, postId = null, postText = null, commentText = null) {
   if (!currentUser || recipientId === currentUser.uid) return;
@@ -2537,6 +2625,77 @@
     read: false
   });
 }
+
+    window.toggleFollow = async function(targetUid, btnElement) {
+  if (!currentUser) {
+    showToast("Please login to follow users", "error");
+    return;
+  }
+  
+  if (targetUid === currentUser.uid) {
+    showToast("You cannot follow yourself", "error");
+    return;
+  }
+  
+  const isCurrentlyFollowing = btnElement.dataset.following === 'true';
+  const followingRef = ref(db, `following/${currentUser.uid}/${targetUid}`);
+  const followersRef = ref(db, `followers/${targetUid}/${currentUser.uid}`);
+  const cacheKey = `${currentUser.uid}_${targetUid}`;
+  
+  try {
+    if (isCurrentlyFollowing) {
+      // Unfollow
+      await set(followingRef, null);
+      await set(followersRef, null);
+      
+      followingCache.set(cacheKey, false);
+      
+      // Update UI immediately for better UX
+      btnElement.dataset.following = 'false';
+      btnElement.classList.remove('following');
+      const btnText = btnElement.querySelector('.btn-text');
+      if (btnText) btnText.textContent = 'Follow';
+      
+      showToast("Unfollowed user", "success");
+    } else {
+      // Follow
+      const followData = {
+        timestamp: Date.now(),
+        username: currentUsername,
+        avatar: avatarCache.get(currentUser.uid) || defaultAvatar
+      };
+      
+      await set(followingRef, followData);
+      
+      // Add to target's followers
+      await set(followersRef, {
+        timestamp: Date.now(),
+        username: currentUsername,
+        avatar: avatarCache.get(currentUser.uid) || defaultAvatar
+      });
+      
+      followingCache.set(cacheKey, true);
+      
+      // Update UI immediately
+      btnElement.dataset.following = 'true';
+      btnElement.classList.add('following');
+      const btnText = btnElement.querySelector('.btn-text');
+      if (btnText) btnText.textContent = 'Following';
+      
+      // Add animation
+      btnElement.style.transform = 'scale(1.1)';
+      setTimeout(() => btnElement.style.transform = 'scale(1)', 200);
+      
+      // Create notification for the followed user
+      await createNotification('follow', targetUid);
+      
+      showToast(`Now following ${btnElement.closest('.post').querySelector('.post-name').textContent}`, "success");
+    }
+  } catch (err) {
+    console.error("Follow action failed:", err);
+    showToast("Failed to update follow status", "error");
+  }
+};
 
     function initializeVideoControls() {
       document.querySelectorAll('.video-container').forEach(container => {
@@ -2746,6 +2905,28 @@
       commentSheet.classList.remove('active');
       activePostIdForComments = null;
     }
+
+    const followingCache = new Map();
+
+async function checkFollowingStatus(targetUid) {
+  if (!currentUser || targetUid === currentUser.uid) return false;
+  
+  const cacheKey = `${currentUser.uid}_${targetUid}`;
+  if (followingCache.has(cacheKey)) {
+    return followingCache.get(cacheKey);
+  }
+  
+  try {
+    const followRef = ref(db, `following/${currentUser.uid}/${targetUid}`);
+    const snapshot = await get(followRef);
+    const isFollowing = snapshot.exists();
+    followingCache.set(cacheKey, isFollowing);
+    return isFollowing;
+  } catch (err) {
+    console.error("Error checking follow status:", err);
+    return false;
+  }
+}
 
     closeSheetBtn.addEventListener('click', closeComments);
     sheetOverlay.addEventListener('click', closeComments);
