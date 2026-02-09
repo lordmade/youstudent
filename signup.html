@@ -127,23 +127,37 @@
       transform: scale(1.02);
     }
 
-    .guest-btn {
-      width: 100%;
-      padding: 0.75rem;
-      background: transparent;
+    .forgot-password {
+      display: block;
+      text-align: right;
+      font-size: 0.85rem;
       color: var(--twitter-blue);
-      border: 1px solid var(--twitter-blue);
-      border-radius: 20px;
-      font-size: 1rem;
-      font-weight: 600;
+      text-decoration: none;
+      margin-top: -0.5rem;
+      margin-bottom: 1rem;
       cursor: pointer;
-      margin-top: 1rem;
-      transition: background 0.2s ease, transform 0.2s ease;
+      transition: color 0.2s ease;
     }
 
-    .guest-btn:hover {
-      background: rgba(29, 161, 242, 0.1);
-      transform: scale(1.02);
+    .forgot-password:hover {
+      color: #1a91da;
+      text-decoration: underline;
+    }
+
+    .back-to-signin {
+      display: block;
+      text-align: center;
+      font-size: 0.9rem;
+      color: var(--twitter-blue);
+      text-decoration: none;
+      margin-top: 1rem;
+      cursor: pointer;
+      transition: color 0.2s ease;
+    }
+
+    .back-to-signin:hover {
+      color: #1a91da;
+      text-decoration: underline;
     }
 
     .custom-alert {
@@ -222,7 +236,7 @@
         font-size: 0.95rem;
       }
 
-      .submit-btn, .guest-btn {
+      .submit-btn {
         padding: 0.6rem;
         font-size: 0.95rem;
       }
@@ -242,6 +256,8 @@
         <button id="signin-toggle" class="active">Sign In</button>
         <button id="signup-toggle">Sign Up</button>
       </div>
+      
+      <!-- Sign In Form -->
       <form id="signin-form" class="form active">
         <div class="form-group">
           <label for="signin-email">Email</label>
@@ -251,8 +267,11 @@
           <label for="signin-password">Password</label>
           <input type="password" id="signin-password" required />
         </div>
+        <a class="forgot-password" onclick="showForgotPassword()">Forgot password?</a>
         <button type="submit" class="submit-btn">Sign In</button>
       </form>
+
+      <!-- Sign Up Form -->
       <form id="signup-form" class="form" style="display: none;">
         <div class="form-group">
           <label for="signup-username">Username</label>
@@ -268,7 +287,16 @@
         </div>
         <button type="submit" class="submit-btn">Sign Up</button>
       </form>
-      <button id="guest-btn" class="guest-btn">Continue as Guest</button>
+
+      <!-- Forgot Password Form -->
+      <form id="forgot-password-form" class="form" style="display: none;">
+        <div class="form-group">
+          <label for="reset-email">Email</label>
+          <input type="email" id="reset-email" placeholder="Enter your email address" required />
+        </div>
+        <button type="submit" class="submit-btn">Send Reset Link</button>
+        <a class="back-to-signin" onclick="showSignIn()">Back to Sign In</a>
+      </form>
     </div>
   </div>
 
@@ -284,7 +312,7 @@
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
-    import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signInAnonymously } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
+    import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
     import { getDatabase, ref, set } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
 
     const firebaseConfig = {
@@ -303,7 +331,7 @@
     const db = getDatabase(app);
     const signinForm = document.getElementById("signin-form");
     const signupForm = document.getElementById("signup-form");
-    const guestBtn = document.getElementById("guest-btn");
+    const forgotPasswordForm = document.getElementById("forgot-password-form");
     const customAlert = document.getElementById("custom-alert");
     const alertMessage = document.getElementById("alert-message");
     const signinToggle = document.getElementById("signin-toggle");
@@ -323,18 +351,34 @@
     }
 
     function showForm(formType) {
+      // Hide all forms
+      signinForm.style.display = "none";
+      signupForm.style.display = "none";
+      forgotPasswordForm.style.display = "none";
+      
+      // Reset toggle buttons
+      signinToggle.classList.remove("active");
+      signupToggle.classList.remove("active");
+
       if (formType === "signin") {
         signinForm.style.display = "block";
-        signupForm.style.display = "none";
         signinToggle.classList.add("active");
-        signupToggle.classList.remove("active");
-      } else {
-        signinForm.style.display = "none";
+      } else if (formType === "signup") {
         signupForm.style.display = "block";
         signupToggle.classList.add("active");
-        signinToggle.classList.remove("active");
+      } else if (formType === "forgot") {
+        forgotPasswordForm.style.display = "block";
+        // No toggle active for forgot password
       }
     }
+
+    window.showForgotPassword = function() {
+      showForm("forgot");
+    };
+
+    window.showSignIn = function() {
+      showForm("signin");
+    };
 
     signinToggle.addEventListener("click", () => showForm("signin"));
     signupToggle.addEventListener("click", () => showForm("signup"));
@@ -391,23 +435,21 @@
       }
     });
 
-    guestBtn.addEventListener("click", async () => {
+    forgotPasswordForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const email = document.getElementById("reset-email").value;
       try {
-        const userCredential = await signInAnonymously(auth);
-        const user = userCredential.user;
-        await set(ref(db, `users/${user.uid}`), {
-          username: "Guest",
-          isGuest: true,
-          createdAt: new Date().toISOString()
-        });
-        document.body.classList.add("fade-out");
+        await sendPasswordResetEmail(auth, email);
+        showAlert("Password reset email sent! Check your inbox.", true);
         setTimeout(() => {
-          window.location.href = "index.html";
-        }, 1500);
+          showForm("signin");
+        }, 2000);
       } catch (error) {
-        let message = "Failed to continue as guest. Please try again.";
-        if (error.code === "auth/operation-not-allowed") {
-          message = "Guest access is not enabled. Please sign in or sign up.";
+        let message = "Failed to send reset email. Please try again.";
+        if (error.code === "auth/user-not-found") {
+          message = "No account found with this email.";
+        } else if (error.code === "auth/invalid-email") {
+          message = "Invalid email format.";
         }
         showAlert(message, false);
       }
