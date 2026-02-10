@@ -2153,6 +2153,17 @@
 .action-item.ai-trigger:active {
   transform: scale(0.95);
 }
+    .post.highlighted {
+  box-shadow: 0 0 0 3px var(--primary-color), 0 4px 20px rgba(99, 102, 241, 0.3);
+  animation: pulse-highlight 2s ease;
+  z-index: 10;
+  position: relative;
+}
+
+@keyframes pulse-highlight {
+  0%, 100% { box-shadow: 0 0 0 3px var(--primary-color), 0 4px 20px rgba(99, 102, 241, 0.3); }
+  50% { box-shadow: 0 0 0 6px var(--primary-light), 0 4px 30px rgba(99, 102, 241, 0.5); }
+}
   </style>
 </head>
 <body>
@@ -2737,59 +2748,80 @@
     }
 
     function renderNotificationsPanel(notifications) {
-      const list = document.getElementById('notifications-list');
+  const list = document.getElementById('notifications-list');
+  
+  if (notifications.length === 0) {
+    list.innerHTML = `
+      <div style="text-align: center; padding: 3rem 1rem; color: var(--text-muted);">
+        <i data-feather="bell" style="width: 48px; height: 48px; opacity: 0.3; margin-bottom: 1rem;"></i>
+        <p>No notifications yet</p>
+      </div>
+    `;
+    feather.replace();
+    return;
+  }
+  
+  list.innerHTML = '';
+  notifications.sort((a, b) => b.timestamp - a.timestamp);
+  
+  notifications.forEach(notif => {
+    const div = document.createElement('div');
+    div.className = `notification-item ${notif.read ? '' : 'unread'}`;
+    
+    // Handle click based on notification type
+    div.onclick = async () => {
+      await markNotificationRead(notif.key);
       
-      if (notifications.length === 0) {
-        list.innerHTML = `
-          <div style="text-align: center; padding: 3rem 1rem; color: var(--text-muted);">
-            <i data-feather="bell" style="width: 48px; height: 48px; opacity: 0.3; margin-bottom: 1rem;"></i>
-            <p>No notifications yet</p>
-          </div>
-        `;
-        feather.replace();
-        return;
+      if (notif.postId && ['like', 'comment', 'reply', 'repost'].includes(notif.type)) {
+        navigateToPost(notif.postId, notif.type);
+      } else if (notif.type === 'follow') {
+        window.location.href = `profile.html?id=${notif.senderId}`;
+      } else if (notif.type === 'message') {
+        window.location.href = 'messages.html';
       }
-      
-      list.innerHTML = '';
-      notifications.sort((a, b) => b.timestamp - a.timestamp);
-      
-      notifications.forEach(notif => {
-        const div = document.createElement('div');
-        div.className = `notification-item ${notif.read ? '' : 'unread'}`;
-        div.onclick = () => markNotificationRead(notif.key);
-        
-        let icon = 'heart';
-        let color = 'var(--like-red)';
-        
-        if (notif.type === 'follow') {
-          icon = 'user-plus';
-          color = 'var(--primary-color)';
-        } else if (notif.type === 'comment') {
-          icon = 'message-circle';
-          color = 'var(--success)';
-        } else if (notif.type === 'message') {
-          icon = 'message-square';
-          color = 'var(--primary-color)';
-        }
-        
-        div.innerHTML = `
-          <img src="${notif.senderAvatar || defaultAvatar}" class="notification-avatar" onerror="this.src='${defaultAvatar}'">
-          <div class="notification-content">
-            <div class="notification-text">
-              <strong>${notif.senderName}</strong> ${getNotificationText(notif)}
-            </div>
-            <div class="notification-time">${getTimeAgo(notif.timestamp)}</div>
-          </div>
-          <div style="color: ${color};">
-            <i data-feather="${icon}" style="width: 20px; height: 20px;"></i>
-          </div>
-        `;
-        
-        list.appendChild(div);
-      });
-      
-      feather.replace();
+    };
+    
+    let icon = 'heart';
+    let color = 'var(--like-red)';
+    
+    if (notif.type === 'follow') {
+      icon = 'user-plus';
+      color = 'var(--primary-color)';
+    } else if (notif.type === 'comment' || notif.type === 'reply') {
+      icon = 'message-circle';
+      color = 'var(--success)';
+    } else if (notif.type === 'message') {
+      icon = 'message-square';
+      color = 'var(--primary-color)';
+    } else if (notif.type === 'repost') {
+      icon = 'repeat';
+      color = 'var(--success)';
     }
+    
+    // Truncate post text if available
+    let previewText = getNotificationText(notif);
+    if (notif.postText) {
+      previewText += `: "${notif.postText.substring(0, 40)}${notif.postText.length > 40 ? '...' : ''}"`;
+    }
+    
+    div.innerHTML = `
+      <img src="${notif.senderAvatar || defaultAvatar}" class="notification-avatar" onerror="this.src='${defaultAvatar}'">
+      <div class="notification-content">
+        <div class="notification-text">
+          <strong>${notif.senderName}</strong> ${previewText}
+        </div>
+        <div class="notification-time">${getTimeAgo(notif.timestamp)}</div>
+      </div>
+      <div style="color: ${color};">
+        <i data-feather="${icon}" style="width: 20px; height: 20px;"></i>
+      </div>
+    `;
+    
+    list.appendChild(div);
+  });
+  
+  feather.replace();
+}
 
     function getNotificationText(notif) {
       switch(notif.type) {
@@ -3074,6 +3106,55 @@
         toastEl.classList.remove('show');
       }, 2800);
     }
+
+    async function navigateToPost(postId, notificationType) {
+  closeNotifications();
+  
+  // If we're in search mode or forYou mode, switch to latest to ensure post is visible
+  if (feedMode !== 'latest' || searchInput.value) {
+    feedMode = 'latest';
+    searchInput.value = '';
+    document.querySelectorAll('.feed-tab').forEach(t => {
+      t.classList.toggle('active', t.dataset.mode === 'latest');
+    });
+    await filterAndRenderPosts('');
+  }
+  
+  const postEl = document.getElementById(`post-${postId}`);
+  if (!postEl) {
+    showToast("Post not found or has been deleted", "error");
+    return;
+  }
+  
+  // Scroll to post with smooth animation
+  postEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  
+  // Add highlight effect
+  postEl.classList.add('highlighted');
+  setTimeout(() => {
+    postEl.classList.remove('highlighted');
+  }, 3000);
+  
+  // If comment notification, open comments sheet after scroll
+  if (notificationType === 'comment' || notificationType === 'reply') {
+    setTimeout(() => {
+      openComments(postId);
+    }, 600);
+  }
+  
+  // If like notification, briefly highlight the like button
+  if (notificationType === 'like') {
+    setTimeout(() => {
+      const likeBtn = document.getElementById(`like-btn-${postId}`);
+      if (likeBtn) {
+        likeBtn.style.transform = 'scale(1.3)';
+        setTimeout(() => {
+          likeBtn.style.transform = 'scale(1)';
+        }, 300);
+      }
+    }, 600);
+  }
+}
 
     function closeDeleteModal() {
       deleteOverlay.classList.remove('active');
