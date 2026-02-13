@@ -2719,38 +2719,39 @@
     }
 
     // Enhanced Algorithm with Verification Priority and Randomization
-    function calculatePostScore(post) {
-      const hoursAgo = (Date.now() - post.timestamp) / (1000 * 60 * 60);
-      const engagement = (post.likes || 0) + ((post.commentCount || 0) * ALGORITHM_WEIGHTS.comments);
-      const timeDecay = Math.pow(hoursAgo + 2, ALGORITHM_WEIGHTS.gravity);
-      
-      // Verified user boost
-      const verifiedBoost = post.isVerified ? ALGORITHM_WEIGHTS.verified : 1;
-      
-      // Following boost
-      const followingBoost = followingList.has(post.uid) ? ALGORITHM_WEIGHTS.following : 1;
-      
-      // Media boost
-      const mediaBoost = (post.mediaUrls && post.mediaUrls.length > 0) || post.mediaUrl ? ALGORITHM_WEIGHTS.media : 1;
-      
-      // Randomization factor (prevents same order every time)
-      const randomFactor = 1 + (Math.random() * ALGORITHM_WEIGHTS.randomization * 2 - ALGORITHM_WEIGHTS.randomization);
-      
-      // Calculate final score
-      const score = (engagement / timeDecay) * verifiedBoost * followingBoost * mediaBoost * randomFactor;
-      
-      return {
-        score: score,
-        factors: {
-          engagement: engagement,
-          timeDecay: timeDecay,
-          verifiedBoost: verifiedBoost,
-          followingBoost: followingBoost,
-          mediaBoost: mediaBoost,
-          randomFactor: randomFactor
-        }
-      };
+// Enhanced Algorithm with Verification Priority and Randomization
+function calculatePostScore(post, mode = 'forYou') {
+  const hoursAgo = (Date.now() - post.timestamp) / (1000 * 60 * 60);
+  const engagement = (post.likes || 0) + ((post.commentCount || 0) * ALGORITHM_WEIGHTS.comments);
+  const timeDecay = Math.pow(hoursAgo + 2, ALGORITHM_WEIGHTS.gravity);
+  
+  // Verified user boost
+  const verifiedBoost = post.isVerified ? ALGORITHM_WEIGHTS.verified : 1;
+  
+  // Following boost - ONLY apply in 'forYou' mode, not in 'latest' mode
+  const followingBoost = (mode === 'forYou' && followingList.has(post.uid)) ? ALGORITHM_WEIGHTS.following : 1;
+  
+  // Media boost
+  const mediaBoost = (post.mediaUrls && post.mediaUrls.length > 0) || post.mediaUrl ? ALGORITHM_WEIGHTS.media : 1;
+  
+  // Randomization factor (prevents same order every time)
+  const randomFactor = 1 + (Math.random() * ALGORITHM_WEIGHTS.randomization * 2 - ALGORITHM_WEIGHTS.randomization);
+  
+  // Calculate final score
+  const score = (engagement / timeDecay) * verifiedBoost * followingBoost * mediaBoost * randomFactor;
+  
+  return {
+    score: score,
+    factors: {
+      engagement: engagement,
+      timeDecay: timeDecay,
+      verifiedBoost: verifiedBoost,
+      followingBoost: followingBoost,
+      mediaBoost: mediaBoost,
+      randomFactor: randomFactor
     }
+  };
+}
 
     async function getUserInfo(uid) {
       const cachedAvatar = avatarCache.get(uid);
@@ -2847,69 +2848,70 @@
     }
 
     // Load More Posts (Infinite Scroll)
-    async function loadMorePosts() {
-      if (isLoadingMore || !hasMorePosts) return;
-      
-      isLoadingMore = true;
-      infiniteLoader.classList.remove('hidden');
-      
-      try {
-        // Simulate network delay for smooth UX
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
-        const startIndex = currentPage * POSTS_PER_PAGE;
-        const endIndex = startIndex + POSTS_PER_PAGE;
-        
-        // Get posts that haven't been displayed yet
-        const remainingPosts = allPosts.filter(post => 
-          !displayedPosts.some(dp => dp.key === post.key)
-        );
-        
-        if (remainingPosts.length === 0) {
-          hasMorePosts = false;
-          feedEndMessage.classList.add('show');
-          infiniteLoader.classList.add('hidden');
-          return;
-        }
-        
-        // Sort remaining posts using the algorithm
-        const scoredPosts = remainingPosts.map(post => ({
-          ...post,
-          ...calculatePostScore(post.data)
-        }));
-        
-        // Sort by score (highest first)
-        scoredPosts.sort((a, b) => b.score - a.score);
-        
-        // Take next batch
-        const postsToLoad = scoredPosts.slice(0, POSTS_PER_PAGE);
-        
-        // Render posts
-        for (const post of postsToLoad) {
-          await renderPost(post.key, post.data, '');
-          displayedPosts.push(post);
-        }
-        
-        currentPage++;
-        
-        // Check if we've loaded all posts
-        if (postsToLoad.length < POSTS_PER_PAGE) {
-          hasMorePosts = false;
-          feedEndMessage.classList.add('show');
-        }
-        
-        feather.replace();
-        initializeVideoControls();
-        initializeCarousels();
-        
-      } catch (err) {
-        console.error("Error loading more posts:", err);
-        showToast("Failed to load more posts", "error");
-      } finally {
-        isLoadingMore = false;
-        infiniteLoader.classList.add('hidden');
-      }
+// Load More Posts (Infinite Scroll)
+async function loadMorePosts() {
+  if (isLoadingMore || !hasMorePosts) return;
+  
+  isLoadingMore = true;
+  infiniteLoader.classList.remove('hidden');
+  
+  try {
+    // Simulate network delay for smooth UX
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    const startIndex = currentPage * POSTS_PER_PAGE;
+    const endIndex = startIndex + POSTS_PER_PAGE;
+    
+    // Get posts that haven't been displayed yet
+    const remainingPosts = allPosts.filter(post => 
+      !displayedPosts.some(dp => dp.key === post.key)
+    );
+    
+    if (remainingPosts.length === 0) {
+      hasMorePosts = false;
+      feedEndMessage.classList.add('show');
+      infiniteLoader.classList.add('hidden');
+      return;
     }
+    
+    // Sort remaining posts using the algorithm with mode parameter
+    const scoredPosts = remainingPosts.map(post => ({
+      ...post,
+      ...calculatePostScore(post.data, feedMode)  // Pass feedMode here
+    }));
+    
+    // Sort by score (highest first)
+    scoredPosts.sort((a, b) => b.score - a.score);
+    
+    // Take next batch
+    const postsToLoad = scoredPosts.slice(0, POSTS_PER_PAGE);
+    
+    // Render posts
+    for (const post of postsToLoad) {
+      await renderPost(post.key, post.data, '');
+      displayedPosts.push(post);
+    }
+    
+    currentPage++;
+    
+    // Check if we've loaded all posts
+    if (postsToLoad.length < POSTS_PER_PAGE) {
+      hasMorePosts = false;
+      feedEndMessage.classList.add('show');
+    }
+    
+    feather.replace();
+    initializeVideoControls();
+    initializeCarousels();
+    
+  } catch (err) {
+    console.error("Error loading more posts:", err);
+    showToast("Failed to load more posts", "error");
+  } finally {
+    isLoadingMore = false;
+    infiniteLoader.classList.add('hidden');
+  }
+}
 
     // Initial Load - Only load first batch
     async function loadInitialPosts() {
@@ -4882,22 +4884,23 @@ const verifiedBadgeHtml = isVerified ? `
     });
 
     // Tab switching with reset
-    document.querySelectorAll('.feed-tab').forEach(tab => {
-      tab.addEventListener('click', () => {
-        document.querySelectorAll('.feed-tab').forEach(t => t.classList.remove('active'));
-        tab.classList.add('active');
-        
-        feedMode = tab.dataset.mode;
-        
-        // Reset and reload feed
-        resetAndReloadFeed();
-        
-        showToast(
-          feedMode === 'forYou' ? 'Showing posts from people you follow' : 'Showing latest posts', 
-          'success'
-        );
-      });
-    });
+    // Tab switching with reset
+document.querySelectorAll('.feed-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.feed-tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    
+    feedMode = tab.dataset.mode;
+    
+    // Reset and reload feed
+    resetAndReloadFeed();
+    
+    const message = feedMode === 'forYou' 
+      ? 'Showing personalized posts' 
+      : 'Showing latest posts from everyone';
+    showToast(message, 'success');
+  });
+});
 
     // Search functionality
     searchInput.addEventListener('input', (e) => {
