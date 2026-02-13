@@ -2705,38 +2705,39 @@
     }
 
     // Enhanced Algorithm with Verification Priority and Randomization
-    function calculatePostScore(post) {
-      const hoursAgo = (Date.now() - post.timestamp) / (1000 * 60 * 60);
-      const engagement = (post.likes || 0) + ((post.commentCount || 0) * ALGORITHM_WEIGHTS.comments);
-      const timeDecay = Math.pow(hoursAgo + 2, ALGORITHM_WEIGHTS.gravity);
-      
-      // Verified user boost
-      const verifiedBoost = post.isVerified ? ALGORITHM_WEIGHTS.verified : 1;
-      
-      // Following boost
-      const followingBoost = followingList.has(post.uid) ? ALGORITHM_WEIGHTS.following : 1;
-      
-      // Media boost
-      const mediaBoost = (post.mediaUrls && post.mediaUrls.length > 0) || post.mediaUrl ? ALGORITHM_WEIGHTS.media : 1;
-      
-      // Randomization factor (prevents same order every time)
-      const randomFactor = 1 + (Math.random() * ALGORITHM_WEIGHTS.randomization * 2 - ALGORITHM_WEIGHTS.randomization);
-      
-      // Calculate final score
-      const score = (engagement / timeDecay) * verifiedBoost * followingBoost * mediaBoost * randomFactor;
-      
-      return {
-        score: score,
-        factors: {
-          engagement: engagement,
-          timeDecay: timeDecay,
-          verifiedBoost: verifiedBoost,
-          followingBoost: followingBoost,
-          mediaBoost: mediaBoost,
-          randomFactor: randomFactor
-        }
-      };
+// Unified Algorithm for both Latest and For You tabs
+function calculatePostScore(post) {
+  const hoursAgo = (Date.now() - post.timestamp) / (1000 * 60 * 60);
+  const engagement = (post.likes || 0) + ((post.commentCount || 0) * ALGORITHM_WEIGHTS.comments);
+  const timeDecay = Math.pow(hoursAgo + 2, ALGORITHM_WEIGHTS.gravity);
+  
+  // Verified user boost (2.5x multiplier)
+  const verifiedBoost = post.isVerified ? ALGORITHM_WEIGHTS.verified : 1;
+  
+  // Following boost (1.8x multiplier) - works in both tabs if user follows someone
+  const followingBoost = followingList.has(post.uid) ? ALGORITHM_WEIGHTS.following : 1;
+  
+  // Media boost (1.3x multiplier)
+  const mediaBoost = (post.mediaUrls && post.mediaUrls.length > 0) || post.mediaUrl ? ALGORITHM_WEIGHTS.media : 1;
+  
+  // Randomization factor for diversity (±15%)
+  const randomFactor = 1 + (Math.random() * ALGORITHM_WEIGHTS.randomization * 2 - ALGORITHM_WEIGHTS.randomization);
+  
+  // Calculate final score
+  const score = (engagement / timeDecay) * verifiedBoost * followingBoost * mediaBoost * randomFactor;
+  
+  return {
+    score: score,
+    factors: {
+      engagement: engagement,
+      timeDecay: timeDecay,
+      verifiedBoost: verifiedBoost,
+      followingBoost: followingBoost,
+      mediaBoost: mediaBoost,
+      randomFactor: randomFactor
     }
+  };
+}
 
     async function getUserInfo(uid) {
       const cachedAvatar = avatarCache.get(uid);
@@ -2833,69 +2834,71 @@
     }
 
     // Load More Posts (Infinite Scroll)
-    async function loadMorePosts() {
-      if (isLoadingMore || !hasMorePosts) return;
-      
-      isLoadingMore = true;
-      infiniteLoader.classList.remove('hidden');
-      
-      try {
-        // Simulate network delay for smooth UX
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
-        const startIndex = currentPage * POSTS_PER_PAGE;
-        const endIndex = startIndex + POSTS_PER_PAGE;
-        
-        // Get posts that haven't been displayed yet
-        const remainingPosts = allPosts.filter(post => 
-          !displayedPosts.some(dp => dp.key === post.key)
-        );
-        
-        if (remainingPosts.length === 0) {
-          hasMorePosts = false;
-          feedEndMessage.classList.add('show');
-          infiniteLoader.classList.add('hidden');
-          return;
-        }
-        
-        // Sort remaining posts using the algorithm
-        const scoredPosts = remainingPosts.map(post => ({
-          ...post,
-          ...calculatePostScore(post.data)
-        }));
-        
-        // Sort by score (highest first)
-        scoredPosts.sort((a, b) => b.score - a.score);
-        
-        // Take next batch
-        const postsToLoad = scoredPosts.slice(0, POSTS_PER_PAGE);
-        
-        // Render posts
-        for (const post of postsToLoad) {
-          await renderPost(post.key, post.data, '');
-          displayedPosts.push(post);
-        }
-        
-        currentPage++;
-        
-        // Check if we've loaded all posts
-        if (postsToLoad.length < POSTS_PER_PAGE) {
-          hasMorePosts = false;
-          feedEndMessage.classList.add('show');
-        }
-        
-        feather.replace();
-        initializeVideoControls();
-        initializeCarousels();
-        
-      } catch (err) {
-        console.error("Error loading more posts:", err);
-        showToast("Failed to load more posts", "error");
-      } finally {
-        isLoadingMore = false;
-        infiniteLoader.classList.add('hidden');
-      }
+// Load More Posts (Infinite Scroll) - Unified Algorithm for both tabs
+async function loadMorePosts() {
+  if (isLoadingMore || !hasMorePosts) return;
+  
+  isLoadingMore = true;
+  infiniteLoader.classList.remove('hidden');
+  
+  try {
+    // Simulate network delay for smooth UX
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    // Get posts that haven't been displayed yet
+    const remainingPosts = allPosts.filter(post => 
+      !displayedPosts.some(dp => dp.key === post.key)
+    );
+    
+    if (remainingPosts.length === 0) {
+      hasMorePosts = false;
+      feedEndMessage.classList.add('show');
+      infiniteLoader.classList.add('hidden');
+      return;
     }
+    
+    // Score and sort ALL remaining posts using the unified algorithm
+    const scoredPosts = remainingPosts.map(post => {
+      const scoreData = calculatePostScore(post.data);
+      return {
+        ...post,
+        score: scoreData.score,
+        scoreFactors: scoreData.factors
+      };
+    });
+    
+    // Sort by score (highest first) - SAME for both tabs
+    scoredPosts.sort((a, b) => b.score - a.score);
+    
+    // Take next batch
+    const postsToLoad = scoredPosts.slice(0, POSTS_PER_PAGE);
+    
+    // Render posts
+    for (const post of postsToLoad) {
+      await renderPost(post.key, post.data, '');
+      displayedPosts.push(post);
+    }
+    
+    currentPage++;
+    
+    // Check if we've loaded all posts
+    if (postsToLoad.length < POSTS_PER_PAGE) {
+      hasMorePosts = false;
+      feedEndMessage.classList.add('show');
+    }
+    
+    feather.replace();
+    initializeVideoControls();
+    initializeCarousels();
+    
+  } catch (err) {
+    console.error("Error loading more posts:", err);
+    showToast("Failed to load more posts", "error");
+  } finally {
+    isLoadingMore = false;
+    infiniteLoader.classList.add('hidden');
+  }
+}
 
     // Initial Load - Only load first batch
     async function loadInitialPosts() {
@@ -3040,13 +3043,24 @@
     }
 
     function resetAndReloadFeed() {
-      // Clear displayed posts and reload
-      displayedPosts = [];
-      currentPage = 0;
-      hasMorePosts = true;
-      feedEndMessage.classList.remove('show');
-      loadInitialPosts();
-    }
+  // Clear all state
+  displayedPosts = [];
+  currentPage = 0;
+  hasMorePosts = true;
+  feedEndMessage.classList.remove('show');
+  
+  // Clear the feed
+  feedStream.innerHTML = '';
+  
+  // Remove all existing listeners
+  postListeners.forEach((listeners) => {
+    listeners.forEach(unsubscribe => unsubscribe());
+  });
+  postListeners.clear();
+  
+  // Load fresh batch with unified algorithm
+  loadInitialPosts();
+}
 
     function loadNotifications() {
       if (!currentUser) return;
@@ -3576,7 +3590,8 @@
       }
     });
 
-    // Listen for new posts in real-time
+   
+        // Listen for new posts in real-time
     const postsRef = ref(db, 'posts');
     onChildAdded(postsRef, async (snapshot) => {
       const postData = snapshot.val();
@@ -3588,16 +3603,10 @@
         // Add to beginning of allPosts
         allPosts.unshift({ key: postKey, data: postData });
         
-        // If it's a new post and we're in latest mode without search, prepend it
-        if (feedMode === 'latest' && !searchInput.value && !isLoadingMore) {
-          // Only prepend if we're on the first page
-          if (currentPage === 0) {
-            await renderPost(postKey, postData, '');
-            displayedPosts.unshift({ key: postKey, data: postData });
-            feather.replace();
-            initializeVideoControls();
-            initializeCarousels();
-          }
+        // Only re-render if we're on first page and no search
+        if (!searchInput.value && !isLoadingMore && currentPage === 0) {
+          // Re-sort and re-render the first page to maintain algorithm order
+          resetAndReloadFeed();
         }
       }
     });
@@ -4864,24 +4873,26 @@
       }
     });
 
-    // Tab switching with reset
-    document.querySelectorAll('.feed-tab').forEach(tab => {
-      tab.addEventListener('click', () => {
-        document.querySelectorAll('.feed-tab').forEach(t => t.classList.remove('active'));
-        tab.classList.add('active');
-        
-        feedMode = tab.dataset.mode;
-        
-        // Reset and reload feed
-        resetAndReloadFeed();
-        
-        showToast(
-          feedMode === 'forYou' ? 'Showing posts from people you follow' : 'Showing latest posts', 
-          'success'
-        );
-      });
-    });
-
+ 
+   // Tab switching - both tabs now use same algorithm
+document.querySelectorAll('.feed-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.feed-tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    
+    feedMode = tab.dataset.mode;
+    
+    // Reset and reload feed - both tabs use same algorithm now
+    resetAndReloadFeed();
+    
+    showToast(
+      feedMode === 'forYou' 
+        ? 'Showing personalized posts' 
+        : 'Showing latest posts', 
+      'success'
+    );
+  });
+});
     // Search functionality
     searchInput.addEventListener('input', (e) => {
       const query = e.target.value;
