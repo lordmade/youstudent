@@ -22,6 +22,7 @@
       --danger: #E11D48;
       --success: #10B981;
       --verified: #1DA1F2;
+      --verified-gold: #FFD700;
       --glass-bg: rgba(255, 255, 255, 0.85);
       --glass-border: rgba(255, 255, 255, 0.5);
       --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
@@ -401,10 +402,22 @@
       transition: all 0.2s; 
       position: relative;
       background: white;
+      animation: fadeInUp 0.4s ease-out;
     }
     
     .post:hover { 
       background-color: #FAFAFA;
+    }
+
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
     }
 
     .post-content { width: 100%; }
@@ -428,10 +441,43 @@
       gap: 0.25rem;
     }
 
+    /* Verified Badge Styles */
     .verified-badge {
       color: var(--verified);
       display: inline-flex;
       align-items: center;
+      background: linear-gradient(135deg, rgba(29, 161, 242, 0.1), rgba(29, 161, 242, 0.05));
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      border: 1px solid rgba(29, 161, 242, 0.2);
+      margin-left: 4px;
+    }
+
+    .verified-badge svg {
+      width: 14px;
+      height: 14px;
+      fill: var(--verified);
+      margin-right: 2px;
+    }
+
+    .verified-badge::after {
+      content: 'Verified';
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    /* Gold badge for premium verified users */
+    .verified-badge.premium {
+      color: var(--verified-gold);
+      background: linear-gradient(135deg, rgba(255, 215, 0, 0.15), rgba(255, 215, 0, 0.05));
+      border-color: rgba(255, 215, 0, 0.3);
+    }
+
+    .verified-badge.premium svg {
+      fill: var(--verified-gold);
     }
     
     .post-username, .post-timestamp { 
@@ -2221,6 +2267,46 @@
 .action-item.ai-trigger:active {
   transform: scale(0.95);
 }
+
+    /* Infinite Scroll Loading Indicator */
+    .infinite-scroll-loader {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+      gap: 0.75rem;
+      color: var(--text-muted);
+      font-size: 0.9rem;
+      font-weight: 500;
+    }
+
+    .infinite-scroll-loader.hidden {
+      display: none;
+    }
+
+    .infinite-scroll-loader .spinner {
+      width: 24px;
+      height: 24px;
+      border-width: 2px;
+    }
+
+    .feed-end-message {
+      text-align: center;
+      padding: 2rem 1rem;
+      color: var(--text-muted);
+      font-size: 0.9rem;
+      display: none;
+    }
+
+    .feed-end-message.show {
+      display: block;
+    }
+
+    /* Sentinels for infinite scroll */
+    .scroll-sentinel {
+      height: 20px;
+      margin: 10px 0;
+    }
   </style>
 </head>
 <body>
@@ -2435,6 +2521,20 @@
       </div>
 
       <div id="feed-stream"></div>
+      
+      <!-- Infinite Scroll Loading Indicator -->
+      <div id="infinite-loader" class="infinite-scroll-loader hidden">
+        <div class="spinner"></div>
+        <span>Loading more posts...</span>
+      </div>
+      
+      <!-- Feed End Message -->
+      <div id="feed-end-message" class="feed-end-message">
+        <p>You're all caught up! 🎉</p>
+      </div>
+      
+      <!-- Sentinel for Intersection Observer -->
+      <div id="scroll-sentinel" class="scroll-sentinel"></div>
     </main>
 
     <aside class="right-sidebar">
@@ -2502,7 +2602,7 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
     import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
-    import { getDatabase, ref, push, set, onChildAdded, onValue, get, runTransaction, remove, off, query, orderByChild, limitToLast } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
+    import { getDatabase, ref, push, set, onChildAdded, onValue, get, runTransaction, remove, off, query, orderByChild, limitToLast, startAt, endAt } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
@@ -2537,17 +2637,30 @@
     let unreadMessages = 0;
     let verifiedUsers = new Set();
 
+    // Infinite Scroll State
+    let displayedPosts = [];
+    let isLoadingMore = false;
+    let hasMorePosts = true;
+    let currentPage = 0;
+    const POSTS_PER_PAGE = 10;
+    let intersectionObserver = null;
+
     let currentModalPost = null;
     let currentModalVideo = null;
 
     const postListeners = new Map();
     const commentListeners = new Map();
 
+    // Enhanced Algorithm Weights
     const ALGORITHM_WEIGHTS = {
       likes: 1,
       comments: 3,
       recency: 6,
-      gravity: 1.8
+      gravity: 1.8,
+      verified: 2.5,      // Boost for verified users
+      following: 1.8,     // Boost for followed users
+      media: 1.3,         // Boost for posts with media
+      randomization: 0.15 // Random factor (0-1)
     };
 
     const feedStream = document.getElementById('feed-stream');
@@ -2575,6 +2688,13 @@
     const searchInput = document.getElementById('header-search-input');
     const mediaModal = document.getElementById('media-modal');
     const mediaModalBody = document.getElementById('media-modal-body');
+    const infiniteLoader = document.getElementById('infinite-loader');
+    const feedEndMessage = document.getElementById('feed-end-message');
+    const scrollSentinel = document.getElementById('scroll-sentinel');
+
+    const avatarCache = new Map();
+    const usernameCache = new Map();
+    const defaultAvatar = "https://abs.twimg.com/sticky/default_profile_images/default_profile_normal.png";
 
     let alertCallback = null;
     window.handleAlertClick = function() {
@@ -2584,24 +2704,52 @@
       }
     }
 
+    // Enhanced Algorithm with Verification Priority and Randomization
     function calculatePostScore(post) {
       const hoursAgo = (Date.now() - post.timestamp) / (1000 * 60 * 60);
       const engagement = (post.likes || 0) + ((post.commentCount || 0) * ALGORITHM_WEIGHTS.comments);
       const timeDecay = Math.pow(hoursAgo + 2, ALGORITHM_WEIGHTS.gravity);
-      const discoveryBoost = 0.9 + (Math.random() * 0.2);
-      return (engagement / timeDecay) * discoveryBoost;
+      
+      // Verified user boost
+      const verifiedBoost = post.isVerified ? ALGORITHM_WEIGHTS.verified : 1;
+      
+      // Following boost
+      const followingBoost = followingList.has(post.uid) ? ALGORITHM_WEIGHTS.following : 1;
+      
+      // Media boost
+      const mediaBoost = (post.mediaUrls && post.mediaUrls.length > 0) || post.mediaUrl ? ALGORITHM_WEIGHTS.media : 1;
+      
+      // Randomization factor (prevents same order every time)
+      const randomFactor = 1 + (Math.random() * ALGORITHM_WEIGHTS.randomization * 2 - ALGORITHM_WEIGHTS.randomization);
+      
+      // Calculate final score
+      const score = (engagement / timeDecay) * verifiedBoost * followingBoost * mediaBoost * randomFactor;
+      
+      return {
+        score: score,
+        factors: {
+          engagement: engagement,
+          timeDecay: timeDecay,
+          verifiedBoost: verifiedBoost,
+          followingBoost: followingBoost,
+          mediaBoost: mediaBoost,
+          randomFactor: randomFactor
+        }
+      };
     }
-
-    const avatarCache = new Map();
-    const usernameCache = new Map();
-    const defaultAvatar = "https://abs.twimg.com/sticky/default_profile_images/default_profile_normal.png";
 
     async function getUserInfo(uid) {
       const cachedAvatar = avatarCache.get(uid);
       const cachedUsername = usernameCache.get(uid);
+      const cachedVerified = verifiedUsers.has(uid);
       
       if (cachedAvatar && cachedUsername) {
-        return { avatar: cachedAvatar, username: cachedUsername };
+        return { 
+          avatar: cachedAvatar, 
+          username: cachedUsername,
+          verified: cachedVerified,
+          isVerified: cachedVerified
+        };
       }
       
       try {
@@ -2612,21 +2760,33 @@
           const userData = snapshot.val();
           const avatarUrl = userData.photoURL || userData.avatarUrl || defaultAvatar;
           const username = userData.username || userData.displayName || 'user_' + uid.substr(0, 6);
+          const isVerified = userData.verified === true;
           
           avatarCache.set(uid, avatarUrl);
           usernameCache.set(uid, username);
           
-          if (userData.verified) {
+          if (isVerified) {
             verifiedUsers.add(uid);
           }
           
-          return { avatar: avatarUrl, username: username, verified: userData.verified || false };
+          return { 
+            avatar: avatarUrl, 
+            username: username, 
+            verified: isVerified,
+            isVerified: isVerified,
+            verifiedType: userData.verifiedType || 'standard'
+          };
         }
       } catch (err) {
         console.error("Error fetching user info:", err);
       }
       
-      return { avatar: defaultAvatar, username: 'unknown', verified: false };
+      return { 
+        avatar: defaultAvatar, 
+        username: 'unknown', 
+        verified: false,
+        isVerified: false
+      };
     }
 
     function showNotificationAlert(title, text, avatar, onClick) {
@@ -2647,6 +2807,148 @@
       if (e) e.stopPropagation();
       document.getElementById('notification-alert').classList.remove('show');
       alertCallback = null;
+    }
+
+    // Initialize Intersection Observer for Infinite Scroll
+    function initInfiniteScroll() {
+      if (intersectionObserver) {
+        intersectionObserver.disconnect();
+      }
+
+      const options = {
+        root: null,
+        rootMargin: '100px',
+        threshold: 0
+      };
+
+      intersectionObserver = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting && !isLoadingMore && hasMorePosts && !searchInput.value) {
+            loadMorePosts();
+          }
+        });
+      }, options);
+
+      intersectionObserver.observe(scrollSentinel);
+    }
+
+    // Load More Posts (Infinite Scroll)
+    async function loadMorePosts() {
+      if (isLoadingMore || !hasMorePosts) return;
+      
+      isLoadingMore = true;
+      infiniteLoader.classList.remove('hidden');
+      
+      try {
+        // Simulate network delay for smooth UX
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        const startIndex = currentPage * POSTS_PER_PAGE;
+        const endIndex = startIndex + POSTS_PER_PAGE;
+        
+        // Get posts that haven't been displayed yet
+        const remainingPosts = allPosts.filter(post => 
+          !displayedPosts.some(dp => dp.key === post.key)
+        );
+        
+        if (remainingPosts.length === 0) {
+          hasMorePosts = false;
+          feedEndMessage.classList.add('show');
+          infiniteLoader.classList.add('hidden');
+          return;
+        }
+        
+        // Sort remaining posts using the algorithm
+        const scoredPosts = remainingPosts.map(post => ({
+          ...post,
+          ...calculatePostScore(post.data)
+        }));
+        
+        // Sort by score (highest first)
+        scoredPosts.sort((a, b) => b.score - a.score);
+        
+        // Take next batch
+        const postsToLoad = scoredPosts.slice(0, POSTS_PER_PAGE);
+        
+        // Render posts
+        for (const post of postsToLoad) {
+          await renderPost(post.key, post.data, '');
+          displayedPosts.push(post);
+        }
+        
+        currentPage++;
+        
+        // Check if we've loaded all posts
+        if (postsToLoad.length < POSTS_PER_PAGE) {
+          hasMorePosts = false;
+          feedEndMessage.classList.add('show');
+        }
+        
+        feather.replace();
+        initializeVideoControls();
+        initializeCarousels();
+        
+      } catch (err) {
+        console.error("Error loading more posts:", err);
+        showToast("Failed to load more posts", "error");
+      } finally {
+        isLoadingMore = false;
+        infiniteLoader.classList.add('hidden');
+      }
+    }
+
+    // Initial Load - Only load first batch
+    async function loadInitialPosts() {
+      feedStream.innerHTML = '';
+      displayedPosts = [];
+      currentPage = 0;
+      hasMorePosts = true;
+      feedEndMessage.classList.remove('show');
+      
+      // Show skeleton loaders
+      showSkeletonLoaders(3);
+      
+      try {
+        // Wait for allPosts to be populated
+        if (allPosts.length === 0) {
+          await new Promise(resolve => {
+            const checkPosts = setInterval(() => {
+              if (allPosts.length > 0) {
+                clearInterval(checkPosts);
+                resolve();
+              }
+            }, 100);
+            
+            // Timeout after 5 seconds
+            setTimeout(() => {
+              clearInterval(checkPosts);
+              resolve();
+            }, 5000);
+          });
+        }
+        
+        // Remove skeletons
+        feedStream.innerHTML = '';
+        
+        // Load first batch
+        await loadMorePosts();
+        
+        // Initialize intersection observer
+        initInfiniteScroll();
+        
+      } catch (err) {
+        console.error("Error in initial load:", err);
+        feedStream.innerHTML = `
+          <div style="text-align:center; padding:4rem 1rem; color:var(--text-light);">
+            <div style="width:64px;height:64px;background:var(--hover-bg);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 1rem;">
+              <i data-feather="alert-circle" style="width:32px;height:32px;color:var(--text-muted);"></i>
+            </div>
+            <h3 style="font-size:1.25rem; font-weight:700; color:var(--text-dark); margin-bottom:0.5rem;">Failed to load posts</h3>
+            <button onclick="location.reload()" style="padding:0.75rem 1.5rem; background:var(--primary-color); color:white; border:none; border-radius:9999px; cursor:pointer; font-weight:600;">Retry</button>
+          </div>
+        `;
+        feather.replace();
+      }
     }
 
     onAuthStateChanged(auth, async (user) => {
@@ -2691,7 +2993,7 @@
           const avatarUrl = user.photoURL || defaultAvatar;
           document.getElementById('current-user-avatar').src = avatarUrl;
           avatarCache.set(user.uid, avatarUrl);
-          usernameCache.set(user.uid, currentUsername);
+          usernameCache.set(uid, currentUsername);
           
           showToast("Profile created!", "success");
         }
@@ -2703,6 +3005,9 @@
         loadFollowingList();
         loadNotifications();
         loadUnreadMessages();
+        
+        // Start initial load
+        loadInitialPosts();
         
       } catch (error) {
         console.error("Profile load error:", error);
@@ -2727,10 +3032,20 @@
             followingList.add(child.key);
           });
         }
+        // Refresh feed if mode is 'forYou'
         if (feedMode === 'forYou') {
-          filterAndRenderPosts(searchInput.value);
+          resetAndReloadFeed();
         }
       });
+    }
+
+    function resetAndReloadFeed() {
+      // Clear displayed posts and reload
+      displayedPosts = [];
+      currentPage = 0;
+      hasMorePosts = true;
+      feedEndMessage.classList.remove('show');
+      loadInitialPosts();
     }
 
     function loadNotifications() {
@@ -2814,44 +3129,38 @@
     async function navigateToPost(postId, notificationType) {
       closeNotifications();
       
-      if (feedMode !== 'latest' || searchInput.value) {
-        feedMode = 'latest';
-        searchInput.value = '';
-        document.querySelectorAll('.feed-tab').forEach(t => {
-          t.classList.toggle('active', t.dataset.mode === 'latest');
-        });
-        await filterAndRenderPosts('');
-      }
-      
+      // Check if post is already displayed
       const postEl = document.getElementById(`post-${postId}`);
       if (!postEl) {
-        showToast("Post not found or has been deleted", "error");
-        return;
-      }
-      
-      postEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      postEl.classList.add('highlighted');
-      
-      setTimeout(() => {
-        postEl.classList.remove('highlighted');
-      }, 3000);
-      
-      if (notificationType === 'comment' || notificationType === 'reply') {
-        setTimeout(() => {
-          openComments(postId);
-        }, 600);
-      }
-      
-      if (notificationType === 'like') {
-        setTimeout(() => {
-          const likeBtn = document.getElementById(`like-btn-${postId}`);
-          if (likeBtn) {
-            likeBtn.style.transform = 'scale(1.3)';
-            setTimeout(() => {
-              likeBtn.style.transform = 'scale(1)';
-            }, 300);
+        // If not displayed, we need to find and show it
+        const targetPost = allPosts.find(p => p.key === postId);
+        if (targetPost) {
+          // Add to displayed posts if not already there
+          if (!displayedPosts.some(dp => dp.key === postId)) {
+            await renderPost(targetPost.key, targetPost.data, '');
+            displayedPosts.push(targetPost);
           }
-        }, 600);
+        } else {
+          showToast("Post not found or has been deleted", "error");
+          return;
+        }
+      }
+      
+      // Scroll to post
+      const element = document.getElementById(`post-${postId}`);
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        element.classList.add('highlighted');
+        
+        setTimeout(() => {
+          element.classList.remove('highlighted');
+        }, 3000);
+        
+        if (notificationType === 'comment' || notificationType === 'reply') {
+          setTimeout(() => {
+            openComments(postId);
+          }, 600);
+        }
       }
     }
 
@@ -3107,81 +3416,6 @@
       return usernameMatch || textMatch || hashtagMatch;
     }
 
-    async function filterAndRenderPosts(query) {
-      feedStream.innerHTML = '';
-      
-      postListeners.forEach((listeners, postId) => {
-        listeners.forEach(unsubscribe => unsubscribe());
-      });
-      postListeners.clear();
-      
-      let postsToRender = query 
-        ? allPosts.filter(post => matchesSearch(post.data, query))
-        : [...allPosts];
-      
-      if (feedMode === 'forYou') {
-        const followedPosts = postsToRender.filter(post => followingList.has(post.data.uid));
-        const otherPosts = postsToRender.filter(post => !followingList.has(post.data.uid));
-        
-        followedPosts.sort((a, b) => b.data.timestamp - a.data.timestamp);
-        
-        const shuffledOthers = otherPosts.map(post => ({
-          ...post,
-          score: calculatePostScore(post.data)
-        })).sort((a, b) => b.score - a.score);
-        
-        postsToRender = [...followedPosts, ...shuffledOthers];
-      } else {
-        if (postsToRender.length > 1) {
-          const mostRecent = postsToRender[0];
-          const rest = postsToRender.slice(1);
-          
-          const shuffledRest = rest.map(post => ({
-            ...post,
-            score: calculatePostScore(post.data)
-          })).sort((a, b) => b.score - a.score);
-          
-          postsToRender = [mostRecent, ...shuffledRest];
-        }
-      }
-      
-      if (postsToRender.length === 0) {
-        feedStream.innerHTML = `
-          <div style="text-align:center; padding:4rem 1rem; color:var(--text-light);">
-            <div style="width:64px;height:64px;background:var(--hover-bg);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 1rem;">
-              <i data-feather="inbox" style="width:32px;height:32px;color:var(--text-muted);"></i>
-            </div>
-            <h3 style="font-size:1.25rem; margin-bottom:0.5rem; font-weight:700; color:var(--text-dark);">
-              ${query ? 'No posts found' : feedMode === 'forYou' ? 'No posts from people you follow' : 'No posts yet'}
-            </h3>
-            <p style="font-size:0.95rem;">${query ? 'Try searching for something else' : feedMode === 'forYou' ? 'Follow more people to see their posts here' : 'Be the first to share something!'}</p>
-          </div>
-        `;
-        feather.replace();
-        return;
-      }
-      
-      for (const post of postsToRender) {
-        await renderPost(post.key, post.data, query);
-      }
-      
-      feather.replace();
-      initializeVideoControls();
-      initializeCarousels();
-    }
-
-    searchInput.addEventListener('input', (e) => {
-      filterAndRenderPosts(e.target.value);
-    });
-
-    searchInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') {
-        searchInput.value = '';
-        filterAndRenderPosts('');
-        searchInput.blur();
-      }
-    });
-
     function showSkeletonLoaders(count = 5) {
       feedStream.innerHTML = '';
       for (let i = 0; i < count; i++) {
@@ -3237,7 +3471,9 @@
         await remove(ref(db, `postLikes/${key}`));
         await remove(ref(db, `postComments/${key}`));
         
+        // Remove from allPosts and displayedPosts
         allPosts = allPosts.filter(p => p.key !== key);
+        displayedPosts = displayedPosts.filter(p => p.key !== key);
         
         element.remove();
         showToast("Post deleted", "success");
@@ -3340,59 +3576,49 @@
       }
     });
 
+    // Listen for new posts in real-time
     const postsRef = ref(db, 'posts');
-
     onChildAdded(postsRef, async (snapshot) => {
-      if (feedStream.querySelector('.skeleton-post')) {
-        feedStream.innerHTML = '';
-      }
-      
       const postData = snapshot.val();
       const postKey = snapshot.key;
       
+      // Check if post already exists
       const existingIndex = allPosts.findIndex(p => p.key === postKey);
       if (existingIndex === -1) {
+        // Add to beginning of allPosts
         allPosts.unshift({ key: postKey, data: postData });
-      } else {
-        allPosts[existingIndex].data = postData;
-      }
-      
-      if (feedMode === 'latest' && !searchInput.value) {
-        await renderPost(postKey, postData, '');
-        feather.replace();
-        initializeVideoControls();
-        initializeCarousels();
+        
+        // If it's a new post and we're in latest mode without search, prepend it
+        if (feedMode === 'latest' && !searchInput.value && !isLoadingMore) {
+          // Only prepend if we're on the first page
+          if (currentPage === 0) {
+            await renderPost(postKey, postData, '');
+            displayedPosts.unshift({ key: postKey, data: postData });
+            feather.replace();
+            initializeVideoControls();
+            initializeCarousels();
+          }
+        }
       }
     });
 
+    // Listen for post updates
     onValue(postsRef, (snapshot) => {
-      allPosts = [];
+      const newAllPosts = [];
       snapshot.forEach(childSnap => {
-        allPosts.unshift({ 
+        newAllPosts.unshift({ 
           key: childSnap.key, 
           data: childSnap.val() 
         });
       });
       
-      if (feedMode === 'forYou' || searchInput.value) {
-        filterAndRenderPosts(searchInput.value);
+      allPosts = newAllPosts;
+      
+      // If feed is empty, load initial posts
+      if (displayedPosts.length === 0 && allPosts.length > 0) {
+        loadInitialPosts();
       }
     });
-
-    setTimeout(() => {
-      if (feedStream.children.length === 0 && allPosts.length === 0) {
-        feedStream.innerHTML = `
-          <div style="text-align:center; padding:4rem 1rem; color:var(--text-light);">
-            <div style="width:64px;height:64px;background:var(--hover-bg);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 1rem;">
-              <i data-feather="inbox" style="width:32px;height:32px;color:var(--text-muted);"></i>
-            </div>
-            <h3 style="font-size:1.25rem; font-weight:700; color:var(--text-dark); margin-bottom:0.5rem;">No posts yet</h3>
-            <p>Be the first to share something!</p>
-          </div>
-        `;
-        feather.replace();
-      }
-    }, 10000);
 
     function getTimeAgo(timestamp) {
       if (!timestamp) return '';
@@ -3706,6 +3932,11 @@
     });
 
     async function renderPost(key, post, searchQuery = '') {
+      // Check if post already exists in DOM
+      if (document.getElementById(`post-${key}`)) {
+        return;
+      }
+
       const el = document.createElement('div');
       el.className = 'post';
       el.id = `post-${key}`;
@@ -3719,6 +3950,7 @@
       const currentUsername = userInfo.username;
       const avatarUrl = userInfo.avatar;
       const isVerified = userInfo.verified || verifiedUsers.has(post.uid);
+      const verifiedType = userInfo.verifiedType || 'standard';
 
       const timeAgo = getTimeAgo(post.timestamp);
       const isOwner = currentUser && currentUser.uid === post.uid;
@@ -3817,6 +4049,15 @@
 
       const hasReposted = currentUser && post.reposts && post.reposts[currentUser.uid];
 
+      // Verified badge HTML
+      const verifiedBadgeHtml = isVerified ? `
+        <span class="verified-badge ${verifiedType === 'premium' ? 'premium' : ''}">
+          <svg viewBox="0 0 24 24" fill="currentColor">
+            <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+          </svg>
+        </span>
+      ` : '';
+
       el.innerHTML = `
         ${repostIndicator}
         <img src="${avatarUrl}" class="user-avatar" onerror="this.src='${defaultAvatar}'">
@@ -3826,7 +4067,7 @@
               <div style="display:flex; align-items:center; gap:0.25rem; flex-wrap:wrap;">
                 <span class="post-name" style="cursor:pointer;" onclick="window.location.href='profile.html?id=${post.uid}'">
                   ${highlightedUsername}
-                  ${isVerified ? `<span class="verified-badge"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg></span>` : ''}
+                  ${verifiedBadgeHtml}
                 </span>
                 <span class="post-username">@${currentUsername.toLowerCase().replace(/\s/g,'')}</span>
                 <span class="post-timestamp">${timeAgo}</span>
@@ -3883,11 +4124,8 @@
         </div>
       `;
 
-      if (feedStream.firstChild && feedMode === 'latest' && !searchQuery) {
-        feedStream.insertBefore(el, feedStream.firstChild);
-      } else {
-        feedStream.appendChild(el);
-      }
+      // Append to feed instead of prepending for infinite scroll
+      feedStream.appendChild(el);
       
       const listeners = [];
       
@@ -4626,13 +4864,16 @@
       }
     });
 
+    // Tab switching with reset
     document.querySelectorAll('.feed-tab').forEach(tab => {
       tab.addEventListener('click', () => {
         document.querySelectorAll('.feed-tab').forEach(t => t.classList.remove('active'));
         tab.classList.add('active');
         
         feedMode = tab.dataset.mode;
-        filterAndRenderPosts(searchInput.value);
+        
+        // Reset and reload feed
+        resetAndReloadFeed();
         
         showToast(
           feedMode === 'forYou' ? 'Showing posts from people you follow' : 'Showing latest posts', 
@@ -4641,7 +4882,53 @@
       });
     });
 
-    showSkeletonLoaders();
+    // Search functionality
+    searchInput.addEventListener('input', (e) => {
+      const query = e.target.value;
+      if (query) {
+        // Disable infinite scroll during search
+        hasMorePosts = false;
+        infiniteLoader.classList.add('hidden');
+        
+        // Filter and show all matching posts
+        feedStream.innerHTML = '';
+        displayedPosts = [];
+        
+        const matchingPosts = allPosts.filter(post => matchesSearch(post.data, query));
+        
+        if (matchingPosts.length === 0) {
+          feedStream.innerHTML = `
+            <div style="text-align:center; padding:4rem 1rem; color:var(--text-light);">
+              <div style="width:64px;height:64px;background:var(--hover-bg);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 1rem;">
+                <i data-feather="search" style="width:32px;height:32px;color:var(--text-muted);"></i>
+              </div>
+              <h3 style="font-size:1.25rem; margin-bottom:0.5rem; font-weight:700; color:var(--text-dark);">No posts found</h3>
+              <p style="font-size:0.95rem;">Try searching for something else</p>
+            </div>
+          `;
+          feather.replace();
+        } else {
+          matchingPosts.forEach(async (post) => {
+            await renderPost(post.key, post.data, query);
+            displayedPosts.push(post);
+          });
+          feather.replace();
+          initializeVideoControls();
+          initializeCarousels();
+        }
+      } else {
+        // Clear search, reset to infinite scroll
+        resetAndReloadFeed();
+      }
+    });
+
+    searchInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        searchInput.value = '';
+        resetAndReloadFeed();
+        searchInput.blur();
+      }
+    });
 
     document.getElementById('fab-new')?.addEventListener('click', () => {
       if (!currentUser) {
@@ -4666,6 +4953,17 @@
           menu.classList.remove('show');
         });
       }
+    });
+
+    // Cleanup on page unload
+    window.addEventListener('beforeunload', () => {
+      if (intersectionObserver) {
+        intersectionObserver.disconnect();
+      }
+      postListeners.forEach((listeners) => {
+        listeners.forEach(unsubscribe => unsubscribe());
+      });
+      commentListeners.forEach(unsubscribe => unsubscribe());
     });
 
     feather.replace();
