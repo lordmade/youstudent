@@ -2848,7 +2848,6 @@ function calculatePostScore(post, mode = 'forYou') {
     }
 
     // Load More Posts (Infinite Scroll)
-// Load More Posts (Infinite Scroll)
 async function loadMorePosts() {
   if (isLoadingMore || !hasMorePosts) return;
   
@@ -2856,57 +2855,29 @@ async function loadMorePosts() {
   infiniteLoader.classList.remove('hidden');
   
   try {
-    // Simulate network delay for smooth UX
-    await new Promise(resolve => setTimeout(resolve, 500));
+    await new Promise(r => setTimeout(r, 400)); // smooth UX delay
     
-    const startIndex = currentPage * POSTS_PER_PAGE;
-    const endIndex = startIndex + POSTS_PER_PAGE;
+    const startIndex = displayedPosts.length;
+    const nextBatch = allPosts.slice(startIndex, startIndex + POSTS_PER_PAGE);
     
-    // Get posts that haven't been displayed yet
-    const remainingPosts = allPosts.filter(post => 
-      !displayedPosts.some(dp => dp.key === post.key)
-    );
-    
-    if (remainingPosts.length === 0) {
+    if (nextBatch.length === 0) {
       hasMorePosts = false;
       feedEndMessage.classList.add('show');
-      infiniteLoader.classList.add('hidden');
-      return;
+    } else {
+      for (const post of nextBatch) {
+        await renderPost(post.key, post.data, '');
+        displayedPosts.push(post);
+      }
+      
+      currentPage++;
+      feather.replace();
+      initializeVideoControls();
+      initializeCarousels();
     }
-    
-    // Sort remaining posts using the algorithm with mode parameter
-    const scoredPosts = remainingPosts.map(post => ({
-      ...post,
-      ...calculatePostScore(post.data, feedMode)  // Pass feedMode here
-    }));
-    
-    // Sort by score (highest first)
-    scoredPosts.sort((a, b) => b.score - a.score);
-    
-    // Take next batch
-    const postsToLoad = scoredPosts.slice(0, POSTS_PER_PAGE);
-    
-    // Render posts
-    for (const post of postsToLoad) {
-      await renderPost(post.key, post.data, '');
-      displayedPosts.push(post);
-    }
-    
-    currentPage++;
-    
-    // Check if we've loaded all posts
-    if (postsToLoad.length < POSTS_PER_PAGE) {
-      hasMorePosts = false;
-      feedEndMessage.classList.add('show');
-    }
-    
-    feather.replace();
-    initializeVideoControls();
-    initializeCarousels();
     
   } catch (err) {
-    console.error("Error loading more posts:", err);
-    showToast("Failed to load more posts", "error");
+    console.error("Load more failed:", err);
+    showToast("Couldn't load more posts", "error");
   } finally {
     isLoadingMore = false;
     infiniteLoader.classList.add('hidden');
@@ -2914,58 +2885,50 @@ async function loadMorePosts() {
 }
 
     // Initial Load - Only load first batch
-    async function loadInitialPosts() {
-      feedStream.innerHTML = '';
-      displayedPosts = [];
-      currentPage = 0;
-      hasMorePosts = true;
-      feedEndMessage.classList.remove('show');
-      
-      // Show skeleton loaders
-      showSkeletonLoaders(3);
-      
-      try {
-        // Wait for allPosts to be populated
-        if (allPosts.length === 0) {
-          await new Promise(resolve => {
-            const checkPosts = setInterval(() => {
-              if (allPosts.length > 0) {
-                clearInterval(checkPosts);
-                resolve();
-              }
-            }, 100);
-            
-            // Timeout after 5 seconds
-            setTimeout(() => {
-              clearInterval(checkPosts);
-              resolve();
-            }, 5000);
-          });
-        }
-        
-        // Remove skeletons
-        feedStream.innerHTML = '';
-        
-        // Load first batch
-        await loadMorePosts();
-        
-        // Initialize intersection observer
-        initInfiniteScroll();
-        
-      } catch (err) {
-        console.error("Error in initial load:", err);
-        feedStream.innerHTML = `
-          <div style="text-align:center; padding:4rem 1rem; color:var(--text-light);">
-            <div style="width:64px;height:64px;background:var(--hover-bg);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 1rem;">
-              <i data-feather="alert-circle" style="width:32px;height:32px;color:var(--text-muted);"></i>
-            </div>
-            <h3 style="font-size:1.25rem; font-weight:700; color:var(--text-dark); margin-bottom:0.5rem;">Failed to load posts</h3>
-            <button onclick="location.reload()" style="padding:0.75rem 1.5rem; background:var(--primary-color); color:white; border:none; border-radius:9999px; cursor:pointer; font-weight:600;">Retry</button>
-          </div>
-        `;
-        feather.replace();
-      }
+async function loadInitialPosts() {
+  feedStream.innerHTML = '';
+  displayedPosts = [];
+  currentPage = 0;
+  hasMorePosts = true;
+  feedEndMessage.classList.remove('show');
+  
+  showSkeletonLoaders(3);
+  
+  try {
+    // Ensure newest-first order
+    allPosts.sort((a, b) => b.data.timestamp - a.data.timestamp);
+    
+    feedStream.innerHTML = '';
+    
+    // Take first page of newest posts
+    const firstBatch = allPosts.slice(0, POSTS_PER_PAGE);
+    
+    for (const post of firstBatch) {
+      await renderPost(post.key, post.data, '');
+      displayedPosts.push(post);
     }
+    
+    currentPage = 1;
+    
+    feather.replace();
+    initializeVideoControls();
+    initializeCarousels();
+    initInfiniteScroll();
+    
+  } catch (err) {
+    console.error("Initial load failed:", err);
+    feedStream.innerHTML = `
+      <div style="text-align:center; padding:4rem 1rem; color:var(--text-light);">
+        <i data-feather="alert-circle" style="width:48px;height:48px;color:var(--danger);"></i>
+        <h3 style="margin:1rem 0 0.5rem;">Failed to load feed</h3>
+        <button onclick="loadInitialPosts()" class="follow-btn" style="margin-top:1rem;">
+          Retry
+        </button>
+      </div>
+    `;
+    feather.replace();
+  }
+}
 
     onAuthStateChanged(auth, async (user) => {
       if (!user) {
@@ -3056,14 +3019,12 @@ async function loadMorePosts() {
     }
 
     function resetAndReloadFeed() {
-      // Clear displayed posts and reload
-      displayedPosts = [];
-      currentPage = 0;
-      hasMorePosts = true;
-      feedEndMessage.classList.remove('show');
-      loadInitialPosts();
-    }
-
+  displayedPosts = [];
+  currentPage = 0;
+  hasMorePosts = true;
+  feedEndMessage.classList.remove('show');
+  loadInitialPosts();
+}
     function loadNotifications() {
       if (!currentUser) return;
       
@@ -3594,29 +3555,50 @@ async function loadMorePosts() {
 
     // Listen for new posts in real-time
     const postsRef = ref(db, 'posts');
-    onChildAdded(postsRef, async (snapshot) => {
-      const postData = snapshot.val();
-      const postKey = snapshot.key;
+    // Listen for brand new posts and prepend them when user is near top or feed is fresh
+onChildAdded(postsRef, async (snapshot) => {
+  const postData = snapshot.val();
+  const postKey = snapshot.key;
+  
+  // Prevent duplicates
+  if (allPosts.some(p => p.key === postKey)) return;
+  
+  const newPost = { key: postKey, data: postData };
+  
+  // Add to the beginning (newest first)
+  allPosts.unshift(newPost);
+  
+  // Only auto-insert at top in these cases:
+  // - Latest mode
+  // - No active search
+  // - User is near the top of the page (or feed just started)
+  if (feedMode === 'latest' && !searchInput.value.trim()) {
+    const isNearTop = window.scrollY < 400; // adjust threshold as needed
+    
+    if (isNearTop || displayedPosts.length === 0) {
+      // Create element and prepend it
+      await renderPost(postKey, postData, '');
+      const newPostEl = document.getElementById(`post-${postKey}`);
       
-      // Check if post already exists
-      const existingIndex = allPosts.findIndex(p => p.key === postKey);
-      if (existingIndex === -1) {
-        // Add to beginning of allPosts
-        allPosts.unshift({ key: postKey, data: postData });
+      if (newPostEl) {
+        // Insert at the very top
+        feedStream.insertBefore(newPostEl, feedStream.firstChild);
         
-        // If it's a new post and we're in latest mode without search, prepend it
-        if (feedMode === 'latest' && !searchInput.value && !isLoadingMore) {
-          // Only prepend if we're on the first page
-          if (currentPage === 0) {
-            await renderPost(postKey, postData, '');
-            displayedPosts.unshift({ key: postKey, data: postData });
-            feather.replace();
-            initializeVideoControls();
-            initializeCarousels();
-          }
-        }
+        // Add to displayedPosts (maintain order)
+        displayedPosts.unshift(newPost);
+        
+        // Visual feedback: gentle highlight for new post
+        newPostEl.classList.add('highlighted');
+        setTimeout(() => newPostEl.classList.remove('highlighted'), 4000);
+        
+        feather.replace();
+        initializeVideoControls();
+        initializeCarousels();
       }
-    });
+    }
+    // If user is scrolled far down → don't auto-prepend (they'll see it when they scroll up)
+  }
+});
 
     // Listen for post updates
     onValue(postsRef, (snapshot) => {
@@ -3972,18 +3954,20 @@ async function loadMorePosts() {
       const isOwner = currentUser && currentUser.uid === post.uid;
       
       let followButtonHtml = '';
-      if (currentUser && !isOwnPost) {
-        const isFollowing = followingList.has(post.uid);
-        followButtonHtml = `
-          <button class="follow-btn ${isFollowing ? 'following' : ''}" 
-                  data-uid="${post.uid}" 
-                  data-following="${isFollowing}"
-                  onclick="event.stopPropagation(); toggleFollow('${post.uid}', this)">
-            <span class="btn-text">${isFollowing ? 'Following' : 'Follow'}</span>
-          </button>
-        `;
-      }
-      
+if (currentUser && !isOwnPost && !followingList.has(post.uid)) {
+  // Only show button if:
+  // - Logged in
+  // - Not own post
+  // - Not already following this user
+  followButtonHtml = `
+    <button class="follow-btn" 
+            data-uid="${post.uid}" 
+            data-following="false"
+            onclick="event.stopPropagation(); toggleFollow('${post.uid}', this)">
+      <span class="btn-text">Follow</span>
+    </button>
+  `;
+}
       const parsedText = parseText(post.text, searchQuery);
       const highlightedUsername = searchQuery ? 
         currentUsername.replace(new RegExp(`(${searchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'), 
@@ -4884,21 +4868,31 @@ const verifiedBadgeHtml = isVerified ? `
     });
 
     // Tab switching with reset
-    // Tab switching with reset
 document.querySelectorAll('.feed-tab').forEach(tab => {
   tab.addEventListener('click', () => {
     document.querySelectorAll('.feed-tab').forEach(t => t.classList.remove('active'));
     tab.classList.add('active');
     
-    feedMode = tab.dataset.mode;
+    const newMode = tab.dataset.mode;
+    if (newMode === feedMode) return;
     
-    // Reset and reload feed
+    feedMode = newMode;
+    
+    // Re-sort when switching modes
+    if (feedMode === 'latest') {
+      allPosts.sort((a, b) => b.data.timestamp - a.data.timestamp);
+      showToast("Showing Latest posts (newest first)", "success");
+    } else {
+      // For You → score-based sort
+      allPosts.sort((a, b) => {
+        const scoreA = calculatePostScore(a.data, 'forYou').score;
+        const scoreB = calculatePostScore(b.data, 'forYou').score;
+        return scoreB - scoreA;
+      });
+      showToast("Showing For You feed", "success");
+    }
+    
     resetAndReloadFeed();
-    
-    const message = feedMode === 'forYou' 
-      ? 'Showing personalized posts' 
-      : 'Showing latest posts from everyone';
-    showToast(message, 'success');
   });
 });
 
