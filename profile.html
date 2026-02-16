@@ -22,6 +22,7 @@
       --danger: #E11D48;
       --success: #10B981;
       --verified: #1DA1F2;
+      --verified-gold: #FFD700;
       --glass-bg: rgba(255, 255, 255, 0.85);
       --glass-border: rgba(255, 255, 255, 0.5);
       --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
@@ -448,10 +449,37 @@
       gap: 0.25rem;
     }
 
+    /* Twitter/X Style Verified Badge */
     .verified-badge {
-      color: var(--verified);
       display: inline-flex;
       align-items: center;
+      justify-content: center;
+      width: 16px;
+      height: 16px;
+      margin-left: 4px;
+      vertical-align: middle;
+      position: relative;
+      flex-shrink: 0;
+    }
+
+    .verified-badge svg {
+      width: 100%;
+      height: 100%;
+      fill: #1D9BF0; /* Twitter Blue */
+      filter: drop-shadow(0 0 0.5px rgba(29, 155, 240, 0.3));
+    }
+
+    /* Premium/Gold verified badge */
+    .verified-badge.premium svg {
+      fill: #FFD700; /* Gold */
+      filter: drop-shadow(0 0 0.5px rgba(255, 215, 0, 0.3));
+    }
+
+    /* Larger badge for profile name */
+    .profile-name .verified-badge {
+      width: 20px;
+      height: 20px;
+      margin-left: 6px;
     }
     
     .post-username, .post-timestamp { 
@@ -1384,6 +1412,7 @@
 
           <div class="profile-name" id="profile-name">
             <span id="display-name">Loading...</span>
+            <!-- Verified badge will be inserted here -->
           </div>
           <div class="profile-username" id="profile-username">@username</div>
           
@@ -1527,6 +1556,29 @@
         document.getElementById('display-name').textContent = profileUser.username || profileUser.displayName || 'User';
         document.getElementById('profile-username').textContent = `@${(profileUser.username || 'user').toLowerCase().replace(/\s/g, '')}`;
         document.getElementById('profile-bio').textContent = profileUser.bio || '';
+        
+        // Add verified badge if user is verified
+        const profileNameEl = document.getElementById('profile-name');
+        const existingBadge = profileNameEl.querySelector('.verified-badge');
+        if (existingBadge) existingBadge.remove();
+        
+        if (profileUser.verified) {
+          const verifiedType = profileUser.verifiedType || 'standard';
+          const badgeColor = verifiedType === 'premium' ? '#FFD700' : '#1D9BF0';
+          const badgeClass = verifiedType === 'premium' ? 'premium' : '';
+          const titleText = verifiedType === 'premium' ? 'Premium Verified' : 'Verified Account';
+          
+          const badgeHtml = `
+            <span class="verified-badge ${badgeClass}" title="${titleText}">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <g>
+                  <path d="M22.25 12c0-1.43-.88-2.67-2.19-3.34.46-1.39.2-2.9-.81-3.91s-2.52-1.27-3.91-.81c-.66-1.31-1.91-2.19-3.34-2.19s-2.67.88-3.33 2.19c-1.4-.46-2.91-.2-3.92.81s-1.26 2.52-.8 3.91c-1.31.67-2.2 1.91-2.2 3.34s.89 2.67 2.2 3.34c-.46 1.39-.21 2.9.8 3.91s2.52 1.26 3.91.81c.67 1.31 1.91 2.19 3.34 2.19s2.68-.88 3.34-2.19c1.39.45 2.9.2 3.91-.81s1.27-2.52.81-3.91c1.31-.67 2.19-1.91 2.19-3.34zm-11.71 4.2L6.8 12.46l1.41-1.42 2.26 2.26 4.8-5.23 1.47 1.36-6.2 6.77z"></path>
+                </g>
+              </svg>
+            </span>
+          `;
+          profileNameEl.insertAdjacentHTML('beforeend', badgeHtml);
+        }
         
         // Avatar
         const avatarUrl = profileUser.photoURL || profileUser.avatarUrl || defaultAvatar;
@@ -1719,13 +1771,26 @@
         }
       }
       
+      // Check if user is verified for posts
+      const isVerified = profileUser && profileUser.verified;
+      const verifiedType = profileUser && profileUser.verifiedType;
+      const verifiedBadgeHtml = isVerified ? `
+        <span class="verified-badge ${verifiedType === 'premium' ? 'premium' : ''}" title="${verifiedType === 'premium' ? 'Premium Verified' : 'Verified Account'}">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <g>
+              <path d="M22.25 12c0-1.43-.88-2.67-2.19-3.34.46-1.39.2-2.9-.81-3.91s-2.52-1.27-3.91-.81c-.66-1.31-1.91-2.19-3.34-2.19s-2.67.88-3.33 2.19c-1.4-.46-2.91-.2-3.92.81s-1.26 2.52-.8 3.91c-1.31.67-2.2 1.91-2.2 3.34s.89 2.67 2.2 3.34c-.46 1.39-.21 2.9.8 3.91s2.52 1.26 3.91.81c.67 1.31 1.91 2.19 3.34 2.19s2.68-.88 3.34-2.19c1.39.45 2.9.2 3.91-.81s1.27-2.52.81-3.91c1.31-.67 2.19-1.91 2.19-3.34zm-11.71 4.2L6.8 12.46l1.41-1.42 2.26 2.26 4.8-5.23 1.47 1.36-6.2 6.77z"></path>
+            </g>
+          </svg>
+        </span>
+      ` : '';
+      
       div.innerHTML = `
         <img src="${profileUser?.photoURL || profileUser?.avatarUrl || defaultAvatar}" class="user-avatar" style="width:48px;height:48px;border-radius:50%;object-fit:cover;">
         <div class="post-content">
           <div class="post-header">
             <div class="post-meta">
               <div style="display:flex; align-items:center; gap:0.25rem;">
-                <span class="post-name">${profileUser?.username || 'User'}</span>
+                <span class="post-name">${profileUser?.username || 'User'}${verifiedBadgeHtml}</span>
                 <span class="post-username">@${(profileUser?.username || 'user').toLowerCase()}</span>
                 <span class="post-timestamp">${timeAgo}</span>
               </div>
