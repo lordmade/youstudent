@@ -2,11 +2,15 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Vynix Imagine • AI Image Generator</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Vynix Imagine • App</title>
+  
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet"/>
   <link href="https://fonts.googleapis.com/icon?family=Material+Symbols+Rounded" rel="stylesheet"/>
-  
+
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-remote-config-compat.js"></script>
+
   <style>
     :root {
       --bg-body: #F0F4F9;
@@ -15,100 +19,201 @@
       --primary-gradient: linear-gradient(135deg, #4285F4, #D96570);
       --text-main: #1F1F1F;
       --text-secondary: #444746;
+      --border-color: #E0E0E0;
     }
-    * { margin:0; padding:0; box-sizing:border-box; }
+    
+    * { 
+      margin: 0; 
+      padding: 0; 
+      box-sizing: border-box; 
+      -webkit-tap-highlight-color: transparent; 
+    }
+    
     body {
       font-family: 'Outfit', sans-serif;
       background: var(--bg-body);
       color: var(--text-main);
-      height: 100dvh;
-      display: flex;
-      overflow: hidden;
-    }
-    .sidebar {
-      width: 280px;
-      background: white;
-      padding: 16px;
-      border-right: 1px solid #e0e0e0;
-      overflow-y: auto;
-    }
-    .main {
-      flex: 1;
+      /* Use svh to account for mobile browser navigation bars */
+      height: 100svh; 
       display: flex;
       flex-direction: column;
-      background: var(--bg-surface);
+      overflow: hidden;
     }
-    .top-bar {
-      height: 64px;
-      padding: 0 24px;
+
+    /* App Header */
+    .app-header {
+      background: var(--bg-surface);
+      height: 60px;
+      padding: 0 16px;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      border-bottom: 1px solid #e0e0e0;
-      font-weight: 600;
+      border-bottom: 1px solid var(--border-color);
+      box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+      z-index: 10;
     }
-    .chat-scroll {
+    
+    .app-title {
+      font-weight: 600;
+      font-size: 1.1rem;
+      color: var(--text-main);
+    }
+
+    .icon-btn {
+      background: none;
+      border: none;
+      color: var(--text-secondary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      cursor: pointer;
+    }
+    
+    .icon-btn:active {
+      background: #f0f0f0;
+    }
+
+    /* Scrollable Content Area */
+    .main-content {
       flex: 1;
       overflow-y: auto;
-      padding: 24px;
-    }
-    .message-row {
-      margin: 16px 0;
+      scroll-behavior: smooth;
       display: flex;
       flex-direction: column;
-      gap: 8px;
     }
+
+    /* Welcome Screen */
+    .welcome-screen {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px 16px;
+      text-align: center;
+    }
+
+    .brand-gradient {
+      background: var(--primary-gradient);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      font-size: 2.5rem;
+      font-weight: 700;
+      margin-bottom: 12px;
+    }
+
+    .suggestions-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      width: 100%;
+      max-width: 400px;
+      margin-top: 24px;
+    }
+
+    .suggestion-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-color);
+      padding: 16px;
+      border-radius: 16px;
+      text-align: left;
+      cursor: pointer;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.02);
+    }
+    
+    .suggestion-card:active {
+      transform: scale(0.98);
+      background: #fafafa;
+    }
+
+    /* Chat Area */
+    .chat-container {
+      padding: 16px;
+      display: none;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .message-row {
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+    }
+
     .message-row.user { align-items: flex-end; }
     .message-row.ai   { align-items: flex-start; }
+
     .msg-bubble {
-      max-width: 80%;
+      max-width: 85%;
       padding: 12px 16px;
       border-radius: 20px;
-      line-height: 1.5;
+      font-size: 0.95rem;
+      line-height: 1.4;
     }
+
     .msg-bubble.user {
       background: #D3E3FD;
+      color: #041E49;
       border-radius: 20px 20px 4px 20px;
     }
+
     .msg-bubble.ai {
-      background: #F0F4F9;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-color);
+      border-radius: 20px 20px 20px 4px;
     }
+
     .images-container {
       display: flex;
-      flex-wrap: wrap;
+      flex-direction: column; /* Stacks images vertically on mobile */
       gap: 12px;
-      margin-top: 12px;
+      margin-top: 8px;
+      width: 100%;
     }
+
     .generated-img {
-      max-width: 360px;
-      border-radius: 12px;
-      box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+      width: 100%;
+      border-radius: 16px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
       cursor: pointer;
-      transition: transform 0.15s;
     }
-    .generated-img:hover { transform: scale(1.03); }
-    .input-container {
-      padding: 16px 24px;
-      background: white;
-      border-top: 1px solid #e0e0e0;
+
+    /* Input Area */
+    .input-area {
+      background: var(--bg-surface);
+      padding: 12px 16px;
+      /* env(safe-area-inset-bottom) protects against iOS home bar overlap */
+      padding-bottom: calc(12px + env(safe-area-inset-bottom));
+      border-top: 1px solid var(--border-color);
     }
+
     .input-wrapper {
       display: flex;
-      gap: 12px;
-      background: #F0F4F9;
-      border-radius: 28px;
-      padding: 8px 16px;
+      align-items: flex-end;
+      gap: 8px;
+      background: var(--bg-body);
+      border-radius: 24px;
+      padding: 6px 6px 6px 16px;
     }
+
     .chat-input {
       flex: 1;
       border: none;
       background: transparent;
-      font-size: 16px;
+      font-size: 1rem;
+      font-family: inherit;
       outline: none;
+      padding: 12px 0;
+      max-height: 120px;
+      resize: none;
     }
+
     .send-btn {
-      width: 48px;
-      height: 48px;
+      width: 40px;
+      height: 40px;
       border-radius: 50%;
       background: var(--primary-gradient);
       color: white;
@@ -117,245 +222,258 @@
       align-items: center;
       justify-content: center;
       cursor: pointer;
+      flex-shrink: 0;
     }
+    
+    .send-btn:active {
+      opacity: 0.8;
+    }
+
+    .footer-text {
+      text-align: center;
+      font-size: 0.75rem;
+      color: #888;
+      margin-top: 8px;
+    }
+
+    /* Loading Animation */
     .thinking {
       display: flex;
       align-items: center;
-      gap: 12px;
+      gap: 6px;
       padding: 12px 16px;
-      background: #E8F0FE;
-      border-radius: 20px;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-color);
+      border-radius: 20px 20px 20px 4px;
       width: fit-content;
     }
+    
     .dot {
-      width: 8px; height: 8px;
+      width: 6px; height: 6px;
       background: var(--primary);
       border-radius: 50%;
-      animation: bounce 1.4s infinite;
+      animation: bounce 1.4s infinite ease-in-out both;
     }
+    
+    .dot:nth-child(1) { animation-delay: -0.32s; }
     .dot:nth-child(2) { animation-delay: -0.16s; }
-    .dot:nth-child(3) { animation-delay: -0.32s; }
+    
     @keyframes bounce {
-      0%,80%,100% { transform: scale(0); }
+      0%, 80%, 100% { transform: scale(0); }
       40% { transform: scale(1); }
-    }
-    .welcome {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      text-align: center;
-      padding: 40px;
-    }
-    .brand-gradient {
-      background: var(--primary-gradient);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      font-size: 3.5rem;
-      font-weight: 700;
-      margin-bottom: 16px;
     }
   </style>
 </head>
 <body>
 
-<aside class="sidebar">
-  <button style="width:100%; padding:12px; background:#4285F4; color:white; border:none; border-radius:12px; margin-bottom:24px;">
-    New Image Chat
-  </button>
-  <!-- History placeholder -->
-  <div style="color:#888; text-align:center; margin-top:40px;">Chat history coming soon</div>
-</aside>
+  <header class="app-header">
+    <button class="icon-btn" onclick="resetChat()" title="New Chat">
+      <span class="material-symbols-rounded">add_circle</span>
+    </button>
+    <div class="app-title">Vynix Imagine</div>
+    <button class="icon-btn" title="Settings">
+      <span class="material-symbols-rounded">settings</span>
+    </button>
+  </header>
 
-<main class="main">
-  <div class="top-bar">
-    <span>Vynix Imagine – Grok Image Gen</span>
-  </div>
-
-  <div class="welcome" id="welcomeScreen">
-    <h1 class="brand-gradient">Imagine Anything</h1>
-    <p style="font-size:1.3rem; color:#555; max-width:600px; margin:24px auto;">
-      Describe your idea and watch Grok turn it into beautiful images.
-    </p>
-    <div style="display:flex; gap:16px; flex-wrap:wrap; justify-content:center; margin:32px 0;">
-      <div onclick="setPrompt('A cyberpunk city at night with flying cars and neon lights, ultra realistic')" 
-           style="background:#fff; border:1px solid #ddd; padding:16px; border-radius:12px; width:220px; cursor:pointer;">
-        <strong>Cyberpunk city</strong><br><small>ultra realistic</small>
-      </div>
-      <div onclick="setPrompt('Studio Ghibli style forest spirit sitting on a giant ancient tree')" 
-           style="background:#fff; border:1px solid #ddd; padding:16px; border-radius:12px; width:220px; cursor:pointer;">
-        <strong>Ghibli forest spirit</strong><br><small>anime style</small>
-      </div>
-      <div onclick="setPrompt('Futuristic robot barista making coffee in a cozy cafe, cinematic lighting')" 
-           style="background:#fff; border:1px solid #ddd; padding:16px; border-radius:12px; width:220px; cursor:pointer;">
-        <strong>Robot barista</strong><br><small>cinematic</small>
+  <main class="main-content" id="mainScroll">
+    
+    <div class="welcome-screen" id="welcomeScreen">
+      <h1 class="brand-gradient">Imagine Anything</h1>
+      <p style="color: var(--text-secondary); font-size: 1rem;">
+        Describe your idea and watch Grok turn it into beautiful images.
+      </p>
+      
+      <div class="suggestions-grid">
+        <div class="suggestion-card" onclick="setPrompt('A cyberpunk city at night with flying cars and neon lights, ultra realistic')">
+          <strong>Cyberpunk city</strong><br><small style="color: #666;">Ultra realistic</small>
+        </div>
+        <div class="suggestion-card" onclick="setPrompt('Studio Ghibli style forest spirit sitting on a giant ancient tree')">
+          <strong>Ghibli forest spirit</strong><br><small style="color: #666;">Anime style</small>
+        </div>
+        <div class="suggestion-card" onclick="setPrompt('Futuristic robot barista making coffee in a cozy cafe, cinematic lighting')">
+          <strong>Robot barista</strong><br><small style="color: #666;">Cinematic lighting</small>
+        </div>
       </div>
     </div>
-  </div>
 
-  <div class="chat-scroll" id="chatContainer" style="display:none;"></div>
+    <div class="chat-container" id="chatContainer"></div>
 
-  <div class="input-container">
+  </main>
+
+  <footer class="input-area">
     <div class="input-wrapper">
-      <input type="text" class="chat-input" id="userInput" placeholder="Describe the image you want to generate..." />
+      <input type="text" class="chat-input" id="userInput" placeholder="Describe an image..." autocomplete="off" />
       <button class="send-btn" id="sendBtn">
-        <span class="material-symbols-rounded">send</span>
+        <span class="material-symbols-rounded">arrow_upward</span>
       </button>
     </div>
-    <div style="text-align:center; margin-top:8px; font-size:0.85rem; color:#777;">
-      Powered by xAI Grok • grok-imagine-image
-    </div>
-  </div>
-</main>
+    <div class="footer-text">Powered by xAI Grok</div>
+  </footer>
 
-<script>
-  const API_BASE = "https://api.x.ai/v1";
-  let XAI_API_KEY = "";
+  <script>
+    const API_BASE = "https://api.x.ai/v1";
+    let XAI_API_KEY = "";
 
-  // Fetch API key from Firebase Remote Config
-  const firebaseConfig = {
-    apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
-    authDomain: "fire-b-a8878.firebaseapp.com",
-    projectId: "fire-b-a8878",
-    databaseURL: "https://fire-b-a8878-default-rtdb.firebaseio.com",
-    appId: "1:658673187627:web:6e4c29af661785f0afa36e"
-  };
+    // Firebase Configuration
+    const firebaseConfig = {
+      apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
+      authDomain: "fire-b-a8878.firebaseapp.com",
+      projectId: "fire-b-a8878",
+      databaseURL: "https://fire-b-a8878-default-rtdb.firebaseio.com",
+      appId: "1:658673187627:web:6e4c29af661785f0afa36e"
+    };
 
-  firebase.initializeApp(firebaseConfig);
-  const remoteConfig = firebase.remoteConfig();
-  remoteConfig.settings.minimumFetchIntervalMillis = 0;
+    // Initialize Firebase
+    firebase.initializeApp(firebaseConfig);
+    const remoteConfig = firebase.remoteConfig();
+    remoteConfig.settings.minimumFetchIntervalMillis = 0;
 
-  async function loadApiKey() {
-    try {
-      await remoteConfig.fetchAndActivate();
-      XAI_API_KEY = remoteConfig.getValue('xai_api_key').asString() || "";
-      if (!XAI_API_KEY) alert("No xAI API key found in remote config!");
-    } catch (err) {
-      console.error("Remote config failed", err);
-      alert("Could not load xAI API key. Check Firebase config.");
-    }
-  }
-
-  loadApiKey();
-
-  const els = {
-    welcome: document.getElementById('welcomeScreen'),
-    chat: document.getElementById('chatContainer'),
-    input: document.getElementById('userInput'),
-    sendBtn: document.getElementById('sendBtn')
-  };
-
-  function activateChat() {
-    els.welcome.style.display = 'none';
-    els.chat.style.display = 'block';
-  }
-
-  function setPrompt(text) {
-    els.input.value = text;
-    handleSend();
-  }
-
-  function appendUserMessage(text) {
-    const row = document.createElement('div');
-    row.className = 'message-row user';
-    row.innerHTML = `<div class="msg-bubble user">${text}</div>`;
-    els.chat.appendChild(row);
-    els.chat.scrollTop = els.chat.scrollHeight;
-  }
-
-  function appendThinking() {
-    const row = document.createElement('div');
-    row.className = 'message-row ai';
-    row.innerHTML = `
-      <div class="thinking">
-        <div class="dot"></div><div class="dot"></div><div class="dot"></div>
-        <span>Generating...</span>
-      </div>`;
-    els.chat.appendChild(row);
-    els.chat.scrollTop = els.chat.scrollHeight;
-    return row;
-  }
-
-  function appendImages(images) {
-    const row = document.createElement('div');
-    row.className = 'message-row ai';
-    const container = document.createElement('div');
-    container.className = 'images-container';
-
-    images.forEach(url => {
-      const img = document.createElement('img');
-      img.src = url;
-      img.className = 'generated-img';
-      img.onclick = () => window.open(url, '_blank');
-      container.appendChild(img);
-    });
-
-    const bubble = document.createElement('div');
-    bubble.className = 'msg-bubble ai';
-    bubble.textContent = "Here are your generated images:";
-    row.appendChild(bubble);
-    row.appendChild(container);
-    els.chat.appendChild(row);
-    els.chat.scrollTop = els.chat.scrollHeight;
-  }
-
-  async function handleSend() {
-    const prompt = els.input.value.trim();
-    if (!prompt || !XAI_API_KEY) return;
-
-    activateChat();
-    appendUserMessage(prompt);
-    const thinkingEl = appendThinking();
-    els.input.value = '';
-
-    try {
-      const res = await fetch(`${API_BASE}/images/generations`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${XAI_API_KEY}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          model: "grok-imagine-image",
-          prompt: prompt,
-          n: 3,                // generate 3 images (1–4 allowed)
-          size: "1024x1024",   // or "1792x1024", "1024x1792" etc.
-          response_format: "url"
-        })
-      });
-
-      if (!res.ok) throw new Error(await res.text());
-
-      const data = await res.json();
-      thinkingEl.remove();
-
-      if (data.data?.length > 0) {
-        const urls = data.data.map(item => item.url);
-        appendImages(urls);
-      } else {
-        appendImages([]);
+    async function loadApiKey() {
+      try {
+        await remoteConfig.fetchAndActivate();
+        XAI_API_KEY = remoteConfig.getValue('xai_api_key').asString() || "";
+        if (!XAI_API_KEY) console.warn("No xAI API key found in remote config.");
+      } catch (err) {
+        console.error("Remote config failed", err);
       }
-    } catch (err) {
-      thinkingEl.remove();
-      const row = document.createElement('div');
-      row.className = 'message-row ai';
-      row.innerHTML = `<div class="msg-bubble ai" style="color:#d32f2f;">Error: ${err.message}</div>`;
-      els.chat.appendChild(row);
     }
-  }
 
-  els.sendBtn.onclick = handleSend;
-  els.input.onkeypress = e => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
+    loadApiKey();
+
+    // DOM Elements
+    const els = {
+      welcome: document.getElementById('welcomeScreen'),
+      chat: document.getElementById('chatContainer'),
+      input: document.getElementById('userInput'),
+      sendBtn: document.getElementById('sendBtn'),
+      scrollArea: document.getElementById('mainScroll')
+    };
+
+    function resetChat() {
+      els.chat.innerHTML = '';
+      els.chat.style.display = 'none';
+      els.welcome.style.display = 'flex';
+    }
+
+    function activateChat() {
+      els.welcome.style.display = 'none';
+      els.chat.style.display = 'flex';
+    }
+
+    function scrollToBottom() {
+      els.scrollArea.scrollTop = els.scrollArea.scrollHeight;
+    }
+
+    function setPrompt(text) {
+      els.input.value = text;
       handleSend();
     }
-  };
-</script>
 
-<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-remote-config-compat.js"></script>
+    function appendUserMessage(text) {
+      const row = document.createElement('div');
+      row.className = 'message-row user';
+      row.innerHTML = `<div class="msg-bubble user">${text}</div>`;
+      els.chat.appendChild(row);
+      scrollToBottom();
+    }
+
+    function appendThinking() {
+      const row = document.createElement('div');
+      row.className = 'message-row ai';
+      row.innerHTML = `
+        <div class="thinking">
+          <div class="dot"></div><div class="dot"></div><div class="dot"></div>
+        </div>`;
+      els.chat.appendChild(row);
+      scrollToBottom();
+      return row;
+    }
+
+    function appendImages(images) {
+      const row = document.createElement('div');
+      row.className = 'message-row ai';
+      
+      const container = document.createElement('div');
+      container.className = 'images-container';
+
+      images.forEach(url => {
+        const img = document.createElement('img');
+        img.src = url;
+        img.className = 'generated-img';
+        img.onclick = () => window.open(url, '_blank');
+        container.appendChild(img);
+      });
+
+      const bubble = document.createElement('div');
+      bubble.className = 'msg-bubble ai';
+      bubble.textContent = "Here are your generated images:";
+      
+      row.appendChild(bubble);
+      row.appendChild(container);
+      els.chat.appendChild(row);
+      scrollToBottom();
+    }
+
+    async function handleSend() {
+      const prompt = els.input.value.trim();
+      if (!prompt) return;
+      
+      if (!XAI_API_KEY) {
+        alert("API Key is missing or still loading. Please wait a moment.");
+        return;
+      }
+
+      activateChat();
+      appendUserMessage(prompt);
+      const thinkingEl = appendThinking();
+      els.input.value = '';
+
+      try {
+        const res = await fetch(`${API_BASE}/images/generations`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${XAI_API_KEY}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            model: "grok-imagine-image",
+            prompt: prompt,
+            n: 3, 
+            size: "1024x1024",
+            response_format: "url"
+          })
+        });
+
+        if (!res.ok) throw new Error(await res.text());
+
+        const data = await res.json();
+        thinkingEl.remove();
+
+        if (data.data && data.data.length > 0) {
+          const urls = data.data.map(item => item.url);
+          appendImages(urls);
+        } else {
+          appendImages([]);
+        }
+      } catch (err) {
+        thinkingEl.remove();
+        const row = document.createElement('div');
+        row.className = 'message-row ai';
+        row.innerHTML = `<div class="msg-bubble ai" style="color:#d32f2f;">Error: ${err.message || 'Generation failed'}</div>`;
+        els.chat.appendChild(row);
+        scrollToBottom();
+      }
+    }
+
+    els.sendBtn.onclick = handleSend;
+    els.input.onkeypress = e => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        handleSend();
+      }
+    };
+  </script>
 
 </body>
 </html>
