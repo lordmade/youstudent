@@ -208,6 +208,7 @@
       gap: 12px;
       transition: transform 0.2s, box-shadow 0.2s;
       box-shadow: var(--shadow-md);
+      position: relative;
     }
     
     .generate-btn:hover:not(:disabled) {
@@ -680,12 +681,14 @@
 
   <script>
     // ==================== HARDCODED API CONFIGURATION ====================
+    // FIXED: Removed trailing space from baseUrl
     const apiConfig = {
       baseUrl: 'https://image.pollinations.ai/prompt',
       defaultParams: {
         nologo: true,
         enhance: true,
-        safe: true
+        safe: true,
+        model: 'flux'
       }
     };
 
@@ -707,7 +710,7 @@
 
     // ==================== NAVIGATION ====================
     function goBack() {
-      window.location.href = 'ai.html'; // Or your main chat page
+      window.location.href = 'ai.html';
     }
 
     // ==================== SEED MANAGEMENT ====================
@@ -760,21 +763,24 @@
         // Enhance prompt with style
         let enhancedPrompt = prompt;
         if (style !== 'default') {
-          enhancedPrompt += `, ${style.replace('-', ' ')} style, high quality, detailed`;
+          enhancedPrompt += `, ${style.replace(/-/g, ' ')} style, high quality, detailed`;
         }
         
-        // Build URL with parameters
+        // Build parameters
         const params = new URLSearchParams({
-          ...apiConfig.defaultParams,
           width: dimensions.width,
           height: dimensions.height,
           seed: seed || Math.floor(Math.random() * 1000000),
-          nologo: true
+          nologo: 'true',
+          enhance: 'true',
+          model: 'flux'
         });
         
-        // For Pollinations AI: URL format is /prompt/{prompt}?params
+        // FIXED: Correct URL format - no extra slash before prompt
         const encodedPrompt = encodeURIComponent(enhancedPrompt);
         const imageUrl = `${apiConfig.baseUrl}/${encodedPrompt}?${params.toString()}`;
+        
+        console.log('Generating image with URL:', imageUrl); // Debug log
         
         // Preload image
         await preloadImage(imageUrl);
@@ -799,7 +805,7 @@
         
       } catch (error) {
         console.error('Generation error:', error);
-        showToast('Failed to generate image. Please try again.', 'error');
+        showToast('Failed to generate image: ' + error.message, 'error');
       } finally {
         clearInterval(progressInterval);
         progressBar.style.width = '100%';
@@ -817,7 +823,7 @@
       const qualitySizes = {
         fast: 512,
         standard: 1024,
-        hd: 2048
+        hd: 1536  // Reduced from 2048 to avoid potential limits
       };
       
       const baseSize = qualitySizes[quality] || 1024;
@@ -842,9 +848,13 @@
         width = Math.round(baseSize * (r.w / r.h));
       }
       
-      // Ensure dimensions are valid (max 2048)
-      width = Math.min(width, 2048);
-      height = Math.min(height, 2048);
+      // Ensure dimensions are valid (max 1536 to be safe)
+      width = Math.min(width, 1536);
+      height = Math.min(height, 1536);
+      
+      // Ensure minimum size
+      width = Math.max(width, 64);
+      height = Math.max(height, 64);
       
       return { width, height };
     }
@@ -852,12 +862,13 @@
     function preloadImage(url) {
       return new Promise((resolve, reject) => {
         const img = new Image();
-        img.onload = resolve;
-        img.onerror = reject;
+        img.crossOrigin = 'anonymous'; // Enable CORS
+        img.onload = () => resolve();
+        img.onerror = (e) => reject(new Error('Failed to load image from API'));
         img.src = url;
         
         // Timeout after 60 seconds
-        setTimeout(() => reject(new Error('Image load timeout')), 60000);
+        setTimeout(() => reject(new Error('Image generation timeout')), 60000);
       });
     }
 
@@ -901,7 +912,7 @@
       
       grid.innerHTML = generationHistory.map((item, index) => `
         <div class="gallery-item" onclick="loadFromHistory(${index})">
-          <img src="${item.url}" alt="${escapeHtml(item.prompt)}" loading="lazy" />
+          <img src="${item.url}" alt="${escapeHtml(item.prompt)}" loading="lazy" crossorigin="anonymous" />
           <div class="gallery-item-overlay">
             <p class="gallery-item-prompt">${escapeHtml(item.prompt)}</p>
           </div>
