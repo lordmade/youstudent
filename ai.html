@@ -8,7 +8,6 @@
   <link href="https://fonts.googleapis.com/icon?family=Material+Symbols+Rounded" rel="stylesheet" />
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-remote-config-compat.js"></script>
   <style>
     :root {
       --bg-body: #F0F4F9;
@@ -680,6 +679,16 @@
   </div>
 
   <script>
+    // ==================== HARDCODED API CONFIGURATION ====================
+    const apiConfig = {
+      baseUrl: 'https://image.pollinations.ai/prompt',
+      defaultParams: {
+        nologo: true,
+        enhance: true,
+        safe: true
+      }
+    };
+
     // ==================== FIREBASE CONFIGURATION ====================
     const firebaseConfig = {
       apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
@@ -690,52 +699,11 @@
 
     firebase.initializeApp(firebaseConfig);
     const auth = firebase.auth();
-    const remoteConfig = firebase.remoteConfig();
 
     // ==================== GLOBAL STATE ====================
     let currentImageUrl = null;
     let currentPrompt = '';
     let generationHistory = JSON.parse(localStorage.getItem('vynix_image_history') || '[]');
-    let apiConfig = {
-      baseUrl: 'https://image.pollinations.ai/prompt',
-      defaultParams: {
-        nologo: true,
-        enhance: true
-      }
-    };
-
-    // ==================== INITIALIZATION ====================
-    async function initConfig() {
-      try {
-        // Set minimum fetch interval
-        remoteConfig.settings = {
-          minimumFetchIntervalMillis: 3600000 // 1 hour
-        };
-        
-        await remoteConfig.fetchAndActivate();
-        
-        // Fetch custom API configuration from Remote Config if available
-        const customBaseUrl = remoteConfig.getValue('image_api_base_url').asString();
-        const customParams = remoteConfig.getValue('image_api_params').asString();
-        
-        if (customBaseUrl) {
-          apiConfig.baseUrl = customBaseUrl;
-        }
-        
-        if (customParams) {
-          try {
-            apiConfig.defaultParams = { ...apiConfig.defaultParams, ...JSON.parse(customParams) };
-          } catch (e) {
-            console.log('Using default params');
-          }
-        }
-        
-        console.log('API Config loaded:', apiConfig);
-      } catch (error) {
-        console.warn('Remote Config error, using defaults:', error);
-        // Fallback to Pollinations AI (completely free, no key needed)
-      }
-    }
 
     // ==================== NAVIGATION ====================
     function goBack() {
@@ -1060,7 +1028,6 @@
 
     // ==================== INIT ====================
     document.addEventListener('DOMContentLoaded', () => {
-      initConfig();
       renderGallery();
       randomizeSeed();
       
