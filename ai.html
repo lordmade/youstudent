@@ -15,7 +15,6 @@
     :root {
       --bg-body: #F7F7F7;
       --bg-surface: #FFFFFF;
-      /* Gold & Obsidian Palette */
       --primary: #C5A059; 
       --accent: #1A1A1A;
       --primary-gradient: linear-gradient(135deg, #C5A059, #8E6E37);
@@ -111,16 +110,101 @@
     .message-row.ai { align-items: flex-start; }
     .msg-bubble.ai { background: white; border: 1px solid var(--border-color); border-radius: 18px 18px 18px 4px; }
 
-    .generated-img {
-      width: 100%; border-radius: 12px; margin-top: 10px;
+    /* --- WATERMARK STYLES --- */
+    .img-wrapper {
+      position: relative;
+      margin-top: 10px;
+      border-radius: 12px;
+      overflow: hidden;
       box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+      cursor: pointer;
+    }
+
+    .generated-img, .generated-video {
+      width: 100%;
+      display: block; /* Removes bottom gap */
+    }
+
+    .watermark {
+      position: absolute;
+      bottom: 10px;
+      right: 10px;
+      background: rgba(0, 0, 0, 0.6); /* Semi-transparent black background */
+      color: var(--primary); /* Gold text color */
+      padding: 6px 10px;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      pointer-events: none; /* Lets clicks pass through to the image */
+      backdrop-filter: blur(2px); /* Optional: adds a slight blur behind watermark */
+    }
+    /* ------------------------ */
+
+
+    /* Bottom Section */
+    .bottom-section {
+      background: white;
+      border-top: 1px solid var(--border-color);
+      padding-bottom: env(safe-area-inset-bottom);
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Mode Toggle */
+    .mode-toggle-container {
+      display: flex;
+      justify-content: center;
+      padding: 12px 0 4px 0;
+    }
+
+    .mode-toggle {
+      display: flex;
+      background: #F0F0F0;
+      border-radius: 20px;
+      padding: 4px;
+      position: relative;
+    }
+
+    .toggle-btn {
+      flex: 1;
+      padding: 6px 16px;
+      border-radius: 16px;
+      border: none;
+      background: transparent;
+      font-family: inherit;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+      cursor: pointer;
+      z-index: 2;
+      transition: color 0.3s;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .toggle-btn.active {
+      color: white;
+    }
+
+    /* The sliding background pill */
+    .toggle-indicator {
+      position: absolute;
+      top: 4px;
+      bottom: 4px;
+      width: calc(50% - 4px);
+      background: var(--accent);
+      border-radius: 16px;
+      transition: transform 0.3s ease;
+      z-index: 1;
     }
 
     /* Input Bar */
     .input-bar {
-      background: white; padding: 15px 20px;
-      padding-bottom: calc(15px + env(safe-area-inset-bottom));
-      border-top: 1px solid var(--border-color);
+      padding: 10px 20px 15px 20px;
     }
 
     .input-box {
@@ -170,29 +254,71 @@
         <div class="suggestion-chip" onclick="setPrompt('Portrait of a warrior in glowing tribal neon armor')">
           <strong>Portrait</strong><br>Neon Warrior
         </div>
-        <div class="suggestion-chip" onclick="setPrompt('Oil painting of a busy Lagos market in sunset colors')">
-          <strong>Painting</strong><br>Lagos Market
-        </div>
-        <div class="suggestion-chip" onclick="setPrompt('Abstract patterns inspired by Kente cloth textures')">
-          <strong>Pattern</strong><br>Modern Kente
-        </div>
       </div>
     </div>
 
     <div class="chat-container" id="chatContainer"></div>
   </main>
 
-  <footer class="input-bar">
-    <div class="input-box">
-      <input type="text" class="chat-input" id="userInput" placeholder="What do you see?..." />
-      <button class="send-btn" id="sendBtn">
-        <span class="material-symbols-rounded">arrow_upward</span>
-      </button>
+  <footer class="bottom-section">
+    <div class="mode-toggle-container">
+      <div class="mode-toggle">
+        <div class="toggle-indicator" id="toggleIndicator"></div>
+        <button class="toggle-btn active" id="btnImage" onclick="setMode('image')">
+          <span class="material-symbols-rounded" style="font-size: 16px;">image</span> Image
+        </button>
+        <button class="toggle-btn" id="btnVideo" onclick="setMode('video')">
+          <span class="material-symbols-rounded" style="font-size: 16px;">movie</span> Video
+        </button>
+      </div>
+    </div>
+
+    <div class="input-bar">
+      <div class="input-box">
+        <input type="text" class="chat-input" id="userInput" placeholder="What do you see?..." autocomplete="off" />
+        <button class="send-btn" id="sendBtn">
+          <span class="material-symbols-rounded">arrow_upward</span>
+        </button>
+      </div>
     </div>
   </footer>
 
   <script>
-    // --- CORE LOGIC ---
+    // --- STATE & UI LOGIC ---
+    let currentMode = 'image'; // Default mode
+
+    const els = {
+      welcome: document.getElementById('welcomeScreen'),
+      chat: document.getElementById('chatContainer'),
+      input: document.getElementById('userInput'),
+      send: document.getElementById('sendBtn'),
+      scroll: document.getElementById('mainScroll'),
+      indicator: document.getElementById('toggleIndicator'),
+      btnImage: document.getElementById('btnImage'),
+      btnVideo: document.getElementById('btnVideo')
+    };
+
+    function setMode(mode) {
+      currentMode = mode;
+      if (mode === 'image') {
+        els.indicator.style.transform = 'translateX(0)';
+        els.btnImage.classList.add('active');
+        els.btnVideo.classList.remove('active');
+        els.input.placeholder = "Describe an image...";
+      } else {
+        // Shift the background pill to the right for "Video"
+        els.indicator.style.transform = 'translateX(100%)';
+        els.btnVideo.classList.add('active');
+        els.btnImage.classList.remove('active');
+        els.input.placeholder = "Describe a short video...";
+      }
+    }
+
+    function resetChat() { location.reload(); }
+    function activateChat() { els.welcome.style.display = 'none'; els.chat.style.display = 'flex'; }
+    function setPrompt(t) { els.input.value = t; handleSend(); }
+
+    // --- API LOGIC ---
     const API_BASE = "https://api.x.ai/v1";
     let XAI_API_KEY = "";
 
@@ -216,18 +342,6 @@
     }
     loadKey();
 
-    const els = {
-      welcome: document.getElementById('welcomeScreen'),
-      chat: document.getElementById('chatContainer'),
-      input: document.getElementById('userInput'),
-      send: document.getElementById('sendBtn'),
-      scroll: document.getElementById('mainScroll')
-    };
-
-    function resetChat() { location.reload(); }
-    function activateChat() { els.welcome.style.display = 'none'; els.chat.style.display = 'flex'; }
-    function setPrompt(t) { els.input.value = t; handleSend(); }
-
     async function handleSend() {
       const prompt = els.input.value.trim();
       if (!prompt || !XAI_API_KEY) return;
@@ -242,12 +356,16 @@
       els.scroll.scrollTop = els.scroll.scrollHeight;
 
       try {
-        const res = await fetch(`${API_BASE}/images/generations`, {
+        // Determine endpoint and model based on the selected mode
+        let endpointUrl = currentMode === 'image' ? `${API_BASE}/images/generations` : `${API_BASE}/videos/generations`;
+        let aiModel = currentMode === 'image' ? "grok-imagine-image" : "grok-video-placeholder"; // Video model name is a placeholder
+
+        const res = await fetch(endpointUrl, {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${XAI_API_KEY}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            model: "grok-imagine-image",
-            prompt: prompt // Simplified request to fix "argument not supported"
+            model: aiModel,
+            prompt: prompt
           })
         });
 
@@ -257,15 +375,37 @@
 
         if (data.data && data.data[0].url) {
           const url = data.data[0].url;
-          els.chat.innerHTML += `
-            <div class="message-row ai">
-              <div class="msg-bubble ai">Your vision is ready:</div>
-              <img src="${url}" class="generated-img" onclick="window.open('${url}')">
-            </div>`;
+          
+          if (currentMode === 'image') {
+             // EDITED: Added Wrapper and Watermark Structure
+             els.chat.innerHTML += `
+              <div class="message-row ai">
+                <div class="msg-bubble ai">Your image is ready:</div>
+                <div class="img-wrapper" onclick="window.open('${url}')">
+                  <img src="${url}" class="generated-img">
+                  <div class="watermark">
+                    <span class="material-symbols-rounded" style="font-size:14px;">auto_awesome</span> Ona AI
+                  </div>
+                </div>
+              </div>`;
+          } else {
+             // Video doesn't necessarily need the watermark, or it needs a different implementation
+             els.chat.innerHTML += `
+              <div class="message-row ai">
+                <div class="msg-bubble ai">Your video is ready:</div>
+                <video src="${url}" class="generated-video" controls autoplay loop playsinline></video>
+              </div>`;
+          }
         }
       } catch (err) {
         loader.remove();
-        els.chat.innerHTML += `<div class="message-row ai"><div class="msg-bubble ai" style="color:red">Error: ${err.message}</div></div>`;
+        
+        let errorMsg = err.message;
+        if (currentMode === 'video' && errorMsg.includes("404")) {
+           errorMsg = "xAI Video API endpoint not found. They may not support this yet.";
+        }
+
+        els.chat.innerHTML += `<div class="message-row ai"><div class="msg-bubble ai" style="color:red">Error: ${errorMsg}</div></div>`;
       }
       els.scroll.scrollTop = els.scroll.scrollHeight;
     }
