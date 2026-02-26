@@ -2771,6 +2771,7 @@
    const suggestedFriendsScroll = document.getElementById('suggested-friends-scroll');
    const avatarCache = new Map();
    const usernameCache = new Map();
+  const displayNameCache = new Map();
    const defaultAvatar = "https://abs.twimg.com/sticky/default_profile_images/default_profile_normal.png";
    let alertCallback = null;
    
@@ -2927,56 +2928,61 @@
        }
      };
    }
-   async function getUserInfo(uid) {
-     const cachedAvatar = avatarCache.get(uid);
-     const cachedUsername = usernameCache.get(uid);
-     const cachedVerified = verifiedUsers.has(uid);
+async function getUserInfo(uid) {
+  const cachedAvatar = avatarCache.get(uid);
+  const cachedUsername = usernameCache.get(uid);
+  const cachedDisplayName = displayNameCache.get(uid); // Add this cache
+  const cachedVerified = verifiedUsers.has(uid);
+  
+  if (cachedAvatar && cachedUsername) {
+    return {
+      avatar: cachedAvatar,
+      username: cachedUsername,
+      displayName: cachedDisplayName || cachedUsername, // Use displayName if available
+      verified: cachedVerified,
+      isVerified: cachedVerified
+    };
+  }
+  
+  try {
+    const userRef = ref(db, `users/${uid}`);
+    const snapshot = await get(userRef);
     
-     if (cachedAvatar && cachedUsername) {
-       return {
-         avatar: cachedAvatar,
-         username: cachedUsername,
-         verified: cachedVerified,
-         isVerified: cachedVerified
-       };
-     }
-    
-     try {
-       const userRef = ref(db, `users/${uid}`);
-       const snapshot = await get(userRef);
+    if (snapshot.exists()) {
+      const userData = snapshot.val();
+      const avatarUrl = userData.photoURL || userData.avatarUrl || defaultAvatar;
+      const username = userData.username || 'user_' + uid.substr(0, 6);
+      const displayName = userData.displayName || username; // Get displayName, fallback to username
       
-       if (snapshot.exists()) {
-         const userData = snapshot.val();
-         const avatarUrl = userData.photoURL || userData.avatarUrl || defaultAvatar;
-         const username = userData.username || userData.displayName || 'user_' + uid.substr(0, 6);
-         const isVerified = userData.verified === true;
-        
-         avatarCache.set(uid, avatarUrl);
-         usernameCache.set(uid, username);
-        
-         if (isVerified) {
-           verifiedUsers.add(uid);
-         }
-        
-         return {
-           avatar: avatarUrl,
-           username: username,
-           verified: isVerified,
-           isVerified: isVerified,
-           verifiedType: userData.verifiedType || 'standard'
-         };
-       }
-     } catch (err) {
-       console.error("Error fetching user info:", err);
-     }
-    
-     return {
-       avatar: defaultAvatar,
-       username: 'unknown',
-       verified: false,
-       isVerified: false
-     };
-   }
+      avatarCache.set(uid, avatarUrl);
+      usernameCache.set(uid, username);
+      displayNameCache.set(uid, displayName); // Cache displayName
+      
+      if (userData.verified) {
+        verifiedUsers.add(uid);
+      }
+      
+      return {
+        avatar: avatarUrl,
+        username: username,
+        displayName: displayName, // Return both
+        verified: userData.verified === true,
+        isVerified: userData.verified === true,
+        verifiedType: userData.verifiedType || 'standard'
+      };
+    }
+  } catch (err) {
+    console.error("Error fetching user info:", err);
+  }
+  
+  return {
+    avatar: defaultAvatar,
+    username: 'unknown',
+    displayName: 'Unknown', // Default displayName
+    verified: false,
+    isVerified: false
+  };
+}
    function showNotificationAlert(title, text, avatar, onClick) {
      const alert = document.getElementById('notification-alert');
      document.getElementById('alert-title').textContent = title;
@@ -4300,34 +4306,34 @@ onValue(postsQuery, (snapshot) => {
      if (isOwnPost) {
        el.dataset.ownPost = "true";
      }
-     const userInfo = await getUserInfo(post.uid);
-     const currentUsername = userInfo.username;
-     const avatarUrl = userInfo.avatar;
-     const isVerified = userInfo.verified || verifiedUsers.has(post.uid);
-     const verifiedType = userInfo.verifiedType || 'standard';
-     const timeAgo = getTimeAgo(post.timestamp);
-     const isOwner = currentUser && currentUser.uid === post.uid;
-    
-     let followButtonHtml = '';
-     if (currentUser && !isOwnPost) {
-       const isFollowing = followingList.has(post.uid);
-       // Only show follow button if NOT already following
-       if (!isFollowing) {
-         followButtonHtml = `
-           <button class="follow-btn"
-                   data-uid="${post.uid}"
-                   data-following="false"
-                   onclick="event.stopPropagation(); toggleFollow('${post.uid}', this)">
-             <span class="btn-text">Follow</span>
-           </button>
-         `;
-       }
-     }
-    
-     const parsedText = parseText(post.text, searchQuery);
-     const highlightedUsername = searchQuery ?
-       currentUsername.replace(new RegExp(`(${searchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'),
-       '<span class="search-highlight">$1</span>') : currentUsername;
+const userInfo = await getUserInfo(post.uid);
+const username = userInfo.username;           // For @username
+const displayName = userInfo.displayName;     // For display name (bold)
+const avatarUrl = userInfo.avatar;
+const isVerified = userInfo.verified || verifiedUsers.has(post.uid);
+const verifiedType = userInfo.verifiedType || 'standard';
+const timeAgo = getTimeAgo(post.timestamp);
+const isOwner = currentUser && currentUser.uid === post.uid;
+
+let followButtonHtml = '';
+if (currentUser && !isOwnPost) {
+  const isFollowing = followingList.has(post.uid);
+  if (!isFollowing) {
+    followButtonHtml = `
+      <button class="follow-btn"
+              data-uid="${post.uid}"
+              data-following="false"
+              onclick="event.stopPropagation(); toggleFollow('${post.uid}', this)">
+        <span class="btn-text">Follow</span>
+      </button>
+    `;
+  }
+}
+
+const parsedText = parseText(post.text, searchQuery);
+const highlightedDisplayName = searchQuery ?
+  displayName.replace(new RegExp(`(${searchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'),
+  '<span class="search-highlight">$1</span>') : displayName;
      let repostIndicator = '';
      if (post.isRepost && post.originalPost) {
        const originalUserInfo = await getUserInfo(post.originalPost.uid);
@@ -4414,22 +4420,22 @@ onValue(postsQuery, (snapshot) => {
      
 
 el.innerHTML = `
- ${repostIndicator}
- <img src="${avatarUrl}" class="user-avatar" onerror="this.src='${defaultAvatar}'">
- <div class="post-content">
-   <div class="post-header">
-     <div class="post-meta">
-       <div style="display:flex; flex-direction:column; gap:0.125rem;">
-         <div style="display:flex; align-items:center; gap:0.25rem;">
-           <span class="post-name" style="cursor:pointer;" onclick="window.location.href='profile.html?id=${post.uid}'">
-             ${highlightedUsername}
-             ${verifiedBadgeHtml}
-           </span>
-           ${followButtonHtml}
-         </div>
-         <span class="post-username" style="font-size:0.875rem; color:var(--text-muted); font-weight:500;">@${currentUsername.toLowerCase().replace(/\s/g,'')} · ${timeAgo}</span>
-       </div>
-     </div>
+  ${repostIndicator}
+  <img src="${avatarUrl}" class="user-avatar" onerror="this.src='${defaultAvatar}'">
+  <div class="post-content">
+    <div class="post-header">
+      <div class="post-meta">
+        <div style="display:flex; flex-direction:column; gap:0.125rem;">
+          <div style="display:flex; align-items:center; gap:0.25rem;">
+            <span class="post-name" style="cursor:pointer;" onclick="window.location.href='profile.html?id=${post.uid}'">
+              ${highlightedDisplayName}
+              ${verifiedBadgeHtml}
+            </span>
+            ${followButtonHtml}
+          </div>
+          <span class="post-username" style="font-size:0.875rem; color:var(--text-muted); font-weight:500;">@${username.toLowerCase().replace(/\s/g,'')} · ${timeAgo}</span>
+        </div>
+      </div>
      <div class="kebab-menu">
        <i data-feather="more-horizontal" style="width:20px;height:20px;"></i>
      </div>
