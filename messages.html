@@ -54,7 +54,6 @@
       user-select: text;
     }
 
-    /* Mobile-First Layout */
     .app-container {
       display: flex;
       flex-direction: column;
@@ -63,7 +62,6 @@
       position: relative;
     }
 
-    /* Header */
     .app-header {
       position: fixed;
       top: 0;
@@ -107,11 +105,11 @@
       transition: all 0.2s;
     }
 
-    .header-btn:hover {
+    .header-btn:active {
       background: var(--border);
+      transform: scale(0.95);
     }
 
-    /* Search Bar */
     .search-container {
       position: fixed;
       top: 60px;
@@ -160,7 +158,6 @@
       opacity: 0.6;
     }
 
-    /* Conversations List */
     .conversations-view {
       flex: 1;
       overflow-y: auto;
@@ -305,6 +302,7 @@
     .conv-you {
       color: var(--text-muted);
       font-size: 0.85rem;
+      flex-shrink: 0;
     }
 
     .unread-badge {
@@ -323,7 +321,6 @@
       box-shadow: 0 2px 4px rgba(99, 102, 241, 0.3);
     }
 
-    /* Chat Area - Full Screen */
     .chat-area {
       display: none;
       flex-direction: column;
@@ -420,7 +417,6 @@
       border-radius: 50%;
     }
 
-    /* Messages Container */
     .chat-messages {
       flex: 1;
       overflow-y: auto;
@@ -504,7 +500,6 @@
       color: #60A5FA;
     }
 
-    /* Date Separator */
     .date-separator {
       text-align: center;
       margin: 1rem 0;
@@ -530,7 +525,6 @@
       font-weight: 500;
     }
 
-    /* Floating Input Area */
     .chat-input-container {
       position: fixed;
       bottom: 0;
@@ -629,7 +623,6 @@
       box-shadow: none;
     }
 
-    /* Typing Indicator */
     .typing-indicator {
       display: flex;
       gap: 0.25rem;
@@ -659,7 +652,6 @@
       30% { transform: translateY(-10px); }
     }
 
-    /* Empty State */
     .empty-state {
       display: flex;
       flex-direction: column;
@@ -698,7 +690,6 @@
       50% { transform: scale(1.05); opacity: 0.2; }
     }
 
-    /* Modal */
     .modal-overlay {
       position: fixed;
       inset: 0;
@@ -826,7 +817,6 @@
       color: var(--text-light);
     }
 
-    /* Toast */
     #toast {
       position: fixed;
       bottom: calc(100px + env(safe-area-inset-bottom));
@@ -862,7 +852,6 @@
       background: var(--danger);
     }
 
-    /* Loading */
     .spinner {
       width: 20px;
       height: 20px;
@@ -885,7 +874,6 @@
       color: var(--text-muted);
     }
 
-    /* No Conversations */
     .no-conversations {
       text-align: center;
       padding: 4rem 1.5rem;
@@ -909,7 +897,6 @@
       transform: scale(0.98);
     }
 
-    /* Scrollbar */
     ::-webkit-scrollbar {
       width: 4px;
     }
@@ -923,7 +910,6 @@
       border-radius: 2px;
     }
 
-    /* Safe area support */
     @supports (padding-top: env(safe-area-inset-top)) {
       .app-header {
         padding-top: calc(0.75rem + env(safe-area-inset-top));
@@ -941,10 +927,8 @@
   </style>
 </head>
 <body>
-  <!-- Toast -->
   <div id="toast"></div>
 
-  <!-- Modal -->
   <div class="modal-overlay" id="modalOverlay" onclick="closeModal()"></div>
   <div class="modal" id="newChatModal">
     <div class="modal-header">
@@ -965,7 +949,6 @@
   </div>
 
   <div class="app-container">
-    <!-- Conversations List View -->
     <div class="conversations-view" id="conversationsView">
       <div class="app-header">
         <span class="header-title">Messages</span>
@@ -990,7 +973,6 @@
       </div>
     </div>
 
-    <!-- Chat Area -->
     <div class="chat-area" id="chatArea">
       <div class="chat-header">
         <button class="back-btn" onclick="closeChat()">
@@ -1076,7 +1058,7 @@
     let allUsers = [];
     let messagesListener = null;
     let typingTimeout = null;
-    let processedConversations = new Set(); // Track processed conversation IDs
+    let conversationsLoaded = false;
 
     const defaultAvatar = "https://abs.twimg.com/sticky/default_profile_images/default_profile_normal.png";
 
@@ -1089,86 +1071,109 @@
 
       currentUser = user;
       
-      const userRef = ref(db, `users/${user.uid}`);
-      const snapshot = await get(userRef);
-      if (snapshot.exists()) {
-        const userData = snapshot.val();
-        currentUsername = userData.username || userData.displayName || user.email?.split('@')[0];
-      }
+      try {
+        const userRef = ref(db, `users/${user.uid}`);
+        const snapshot = await get(userRef);
+        if (snapshot.exists()) {
+          const userData = snapshot.val();
+          currentUsername = userData.username || userData.displayName || user.email?.split('@')[0];
+        } else {
+          // Create user if doesn't exist
+          currentUsername = user.email?.split('@')[0] || 'user_' + user.uid.substr(0, 6);
+          await set(userRef, {
+            username: currentUsername,
+            email: user.email,
+            createdAt: Date.now(),
+            photoURL: user.photoURL || "",
+            verified: false,
+            online: true
+          });
+        }
 
-      loadConversations();
-      loadAllUsers();
+        // Set online status
+        await update(ref(db, `users/${user.uid}`), { 
+          online: true,
+          lastSeen: Date.now()
+        });
+
+        // Handle disconnect
+        const connectedRef = ref(db, ".info/connected");
+        onValue(connectedRef, (snap) => {
+          if (snap.val() === true) {
+            const userStatusRef = ref(db, `users/${user.uid}`);
+            onDisconnect(userStatusRef).update({ 
+              online: false,
+              lastSeen: Date.now()
+            });
+          }
+        });
+
+        loadConversations();
+        loadAllUsers();
+      } catch (error) {
+        console.error("Auth error:", error);
+        showToast("Error loading profile", "error");
+      }
     });
 
-    // Load conversations with duplicate prevention
+    // Load conversations - FIXED VERSION
     function loadConversations() {
       const chatsRef = ref(db, `userChats/${currentUser.uid}`);
       
       onValue(chatsRef, async (snapshot) => {
-        const newConversations = [];
-        const processedIds = new Set();
+        conversations = [];
         
-        if (snapshot.exists()) {
-          const chatPromises = [];
-          
-          snapshot.forEach((child) => {
-            // Skip if we've already processed this conversation ID
-            if (processedIds.has(child.key)) return;
-            processedIds.add(child.key);
-            
-            const chatData = child.val();
-            const otherUserId = chatData.participants.find(id => id !== currentUser.uid);
-            
-            const promise = get(ref(db, `users/${otherUserId}`)).then(userSnap => {
-              const userData = userSnap.val() || {};
-              return {
-                id: child.key,
-                userId: otherUserId,
-                name: userData.displayName || userData.username || 'Unknown',
-                username: userData.username || '',
-                avatar: userData.photoURL || userData.avatarUrl || defaultAvatar,
-                verified: userData.verified || false,
-                lastMessage: chatData.lastMessage || '',
-                lastMessageTime: chatData.lastMessageTime || 0,
-                unreadCount: chatData.unreadCount || 0,
-                online: userData.online || false,
-                lastSeen: userData.lastSeen || null,
-                typing: chatData.typing || false
-              };
-            });
-            
-            chatPromises.push(promise);
-          });
-          
-          const results = await Promise.all(chatPromises);
-          // Sort by most recent activity first
-          newConversations.push(...results.sort((a, b) => b.lastMessageTime - a.lastMessageTime));
+        if (!snapshot.exists() || !snapshot.val()) {
+          // No conversations found
+          conversationsLoaded = true;
+          renderConversations();
+          return;
         }
         
-        // Merge with existing conversations, avoiding duplicates
-        conversations = mergeConversations(conversations, newConversations);
+        const chatData = snapshot.val();
+        const chatIds = Object.keys(chatData);
+        
+        // Process each chat
+        const conversationPromises = chatIds.map(async (chatId) => {
+          const chat = chatData[chatId];
+          const otherUserId = chat.participants?.find(id => id !== currentUser.uid);
+          
+          if (!otherUserId) return null;
+          
+          try {
+            const userSnap = await get(ref(db, `users/${otherUserId}`));
+            const userData = userSnap.val() || {};
+            
+            return {
+              id: chatId,
+              userId: otherUserId,
+              name: userData.displayName || userData.username || 'Unknown',
+              username: userData.username || '',
+              avatar: userData.photoURL || userData.avatarUrl || defaultAvatar,
+              verified: userData.verified || false,
+              lastMessage: chat.lastMessage || '',
+              lastMessageTime: chat.lastMessageTime || 0,
+              unreadCount: chat.unreadCount || 0,
+              online: userData.online || false,
+              lastSeen: userData.lastSeen || null,
+              typing: chat.typing || false
+            };
+          } catch (err) {
+            console.error("Error loading user:", err);
+            return null;
+          }
+        });
+        
+        const results = await Promise.all(conversationPromises);
+        conversations = results.filter(r => r !== null).sort((a, b) => b.lastMessageTime - a.lastMessageTime);
+        
+        conversationsLoaded = true;
+        renderConversations();
+      }, (error) => {
+        console.error("Error loading conversations:", error);
+        conversationsLoaded = true;
         renderConversations();
       });
-    }
-
-    // Merge conversations avoiding duplicates
-    function mergeConversations(existing, newConvs) {
-      const merged = [...existing];
-      const existingIds = new Set(existing.map(c => c.id));
-      
-      newConvs.forEach(newConv => {
-        const existingIndex = merged.findIndex(c => c.id === newConv.id);
-        if (existingIndex >= 0) {
-          // Update existing conversation
-          merged[existingIndex] = { ...merged[existingIndex], ...newConv };
-        } else {
-          // Add new conversation
-          merged.push(newConv);
-        }
-      });
-      
-      // Re-sort by last message time
-      return merged.sort((a, b) => b.lastMessageTime - a.lastMessageTime);
     }
 
     // Render conversations
@@ -1176,7 +1181,7 @@
       const list = document.getElementById('conversationsList');
       const loadingEl = document.getElementById('loadingConversations');
       
-      if (loadingEl) loadingEl.style.display = 'none';
+      if (loadingEl) loadingEl.remove();
       
       if (conversations.length === 0) {
         list.innerHTML = `
@@ -1184,22 +1189,19 @@
             <div class="empty-icon">
               <i data-feather="message-circle" style="width:48px;height:48px;color:var(--primary-color);"></i>
             </div>
-            <p style="font-size:1.1rem;font-weight:600;color:var(--text-dark);margin-bottom:0.5rem;">No messages yet</p>
-            <p style="color:var(--text-muted);margin-bottom:1.5rem;font-size:0.9rem;">Start a conversation with someone</p>
-            <button class="start-chat-btn" onclick="openModal()">Start chatting</button>
+            <p style="font-size:1.1rem;font-weight:600;color:var(--text-dark);margin-bottom:0.5rem;">No conversations yet</p>
+            <p style="color:var(--text-muted);margin-bottom:1.5rem;font-size:0.9rem;">Start messaging with your friends</p>
+            <button class="start-chat-btn" onclick="openModal()">Start a chat</button>
           </div>
         `;
         feather.replace();
         return;
       }
       
-      // Clear and rebuild list to ensure no duplicates in DOM
+      // Clear and rebuild
       list.innerHTML = '';
       
       conversations.forEach(conv => {
-        // Skip if already rendered
-        if (document.getElementById(`conv-${conv.id}`)) return;
-        
         const div = document.createElement('div');
         div.className = `conversation-item ${conv.id === currentChatId ? 'active' : ''} ${conv.unreadCount > 0 ? 'unread' : ''}`;
         div.onclick = () => openChat(conv);
@@ -1209,24 +1211,23 @@
         const verifiedBadge = conv.verified ? 
           `<span class="verified-badge"><svg viewBox="0 0 24 24"><path d="M22.25 12c0-1.43-.88-2.67-2.19-3.34.46-1.39.2-2.9-.81-3.91s-2.52-1.27-3.91-.81c-.66-1.31-1.91-2.19-3.34-2.19s-2.67.88-3.33 2.19c-1.4-.46-2.91-.2-3.92.81s-1.26 2.52-.8 3.91c-1.31.67-2.2 1.91-2.2 3.34s.89 2.67 2.2 3.34c-.46 1.39-.21 2.9.8 3.91s2.52 1.26 3.91.81c.67 1.31 1.91 2.19 3.34 2.19s2.68-.88 3.34-2.19c1.39.45 2.9.2 3.91-.81s1.27-2.52.81-3.91c1.31-.67 2.19-1.91 2.19-3.34zm-11.71 4.2L6.8 12.46l1.41-1.42 2.26 2.26 4.8-5.23 1.47 1.36-6.2 6.77z"/></svg></span>` : '';
         
-        // Format last message preview
+        // Format message preview
         let messagePreview = conv.lastMessage || 'Start chatting...';
         let isYou = false;
         
-        // Check if last message was from you
         if (messagePreview.startsWith('You: ')) {
           messagePreview = messagePreview.substring(5);
           isYou = true;
         }
         
-        // Truncate long messages
-        if (messagePreview.length > 35) {
-          messagePreview = messagePreview.substring(0, 35) + '...';
+        // Truncate
+        if (messagePreview.length > 40) {
+          messagePreview = messagePreview.substring(0, 40) + '...';
         }
         
-        const typingIndicator = conv.typing ? 
+        const typingHtml = conv.typing ? 
           `<span style="color:var(--primary-color);font-style:italic;font-weight:500;">typing...</span>` : 
-          `<span class="${conv.unreadCount > 0 ? 'unread' : ''}">${messagePreview}</span>`;
+          `<span class="${conv.unreadCount > 0 ? 'unread' : ''}">${escapeHtml(messagePreview)}</span>`;
         
         div.innerHTML = `
           <div class="conv-avatar">
@@ -1236,14 +1237,14 @@
           <div class="conv-info">
             <div class="conv-header">
               <div class="conv-name-row">
-                <span class="conv-name">${conv.name}</span>
+                <span class="conv-name">${escapeHtml(conv.name)}</span>
                 ${verifiedBadge}
               </div>
               <span class="conv-time">${timeAgo}</span>
             </div>
             <div class="conv-preview-row">
-              ${isYou && !conv.yping ? '<span class="conv-you">You:</span>' : ''}
-              ${typingIndicator}
+              ${isYou && !conv.typing ? '<span class="conv-you">You:</span>' : ''}
+              ${typingHtml}
             </div>
           </div>
           ${conv.unreadCount > 0 ? `<span class="unread-badge">${conv.unreadCount > 99 ? '99+' : conv.unreadCount}</span>` : ''}
@@ -1255,33 +1256,40 @@
       feather.replace();
     }
 
-    // Check if user was active in last 15 minutes
     function isRecentlyActive(lastSeen) {
       if (!lastSeen) return false;
       const fifteenMinutes = 15 * 60 * 1000;
       return (Date.now() - lastSeen) < fifteenMinutes;
     }
 
-    // Load all users for modal
+    // Load all users for new chat modal
     async function loadAllUsers() {
-      const usersRef = ref(db, 'users');
-      const snapshot = await get(usersRef);
-      
-      allUsers = [];
-      if (snapshot.exists()) {
-        snapshot.forEach((child) => {
-          if (child.key !== currentUser.uid) {
-            const userData = child.val();
-            allUsers.push({
-              id: child.key,
-              name: userData.displayName || userData.username || 'Unknown',
-              username: userData.username || '',
-              avatar: userData.photoURL || userData.avatarUrl || defaultAvatar,
-              verified: userData.verified || false,
-              bio: userData.bio || 'Tap to start chatting'
-            });
-          }
-        });
+      try {
+        const usersRef = ref(db, 'users');
+        const snapshot = await get(usersRef);
+        
+        allUsers = [];
+        if (snapshot.exists()) {
+          snapshot.forEach((child) => {
+            if (child.key !== currentUser.uid) {
+              const userData = child.val();
+              // Don't include users already in conversations
+              const existingConv = conversations.find(c => c.userId === child.key);
+              if (!existingConv) {
+                allUsers.push({
+                  id: child.key,
+                  name: userData.displayName || userData.username || 'Unknown',
+                  username: userData.username || '',
+                  avatar: userData.photoURL || userData.avatarUrl || defaultAvatar,
+                  verified: userData.verified || false,
+                  bio: userData.bio || 'Tap to start chatting'
+                });
+              }
+            }
+          });
+        }
+      } catch (err) {
+        console.error("Error loading users:", err);
       }
     }
 
@@ -1303,7 +1311,7 @@
       
       // Update header
       document.getElementById('chatName').innerHTML = `
-        ${conv.name}
+        ${escapeHtml(conv.name)}
         ${conv.verified ? `<span class="verified-badge" style="width:16px;height:16px;margin-left:4px;"><svg viewBox="0 0 24 24"><path d="M22.25 12c0-1.43-.88-2.67-2.19-3.34.46-1.39.2-2.9-.81-3.91s-2.52-1.27-3.91-.81c-.66-1.31-1.91-2.19-3.34-2.19s-2.67.88-3.33 2.19c-1.4-.46-2.91-.2-3.92.81s-1.26 2.52-.8 3.91c-1.31.67-2.2 1.91-2.2 3.34s.89 2.67 2.2 3.34c-.46 1.39-.21 2.9.8 3.91s2.52 1.26 3.91.81c.67 1.31 1.91 2.19 3.34 2.19s2.68-.88 3.34-2.19c1.39.45 2.9.2 3.91-.81s1.27-2.52.81-3.91c1.31-.67 2.19-1.91 2.19-3.34zm-11.71 4.2L6.8 12.46l1.41-1.42 2.26 2.26 4.8-5.23 1.47 1.36-6.2 6.77z"/></svg></span>` : ''}
       `;
       document.getElementById('chatAvatar').src = conv.avatar;
@@ -1321,22 +1329,24 @@
         statusEl.className = 'offline';
       }
       
-      // Listen for online status changes
-      const userStatusRef = ref(db, `users/${conv.userId}/online`);
+      // Listen for online status
+      const userStatusRef = ref(db, `users/${conv.userId}`);
       onValue(userStatusRef, (snapshot) => {
-        const isOnline = snapshot.val();
-        if (isOnline) {
-          onlineIndicator.style.display = 'block';
-          statusEl.textContent = 'Online';
-          statusEl.className = '';
-        } else {
-          onlineIndicator.style.display = 'none';
-          statusEl.textContent = 'Offline';
-          statusEl.className = 'offline';
+        if (snapshot.exists()) {
+          const data = snapshot.val();
+          if (data.online) {
+            onlineIndicator.style.display = 'block';
+            statusEl.textContent = 'Online';
+            statusEl.className = '';
+          } else {
+            onlineIndicator.style.display = 'none';
+            statusEl.textContent = data.lastSeen ? `Last seen ${getTimeAgo(data.lastSeen)}` : 'Offline';
+            statusEl.className = 'offline';
+          }
         }
       });
       
-      // Listen for typing status
+      // Listen for typing
       const typingRef = ref(db, `userChats/${conv.userId}/${conv.id}/typing`);
       onValue(typingRef, (snapshot) => {
         const isTyping = snapshot.val() === currentUser.uid;
@@ -1349,13 +1359,11 @@
       
       loadMessages(conv.id);
       
-      // Focus input
       setTimeout(() => {
         document.getElementById('messageInput').focus();
       }, 300);
     }
 
-    // Show typing indicator
     function showTypingIndicator() {
       const container = document.getElementById('chatMessages');
       let indicator = document.getElementById('typing-indicator');
@@ -1384,7 +1392,7 @@
     // Load messages
     function loadMessages(chatId) {
       const container = document.getElementById('chatMessages');
-      container.innerHTML = '';
+      container.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--text-muted);"><div class="spinner" style="margin:0 auto 1rem;"></div>Loading messages...</div>';
       
       if (messagesListener) {
         messagesListener();
@@ -1395,25 +1403,41 @@
         orderByChild('timestamp')
       );
       
+      let firstLoad = true;
+      
       messagesListener = onChildAdded(messagesRef, (snapshot) => {
+        if (firstLoad) {
+          container.innerHTML = '';
+          firstLoad = false;
+        }
+        
         const msg = snapshot.val();
         msg.id = snapshot.key;
         renderMessage(msg);
         scrollToBottom();
+      }, (error) => {
+        console.error("Error loading messages:", error);
+        container.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--text-muted);">Failed to load messages</div>';
       });
+      
+      // If no messages after short delay, show empty state
+      setTimeout(() => {
+        if (firstLoad) {
+          container.innerHTML = '<div style="text-align:center;padding:3rem;color:var(--text-muted);font-size:0.9rem;">No messages yet.<br>Send your first message!</div>';
+        }
+      }, 2000);
     }
 
-    // Render message
     function renderMessage(msg) {
       const container = document.getElementById('chatMessages');
       const isOwn = msg.senderId === currentUser.uid;
       
-      // Date separator
+      // Check for date separator
       const msgDate = new Date(msg.timestamp).toDateString();
       const lastGroup = container.lastElementChild;
       let needsSeparator = true;
       
-      if (lastGroup && lastGroup.classList.contains('message-group') && !lastGroup.id?.includes('typing')) {
+      if (lastGroup && lastGroup.classList.contains('message-group')) {
         const lastTime = lastGroup.querySelector('.message-time')?.dataset?.timestamp;
         if (lastTime && new Date(parseInt(lastTime)).toDateString() === msgDate) {
           needsSeparator = false;
@@ -1443,7 +1467,7 @@
       container.appendChild(group);
       feather.replace();
       
-      // Mark as read if received message
+      // Mark as read
       if (!isOwn && !msg.read) {
         update(ref(db, `messages/${currentChatId}/${msg.id}`), { read: true });
       }
@@ -1460,52 +1484,69 @@
       input.style.height = 'auto';
       document.getElementById('sendBtn').disabled = true;
       
-      // Clear typing status
+      // Clear typing
       await update(ref(db, `userChats/${currentUser.uid}/${currentChatId}`), { typing: false });
       
       const msgData = {
         senderId: currentUser.uid,
+        senderName: currentUsername,
         text: text,
         timestamp: Date.now(),
         read: false
       };
       
-      const msgRef = push(ref(db, `messages/${currentChatId}`));
-      await set(msgRef, msgData);
-      
-      const updateData = {
-        lastMessage: text,
-        lastMessageTime: Date.now()
-      };
-      
-      // Update for current user
-      await update(ref(db, `userChats/${currentUser.uid}/${currentChatId}`), updateData);
-      
-      // Update for other user and increment unread
-      const otherChatRef = ref(db, `userChats/${currentChatUser.userId}/${currentChatId}`);
-      const otherSnap = await get(otherChatRef);
-      
-      if (otherSnap.exists()) {
-        const currentUnread = otherSnap.val().unreadCount || 0;
-        await update(otherChatRef, {
-          ...updateData,
-          unreadCount: currentUnread + 1
+      try {
+        // Save message
+        const msgRef = push(ref(db, `messages/${currentChatId}`));
+        await set(msgRef, msgData);
+        
+        // Update chat metadata for both users
+        const updateData = {
+          lastMessage: text,
+          lastMessageTime: Date.now()
+        };
+        
+        // For current user
+        await update(ref(db, `userChats/${currentUser.uid}/${currentChatId}`), updateData);
+        
+        // For other user (increment unread)
+        const otherChatRef = ref(db, `userChats/${currentChatUser.userId}/${currentChatId}`);
+        const otherSnap = await get(otherChatRef);
+        
+        if (otherSnap.exists()) {
+          const currentUnread = otherSnap.val().unreadCount || 0;
+          await update(otherChatRef, {
+            ...updateData,
+            unreadCount: currentUnread + 1
+          });
+        } else {
+          // Create chat entry for other user if doesn't exist
+          await set(otherChatRef, {
+            participants: [currentUser.uid, currentChatUser.userId],
+            createdAt: Date.now(),
+            lastMessage: text,
+            lastMessageTime: Date.now(),
+            unreadCount: 1
+          });
+        }
+        
+        // Create notification
+        await push(ref(db, `notifications/${currentChatUser.userId}`), {
+          type: 'message',
+          senderId: currentUser.uid,
+          senderName: currentUsername,
+          chatId: currentChatId,
+          text: text.substring(0, 50),
+          timestamp: Date.now(),
+          read: false
         });
+        
+      } catch (err) {
+        console.error("Error sending message:", err);
+        showToast("Failed to send message", "error");
       }
-      
-      // Create notification
-      await push(ref(db, `notifications/${currentChatUser.userId}`), {
-        type: 'message',
-        senderId: currentUser.uid,
-        senderName: currentUsername,
-        chatId: currentChatId,
-        text: text.substring(0, 50),
-        timestamp: Date.now(),
-        read: false
-      });
     };
 
-    // Handle input
     window.handleKeyDown = function(e) {
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
@@ -1513,7 +1554,7 @@
         return;
       }
       
-      // Set typing status
+      // Typing indicator
       if (currentChatId) {
         update(ref(db, `userChats/${currentUser.uid}/${currentChatId}`), { typing: currentChatUser.userId });
         
@@ -1524,7 +1565,6 @@
       }
     };
 
-    // Close chat
     window.closeChat = function() {
       document.getElementById('chatArea').classList.remove('active');
       document.getElementById('conversationsView').style.display = 'block';
@@ -1537,7 +1577,7 @@
         messagesListener = null;
       }
       
-      // Clear typing status
+      // Clear typing
       if (currentChatId) {
         update(ref(db, `userChats/${currentUser.uid}/${currentChatId}`), { typing: false });
       }
@@ -1552,7 +1592,6 @@
       }
     });
 
-    // Push initial state for back button handling
     history.pushState(null, null, window.location.href);
 
     // Modal functions
@@ -1573,19 +1612,19 @@
       const list = document.getElementById('modalList');
       
       if (users.length === 0) {
-        list.innerHTML = '<div style="text-align:center; padding:2rem; color:var(--text-muted);">No users found</div>';
+        list.innerHTML = '<div style="text-align:center; padding:2rem; color:var(--text-muted);">No users found. You may already be chatting with everyone!</div>';
         return;
       }
       
       list.innerHTML = users.map(user => `
         <div class="modal-user" onclick="startChatWithUser('${user.id}')">
-          <img src="${user.avatar}" onerror="this.src='${defaultAvatar}'" alt="${user.name}">
+          <img src="${user.avatar}" onerror="this.src='${defaultAvatar}'" alt="${escapeHtml(user.name)}">
           <div class="modal-user-info">
             <h4>
-              ${user.name}
+              ${escapeHtml(user.name)}
               ${user.verified ? '<span class="verified-badge" style="width:14px;height:14px;"><svg viewBox="0 0 24 24"><path d="M22.25 12c0-1.43-.88-2.67-2.19-3.34.46-1.39.2-2.9-.81-3.91s-2.52-1.27-3.91-.81c-.66-1.31-1.91-2.19-3.34-2.19s-2.67.88-3.33 2.19c-1.4-.46-2.91-.2-3.92.81s-1.26 2.52-.8 3.91c-1.31.67-2.2 1.91-2.2 3.34s.89 2.67 2.2 3.34c-.46 1.39-.21 2.9.8 3.91s2.52 1.26 3.91.81c.67 1.31 1.91 2.19 3.34 2.19s2.68-.88 3.34-2.19c1.39.45 2.9.2 3.91-.81s1.27-2.52.81-3.91c1.31-.67 2.19-1.91 2.19-3.34zm-11.71 4.2L6.8 12.46l1.41-1.42 2.26 2.26 4.8-5.23 1.47 1.36-6.2 6.77z"/></svg></span>' : ''}
             </h4>
-            <p>${user.bio}</p>
+            <p>${escapeHtml(user.bio)}</p>
           </div>
           <i data-feather="message-circle" style="color:var(--primary-color);width:20px;height:20px;"></i>
         </div>
@@ -1604,9 +1643,8 @@
     };
 
     window.startChatWithUser = async function(userId) {
-      // Check if chat already exists
+      // Check if already exists
       const existingChat = conversations.find(c => c.userId === userId);
-      
       if (existingChat) {
         closeModal();
         openChat(existingChat);
@@ -1619,11 +1657,6 @@
       // Create new chat
       const chatRef = push(ref(db, 'chats'));
       const chatId = chatRef.key;
-      
-      await set(chatRef, {
-        participants: [currentUser.uid, userId],
-        createdAt: Date.now()
-      });
       
       const chatData = {
         participants: [currentUser.uid, userId],
@@ -1638,6 +1671,7 @@
       
       closeModal();
       
+      // Reload conversations and open new chat
       const newConv = {
         id: chatId,
         userId: userId,
@@ -1650,10 +1684,8 @@
         unreadCount: 0
       };
       
-      // Add to conversations array
       conversations.unshift(newConv);
       renderConversations();
-      
       openChat(newConv);
     };
 
@@ -1702,7 +1734,6 @@
       }, 2800);
     }
 
-    // Utilities
     function getTimeAgo(timestamp) {
       if (!timestamp) return '';
       const diff = Math.floor((Date.now() - timestamp) / 1000);
@@ -1729,6 +1760,7 @@
     }
 
     function escapeHtml(text) {
+      if (!text) return '';
       const div = document.createElement('div');
       div.textContent = text;
       return div.innerHTML;
