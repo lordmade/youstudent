@@ -600,7 +600,6 @@
     </svg>
 </div>
 
-<!-- ══ FULLSCREEN VIDEO FEED ══ -->
 <div class="vf-overlay" id="vf-overlay">
     <button class="vf-close" onclick="closeVideoFeed()">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round">
@@ -608,6 +607,20 @@
         </svg>
     </button>
     <div class="vf-scroller" id="vf-scroller"></div>
+</div>
+
+<div class="modal-overlay" id="vf-comments-overlay" onclick="closeVfComments()" style="z-index: 10002;"></div>
+<div class="bottom-sheet" id="vf-comments-sheet" style="z-index: 10003; height: 75vh; display: flex; flex-direction: column; padding: 0;">
+    <div style="padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
+        <h3 style="font-weight: 700; font-size: 18px; margin: 0;">Comments</h3>
+        <button onclick="closeVfComments()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-primary); line-height: 1;">&times;</button>
+    </div>
+    <div id="vf-comments-container" style="flex: 1; overflow-y: auto; padding: 16px 20px;"></div>
+    <div class="comment-input-wrapper" style="margin: 0; padding: 16px 20px; border-top: 1px solid var(--border); background: var(--surface);">
+        <img src="" id="vf-comment-avatar" class="comment-avatar">
+        <input type="text" class="comment-input" id="vf-comment-input" placeholder="Write a comment…">
+        <button class="comment-submit" id="vf-comment-submit">Post</button>
+    </div>
 </div>
 
 <div class="app-container">
@@ -808,6 +821,8 @@ let vfProgTimer     = null;
 let vfLikeState     = {};
 let vfScrollSetup   = false;
 let vfVideoPosts    = [];
+let vfCurrentCommentPostId = null;
+const vfCommentListeners = new Map();
 
 let shuffleSeed = Date.now() % 9999;
 setInterval(() => {
@@ -1146,11 +1161,24 @@ function attachCommentLikeListener(postId, commentId) {
     if (commentLikeListeners.has(key)) return;
     onValue(ref(db, `posts/${postId}/comments/${commentId}/likes`), (snap) => {
         const likes = snap.val() || {}; const count = Object.keys(likes).length; const userLiked = !!likes[currentUser?.uid];
-        const btn = document.getElementById(`clbtn-${postId}-${commentId}`); if (!btn) return;
-        btn.classList.toggle('liked', userLiked);
-        const svg = btn.querySelector('svg');
-        if (svg) { userLiked ? svg.setAttribute('fill','currentColor') : svg.setAttribute('fill','none'); }
-        const countEl = btn.querySelector('.cl-count'); if (countEl) countEl.textContent = count > 0 ? count : '';
+        
+        // Main Feed Comment Update
+        const btn = document.getElementById(`clbtn-${postId}-${commentId}`); 
+        if (btn) {
+            btn.classList.toggle('liked', userLiked);
+            const svg = btn.querySelector('svg');
+            if (svg) { userLiked ? svg.setAttribute('fill','currentColor') : svg.setAttribute('fill','none'); }
+            const countEl = btn.querySelector('.cl-count'); if (countEl) countEl.textContent = count > 0 ? count : '';
+        }
+
+        // VF Comments Update
+        const vfBtn = document.getElementById(`vf-clbtn-${postId}-${commentId}`);
+        if (vfBtn) {
+            vfBtn.classList.toggle('liked', userLiked);
+            const vfSvg = vfBtn.querySelector('svg');
+            if (vfSvg) { userLiked ? vfSvg.setAttribute('fill','currentColor') : vfSvg.setAttribute('fill','none'); }
+            const vfCountEl = vfBtn.querySelector('.cl-count'); if (vfCountEl) vfCountEl.textContent = count > 0 ? count : '';
+        }
     });
     commentLikeListeners.set(key, true);
 }
@@ -1234,6 +1262,21 @@ function renderPost(post, prepend = false) {
     feather.replace();
 }
 
+// ── AUTOPLAY INTERSECTION OBSERVER ──
+const feedVideoObserver = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+        const vid = entry.target;
+        // Don't autoplay feed videos if the full-screen TikTok view is open
+        if (document.getElementById('vf-overlay')?.classList.contains('active')) return;
+
+        if (entry.isIntersecting) {
+            vid.play().catch(()=>{});
+        } else {
+            if (!vid.paused) vid.pause();
+        }
+    });
+}, { threshold: 0.6 });
+
 function createVynixPlayer(src, postId, idx = '') {
     const id = `vynix-${postId}${idx ? '-'+idx : ''}`;
     return `<div class="vynix-player" id="${id}">
@@ -1277,6 +1320,10 @@ function initVynixPlayer(playerId) {
     const playIcon = document.getElementById(`${playerId}-play-icon`);
     const loader   = document.getElementById(`${playerId}-loader`);
     let cTimer = null, scrubbing = false;
+
+    // Observe for autoplay functionality
+    feedVideoObserver.observe(video);
+
     const fmt = s => `${Math.floor(s/60)}:${Math.floor(s%60).toString().padStart(2,'0')}`;
     const showCtrls = () => { container.classList.add('controls-visible'); clearTimeout(cTimer); cTimer = setTimeout(() => { if (!video.paused) container.classList.remove('controls-visible'); }, 3000); };
     const flashIcon = (playing) => {
@@ -1334,6 +1381,11 @@ function getVideoPosts() {
 }
 
 window.openVideoFeed = (postId) => {
+    // Pause any actively playing feed videos to prevent sound clashing
+    document.querySelectorAll('.vynix-player video').forEach(v => {
+        if (!v.paused) v.pause();
+    });
+
     vfVideoPosts = getVideoPosts();
     if (!vfVideoPosts.length) { showToast('No videos to show'); return; }
     const startIdx = Math.max(0, vfVideoPosts.findIndex(p => p.id === postId));
@@ -1349,6 +1401,13 @@ window.closeVideoFeed = () => {
     document.body.style.overflow = '';
     document.querySelectorAll('#vf-scroller video').forEach(v => { v.pause(); v.src = ''; });
     if (vfProgTimer) { clearInterval(vfProgTimer); vfProgTimer = null; }
+    
+    // Resume auto-play for feed videos that are currently in the viewport
+    document.querySelectorAll('.vynix-player video').forEach(vid => {
+        const rect = vid.getBoundingClientRect();
+        const inView = rect.top < window.innerHeight && rect.bottom > 0;
+        if (inView) { vid.play().catch(()=>{}); }
+    });
 };
 
 function buildVideoSlides(startIdx) {
@@ -1579,15 +1638,158 @@ window.vfToggleLike = async (postId, slideIdx) => {
     } catch {}
 };
 
+/* ══ VF COMMENTS HANDLERS ══ */
 window.vfOpenComments = (postId) => {
-    closeVideoFeed();
-    setTimeout(() => {
-        const card = document.getElementById(`post-${postId}`);
-        if (card) {
-            card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            toggleComments(postId);
-        }
-    }, 350);
+    vfCurrentCommentPostId = postId;
+    const overlay = document.getElementById('vf-comments-overlay');
+    const sheet = document.getElementById('vf-comments-sheet');
+    document.getElementById('vf-comment-avatar').src = currentUserData?.photoURL || DEFAULT_AVATAR;
+
+    // Reset container for the current post
+    const container = document.getElementById('vf-comments-container');
+    container.innerHTML = `<div id="vf-comments-list-${postId}"></div>`;
+
+    overlay.classList.add('active');
+    sheet.style.transform = 'translateY(0)';
+
+    const input = document.getElementById('vf-comment-input');
+    const btn = document.getElementById('vf-comment-submit');
+    input.value = '';
+    
+    input.oninput = () => { 
+        btn.disabled = !input.value.trim(); 
+        btn.classList.toggle('active', !!input.value.trim()); 
+    };
+    input.onkeypress = (e) => { if (e.key === 'Enter') window.vfSubmitComment(postId); };
+    btn.onclick = () => window.vfSubmitComment(postId);
+
+    setupVfCommentsListener(postId);
+};
+
+window.closeVfComments = () => {
+    document.getElementById('vf-comments-overlay').classList.remove('active');
+    document.getElementById('vf-comments-sheet').style.transform = 'translateY(100%)';
+    if (vfCurrentCommentPostId) {
+        try { off(ref(db, `posts/${vfCurrentCommentPostId}/comments`)); } catch {}
+        vfCommentListeners.delete(vfCurrentCommentPostId);
+        vfCurrentCommentPostId = null;
+    }
+};
+
+window.vfSubmitComment = async (postId) => {
+    const input = document.getElementById(`vf-comment-input`);
+    const text  = input.value.trim();
+    if (!text) return;
+    
+    const btn = document.getElementById(`vf-comment-submit`);
+    btn.disabled = true;
+    try {
+        await push(ref(db, `posts/${postId}/comments`), {
+            uid: currentUser.uid, text, timestamp: serverTimestamp(), likes: {}
+        });
+        input.value = '';
+        btn.disabled = true;
+        btn.classList.remove('active');
+        
+        try {
+            const postSnap = await get(ref(db, `posts/${postId}`));
+            if (postSnap.exists()) {
+                const ownerUid = postSnap.val().uid;
+                if (ownerUid !== currentUser.uid) {
+                    await push(
+                        ref(db, `notifications/${ownerUid}`),
+                        { type: 'comment', actorId: currentUser.uid, postId, read: false, timestamp: Date.now() }
+                    );
+                }
+            }
+        } catch (e) { console.warn('Comment notification failed', e); }
+
+    } catch { showToast('Failed to post comment'); }
+    finally   { btn.disabled = false; }
+};
+
+function setupVfCommentsListener(postId) {
+    if (vfCommentListeners.has(postId)) {
+        off(ref(db, `posts/${postId}/comments`));
+    }
+    const cRef = ref(db, `posts/${postId}/comments`);
+    
+    onChildAdded(cRef, async (snap) => {
+        if (document.getElementById(`vf-comment-${postId}-${snap.key}`)) return;
+        await renderVfComment(postId, snap.key, snap.val());
+    });
+    
+    onChildRemoved(cRef, (snap) => {
+        const el = document.getElementById(`vf-comment-${postId}-${snap.key}`);
+        if (el) { el.classList.add('removing'); setTimeout(() => el.remove(), 300); }
+    });
+    
+    vfCommentListeners.set(postId, true);
+}
+
+async function renderVfComment(postId, commentId, comment, isReply=false, parentId=null) {
+    const containerId = parentId ? `vf-replies-${postId}-${parentId}` : `vf-comments-list-${postId}`;
+    const container = document.getElementById(containerId);
+    if (!container || document.getElementById(`vf-comment-${postId}-${commentId}`)) return;
+    
+    let user = {};
+    try { const us = await get(ref(db, `users/${comment.uid}`)); user = us.val() || {}; } catch {}
+    
+    const isOwner  = comment.uid === currentUser.uid;
+    const likes     = comment.likes || {};
+    const likeCount = Object.keys(likes).length;
+    const userLiked = !!likes[currentUser?.uid];
+
+    const div = document.createElement('div');
+    div.className = `comment`; div.id = `vf-comment-${postId}-${commentId}`;
+    div.innerHTML = `
+        <img src="${user.photoURL || DEFAULT_AVATAR}" onerror="this.src='${DEFAULT_AVATAR}'" class="comment-avatar">
+        <div class="comment-content">
+            <div class="comment-header">
+                <span class="comment-author">${escapeHtml(user.displayName||'User')}</span>
+                <span class="comment-time">${formatTime(comment.timestamp)}</span>
+                ${isOwner ? `<div class="comment-menu"><button class="comment-menu-btn" onclick="confirmDeleteComment('${postId}','${commentId}')"><i data-feather="trash-2" style="width:14px;height:14px;"></i></button></div>` : ''}
+            </div>
+            <div class="comment-text">${escapeHtml(comment.text)}</div>
+            <div class="comment-actions">
+                <button class="comment-action ${userLiked ? 'liked' : ''}" id="vf-clbtn-${postId}-${commentId}"
+                    onclick="toggleCommentLike('${postId}','${commentId}')"
+                    style="background:none;border:none;font-family:inherit;font-size:12px;font-weight:600;padding:0;cursor:pointer;display:flex;align-items:center;gap:4px;color:${userLiked ? 'var(--like)' : 'var(--text-secondary)'};">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="${userLiked ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+                    </svg>
+                    <span class="cl-count">${likeCount > 0 ? likeCount : ''}</span>
+                </button>
+                ${!isReply ? `<span class="comment-action" onclick="showVfReplyInput('${postId}','${commentId}')">Reply</span>` : ''}
+            </div>
+            <div id="vf-replies-${postId}-${commentId}"></div>
+            <div id="vf-reply-input-${postId}-${commentId}"></div>
+        </div>`;
+        
+    container.appendChild(div);
+    attachCommentLikeListener(postId, commentId);
+    
+    if (comment.replies) {
+        Object.entries(comment.replies).forEach(([rId, r]) => renderVfComment(postId, rId, r, true, commentId));
+    }
+    feather.replace();
+}
+
+window.showVfReplyInput = (postId, commentId) => {
+    const c = document.getElementById(`vf-reply-input-${postId}-${commentId}`);
+    if (c.innerHTML) { c.innerHTML=''; return; }
+    c.innerHTML=`<div class="reply-input-wrapper"><img src="${currentUserData.photoURL || DEFAULT_AVATAR}" onerror="this.src='${DEFAULT_AVATAR}'" class="comment-avatar" style="width:28px;height:28px;"><input type="text" class="reply-input" id="vf-reply-text-${postId}-${commentId}" placeholder="Write a reply…" onkeypress="if(event.key==='Enter')submitVfReply('${postId}','${commentId}')"><button class="reply-submit" onclick="submitVfReply('${postId}','${commentId}')">Post</button></div>`;
+    setTimeout(() => document.getElementById(`vf-reply-text-${postId}-${commentId}`)?.focus(), 100);
+};
+
+window.submitVfReply = async (postId, commentId) => {
+    const i = document.getElementById(`vf-reply-text-${postId}-${commentId}`); if (!i) return;
+    const text = i.value.trim(); if (!text) return;
+    try { 
+        await push(ref(db,`posts/${postId}/comments/${commentId}/replies`),{uid:currentUser.uid,text,timestamp:serverTimestamp(),likes:{}}); 
+        i.value=''; 
+    }
+    catch { showToast('Failed to post reply'); }
 };
 
 /* ══════════════════════════════════════ */
