@@ -145,6 +145,8 @@
         @keyframes updateFlash { 0% { background: rgba(var(--primary-rgb),0.15); } 100% { background: transparent; } }
         @keyframes badgePop { 0% { transform: scale(0.5); } 70% { transform: scale(1.2); } 100% { transform: scale(1); } }
         @keyframes navSlideUp { from { opacity: 0; transform: translateX(-50%) translateY(20px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
+        @keyframes vf-like-pop { 0%{transform:scale(1)} 40%{transform:scale(1.45)} 70%{transform:scale(0.9)} 100%{transform:scale(1)} }
+        @keyframes vf-bounce { 0%,100%{transform:translateX(-50%) translateY(0)} 50%{transform:translateX(-50%) translateY(-5px)} }
 
         /* ── NEW POST PILL ── */
         .new-posts-pill {
@@ -240,6 +242,20 @@
         .see-more-btn { color: var(--primary); font-size: 14px; font-weight: 600; cursor: pointer; background: none; border: none; padding: 2px 0 8px; display: inline-block; font-family: inherit; }
         .post-text .mention, .post-text .hashtag, .post-text .post-link { color: var(--primary); font-weight: 500; cursor: pointer; text-decoration: none; }
         .post-text .mention:hover, .post-text .hashtag:hover, .post-text .post-link:hover { text-decoration: underline; }
+
+        /* ══ VIDEO POST CLICK OVERLAY ══ */
+        .video-open-overlay {
+            position: absolute; inset: 0; z-index: 8; cursor: pointer; background: transparent;
+        }
+        .video-open-hint {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
+            background: rgba(0,0,0,0.55); color: white; padding: 8px 18px;
+            border-radius: 9999px; font-size: 13px; font-weight: 600;
+            opacity: 0; transition: opacity 0.2s; pointer-events: none;
+            white-space: nowrap; backdrop-filter: blur(4px);
+        }
+        .video-post-wrapper { position: relative; }
+        .video-post-wrapper:hover .video-open-hint { opacity: 1; }
 
         /* ══ CUSTOM VIDEO PLAYER ══ */
         .vynix-player { position: relative; background: #000; border-radius: 16px; overflow: hidden; margin-bottom: 12px; border: 1px solid var(--border); cursor: pointer; -webkit-touch-callout: none; user-select: none; }
@@ -450,6 +466,80 @@
         .story-nav { position: absolute; top: 0; bottom: 0; width: 30%; z-index: 5; }
         .story-nav.prev { left: 0; } .story-nav.next { right: 0; }
 
+        /* ══ FULLSCREEN VIDEO FEED ══ */
+        .vf-overlay {
+            position: fixed; inset: 0; background: #000; z-index: 9999;
+            display: flex; flex-direction: column;
+            opacity: 0; pointer-events: none; transition: opacity 0.25s;
+        }
+        .vf-overlay.active { opacity: 1; pointer-events: all; }
+        .vf-scroller {
+            flex: 1; overflow-y: scroll; scroll-snap-type: y mandatory; scrollbar-width: none;
+        }
+        .vf-scroller::-webkit-scrollbar { display: none; }
+        .vf-slide {
+            height: 100vh; scroll-snap-align: start; position: relative;
+            display: flex; align-items: center; justify-content: center; background: #000;
+            overflow: hidden;
+        }
+        .vf-close {
+            position: fixed; top: calc(16px + env(safe-area-inset-top)); left: 16px;
+            z-index: 10001; background: rgba(255,255,255,0.15); border: none; color: white;
+            width: 40px; height: 40px; border-radius: 50%; display: flex;
+            align-items: center; justify-content: center; cursor: pointer; backdrop-filter: blur(8px);
+            transition: background 0.2s;
+        }
+        .vf-close:hover { background: rgba(255,255,255,0.25); }
+        .vf-info {
+            position: absolute; bottom: calc(90px + env(safe-area-inset-bottom));
+            left: 16px; right: 72px; color: white; z-index: 5;
+        }
+        .vf-author-row {
+            font-size: 15px; font-weight: 700; margin-bottom: 6px;
+            display: flex; align-items: center; gap: 10px;
+        }
+        .vf-author-row img {
+            width: 38px; height: 38px; border-radius: 50%; object-fit: cover;
+            border: 2px solid rgba(255,255,255,0.4); flex-shrink: 0;
+        }
+        .vf-author-name { font-weight: 700; font-size: 15px; }
+        .vf-author-handle { font-size: 12px; opacity: 0.7; font-weight: 400; }
+        .vf-caption { font-size: 14px; opacity: 0.9; line-height: 1.5; margin-top: 4px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+        .vf-actions {
+            position: absolute; right: 12px;
+            bottom: calc(100px + env(safe-area-inset-bottom));
+            display: flex; flex-direction: column; gap: 18px; align-items: center; z-index: 5;
+        }
+        .vf-act { display: flex; flex-direction: column; align-items: center; gap: 4px; color: white; }
+        .vf-act-btn {
+            width: 48px; height: 48px; background: rgba(255,255,255,0.15); border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            border: none; color: white; cursor: pointer;
+            transition: transform 0.15s, background 0.2s;
+        }
+        .vf-act-btn:active { transform: scale(0.82); }
+        .vf-act-btn.liked { background: rgba(244,63,94,0.35); }
+        .vf-act span { font-size: 11px; font-weight: 600; opacity: 0.85; }
+        .vf-progress-bar { position: absolute; bottom: 0; left: 0; right: 0; height: 3px; background: rgba(255,255,255,0.2); }
+        .vf-progress-fill { height: 100%; background: rgba(255,255,255,0.9); width: 0%; }
+        .vf-tap-anim { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; z-index: 6; }
+        .vf-tap-ring {
+            width: 72px; height: 72px; border-radius: 50%; background: rgba(255,255,255,0.2);
+            display: flex; align-items: center; justify-content: center;
+            transform: scale(0); opacity: 0; transition: transform 0.15s, opacity 0.2s;
+        }
+        .vf-tap-ring.show { transform: scale(1); opacity: 1; }
+        .vf-gradient { position: absolute; inset: 0; background: linear-gradient(to top, rgba(0,0,0,0.72) 0%, transparent 40%, transparent 70%, rgba(0,0,0,0.3) 100%); pointer-events: none; }
+        .vf-scroll-hint {
+            position: absolute; bottom: calc(22px + env(safe-area-inset-bottom)); left: 50%;
+            transform: translateX(-50%); color: rgba(255,255,255,0.4); font-size: 11px;
+            display: flex; align-items: center; gap: 4px;
+            animation: vf-bounce 2s infinite ease-in-out; pointer-events: none;
+        }
+        .vf-loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 8; pointer-events: none; }
+        .vf-spinner { width: 40px; height: 40px; border: 3px solid rgba(255,255,255,0.2); border-top-color: rgba(255,255,255,0.8); border-radius: 50%; animation: spin 0.8s linear infinite; }
+        .vf-empty { color: rgba(255,255,255,0.5); font-size: 16px; text-align: center; padding: 32px; }
+
         /* ══ MISC ══ */
         .upload-progress { height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; margin: 12px 0; display: none; }
         .upload-progress.active { display: block; }
@@ -508,6 +598,16 @@
         <circle class="track" cx="28" cy="28" r="25" fill="none" stroke-width="3"/>
         <circle class="fill" id="lp-fill" cx="28" cy="28" r="25" fill="none" stroke-width="3"/>
     </svg>
+</div>
+
+<!-- ══ FULLSCREEN VIDEO FEED ══ -->
+<div class="vf-overlay" id="vf-overlay">
+    <button class="vf-close" onclick="closeVideoFeed()">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round">
+            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+    </button>
+    <div class="vf-scroller" id="vf-scroller"></div>
 </div>
 
 <div class="app-container">
@@ -672,6 +772,7 @@ const DEFAULT_AVATAR = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/
 const CLOUDINARY_CLOUD_NAME   = 'dqkujefxj';
 const CLOUDINARY_UPLOAD_PRESET = 'banter_box';
 const MAX_VIDEO_DURATION = 120;
+const MAX_STORY_VIDEO_DURATION = 30; /* ← 30 seconds for stories */
 const VERIFIED_BADGE_SVG = `<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" style="color:var(--verified);"><path d="M22.25 12c0-1.43-.88-2.67-2.19-3.34.46-1.39.2-2.9-.81-3.91s-2.52-1.27-3.91-.81c-.66-1.31-1.91-2.19-3.34-2.19s-2.67.88-3.33 2.19c-1.4-.46-2.91-.2-3.92.81s-1.26 2.52-.8 3.91c-1.31.67-2.2 1.91-2.2 3.34s.89 2.67 2.2 3.34c-.46 1.39-.21 2.9.8 3.91s2.52 1.26 3.91.81c.67 1.31 1.91 2.19 3.34 2.19s2.68-.88 3.34-2.19c1.39.45 2.9.2 3.91-.81s1.27-2.52.81-3.91c1.31-.67 2.19-1.91 2.19-3.34zm-11.71 4.2L6.8 12.22l1.41-1.41 2.83 2.83 5.66-5.66 1.41 1.41-7.07 7.22z"/></svg>`;
 const REPOST_SVG = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"></polyline><path d="M3 11V9a4 4 0 0 1 4-4h14"></path><polyline points="7 23 3 19 7 15"></polyline><path d="M21 13v2a4 4 0 0 1-4 4H3"></path></svg>`;
 
@@ -700,6 +801,13 @@ let pendingNewPosts = [], isUserAtTop = true;
 const postListeners        = new Map();
 const commentListeners     = new Map();
 const commentLikeListeners = new Map();
+
+/* ══ VIDEO FEED STATE ══ */
+let vfCurrentIdx    = 0;
+let vfProgTimer     = null;
+let vfLikeState     = {};
+let vfScrollSetup   = false;
+let vfVideoPosts    = [];
 
 let shuffleSeed = Date.now() % 9999;
 setInterval(() => {
@@ -1214,15 +1322,300 @@ new MutationObserver(mutations => {
     }));
 }).observe(document.body, { childList: true, subtree: true });
 
+/* ══════════════════════════════════════
+   FULLSCREEN VIDEO FEED
+══════════════════════════════════════ */
+
+function getVideoPosts() {
+    return allPostsCache.filter(p =>
+        p.mediaType === 'video' ||
+        (p.mediaUrls && p.mediaUrls.some(m => m.type === 'video'))
+    );
+}
+
+window.openVideoFeed = (postId) => {
+    vfVideoPosts = getVideoPosts();
+    if (!vfVideoPosts.length) { showToast('No videos to show'); return; }
+    const startIdx = Math.max(0, vfVideoPosts.findIndex(p => p.id === postId));
+    vfCurrentIdx = startIdx;
+    buildVideoSlides(startIdx);
+    document.getElementById('vf-overlay').classList.add('active');
+    document.body.style.overflow = 'hidden';
+    if (!vfScrollSetup) { vfScrollSetup = true; setupVfScroll(); }
+};
+
+window.closeVideoFeed = () => {
+    document.getElementById('vf-overlay').classList.remove('active');
+    document.body.style.overflow = '';
+    document.querySelectorAll('#vf-scroller video').forEach(v => { v.pause(); v.src = ''; });
+    if (vfProgTimer) { clearInterval(vfProgTimer); vfProgTimer = null; }
+};
+
+function buildVideoSlides(startIdx) {
+    const scroller = document.getElementById('vf-scroller');
+    scroller.innerHTML = '';
+
+    vfVideoPosts.forEach((post, i) => {
+        const user = (post.isRepost && post.originalUser) ? post.originalUser : (post.user || {});
+        const videoSrc = post.mediaType === 'video'
+            ? post.mediaUrl
+            : (post.mediaUrls?.find(m => m.type === 'video')?.url || '');
+        const likeCount    = Object.keys(post.likes   || {}).length;
+        const commentCount = Object.keys(post.comments|| {}).length;
+        const repostCount  = Object.keys(post.reposts || {}).length;
+        const userLiked    = !!(post.likes?.[currentUser?.uid] || vfLikeState[post.id]);
+
+        const slide = document.createElement('div');
+        slide.className = 'vf-slide'; slide.id = `vfs-${i}`;
+        slide.innerHTML = `
+            <video id="vfv-${i}" src="${i === startIdx ? videoSrc : ''}"
+                data-src="${videoSrc}"
+                playsinline loop preload="${i === startIdx ? 'auto' : 'none'}"
+                style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;">
+            </video>
+            <div class="vf-gradient"></div>
+            <div class="vf-loading" id="vfl-${i}"><div class="vf-spinner"></div></div>
+            <div class="vf-tap-anim">
+                <div class="vf-tap-ring" id="vftr-${i}">
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="white">
+                        <polygon id="vfti-${i}" points="5 3 19 12 5 21 5 3"/>
+                    </svg>
+                </div>
+            </div>
+            <div class="vf-info">
+                <div class="vf-author-row">
+                    <img src="${user.photoURL || DEFAULT_AVATAR}" onerror="this.src='${DEFAULT_AVATAR}'" alt="">
+                    <div>
+                        <div class="vf-author-name">${escapeHtml(user.displayName || 'User')}</div>
+                        <div class="vf-author-handle">@${user.username || 'user'}</div>
+                    </div>
+                </div>
+                ${post.text ? `<div class="vf-caption">${escapeHtml(post.text.slice(0,150))}${post.text.length>150?'…':''}</div>` : ''}
+            </div>
+            <div class="vf-actions">
+                <div class="vf-act">
+                    <button class="vf-act-btn ${userLiked ? 'liked' : ''}" id="vflike-${i}"
+                        onclick="vfToggleLike('${post.id}',${i})">
+                        <svg width="22" height="22" viewBox="0 0 24 24"
+                            fill="${userLiked ? '#f43f5e' : 'none'}"
+                            stroke="${userLiked ? '#f43f5e' : 'white'}" stroke-width="2">
+                            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+                        </svg>
+                    </button>
+                    <span id="vflike-ct-${i}">${likeCount}</span>
+                </div>
+                <div class="vf-act">
+                    <button class="vf-act-btn" onclick="vfOpenComments('${post.id}')">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
+                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                        </svg>
+                    </button>
+                    <span>${commentCount}</span>
+                </div>
+                <div class="vf-act">
+                    <button class="vf-act-btn" onclick="handleRepost('${post.id}')">
+                        ${REPOST_SVG}
+                    </button>
+                    <span>${repostCount > 0 ? repostCount : ''}</span>
+                </div>
+                <div class="vf-act">
+                    <button class="vf-act-btn" onclick="openAIFromPost('${post.id}',event)">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+                            <line x1="12" y1="17" x2="12.01" y2="17"/>
+                        </svg>
+                    </button>
+                    <span>Ona</span>
+                </div>
+            </div>
+            <div class="vf-progress-bar">
+                <div class="vf-progress-fill" id="vfprog-${i}" style="transition:width 0.1s linear;"></div>
+            </div>
+            ${i < vfVideoPosts.length - 1 ? `<div class="vf-scroll-hint">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+                Swipe up
+            </div>` : ''}
+        `;
+
+        /* tap to play/pause */
+        slide.addEventListener('click', e => {
+            if (e.target.closest('.vf-act-btn') || e.target.closest('.vf-close')) return;
+            const vid  = document.getElementById(`vfv-${i}`);
+            const icon = document.getElementById(`vfti-${i}`);
+            const ring = document.getElementById(`vftr-${i}`);
+            if (!vid) return;
+            if (vid.paused) {
+                vid.play().catch(()=>{});
+                icon.setAttribute('points','6 4 6 20 M14 4');
+                icon.innerHTML = '';
+                icon.outerHTML = `<polygon id="vfti-${i}" points="6 4 6 20"/>`;
+                /* re-render as pause */
+                const parent = document.getElementById(`vftr-${i}`)?.querySelector('svg');
+                if (parent) parent.innerHTML = `<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>`;
+            } else {
+                vid.pause();
+                const parent = document.getElementById(`vftr-${i}`)?.querySelector('svg');
+                if (parent) parent.innerHTML = `<polygon points="5 3 19 12 5 21 5 3"/>`;
+            }
+            ring.classList.add('show');
+            clearTimeout(ring._t);
+            ring._t = setTimeout(() => ring.classList.remove('show'), 500);
+        });
+
+        /* video events */
+        const vid = slide.querySelector('video');
+        vid.addEventListener('waiting', () => { document.getElementById(`vfl-${i}`).style.display = 'flex'; });
+        vid.addEventListener('canplay', () => { document.getElementById(`vfl-${i}`).style.display = 'none'; });
+        vid.addEventListener('playing', () => { document.getElementById(`vfl-${i}`).style.display = 'none'; });
+
+        scroller.appendChild(slide);
+    });
+
+    requestAnimationFrame(() => {
+        const target = document.getElementById(`vfs-${startIdx}`);
+        if (target) target.scrollIntoView({ behavior: 'instant' });
+        vfPlaySlide(startIdx);
+    });
+}
+
+function vfPlaySlide(idx) {
+    if (vfProgTimer) { clearInterval(vfProgTimer); vfProgTimer = null; }
+    /* pause all, clear non-adjacent src */
+    document.querySelectorAll('#vf-scroller video').forEach((v, i) => {
+        if (i !== idx) {
+            v.pause();
+            if (Math.abs(i - idx) > 2) v.src = '';
+        }
+    });
+    const vid = document.getElementById(`vfv-${idx}`);
+    if (!vid) return;
+    /* lazy load src */
+    if (!vid.src || vid.src === window.location.href) {
+        vid.src = vid.dataset.src || '';
+        vid.load();
+    }
+    vid.currentTime = 0;
+    vid.play().catch(() => {});
+
+    /* pre-load neighbours */
+    [-1, 1].forEach(d => {
+        const nv = document.getElementById(`vfv-${idx + d}`);
+        if (nv && (!nv.src || nv.src === window.location.href)) {
+            nv.src = nv.dataset.src || '';
+            nv.preload = 'auto';
+        }
+    });
+
+    /* progress bar */
+    const fill = document.getElementById(`vfprog-${idx}`);
+    if (fill) {
+        fill.style.transition = 'none';
+        fill.style.width = '0%';
+        vfProgTimer = setInterval(() => {
+            if (!vid.duration || vid.paused) return;
+            const pct = (vid.currentTime / vid.duration) * 100;
+            fill.style.transition = 'width 0.1s linear';
+            fill.style.width = pct + '%';
+        }, 80);
+    }
+}
+
+function setupVfScroll() {
+    const scroller = document.getElementById('vf-scroller');
+    let ticking = false;
+    scroller.addEventListener('scroll', () => {
+        if (!ticking) {
+            requestAnimationFrame(() => {
+                const idx = Math.round(scroller.scrollTop / scroller.clientHeight);
+                if (idx !== vfCurrentIdx && idx >= 0 && idx < vfVideoPosts.length) {
+                    vfCurrentIdx = idx;
+                    vfPlaySlide(idx);
+                }
+                ticking = false;
+            });
+            ticking = true;
+        }
+    }, { passive: true });
+
+    /* keyboard nav */
+    document.addEventListener('keydown', e => {
+        if (!document.getElementById('vf-overlay').classList.contains('active')) return;
+        if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
+            const next = Math.min(vfCurrentIdx + 1, vfVideoPosts.length - 1);
+            document.getElementById(`vfs-${next}`)?.scrollIntoView({ behavior: 'smooth' });
+        }
+        if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
+            const prev = Math.max(vfCurrentIdx - 1, 0);
+            document.getElementById(`vfs-${prev}`)?.scrollIntoView({ behavior: 'smooth' });
+        }
+        if (e.key === 'Escape') closeVideoFeed();
+        if (e.key === ' ') {
+            e.preventDefault();
+            const vid = document.getElementById(`vfv-${vfCurrentIdx}`);
+            if (vid) vid.paused ? vid.play().catch(()=>{}) : vid.pause();
+        }
+    });
+}
+
+window.vfToggleLike = async (postId, slideIdx) => {
+    await toggleLike(postId);
+    try {
+        const snap  = await get(ref(db, `posts/${postId}/likes`));
+        const likes = snap.val() || {};
+        const userLiked = !!likes[currentUser?.uid];
+        const count = Object.keys(likes).length;
+        vfLikeState[postId] = userLiked;
+        const btn = document.getElementById(`vflike-${slideIdx}`);
+        const ct  = document.getElementById(`vflike-ct-${slideIdx}`);
+        if (btn) {
+            const svg = btn.querySelector('svg');
+            svg?.setAttribute('fill', userLiked ? '#f43f5e' : 'none');
+            svg?.setAttribute('stroke', userLiked ? '#f43f5e' : 'white');
+            btn.classList.toggle('liked', userLiked);
+            btn.style.animation = 'vf-like-pop 0.4s ease-out';
+            setTimeout(() => btn.style.animation = '', 400);
+        }
+        if (ct) ct.textContent = count;
+    } catch {}
+};
+
+window.vfOpenComments = (postId) => {
+    closeVideoFeed();
+    setTimeout(() => {
+        const card = document.getElementById(`post-${postId}`);
+        if (card) {
+            card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            toggleComments(postId);
+        }
+    }, 350);
+};
+
+/* ══════════════════════════════════════ */
+
 function renderPostMedia(post) {
     if (post.mediaUrls && post.mediaUrls.length > 1) {
         const id = `carousel-${post.id}`;
-        const slides = post.mediaUrls.map((m,i) => `<div class="carousel-slide">${m.type==='video' ? createVynixPlayer(m.url,post.id,i) : `<img src="${m.url}" loading="lazy" alt="">`}</div>`).join('');
-        const dots   = post.mediaUrls.map((_,i) => `<div class="carousel-dot${i===0?' active':''}" onclick="carouselGoTo('${id}',${i})"></div>`).join('');
+        const slides = post.mediaUrls.map((m,i) => {
+            if (m.type === 'video') {
+                return `<div class="carousel-slide">
+                    <div class="video-post-wrapper" style="position:relative;cursor:pointer;" onclick="openVideoFeed('${post.id}')">
+                        ${createVynixPlayer(m.url, post.id, i)}
+                        <div class="video-open-hint">▶ Open in feed</div>
+                    </div>
+                </div>`;
+            }
+            return `<div class="carousel-slide"><img src="${m.url}" loading="lazy" alt=""></div>`;
+        }).join('');
+        const dots = post.mediaUrls.map((_,i) => `<div class="carousel-dot${i===0?' active':''}" onclick="carouselGoTo('${id}',${i})"></div>`).join('');
         return `<div class="carousel" id="${id}" data-index="0" data-count="${post.mediaUrls.length}"><div class="carousel-track" id="${id}-track">${slides}</div><button class="carousel-btn prev" onclick="carouselMove('${id}',-1)">&#8249;</button><button class="carousel-btn next" onclick="carouselMove('${id}',1)">&#8250;</button><div class="carousel-dots" id="${id}-dots">${dots}</div><div class="carousel-counter" id="${id}-counter">1 / ${post.mediaUrls.length}</div></div>`;
     }
     if (post.mediaUrl) {
-        if (post.mediaType === 'video') return createVynixPlayer(post.mediaUrl, post.id);
+        if (post.mediaType === 'video') {
+            return `<div class="video-post-wrapper" style="position:relative;" onclick="openVideoFeed('${post.id}')">
+                ${createVynixPlayer(post.mediaUrl, post.id)}
+                <div class="video-open-hint">▶ Open in feed</div>
+            </div>`;
+        }
         return `<div class="post-media"><img src="${post.mediaUrl}" style="width:100%;display:block;" loading="lazy"></div>`;
     }
     return '';
@@ -1420,7 +1813,6 @@ window.handleRepost = async postId => {
     }
 };
 
-// ── LIKE — writes notification to notifications/${ownerUid} ──
 window.toggleLike = async postId => {
     const lr = ref(db, `posts/${postId}/likes/${currentUser.uid}`);
     const s  = await get(lr);
@@ -1429,14 +1821,11 @@ window.toggleLike = async postId => {
     } else {
         await set(lr, true);
         if (navigator.vibrate) navigator.vibrate(50);
-        // Write notification. Only actorId + postId stored.
-        // notifications.html fetches users/${actorId} and posts/${postId} live.
         try {
             const postSnap = await get(ref(db, `posts/${postId}`));
             if (postSnap.exists()) {
                 const ownerUid = postSnap.val().uid;
                 if (ownerUid !== currentUser.uid) {
-                    // Deduped key: one entry per liker per post, updates timestamp on re-like
                     await set(
                         ref(db, `notifications/${ownerUid}/like_${postId}_${currentUser.uid}`),
                         { type: 'like', actorId: currentUser.uid, postId, read: false, timestamp: Date.now() }
@@ -1455,7 +1844,6 @@ window.updateCommentButton = postId => {
 };
 window.handleCommentKeypress = (e, postId) => { if (e.key==='Enter') submitComment(postId); };
 
-// ── COMMENT — writes notification to notifications/${ownerUid} ──
 window.submitComment = async postId => {
     const input = document.getElementById(`comment-input-${postId}`);
     const text  = input.value.trim();
@@ -1468,8 +1856,6 @@ window.submitComment = async postId => {
         });
         input.value = '';
         updateCommentButton(postId);
-        // Write notification. Only actorId + postId stored.
-        // notifications.html fetches users/${actorId} and posts/${postId} live.
         try {
             const postSnap = await get(ref(db, `posts/${postId}`));
             if (postSnap.exists()) {
@@ -1533,7 +1919,11 @@ window.executeConfirmAction = async () => {
     closeConfirmModal();
 };
 
-// ── STORIES ──
+/* ══ STORIES ══ */
+/* Story duration: images = 5s, videos = actual duration capped at 30s */
+const STORY_IMAGE_DURATION = 5000;
+const STORY_MAX_VIDEO_DURATION = 30000;
+
 function setupStoriesListeners() {
     onChildAdded  (ref(db,'stories'), snap => { const s={id:snap.key,...snap.val()}; if(Date.now()-s.timestamp<86400000) addStoryToGroup(s); });
     onChildChanged(ref(db,'stories'), snap => updateStoryInGroup({id:snap.key,...snap.val()}));
@@ -1578,9 +1968,18 @@ window.validateAndUploadStory = async e => {
     const file = e.target.files[0]; if (!file) return;
     if (file.type.startsWith('video/')) {
         const v = document.createElement('video'); v.preload='metadata';
-        v.onloadedmetadata = async () => { window.URL.revokeObjectURL(v.src); if(v.duration>MAX_VIDEO_DURATION){showToast(`Video too long. Max ${MAX_VIDEO_DURATION/60} minutes.`);return;} await uploadStory(file); };
+        v.onloadedmetadata = async () => {
+            window.URL.revokeObjectURL(v.src);
+            /* ← 30 second limit for story videos */
+            if (v.duration > MAX_STORY_VIDEO_DURATION) {
+                showToast(`Story videos max 30 seconds.`);
+                return;
+            }
+            await uploadStory(file);
+        };
         v.src = URL.createObjectURL(file);
     } else await uploadStory(file);
+    e.target.value = '';
 };
 async function uploadStory(file) {
     showToast('Uploading…');
@@ -1599,6 +1998,14 @@ window.openStoryViewer = uid => {
     displayCurrentStory();
 };
 
+function getStoryDuration(story, videoEl) {
+    /* For videos: use actual duration capped at 30s. For images: 5s */
+    if (story.mediaType === 'video' && videoEl && videoEl.duration && !isNaN(videoEl.duration)) {
+        return Math.min(videoEl.duration * 1000, STORY_MAX_VIDEO_DURATION);
+    }
+    return STORY_IMAGE_DURATION;
+}
+
 function displayCurrentStory() {
     const ids = Array.from(storyGroups.keys()).sort((a,b)=>{if(a===currentUser?.uid)return -1;if(b===currentUser?.uid)return 1;return 0;});
     const group = storyGroups.get(ids[currentStoryGroupIndex]);
@@ -1609,23 +2016,64 @@ function displayCurrentStory() {
     document.getElementById('delete-story-btn').style.display = story.uid===currentUser?.uid?'block':'none';
     if (story.uid!==currentUser?.uid) update(ref(db,`stories/${story.id}/viewed`),{[currentUser.uid]:true});
     updateStoryLikeUI(story);
+
+    /* build progress bars — don't start fill until media is ready */
     const pc = document.getElementById('story-progress-container'); pc.innerHTML='';
     group.stories.forEach((_,idx)=>{
         const bar  = document.createElement('div'); bar.className='story-progress-bar';
-        const fill = document.createElement('div'); fill.className='story-progress-fill'; fill.style.width=idx<currentStoryIndex?'100%':'0%';
-        if (idx===currentStoryIndex){fill.id='current-progress';setTimeout(()=>{fill.style.transition='width 5s linear';fill.style.width='100%';},50);}
+        const fill = document.createElement('div'); fill.className='story-progress-fill';
+        if (idx < currentStoryIndex) fill.style.width = '100%';
+        if (idx === currentStoryIndex) fill.id = 'current-progress';
         bar.appendChild(fill); pc.appendChild(bar);
     });
+
     const mc = document.getElementById('story-media-container'); mc.innerHTML='';
     if (currentVideoElement){currentVideoElement.pause();currentVideoElement=null;}
     if (storyTimeout) clearTimeout(storyTimeout);
-    storyTimeout = setTimeout(()=>navigateStory(1),5000);
+
     if (story.mediaType==='video') {
-        const v=document.createElement('video');v.className='story-video';v.src=story.mediaUrl;v.autoplay=true;v.playsInline=true;v.onended=()=>navigateStory(1);mc.appendChild(v);currentVideoElement=v;
+        const v = document.createElement('video');
+        v.className = 'story-video';
+        v.src = story.mediaUrl;
+        v.autoplay = true;
+        v.playsInline = true;
+        v.style.maxHeight = '100vh';
+        /* cap playback at 30s */
+        v.ontimeupdate = () => {
+            if (v.currentTime >= 30) {
+                v.pause();
+                navigateStory(1);
+            }
+        };
+        v.onloadedmetadata = () => {
+            const dur = Math.min(v.duration * 1000, STORY_MAX_VIDEO_DURATION);
+            startStoryProgress(dur, v);
+            if (storyTimeout) clearTimeout(storyTimeout);
+            storyTimeout = setTimeout(() => navigateStory(1), dur);
+        };
+        v.onended = () => navigateStory(1);
+        mc.appendChild(v);
+        currentVideoElement = v;
     } else {
-        const img=document.createElement('img');img.className='story-media';img.src=story.mediaUrl;mc.appendChild(img);
+        const img = document.createElement('img');
+        img.className='story-media'; img.src=story.mediaUrl;
+        mc.appendChild(img);
+        startStoryProgress(STORY_IMAGE_DURATION, null);
+        storyTimeout = setTimeout(() => navigateStory(1), STORY_IMAGE_DURATION);
     }
+
     document.getElementById('story-viewer').classList.add('active');
+}
+
+function startStoryProgress(durationMs, videoEl) {
+    const fill = document.getElementById('current-progress');
+    if (!fill) return;
+    fill.style.transition = 'none';
+    fill.style.width = '0%';
+    requestAnimationFrame(() => {
+        fill.style.transition = `width ${durationMs}ms linear`;
+        fill.style.width = '100%';
+    });
 }
 
 window.toggleStoryLike = async () => {
@@ -1663,7 +2111,8 @@ function setupStoryHold() {
         if (fill) {
             const computed = getComputedStyle(fill).width; const parent = fill.parentElement;
             const pct = parent ? (parseFloat(computed)/parent.offsetWidth*100) : parseFloat(fill.style.width);
-            storyElapsedMs = pct/100*5000; fill.style.transition='none'; fill.style.width=pct+'%';
+            storyElapsedMs = pct / 100 * (parseFloat(fill.style.transitionDuration) * 1000 || STORY_IMAGE_DURATION);
+            fill.style.transition='none'; fill.style.width=pct+'%';
         }
         if (currentVideoElement) currentVideoElement.pause();
         if (storyTimeout) { clearTimeout(storyTimeout); storyTimeout=null; }
@@ -1674,10 +2123,14 @@ function setupStoryHold() {
         if (holdIndicator) holdIndicator.classList.remove('visible');
         if (!document.getElementById('story-viewer').classList.contains('active')) return;
         const fill = document.getElementById('current-progress');
-        const remainingMs = Math.max(0,5000-storyElapsedMs);
+        let totalDur = STORY_IMAGE_DURATION;
+        if (currentVideoElement && currentVideoElement.duration) {
+            totalDur = Math.min(currentVideoElement.duration * 1000, STORY_MAX_VIDEO_DURATION);
+        }
+        const remainingMs = Math.max(0, totalDur - storyElapsedMs);
         if (fill&&remainingMs>0) { fill.style.transition=`width ${remainingMs}ms linear`; fill.style.width='100%'; }
         if (currentVideoElement) currentVideoElement.play().catch(()=>{});
-        storyTimeout = setTimeout(()=>navigateStory(1),remainingMs);
+        storyTimeout = setTimeout(()=>navigateStory(1), remainingMs);
     };
     mc.addEventListener('touchstart', startHold,{passive:true}); mc.addEventListener('touchend',endHold); mc.addEventListener('touchcancel',endHold);
     mc.addEventListener('mousedown',  startHold); mc.addEventListener('mouseup',endHold); mc.addEventListener('mouseleave',endHold);
