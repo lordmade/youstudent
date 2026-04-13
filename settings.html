@@ -18,6 +18,14 @@
         body{font-family:'Inter',sans-serif;background:var(--background);color:var(--text-primary);-webkit-font-smoothing:antialiased;min-height:100vh;transition:background 0.3s,color 0.3s;}
 
         @keyframes fadeIn{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:translateY(0);}}
+        
+        /* ── SHIMMER ANIMATION ── */
+        .shimmer {
+            background: linear-gradient(90deg, var(--surface2) 25%, var(--border) 50%, var(--surface2) 75%);
+            background-size: 200% 100%;
+            animation: shimmer 1.5s infinite;
+        }
+        @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 
         .header{position:sticky;top:0;z-index:50;background:rgba(255,255,255,0.92);backdrop-filter:blur(20px);border-bottom:1px solid var(--border);padding:12px 16px;display:flex;align-items:center;gap:12px;transition:background 0.3s;}
         [data-theme="dark"] .header{background:rgba(30,41,59,0.92);}
@@ -29,15 +37,14 @@
         .content{max-width:600px;margin:0 auto;padding:0 0 48px;}
 
         /* Profile card */
-        .profile-card{margin:16px;background:var(--surface);border-radius:20px;padding:20px;display:flex;align-items:center;gap:16px;box-shadow:var(--shadow-lg);animation:fadeIn 0.4s ease-out;}
+        .profile-card{margin:16px;background:var(--surface);border-radius:20px;padding:20px;display:flex;align-items:center;gap:16px;box-shadow:var(--shadow-lg);animation:fadeIn 0.4s ease-out; transition: background 0.3s;}
         .profile-avatar-wrap{position:relative;flex-shrink:0;}
-        .profile-avatar{width:64px;height:64px;border-radius:50%;object-fit:cover;}
-        .avatar-edit-btn{position:absolute;bottom:-2px;right:-2px;width:22px;height:22px;background:var(--primary);border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;border:2px solid var(--surface);}
+        .profile-avatar{width:64px;height:64px;border-radius:50%;object-fit:cover;transition: opacity 0.3s;}
         .profile-info{flex:1;min-width:0;}
-        .profile-name{font-size:17px;font-weight:700;color:var(--text-primary);}
-        .profile-handle{font-size:13px;color:var(--text-muted);}
-        .profile-email{font-size:12px;color:var(--text-muted);margin-top:2px;}
-        .edit-profile-btn{background:var(--surface2);color:var(--text-primary);border:1px solid var(--border);padding:7px 14px;border-radius:9999px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap;}
+        .profile-name{font-size:17px;font-weight:700;color:var(--text-primary); transition: all 0.3s;}
+        .profile-handle{font-size:13px;color:var(--text-muted); transition: all 0.3s;}
+        .profile-email{font-size:12px;color:var(--text-muted);margin-top:2px; transition: all 0.3s;}
+        .edit-profile-btn{background:var(--surface2);color:var(--text-primary);border:1px solid var(--border);padding:7px 14px;border-radius:9999px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap; animation: fadeIn 0.3s ease-out;}
 
         /* Section */
         .section{margin:0 16px 8px;animation:fadeIn 0.4s ease-out;}
@@ -94,16 +101,16 @@
 
 <div class="content">
 
-    <div class="profile-card">
+    <div class="profile-card" id="profile-card">
         <div class="profile-avatar-wrap">
-            <img src="" id="s-avatar" class="profile-avatar">
+            <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2394A3B8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' style='background-color:%23F1F5F9'%3E%3Cpath d='M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2'/%3E%3Ccircle cx='12' cy='7' r='4'/%3E%3C/svg%3E" id="s-avatar" class="profile-avatar shimmer">
         </div>
         <div class="profile-info">
-            <div class="profile-name" id="s-name"></div>
-            <div class="profile-handle" id="s-handle"></div>
-            <div class="profile-email" id="s-email"></div>
+            <div class="profile-name shimmer" id="s-name" style="width:120px; height:20px; border-radius:4px; margin-bottom:4px;"></div>
+            <div class="profile-handle shimmer" id="s-handle" style="width:80px; height:16px; border-radius:4px; margin-bottom:4px;"></div>
+            <div class="profile-email shimmer" id="s-email" style="width:140px; height:14px; border-radius:4px;"></div>
         </div>
-        <button class="edit-profile-btn" onclick="goToEditProfile()">Edit</button>
+        <button class="edit-profile-btn" id="s-edit-btn" style="display:none;" onclick="goToEditProfile()">Edit</button>
     </div>
 
     <div class="setting-row" onclick="window.location.href='verify.html'">
@@ -279,8 +286,10 @@
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getAuth, onAuthStateChanged, signOut, deleteUser, updatePassword, EmailAuthProvider, reauthenticateWithCredential } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { getAuth, onAuthStateChanged, signOut, deleteUser } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { getDatabase, ref, get, set, update, remove } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+
+const DEFAULT_AVATAR = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2394A3B8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' style='background-color:%23F1F5F9'%3E%3Cpath d='M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2'/%3E%3Ccircle cx='12' cy='7' r='4'/%3E%3C/svg%3E";
 
 const CLOUDINARY_CLOUD_NAME='dqkujefxj', CLOUDINARY_UPLOAD_PRESET='banter_box';
 const firebaseConfig={apiKey:"AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",authDomain:"fire-b-a8878.firebaseapp.com",databaseURL:"https://fire-b-a8878.firebaseio.com",projectId:"fire-b-a8878",storageBucket:"fire-b-a8878.appspot.com",messagingSenderId:"658673187627",appId:"1:658673187627:web:6e4c29af661785f0afa36e"};
@@ -304,10 +313,32 @@ async function loadUserAndPrefs(){
     try{
         const snap=await get(ref(db,`users/${currentUser.uid}`));
         const data=snap.val()||{};
-        document.getElementById('s-avatar').src=data.photoURL||`https://ui-avatars.com/api/?name=${data.username||'U'}&background=6366F1&color=fff`;
-        document.getElementById('s-name').textContent=data.displayName||'User';
-        document.getElementById('s-handle').textContent='@'+(data.username||'user');
-        document.getElementById('s-email').textContent=currentUser.email||'';
+        
+        // Grab elements
+        const nameEl = document.getElementById('s-name');
+        const handleEl = document.getElementById('s-handle');
+        const emailEl = document.getElementById('s-email');
+        const avatarEl = document.getElementById('s-avatar');
+        
+        // Remove shimmer classes and reset inline loading styles
+        [nameEl, handleEl, emailEl, avatarEl].forEach(el => {
+            el.classList.remove('shimmer');
+            if (el !== avatarEl) { // Ensure we don't wipe image specific styles if any were set
+                el.style.width = '';
+                el.style.height = '';
+                el.style.marginBottom = '';
+            }
+        });
+        
+        // Reveal edit button
+        document.getElementById('s-edit-btn').style.display = 'block';
+
+        // Populate actual data
+        avatarEl.src = data.photoURL || DEFAULT_AVATAR;
+        avatarEl.onerror = () => { avatarEl.src = DEFAULT_AVATAR; };
+        nameEl.textContent = data.displayName || 'User';
+        handleEl.textContent = '@' + (data.username || 'user');
+        emailEl.textContent = currentUser.email || '';
         
         // Load prefs from Firebase
         const ps=await get(ref(db,`userPrefs/${currentUser.uid}`));
@@ -337,29 +368,13 @@ function updateSwatches(theme){
 }
 
 // ── PREFS ──
-// Triggered seamlessly when clicking either the toggle itself or the surrounding row wrapper
 window.savePref=async(key,value)=>{
     prefs[key]=value;
     try{
-        // Update preference in Firebase DB
         await update(ref(db,`userPrefs/${currentUser.uid}`),{[key]:value});
     }catch{
         showToast('Error saving preference');
     }
-};
-
-// ── AVATAR ──
-window.handleAvatarChange=async e=>{
-    const file=e.target.files[0]; if(!file)return;
-    showToast('Uploading…');
-    try{
-        const fd=new FormData(); fd.append('file',file); fd.append('upload_preset',CLOUDINARY_UPLOAD_PRESET); fd.append('folder','avatars');
-        const r=await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/upload`,{method:'POST',body:fd});
-        const data=await r.json();
-        await update(ref(db,`users/${currentUser.uid}`),{photoURL:data.secure_url});
-        document.getElementById('s-avatar').src=data.secure_url;
-        showToast('Photo updated!');
-    }catch{showToast('Upload failed');}
 };
 
 // ── LOGOUT ──
