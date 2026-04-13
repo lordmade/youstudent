@@ -65,7 +65,7 @@
         /* ── PROFILE HEADER ── */
         .profile-header-container { padding: 20px 16px; background: var(--surface); border-bottom: 1px solid var(--border); transition: background 0.3s; }
         .profile-stats-row { display: flex; align-items: center; gap: 24px; margin-bottom: 16px; }
-        .profile-avatar-wrap { position: relative; flex-shrink: 0; }
+        .profile-avatar-wrap { position: relative; flex-shrink: 0; cursor: pointer; }
         .profile-avatar { width: 84px; height: 84px; border-radius: 50%; object-fit: cover; border: 2px solid var(--border); transition: opacity 0.3s; }
         .profile-stats { flex: 1; display: flex; justify-content: space-around; align-items: center; }
         .stat-box { display: flex; flex-direction: column; align-items: center; cursor: pointer; padding: 4px; border-radius: 8px; transition: background 0.2s; }
@@ -76,9 +76,10 @@
         .profile-info-row { margin-bottom: 16px; }
         .profile-name { font-size: 16px; font-weight: 800; color: var(--text-primary); margin-bottom: 2px; display: flex; align-items: center; gap: 4px; }
         .profile-bio { font-size: 14px; color: var(--text-primary); line-height: 1.4; white-space: pre-wrap; word-break: break-word; }
+        .profile-link { display: none; color: var(--primary); font-size: 14px; font-weight: 500; text-decoration: none; margin-top: 6px; align-items: center; gap: 6px; }
+        .profile-link:hover { text-decoration: underline; }
         
         .profile-actions { display: flex; gap: 8px; }
-        /* ── UPDATED: Pill-shaped action buttons ── */
         .profile-btn { flex: 1; padding: 8px 16px; border-radius: 9999px; font-weight: 700; font-size: 14px; cursor: pointer; text-align: center; border: none; font-family: inherit; transition: opacity 0.2s, background 0.3s; }
         .profile-btn:active { opacity: 0.8; }
         .btn-primary { background: var(--primary); color: white; }
@@ -130,6 +131,14 @@
         .bottom-sheet { position: fixed; bottom: 0; left: 0; right: 0; background: var(--surface); border-radius: 24px 24px 0 0; padding: 24px; padding-bottom: calc(24px + env(safe-area-inset-bottom)); transform: translateY(100%); transition: transform 0.3s cubic-bezier(0.4,0,0.2,1); z-index: 201; max-height: 90vh; overflow-y: auto; display: flex; flex-direction: column; }
         .modal-overlay.active ~ .bottom-sheet { transform: translateY(0); }
 
+        /* ── FULL IMAGE MODAL ── */
+        .full-image-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 1000; display: flex; align-items: center; justify-content: center; opacity: 0; pointer-events: none; transition: opacity 0.3s; }
+        .full-image-modal.active { opacity: 1; pointer-events: auto; }
+        .full-image-modal img { max-width: 90%; max-height: 90%; object-fit: contain; border-radius: 8px; transform: scale(0.9); transition: transform 0.3s cubic-bezier(0.34,1.56,0.64,1); }
+        .full-image-modal.active img { transform: scale(1); }
+        .full-image-close { position: absolute; top: calc(20px + env(safe-area-inset-top)); right: 20px; background: rgba(255,255,255,0.15); border: none; color: white; width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: background 0.2s; z-index: 1001; }
+        .full-image-close:hover { background: rgba(255,255,255,0.25); }
+
         /* ── USER LIST (Followers/Following) ── */
         .user-list-row { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--border); cursor: pointer; transition: background 0.2s; }
         .user-list-row:last-child { border-bottom: none; }
@@ -180,7 +189,7 @@
 
     <div class="profile-header-container">
         <div class="profile-stats-row">
-            <div class="profile-avatar-wrap">
+            <div class="profile-avatar-wrap" onclick="viewFullAvatar()">
                 <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2394A3B8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' style='background-color:%23F1F5F9'%3E%3Cpath d='M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2'/%3E%3Ccircle cx='12' cy='7' r='4'/%3E%3C/svg%3E" id="prof-avatar" class="profile-avatar shimmer">
             </div>
             <div class="profile-stats">
@@ -194,6 +203,10 @@
             <div class="profile-name shimmer" id="prof-name">Loading User</div>
             <div class="profile-handle shimmer" id="prof-handle">@loading</div>
             <div class="profile-bio shimmer" id="prof-bio">Fetching profile information...</div>
+            <a id="prof-link" class="profile-link" href="#" target="_blank" rel="noopener noreferrer">
+                <i data-feather="link" style="width:14px;height:14px;"></i>
+                <span id="prof-link-text"></span>
+            </a>
         </div>
 
         <div class="profile-actions" id="prof-actions">
@@ -212,6 +225,11 @@
         <div class="vynix-spinner" style="border-color: rgba(99,102,241,0.3); border-top-color: var(--primary);"></div>
     </div>
 
+</div>
+
+<div class="full-image-modal" id="full-image-modal" onclick="closeFullAvatar()">
+    <button class="full-image-close" onclick="closeFullAvatar()"><i data-feather="x"></i></button>
+    <img src="" id="full-image-content" onclick="event.stopPropagation()">
 </div>
 
 <div class="modal-overlay" id="list-overlay" onclick="closeUserList()" style="z-index:300;"></div>
@@ -253,9 +271,14 @@
         <div id="username-edit-hint" style="font-size:11px;color:var(--text-muted);margin-top:6px;"></div>
     </div>
     
-    <div class="ep-input-group" style="margin-bottom:8px;">
+    <div class="ep-input-group">
         <label class="ep-label">Bio</label>
         <textarea id="edit-bio" class="ep-textarea" placeholder="Write something about yourself..."></textarea>
+    </div>
+    
+    <div class="ep-input-group" style="margin-bottom:8px;">
+        <label class="ep-label">Link</label>
+        <input type="url" id="edit-link" class="ep-input" placeholder="https://yourwebsite.com">
     </div>
 </div>
 
@@ -340,10 +363,8 @@ async function loadCurrentUser() {
         const snap = await get(ref(db, `users/${currentUser.uid}`));
         currentUserData = snap.val() || {};
         
-        // Setup Bottom Nav Avatar
         document.getElementById('nav-profile-avatar').src = currentUserData.photoURL || DEFAULT_AVATAR;
         
-        // Grab bookmarks
         const bSnap = await get(ref(db, `users/${currentUser.uid}/bookmarks`));
         currentUserData.bookmarks = bSnap.val() || {};
     } catch(e) { console.error("Error loading current user", e); }
@@ -361,11 +382,8 @@ async function loadProfileData() {
         }
         
         targetUserData = snap.val();
-        
-        // Remove shimmer classes
         document.querySelectorAll('.shimmer').forEach(el => el.classList.remove('shimmer'));
         
-        // Set Data
         document.getElementById('header-username').textContent = targetUserData.username || 'Profile';
         
         const avatarEl = document.getElementById('prof-avatar');
@@ -383,11 +401,22 @@ async function loadProfileData() {
             bioEl.style.display = 'none';
         }
 
-        // Load correct stats
+        // Display Bio Link
+        const linkEl = document.getElementById('prof-link');
+        const linkTextEl = document.getElementById('prof-link-text');
+        if (targetUserData.website) {
+            let url = targetUserData.website;
+            if (!url.startsWith('http://') && !url.startsWith('https://')) { url = 'https://' + url; }
+            linkEl.href = url;
+            linkTextEl.textContent = targetUserData.website.replace(/^https?:\/\//, '').replace(/\/$/, '');
+            linkEl.style.display = 'flex';
+        } else {
+            linkEl.style.display = 'none';
+        }
+
         document.getElementById('stat-followers').textContent = Object.keys(targetUserData.followers || {}).length;
         document.getElementById('stat-following').textContent = Object.keys(targetUserData.following || {}).length;
 
-        // Render Action Buttons
         const actionsContainer = document.getElementById('prof-actions');
         if (isOwnProfile) {
             actionsContainer.innerHTML = `
@@ -408,6 +437,16 @@ async function loadProfileData() {
         console.error("Error loading profile", e);
     }
 }
+
+/* ── FULL IMAGE MODAL ── */
+window.viewFullAvatar = () => {
+    const src = document.getElementById('prof-avatar').src;
+    document.getElementById('full-image-content').src = src;
+    document.getElementById('full-image-modal').classList.add('active');
+};
+window.closeFullAvatar = () => {
+    document.getElementById('full-image-modal').classList.remove('active');
+};
 
 /* ── FOLLOWERS / FOLLOWING LIST ── */
 window.openUserList = async (type) => {
@@ -447,6 +486,7 @@ window.openUserList = async (type) => {
             }
         }
         container.innerHTML = html;
+        feather.replace();
     } catch (e) {
         container.innerHTML = '<div style="text-align:center; padding:40px; color:var(--like);">Failed to load users.</div>';
     }
@@ -460,13 +500,13 @@ window.closeUserList = () => {
 window.openEditProfile = () => {
     document.getElementById('edit-name').value = currentUserData.displayName || '';
     document.getElementById('edit-bio').value = currentUserData.bio || '';
+    document.getElementById('edit-link').value = currentUserData.website || '';
     
     const usernameInput = document.getElementById('edit-username');
     const usernameHint = document.getElementById('username-edit-hint');
     
     usernameInput.value = currentUserData.username || '';
     
-    // Check if verified to allow username edits
     if (currentUserData.verified) {
         usernameInput.disabled = false;
         usernameHint.textContent = 'You can change your username because you are verified.';
@@ -518,15 +558,16 @@ window.saveProfile = async () => {
     const name = document.getElementById('edit-name').value.trim();
     const username = document.getElementById('edit-username').value.trim();
     const bio = document.getElementById('edit-bio').value.trim();
+    const website = document.getElementById('edit-link').value.trim();
 
     try {
         const updates = {
             displayName: name,
             bio: bio,
+            website: website,
             photoURL: newAvatarUrl || currentUserData.photoURL || ""
         };
         
-        // Only update username if they are verified
         if (currentUserData.verified) {
             updates.username = username;
         }
@@ -536,7 +577,6 @@ window.saveProfile = async () => {
         showToast('Profile updated!');
         closeEditProfile();
         
-        // Reload UI data
         await loadCurrentUser();
         if (targetUid === currentUser.uid) {
             await loadProfileData();
@@ -607,9 +647,9 @@ function renderPost(post) {
         ${isRepost ? `<div style="display:flex; align-items:center; gap:6px; font-size:12px; font-weight:600; color:var(--repost); margin-bottom:8px;">${REPOST_SVG}<span>${targetUserData.displayName} reposted</span></div>` : ''}
         
         <div class="post-header">
-            <img src="${displayUser.photoURL || DEFAULT_AVATAR}" onerror="this.src='${DEFAULT_AVATAR}'" class="avatar">
+            <img src="${displayUser.photoURL || DEFAULT_AVATAR}" onerror="this.src='${DEFAULT_AVATAR}'" class="avatar" onclick="window.location.href='profile.html?id=${post.uid}'">
             <div class="post-meta">
-                <div class="post-author-row">
+                <div class="post-author-row" onclick="window.location.href='profile.html?id=${post.uid}'">
                     <span>${escapeHtml(displayUser.displayName || 'User')}</span>
                     ${displayUser.verified ? VERIFIED_BADGE_SVG : ''}
                 </div>
@@ -794,7 +834,6 @@ window.toggleFollow = async () => {
                 timestamp: serverTimestamp()
             });
         }
-        // Update stats UI dynamically
         document.getElementById('stat-followers').textContent = Object.keys(targetUserData.followers || {}).length;
     } catch (e) {
         showToast('Action failed');
