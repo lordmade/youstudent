@@ -92,6 +92,7 @@
         .notif-avatar-wrap { position: relative; width: 48px; height: 48px; flex-shrink: 0; }
         .notif-avatar { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; border: 1px solid var(--border); }
         
+        /* Overlapping Interaction Icons */
         .notif-icon { position: absolute; bottom: -4px; right: -4px; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 2.5px solid var(--surface); color: white; transition: border-color 0.3s; }
         .notif-card.unread .notif-icon { border-color: rgba(var(--primary-rgb), 0.04); }
         .icon-like { background: var(--like); }
@@ -105,9 +106,13 @@
         .notif-text b { font-weight: 700; }
         .notif-time { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
         
+        /* Media Thumbnails */
         .notif-thumb { width: 44px; height: 44px; border-radius: 8px; object-fit: cover; flex-shrink: 0; border: 1px solid var(--border); align-self: center; margin-left: 12px; }
+        
+        /* Quoted Snippet */
         .notif-snippet { font-size: 13px; color: var(--text-secondary); margin-top: 6px; padding: 8px 12px; background: var(--surface2); border-radius: 8px; border-left: 3px solid var(--border); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-style: italic; }
 
+        /* Follow Back Button */
         .follow-back-btn { background: var(--primary); color: white; border: none; border-radius: 9999px; padding: 6px 14px; font-size: 12px; font-weight: 700; cursor: pointer; font-family: inherit; transition: all 0.2s; margin-top: 8px; display: inline-block; }
         .follow-back-btn:active { transform: scale(0.95); }
         .follow-back-btn.following { background: var(--surface2); color: var(--text-primary); border: 1.5px solid var(--border); }
@@ -115,13 +120,11 @@
         /* ── SKELETON LOADER ── */
         .skel-wrap { padding: 16px; border-bottom: 1px solid var(--border); display: flex; gap: 14px; }
 
-        /* ── EMPTY STATE & LAZY LOAD SPINNER ── */
+        /* ── EMPTY STATE ── */
         .empty-state { padding: 80px 24px; text-align: center; color: var(--text-muted); animation: fadeIn 0.4s ease-out; }
         .empty-state-icon { width: 72px; height: 72px; border-radius: 24px; background: var(--surface2); display: flex; align-items: center; justify-content: center; margin: 0 auto 20px; color: var(--text-muted); }
         .empty-state h3 { font-size: 20px; font-weight: 800; color: var(--text-primary); margin-bottom: 8px; }
         .empty-state p { font-size: 15px; line-height: 1.5; }
-        
-        .loading-more-spinner { width: 32px; height: 32px; border: 3px solid var(--border); border-top-color: var(--primary); border-radius: 50%; animation: spin 0.8s linear infinite; margin: 24px auto; display: none; }
 
         /* ── BOTTOM NAV ── */
         .bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; width: 100%; background: var(--surface); border-top: 1px solid var(--border); padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); display: flex; justify-content: space-around; align-items: center; z-index: 100; transition: background 0.3s; }
@@ -191,9 +194,6 @@
         </div>
 
         <div id="notifications-list"></div>
-        
-        <div class="loading-more-spinner" id="loading-more-spinner"></div>
-        <div id="scroll-sentinel" style="height: 1px;"></div>
 
         <div id="empty-state" class="empty-state" style="display:none;">
             <div class="empty-state-icon">
@@ -214,7 +214,7 @@
         <svg class="nav-icon-filled" width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
         <svg class="nav-icon-outline" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
     </button>
-    <button class="nav-item" onclick="window.location.href='new.html?compose=true'">
+    <button class="nav-item" onclick="window.location.href='index.html?compose=true'">
         <svg class="nav-icon-outline" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="18" height="18" rx="4" ry="4"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
     </button>
     <button class="nav-item active" id="nav-notifications" onclick="window.scrollTo({top:0,behavior:'smooth'})">
@@ -231,10 +231,9 @@
 <div class="toast" id="toast"></div>
 
 <script type="module">
-import { initializeApp }       from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-import { getDatabase, ref, get, update, remove, set, push, serverTimestamp, query, orderByChild, limitToLast, endAt, startAt, onChildAdded, onChildChanged } 
-    from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+import { getDatabase, ref, onChildAdded, onChildChanged, onChildRemoved, get, update, remove, set, push, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
 const DEFAULT_AVATAR = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2394A3B8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' style='background-color:%23F1F5F9'%3E%3Cpath d='M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2'/%3E%3Ccircle cx='12' cy='7' r='4'/%3E%3C/svg%3E";
 const VERIFIED_BADGE = `<svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" style="color:var(--verified);flex-shrink:0;"><path d="M22.25 12c0-1.43-.88-2.67-2.19-3.34.46-1.39.2-2.9-.81-3.91s-2.52-1.27-3.91-.81c-.66-1.31-1.91-2.19-3.34-2.19s-2.67.88-3.33 2.19c-1.4-.46-2.91-.2-3.92.81s-1.26 2.52-.8 3.91c-1.31.67-2.2 1.91-2.2 3.34s.89 2.67 2.2 3.34c-.46 1.39-.21 2.9.8 3.91s2.52 1.26 3.91.81c.67 1.31 1.91 2.19 3.34 2.19s2.68-.88 3.34-2.19c1.39.45 2.9.2 3.91-.81s1.27-2.52.81-3.91c1.31-.67 2.19-1.91 2.19-3.34zm-11.71 4.2L6.8 12.22l1.41-1.41 2.83 2.83 5.66-5.66 1.41 1.41-7.07 7.22z"/></svg>`;
@@ -256,20 +255,12 @@ const db   = getDatabase(app);
 document.documentElement.setAttribute('data-theme', localStorage.getItem('vynix_theme') || 'light');
 
 let currentUser = null;
-let notifMap    = {};          
+let notifMap    = {};
 let currentFilter = 'all';
 let isUserAtTop   = true;
-let pendingNew    = [];        
-let followingSet  = new Set(); 
+let pendingNew    = [];
+let followingSet  = new Set();
 
-// Pagination State
-let oldestTimestamp = null;
-let isLoadingMore = false;
-let hasMore = true;
-const PAGE_SIZE = 12;
-let realtimeListenerAttached = false;
-
-// Caches to prevent duplicate lookups
 const userCache = {};
 const postCache = {};
 
@@ -282,23 +273,18 @@ onAuthStateChanged(auth, async user => {
     if (!user) { window.location.href = 'signup.html'; return; }
     currentUser = user;
 
-    // Load basic user info
     const myData = await fetchUser(currentUser.uid);
     const navAv = document.getElementById('nav-profile-avatar');
     if (navAv) navAv.src = myData.photoURL || DEFAULT_AVATAR;
 
-    // Load following list to check "Follow Back" status
     try {
         const fs = await get(ref(db, `users/${currentUser.uid}/following`));
         if (fs.exists()) fs.forEach(c => followingSet.add(c.key));
     } catch {}
 
-    // Load first chunk of notifications instead of downloading everything!
-    await loadNextPage();
-    setupIntersectionObserver();
+    subscribeToNotifications();
 });
 
-// Helper: Fetch user data selectively
 async function fetchUser(uid) {
     if (!uid) return {};
     if (userCache[uid]) return userCache[uid];
@@ -309,7 +295,6 @@ async function fetchUser(uid) {
     return userCache[uid];
 }
 
-// Helper: Fetch post data selectively
 async function fetchPost(postId) {
     if (!postId) return null;
     if (postCache[postId] !== undefined) return postCache[postId];
@@ -320,101 +305,12 @@ async function fetchPost(postId) {
     return postCache[postId];
 }
 
-/* ─────────────────────────────────────────────
-   INFINITE SCROLL LAZY LOADING
-   ───────────────────────────────────────────── */
-async function loadNextPage() {
-    if (isLoadingMore || !hasMore) return;
-    isLoadingMore = true;
-    const spinner = document.getElementById('loading-more-spinner');
-    if (spinner) spinner.style.display = 'block';
-
+function subscribeToNotifications() {
     const notifRef = ref(db, `notifications/${currentUser.uid}`);
-    let q;
-    if (oldestTimestamp) {
-        q = query(notifRef, orderByChild('timestamp'), endAt(oldestTimestamp - 1), limitToLast(PAGE_SIZE));
-    } else {
-        q = query(notifRef, orderByChild('timestamp'), limitToLast(PAGE_SIZE));
-    }
 
-    try {
-        const snap = await get(q);
-        if (!snap.exists()) {
-            hasMore = false;
-        } else {
-            const items = [];
-            snap.forEach(child => { items.push({ id: child.key, ...child.val() }); });
-            
-            // Sort Descending
-            items.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-
-            if (items.length > 0) {
-                oldestTimestamp = items[items.length - 1].timestamp;
-
-                // Concurrently fetch necessary user & post data for this chunk
-                await Promise.all(items.map(async data => {
-                    const actorUser = data.actorId ? await fetchUser(data.actorId) : {};
-                    const post = data.postId ? await fetchPost(data.postId) : null;
-
-                    notifMap[data.id] = {
-                        id: data.id, ...data,
-                        _actorDisplayName: actorUser.displayName || actorUser.username || 'Someone',
-                        _actorUsername: actorUser.username || '',
-                        _actorPhoto: actorUser.photoURL || DEFAULT_AVATAR,
-                        _actorVerified: actorUser.verified || false,
-                        _postText: post ? (post.text || '') : (data.snippet || ''),
-                        _postThumb: post ? (post.mediaUrl || null) : (data.postThumb || null),
-                    };
-                }));
-
-                document.getElementById('skeletons').style.display = 'none';
-
-                // Render the chunk
-                items.forEach(item => {
-                    if (!document.getElementById(`notif-${item.id}`)) {
-                        renderSingle(item.id, false, true); // true = append at bottom
-                    }
-                });
-            }
-
-            if (items.length < PAGE_SIZE) hasMore = false;
-        }
-    } catch (e) {
-        console.error("Error loading notifications:", e);
-    } finally {
-        isLoadingMore = false;
-        if (spinner) spinner.style.display = 'none';
-        checkEmpty();
-        refreshCounts();
-
-        // Attach live listener for NEW notifications only after initial load
-        if (!realtimeListenerAttached) {
-            attachLiveListener();
-            realtimeListenerAttached = true;
-        }
-    }
-}
-
-function setupIntersectionObserver() {
-    const sentinel = document.getElementById('scroll-sentinel');
-    if (!sentinel) return;
-    const observer = new IntersectionObserver((entries) => {
-        if (entries[0].isIntersecting) {
-            loadNextPage();
-        }
-    }, { rootMargin: '300px' });
-    observer.observe(sentinel);
-}
-
-/* ─────────────────────────────────────────────
-   REAL-TIME SUBSCRIPTION (NEW ITEMS ONLY)
-   ───────────────────────────────────────────── */
-function attachLiveListener() {
-    const liveQ = query(ref(db, `notifications/${currentUser.uid}`), orderByChild('timestamp'), startAt(Date.now()));
-    
-    onChildAdded(liveQ, async snap => {
+    onChildAdded(notifRef, async snap => {
         const data = snap.val();
-        const id = snap.key;
+        const id   = snap.key;
         if (notifMap[id]) return;
 
         const actorUser = data.actorId ? await fetchUser(data.actorId) : {};
@@ -429,53 +325,72 @@ function attachLiveListener() {
             _postThumb: post ? (post.mediaUrl || null) : (data.postThumb || null),
         };
 
+        document.getElementById('skeletons').style.display = 'none';
+
         const isNew = data.timestamp && (Date.now() - data.timestamp) < 10000;
-        if (isNew && !isUserAtTop) {
+        if (isNew && !isUserAtTop && Object.keys(notifMap).length > 0) {
             pendingNew.push(id);
             updateNewPill();
         } else {
-            renderSingle(id, isNew, false); // false = prepend to top
+            renderSingle(id, isNew);
         }
         refreshCounts();
     });
 
-    // Listen for read-status changes
-    onChildChanged(ref(db, `notifications/${currentUser.uid}`), snap => {
+    onChildChanged(notifRef, async snap => {
         const data = snap.val();
+        const id   = snap.key;
+        
+        const actorUser = data.actorId ? await fetchUser(data.actorId) : {};
+        const post      = data.postId  ? await fetchPost(data.postId)  : null;
+        
+        notifMap[id] = {
+            id, ...data,
+            _actorDisplayName: actorUser.displayName || actorUser.username || 'Someone',
+            _actorPhoto: actorUser.photoURL || DEFAULT_AVATAR,
+            _actorVerified: actorUser.verified || false,
+            _postText: post ? (post.text || '') : (data.snippet || ''),
+            _postThumb: post ? (post.mediaUrl || null) : (data.postThumb || null),
+        };
+        
+        const card = document.getElementById(`notif-${id}`);
+        if (card) card.classList.toggle('unread', !data.read);
+        refreshCounts();
+    });
+
+    onChildRemoved(notifRef, snap => {
         const id = snap.key;
-        if (notifMap[id]) {
-            notifMap[id].read = data.read;
-            const card = document.getElementById(`notif-${id}`);
-            if (card) card.classList.toggle('unread', !data.read);
-            refreshCounts();
+        delete notifMap[id];
+        const card = document.getElementById(`notif-${id}`);
+        if (card) {
+            card.style.animation = 'slideOutLeft 0.3s ease-out forwards';
+            setTimeout(() => { card.remove(); checkEmpty(); }, 300);
         }
+        refreshCounts();
     });
 }
 
-/* ─────────────────────────────────────────────
-   RENDER SINGLE NOTIFICATION
-   ───────────────────────────────────────────── */
-function renderSingle(id, isNew = false, append = false) {
+function renderSingle(id, isNew = false) {
     const notif = notifMap[id];
-    if (!notif) return;
-    
-    // Check if it matches the current filter before injecting into DOM
-    if (!matchesFilter(notif)) return;
+    if (!notif || !matchesFilter(notif)) return;
 
     const list = document.getElementById('notifications-list');
-    const sentinel = document.getElementById('scroll-sentinel');
-    
     const existing = document.getElementById(`notif-${id}`);
     if (existing) existing.remove();
 
     const card = buildCard(notif, isNew);
     card.id = `notif-${id}`;
 
-    if (append) {
-        list.appendChild(card);
-    } else {
-        list.insertBefore(card, list.firstChild);
+    const cards = list.querySelectorAll('.notif-card');
+    let inserted = false;
+    for (const c of cards) {
+        if ((notif.timestamp || 0) > parseInt(c.dataset.timestamp || '0')) {
+            list.insertBefore(card, c);
+            inserted = true;
+            break;
+        }
     }
+    if (!inserted) list.appendChild(card);
 
     feather.replace();
     checkEmpty();
@@ -487,12 +402,12 @@ function buildCard(notif, isNew = false) {
     card.dataset.timestamp = notif.timestamp || 0;
     card.onclick = () => handleNotifClick(notif.id, getRedirectUrl(notif));
 
-    const displayName  = escHtml(notif._actorDisplayName || 'Someone');
-    const actorPhoto   = notif._actorPhoto || DEFAULT_AVATAR;
-    const isVerified   = notif._actorVerified || false;
-    const actorLabel   = `${displayName}${isVerified ? ` ${VERIFIED_BADGE}` : ''}`;
-    const snippet      = notif._postText ? notif._postText.slice(0, 100) : '';
-    const postThumb    = notif._postThumb || null;
+    const displayName = escHtml(notif._actorDisplayName);
+    const actorPhoto  = notif._actorPhoto || DEFAULT_AVATAR;
+    const isVerified  = notif._actorVerified || false;
+    const actorLabel  = `${displayName}${isVerified ? ` ${VERIFIED_BADGE}` : ''}`;
+    const snippet = notif._postText ? notif._postText.slice(0, 100) : '';
+    const postThumb = notif._postThumb || null;
 
     let iconHtml = '', textHtml = '', extraHtml = '';
 
@@ -554,13 +469,9 @@ window.setFilter = filter => {
     currentFilter = filter;
     document.querySelectorAll('.filter-chip').forEach(c => c.classList.toggle('active', c.dataset.filter === filter));
     
-    // Re-render from local downloaded memory
     document.getElementById('notifications-list').innerHTML = '';
-    const sorted = Object.values(notifMap)
-        .filter(n => matchesFilter(n))
-        .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-    
-    sorted.forEach(n => renderSingle(n.id, false, true));
+    const sorted = Object.values(notifMap).filter(n => matchesFilter(n)).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+    sorted.forEach(n => renderSingle(n.id));
     checkEmpty();
     feather.replace();
 };
@@ -580,7 +491,7 @@ function updateNewPill() {
 }
 
 window.showNewNotifications = () => {
-    pendingNew.forEach(id => renderSingle(id, true, false));
+    pendingNew.forEach(id => renderSingle(id, true));
     pendingNew = [];
     document.getElementById('new-notif-pill').classList.remove('visible');
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -619,40 +530,35 @@ window.toggleFollow = async (targetUid, notifId) => {
     if (!currentUser || !targetUid) return;
     const btn = document.getElementById(`fb-${notifId}`);
     const isFollowing = followingSet.has(targetUid);
-    
-    if (btn) btn.disabled = true;
+
+    if (isFollowing) {
+        followingSet.delete(targetUid);
+        if (btn) { btn.textContent = 'Follow back'; btn.classList.remove('following'); }
+    } else {
+        followingSet.add(targetUid);
+        if (btn) { btn.textContent = 'Following'; btn.classList.add('following'); }
+        if (navigator.vibrate) navigator.vibrate(40);
+    }
 
     try {
+        const updates = {};
         if (isFollowing) {
             await remove(ref(db, `users/${currentUser.uid}/following/${targetUid}`));
             await remove(ref(db, `users/${targetUid}/followers/${currentUser.uid}`));
-            followingSet.delete(targetUid);
-            if (btn) { btn.textContent = 'Follow back'; btn.classList.remove('following'); }
         } else {
-            await set(ref(db, `users/${currentUser.uid}/following/${targetUid}`), true);
-            await set(ref(db, `users/${targetUid}/followers/${currentUser.uid}`), true);
-            followingSet.add(targetUid);
-            if (btn) { btn.textContent = 'Following'; btn.classList.add('following'); }
-            
-            await push(ref(db, `notifications/${targetUid}`), {
-                type: 'follow',
-                actorId: currentUser.uid,
-                read: false,
-                timestamp: serverTimestamp()
-            });
-            if (navigator.vibrate) navigator.vibrate(40);
+            updates[`users/${currentUser.uid}/following/${targetUid}`] = true;
+            updates[`users/${targetUid}/followers/${currentUser.uid}`] = true;
+            await update(ref(db), updates);
         }
-    } catch (err) {
-        showToast('Action failed');
-    } finally {
-        if (btn) btn.disabled = false;
+    } catch {
+        showToast('Action failed. Try again.');
     }
 };
 
 function checkEmpty() {
     const list  = document.getElementById('notifications-list');
     const empty = document.getElementById('empty-state');
-    if (Object.values(notifMap).filter(n => matchesFilter(n)).length === 0 && list.children.length === 0 && !isLoadingMore) {
+    if (Object.values(notifMap).filter(n => matchesFilter(n)).length === 0 && list.children.length === 0) {
         empty.style.display = 'block';
         feather.replace();
     } else {
