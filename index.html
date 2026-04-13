@@ -7,6 +7,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/feather-icons"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Grand+Hotel&display=swap" rel="stylesheet">
     <style>
         /* ══════════════════════════════════════════
            THEME SYSTEM
@@ -605,12 +606,14 @@
 
     <header class="header">
         <div style="display:flex; align-items:center; gap:8px;">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color:var(--primary);">
-                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
-            </svg>
-            <h1 style="font-size:22px; font-weight:800; color:var(--text-primary); margin:0; letter-spacing:-0.5px; cursor:pointer;" onclick="window.scrollTo({top:0,behavior:'smooth'})">Vynix</h1>
+            <h1 style="font-family: 'Grand Hotel', cursive; font-size:32px; font-weight:400; color:var(--text-primary); margin:0; cursor:pointer; line-height: 1;" onclick="window.scrollTo({top:0,behavior:'smooth'})">Vynix</h1>
         </div>
         <div style="display:flex; align-items:center; gap:16px;">
+            <button style="background:none;border:none;cursor:pointer; display:flex; align-items:center;" onclick="window.location.href='ai.html'" aria-label="Ask Ona">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--text-primary);">
+                    <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path>
+                </svg>
+            </button>
             <button style="background:none;border:none;cursor:pointer;position:relative;" onclick="goToMessages()">
                 <i data-feather="send" style="width:24px;height:24px;color:var(--text-primary);"></i>
                 <span class="nav-badge" id="badge-messages-header" style="top:-2px;right:-4px;"></span>
@@ -960,6 +963,19 @@ async function loadUserData() {
         };
         await set(ref(db, `users/${currentUser.uid}`), currentUserData);
     }
+    
+    // Attach listener for bookmarks to keep local state updated
+    onValue(ref(db, `users/${currentUser.uid}/bookmarks`), s => {
+        currentUserData.bookmarks = s.val() || {};
+        
+        // Update the UI of any already rendered posts
+        document.querySelectorAll('[id^="bookmark-btn-"]').forEach(btn => {
+            const pid = btn.id.replace('bookmark-btn-', '');
+            const isBookmarked = !!currentUserData.bookmarks[pid];
+            btn.querySelector('svg').setAttribute('fill', isBookmarked ? 'currentColor' : 'none');
+        });
+    });
+
     document.getElementById('compose-avatar').src      = currentUserData.photoURL || DEFAULT_AVATAR;
     document.getElementById('my-story-img').src        = currentUserData.photoURL || DEFAULT_AVATAR;
     document.getElementById('nav-profile-avatar').src  = currentUserData.photoURL || DEFAULT_AVATAR;
@@ -1186,6 +1202,10 @@ function renderPost(post, prepend = false) {
     const isRepost = !!post.isRepost; const reposterName = isRepost ? (user.displayName || 'Someone') : null;
     const displayUser = isRepost && post.originalUser ? post.originalUser : user;
     const repostCount = Object.keys(post.reposts || {}).length; const userReposted = post.reposts?.[currentUser.uid];
+    
+    // Check if the current post is bookmarked by checking local cache
+    const isBookmarked = !!(currentUserData?.bookmarks?.[post.id]);
+    
     const div = document.createElement('div');
     div.className = 'post-card'; div.id = `post-${post.id}`;
     div.innerHTML = `
@@ -1227,7 +1247,7 @@ function renderPost(post, prepend = false) {
             </div>
             <div>
                 <button class="action-btn" onclick="toggleBookmark('${post.id}')" id="bookmark-btn-${post.id}">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="${isBookmarked ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>
                 </button>
             </div>
         </div>
@@ -2026,24 +2046,31 @@ window.toggleLike = async postId => {
 };
 
 window.toggleBookmark = async postId => {
+    if (!currentUser) { showToast('Please log in'); return; }
+    
     const btn = document.getElementById(`bookmark-btn-${postId}`);
     if (!btn) return;
+    
     const svg = btn.querySelector('svg');
     const isBookmarked = svg.getAttribute('fill') === 'currentColor';
+    const bookmarkRef = ref(db, `users/${currentUser.uid}/bookmarks/${postId}`);
     
-    // UI Update
-    if (isBookmarked) {
-        svg.setAttribute('fill', 'none');
-        showToast('Removed from bookmarks');
-    } else {
-        svg.setAttribute('fill', 'currentColor');
-        showToast('Saved to bookmarks');
-        if (navigator.vibrate) navigator.vibrate(30);
+    try {
+        if (isBookmarked) {
+            await remove(bookmarkRef);
+            svg.setAttribute('fill', 'none');
+            showToast('Removed from bookmarks');
+        } else {
+            // Save the bookmark with a timestamp so you can sort them later
+            await set(bookmarkRef, serverTimestamp());
+            svg.setAttribute('fill', 'currentColor');
+            showToast('Saved to bookmarks');
+            if (navigator.vibrate) navigator.vibrate(30);
+        }
+    } catch (e) {
+        console.error(e);
+        showToast('Error updating bookmark');
     }
-    
-    // Add Firebase database logic here when ready. For example:
-    // const bookmarkRef = ref(db, `users/${currentUser.uid}/bookmarks/${postId}`);
-    // if (isBookmarked) await remove(bookmarkRef); else await set(bookmarkRef, true);
 };
 
 window.toggleComments   = postId => document.getElementById(`comments-${postId}`).classList.toggle('active');
