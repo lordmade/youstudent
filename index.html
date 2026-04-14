@@ -244,6 +244,22 @@
         .post-text .mention, .post-text .hashtag, .post-text .post-link { color: var(--primary); font-weight: 500; cursor: pointer; text-decoration: none; }
         .post-text .mention:hover, .post-text .hashtag:hover, .post-text .post-link:hover { text-decoration: underline; }
 
+        /* ══ AD SYSTEM / SPONSORED ══ */
+        .ad-cta-btn {
+            display: flex; align-items: center; justify-content: center;
+            width: 100%; text-align: center;
+            background: var(--primary); color: white;
+            font-weight: 700; font-size: 14px; padding: 12px;
+            border-radius: 8px; margin-top: 12px;
+            text-decoration: none; border: none;
+            transition: background 0.2s; cursor: pointer;
+        }
+        .ad-cta-btn:hover { background: var(--primary-dark); }
+        .ad-sponsored-label {
+            font-size: 12px; font-weight: 600; color: var(--text-primary);
+            display: flex; align-items: center; gap: 4px;
+        }
+
         /* ══ VIDEO POST CLICK OVERLAY ══ */
         .video-open-overlay {
             position: absolute; inset: 0; z-index: 8; cursor: pointer; background: transparent;
@@ -393,7 +409,7 @@
         .modal-overlay.active { opacity: 1; pointer-events: auto; }
         .bottom-sheet { position: fixed; bottom: 0; left: 0; right: 0; background: var(--surface); border-radius: 24px 24px 0 0; padding: 20px; padding-bottom: calc(20px + env(safe-area-inset-bottom)); transform: translateY(100%); transition: transform 0.3s cubic-bezier(0.4,0,0.2,1); z-index: 201; max-height: 90vh; overflow-y: auto; }
         .modal-overlay.active ~ .bottom-sheet { transform: translateY(0); }
-        .confirm-modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%) scale(0.9); background: var(--surface); border-radius: 20px; padding: 24px; width: 90%; max-width: 320px; z-index: 210; opacity: 0; pointer-events: none; transition: all 0.3s; box-shadow: var(--shadow-lg); }
+        .confirm-modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%) scale(0.9); background: var(--surface); border-radius: 20px; padding: 24px; width: 90%; max-width: 320px; z-index: 500; opacity: 0; pointer-events: none; transition: all 0.3s; box-shadow: var(--shadow-lg); }
         .confirm-modal.active { opacity: 1; pointer-events: auto; transform: translate(-50%,-50%) scale(1); }
         .confirm-title { font-size: 18px; font-weight: 700; margin-bottom: 8px; text-align: center; color: var(--text-primary); }
         .confirm-text { font-size: 14px; color: var(--text-secondary); margin-bottom: 20px; text-align: center; }
@@ -795,6 +811,36 @@ let pendingNewPosts = [], isUserAtTop = true;
 const postListeners        = new Map();
 const commentListeners     = new Map();
 const commentLikeListeners = new Map();
+
+/* ══ STORY GLOBAL PAUSE/RESUME ══ */
+let holdActive = false, storyElapsedMs = 0;
+
+window.pauseStoryPlayback = () => {
+    if (!document.getElementById('story-viewer').classList.contains('active')) return;
+    const fill = document.getElementById('current-progress');
+    if (fill) {
+        const computed = getComputedStyle(fill).width; const parent = fill.parentElement;
+        const pct = parent ? (parseFloat(computed)/parent.offsetWidth*100) : parseFloat(fill.style.width);
+        storyElapsedMs = pct / 100 * (parseFloat(fill.style.transitionDuration) * 1000 || STORY_IMAGE_DURATION);
+        fill.style.transition='none'; fill.style.width=pct+'%';
+    }
+    if (currentVideoElement) currentVideoElement.pause();
+    if (storyTimeout) { clearTimeout(storyTimeout); storyTimeout=null; }
+};
+
+window.resumeStoryPlayback = () => {
+    if (!document.getElementById('story-viewer').classList.contains('active')) return;
+    const fill = document.getElementById('current-progress');
+    let totalDur = STORY_IMAGE_DURATION;
+    if (currentVideoElement && currentVideoElement.duration) {
+        totalDur = Math.min(currentVideoElement.duration * 1000, STORY_MAX_VIDEO_DURATION);
+    }
+    const remainingMs = Math.max(0, totalDur - storyElapsedMs);
+    if (fill&&remainingMs>0) { fill.style.transition=`width ${remainingMs}ms linear`; fill.style.width='100%'; }
+    if (currentVideoElement) currentVideoElement.play().catch(()=>{});
+    storyTimeout = setTimeout(()=>navigateStory(1), remainingMs);
+};
+
 
 /* ══ VIDEO FEED STATE ══ */
 let vfCurrentIdx    = 0;
@@ -1205,6 +1251,17 @@ function renderPost(post, prepend = false) {
     
     // Check if the current post is bookmarked by checking local cache
     const isBookmarked = !!(currentUserData?.bookmarks?.[post.id]);
+
+    // Check if the post is an ad and the user is verified
+    const isAd = !!post.isAd && displayUser.verified;
+    
+    const handleAndDate = isAd
+        ? `<div class="ad-sponsored-label">Sponsored</div>`
+        : `<div class="post-handle">@${displayUser.username || 'user'} · ${formatTime(post.timestamp)}</div>`;
+    
+    const adCTA = isAd 
+        ? `<a href="${post.adLink || '#'}" class="ad-cta-btn" target="_blank">${escapeHtml(post.adCtaText || 'Learn More')} <i data-feather="external-link" style="width:14px;height:14px;vertical-align:middle;margin-left:4px;"></i></a>` 
+        : '';
     
     const div = document.createElement('div');
     div.className = 'post-card'; div.id = `post-${post.id}`;
@@ -1225,11 +1282,12 @@ function renderPost(post, prepend = false) {
                     <span class="post-author">${escapeHtml(displayUser.displayName || 'User')}</span>
                     ${displayUser.verified ? `<span class="verified-badge">${VERIFIED_BADGE_SVG}</span>` : ''}
                 </div>
-                <div class="post-handle">@${displayUser.username || 'user'} · ${formatTime(post.timestamp)}</div>
+                ${handleAndDate}
             </div>
         </div>
         ${renderPostText(post.text || '', post.id)}
         ${renderPostMedia(post)}
+        ${adCTA}
         
         <div class="actions" style="display: flex; justify-content: space-between; align-items: center; max-width: 100%;">
             <div style="display: flex; gap: 8px;">
@@ -1287,7 +1345,7 @@ const feedVideoObserver = new IntersectionObserver((entries) => {
 function createVynixPlayer(src, postId, idx = '') {
     const id = `vynix-${postId}${idx ? '-'+idx : ''}`;
     return `<div class="vynix-player" id="${id}">
-        <video id="${id}-video" src="${src}" playsinline loop preload="metadata" style="width:100%;max-height:500px;object-fit:cover;display:block;"></video>
+        <video id="${id}-video" src="${src}" playsinline loop muted preload="metadata" style="width:100%;max-height:500px;object-fit:cover;display:block;"></video>
         <div class="vynix-loader" id="${id}-loader"><div class="vynix-spinner"></div></div>
         <div class="vynix-tap-overlay"><div class="vynix-tap-icon" id="${id}-tap-icon"><svg id="${id}-tap-svg" width="28" height="28" viewBox="0 0 24 24" fill="white" stroke="none"><polygon points="5 3 19 12 5 21 5 3"/></svg></div></div>
         <div class="vynix-controls">
@@ -1300,7 +1358,7 @@ function createVynixPlayer(src, postId, idx = '') {
             </div>
             <div class="vynix-btn-row">
                 <button class="vynix-btn" onclick="vynixTogglePlay('${id}')"><svg id="${id}-play-icon" viewBox="0 0 24 24" fill="white" stroke="none"><polygon points="5 3 19 12 5 21 5 3"/></svg></button>
-                <button class="vynix-btn vynix-mute-btn" id="${id}-mute-btn" onclick="vynixToggleMute('${id}')">
+                <button class="vynix-btn vynix-mute-btn muted" id="${id}-mute-btn" onclick="vynixToggleMute('${id}')">
                     <svg class="icon-unmuted" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
                     <svg class="icon-muted" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>
                 </button>
@@ -1487,7 +1545,7 @@ function buildVideoSlides(startIdx) {
                 <div class="vf-act">
                     <button class="vf-act-btn" onclick="openAIFromPost('${post.id}',event)">
                         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
-                            <circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+                            <circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3"/>
                             <line x1="12" y1="17" x2="12.01" y2="17"/>
                         </svg>
                     </button>
@@ -2140,11 +2198,14 @@ function showConfirmModal(title, text, confirmText, isRepost=false) {
     document.getElementById('confirm-overlay').classList.add('active');
     document.getElementById('confirm-modal').classList.add('active');
 }
+
 window.closeConfirmModal = () => {
     document.getElementById('confirm-overlay').classList.remove('active');
     document.getElementById('confirm-modal').classList.remove('active');
+    if (deleteType === 'story') window.resumeStoryPlayback();
     deleteType=null; deleteData=null; confirmCallback=null;
 };
+
 window.executeConfirmAction = async () => {
     if (confirmCallback) { const cb=confirmCallback; closeConfirmModal(); await cb(); return; }
     if (!deleteType||!deleteData) { closeConfirmModal(); return; }
@@ -2339,36 +2400,21 @@ function updateStoryLikeUI(story) {
 function setupStoryHold() {
     const mc = document.getElementById('story-media-container');
     const holdIndicator = document.getElementById('story-hold-indicator');
-    let holdActive=false, storyElapsedMs=0;
+    
     const startHold = (e) => {
         if (e.target.closest('.story-nav')||e.target.closest('.story-controls')||e.target.closest('.story-header')) return;
         if (!document.getElementById('story-viewer').classList.contains('active')) return;
         holdActive = true;
-        const fill = document.getElementById('current-progress');
-        if (fill) {
-            const computed = getComputedStyle(fill).width; const parent = fill.parentElement;
-            const pct = parent ? (parseFloat(computed)/parent.offsetWidth*100) : parseFloat(fill.style.width);
-            storyElapsedMs = pct / 100 * (parseFloat(fill.style.transitionDuration) * 1000 || STORY_IMAGE_DURATION);
-            fill.style.transition='none'; fill.style.width=pct+'%';
-        }
-        if (currentVideoElement) currentVideoElement.pause();
-        if (storyTimeout) { clearTimeout(storyTimeout); storyTimeout=null; }
+        window.pauseStoryPlayback();
         if (holdIndicator) holdIndicator.classList.add('visible');
     };
+    
     const endHold = () => {
         if (!holdActive) return; holdActive=false;
         if (holdIndicator) holdIndicator.classList.remove('visible');
-        if (!document.getElementById('story-viewer').classList.contains('active')) return;
-        const fill = document.getElementById('current-progress');
-        let totalDur = STORY_IMAGE_DURATION;
-        if (currentVideoElement && currentVideoElement.duration) {
-            totalDur = Math.min(currentVideoElement.duration * 1000, STORY_MAX_VIDEO_DURATION);
-        }
-        const remainingMs = Math.max(0, totalDur - storyElapsedMs);
-        if (fill&&remainingMs>0) { fill.style.transition=`width ${remainingMs}ms linear`; fill.style.width='100%'; }
-        if (currentVideoElement) currentVideoElement.play().catch(()=>{});
-        storyTimeout = setTimeout(()=>navigateStory(1), remainingMs);
+        window.resumeStoryPlayback();
     };
+    
     mc.addEventListener('touchstart', startHold,{passive:true}); mc.addEventListener('touchend',endHold); mc.addEventListener('touchcancel',endHold);
     mc.addEventListener('mousedown',  startHold); mc.addEventListener('mouseup',endHold); mc.addEventListener('mouseleave',endHold);
 }
@@ -2383,7 +2429,15 @@ window.navigateStory = dir => {
     displayCurrentStory();
 };
 window.closeStoryViewer = () => { if(storyTimeout)clearTimeout(storyTimeout); if(currentVideoElement){currentVideoElement.pause();currentVideoElement=null;} document.getElementById('story-viewer').classList.remove('active'); };
-window.deleteCurrentStory = () => { const ids=Array.from(storyGroups.keys()).sort((a,b)=>{if(a===currentUser?.uid)return -1;if(b===currentUser?.uid)return 1;return 0;}); const g=storyGroups.get(ids[currentStoryGroupIndex]); const s=g.stories[currentStoryIndex]; deleteType='story'; deleteData=s.id; confirmCallback=null; showConfirmModal('Delete Story?','This story will be permanently removed.','Delete',false); };
+
+window.deleteCurrentStory = () => { 
+    window.pauseStoryPlayback();
+    const ids=Array.from(storyGroups.keys()).sort((a,b)=>{if(a===currentUser?.uid)return -1;if(b===currentUser?.uid)return 1;return 0;}); 
+    const g=storyGroups.get(ids[currentStoryGroupIndex]); 
+    const s=g.stories[currentStoryIndex]; 
+    deleteType='story'; deleteData=s.id; confirmCallback=null; 
+    showConfirmModal('Delete Story?','This story will be permanently removed.','Delete',false); 
+};
 
 // ── COMPOSE ──
 window.openCompose  = () => document.getElementById('compose-overlay').classList.add('active');
