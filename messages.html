@@ -6,7 +6,6 @@
     <title>Vynix · Messages</title>
     <script src="https://unpkg.com/feather-icons"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Grand+Hotel&display=swap" rel="stylesheet">
     <style>
         /* ── THEME SYSTEM ── */
         :root, [data-theme="light"] {
@@ -89,6 +88,8 @@
             color:var(--text-primary);
             -webkit-font-smoothing:antialiased;
             transition:background 0.3s,color 0.3s;
+            /* Required for dynamic visualViewport resizing */
+            position: relative;
         }
 
         @keyframes fadeUp{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:translateY(0);}}
@@ -107,7 +108,7 @@
 
         /* ══ SHELL ══ */
         .app{
-            display:flex;height:100dvh;
+            display:flex; height:100%; /* Changed from 100dvh to 100% for dynamic viewport */
             max-width:1000px;margin:0 auto; 
             background:var(--surface);
         }
@@ -257,7 +258,7 @@
             margin-bottom:2px; animation:msgIn 0.2s cubic-bezier(0.34,1.2,0.64,1);
         }
         .msg-row.in { justify-content: flex-start; flex-direction: row; }
-        .msg-row.out { justify-content: flex-end; flex-direction: row; } /* Fix applied here! */
+        .msg-row.out { justify-content: flex-end; flex-direction: row; }
         .msg-row.gap{margin-top:12px;}
         
         .msg-avatar-sm{width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;cursor:pointer;}
@@ -553,7 +554,7 @@
                         <i data-feather="smile" style="width:24px;height:24px;"></i>
                     </button>
 
-                    <textarea class="msg-input" id="msg-input" placeholder="Message..." rows="1" oninput="onMsgInput()" onkeydown="onMsgKeydown(event)"></textarea>
+                    <textarea class="msg-input" id="msg-input" placeholder="Message..." rows="1" oninput="onMsgInput()" onkeydown="onMsgKeydown(event)" onfocus="setTimeout(scrollBot, 300)"></textarea>
                     
                     <button class="send-btn-icon" id="send-btn" onclick="sendMessage()" disabled>
                         <i data-feather="send" style="width:22px;height:22px;"></i>
@@ -578,6 +579,14 @@ const app=initializeApp(fbCfg), auth=getAuth(app), db=getDatabase(app);
 
 const savedTheme = localStorage.getItem('vynix_theme') || 'light';
 document.documentElement.setAttribute('data-theme', savedTheme);
+
+// ── MOBILE KEYBOARD FIX ──
+if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', () => {
+        document.body.style.height = window.visualViewport.height + 'px';
+        scrollBot();
+    });
+}
 
 // ── ENCRYPTION ──
 const IDB_DB='vynix-e2e', IDB_STORE='keys';
@@ -1074,7 +1083,7 @@ window.onMsgInput=()=>{
     
     if(has) { 
         btn.classList.add('show'); 
-        btn.disabled = false; // Make sure it's enabled!
+        btn.disabled = false;
         startTyping(); 
     } else { 
         btn.classList.remove('show'); 
