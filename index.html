@@ -622,7 +622,7 @@
 
     <header class="header">
         <div style="display:flex; align-items:center; gap:8px;">
-            <h1 style="font-family: 'Grand Hotel', cursive; font-size:32px; font-weight:400; color:var(--text-primary); margin:0; cursor:pointer; line-height: 1;" onclick="window.scrollTo({top:0,behavior:'smooth'})">Vynix</h1>
+            <img src="https://i.postimg.cc/T3Nv0Szn/Gemini-Generated-Image-g7omg8g7omg8g7om-removebg-preview.png" alt="Vynix" style="height: 36px; cursor: pointer; object-fit: contain;" onclick="window.scrollTo({top:0,behavior:'smooth'})">
         </div>
         <div style="display:flex; align-items:center; gap:16px;">
             <button style="background:none;border:none;cursor:pointer; display:flex; align-items:center;" onclick="window.location.href='ai.html'" aria-label="Ask Ona">
@@ -709,7 +709,7 @@
 </nav>
 
 <div class="modal-overlay" id="compose-overlay" onclick="closeCompose()"></div>
-<div class="bottom-sheet">
+<div class="bottom-sheet" id="compose-sheet">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
         <button onclick="closeCompose()" style="background:none;border:none;color:var(--text-secondary);font-size:15px;cursor:pointer;font-family:inherit;">Cancel</button>
         <button id="post-btn" onclick="createPost()" style="background:var(--primary);color:white;border:none;padding:8px 20px;border-radius:9999px;font-weight:700;opacity:0.5;cursor:pointer;font-family:inherit;" disabled>Post</button>
@@ -732,6 +732,16 @@
             </button>
         </div>
         <span id="char-count" style="color:var(--text-muted);font-size:14px;">280</span>
+    </div>
+</div>
+
+<div class="modal-overlay" id="edit-overlay" onclick="closeEditModal()"></div>
+<div class="confirm-modal" id="edit-modal" style="max-width: 400px;">
+    <div class="confirm-title">Edit Post</div>
+    <textarea id="edit-post-text" style="width: 100%; height: 100px; border: 1px solid var(--border); border-radius: 12px; padding: 12px; font-family: inherit; font-size: 15px; margin-bottom: 16px; background: var(--surface2); color: var(--text-primary); resize: none; outline: none;"></textarea>
+    <div class="confirm-buttons">
+        <button class="confirm-btn cancel" onclick="closeEditModal()">Cancel</button>
+        <button class="confirm-btn" style="background: var(--primary); color: white;" id="save-edit-btn" onclick="saveEdit()">Save</button>
     </div>
 </div>
 
@@ -803,6 +813,7 @@ const db   = getDatabase(app);
 let currentUser = null, currentUserData = null;
 let selectedMedia = null, selectedMediaFiles = [];
 let deleteType = null, deleteData = null, confirmCallback = null;
+let currentEditPostId = null; // for editing logic
 let storyGroups = new Map();
 let currentStoryGroupIndex = 0, currentStoryIndex = 0, storyTimeout = null, currentVideoElement = null;
 let loadedPostIds = new Set(), postsListenerAttached = false;
@@ -840,7 +851,6 @@ window.resumeStoryPlayback = () => {
     if (currentVideoElement) currentVideoElement.play().catch(()=>{});
     storyTimeout = setTimeout(()=>navigateStory(1), remainingMs);
 };
-
 
 /* ══ VIDEO FEED STATE ══ */
 let vfCurrentIdx    = 0;
@@ -1263,6 +1273,10 @@ function renderPost(post, prepend = false) {
         ? `<a href="${post.adLink || '#'}" class="ad-cta-btn" target="_blank">${escapeHtml(post.adCtaText || 'Learn More')} <i data-feather="external-link" style="width:14px;height:14px;vertical-align:middle;margin-left:4px;"></i></a>` 
         : '';
     
+    // Check if post is editable (Owner AND within 1 hour)
+    const postTimeMs = post.timestamp || Date.now();
+    const canEdit = isOwner && (Date.now() - postTimeMs < 3600000);
+
     const div = document.createElement('div');
     div.className = 'post-card'; div.id = `post-${post.id}`;
     div.innerHTML = `
@@ -1272,7 +1286,9 @@ function renderPost(post, prepend = false) {
             <button class="post-menu-btn" onclick="togglePostMenu('${post.id}',event)"><i data-feather="more-horizontal" style="width:20px;height:20px;"></i></button>
             <div class="post-dropdown" id="dropdown-${post.id}">
                 <button class="dropdown-item ai-action" onclick="openAIFromPost('${post.id}',event)"><i data-feather="cpu" style="width:16px;height:16px;"></i> Ask AI about this</button>
+                ${canEdit ? `<button class="dropdown-item" onclick="openEditModal('${post.id}', event)"><i data-feather="edit-2" style="width:16px;height:16px;"></i> Edit</button>` : ''}
                 ${isOwner ? `<button class="dropdown-item delete" onclick="confirmDeletePost('${post.id}')"><i data-feather="trash-2" style="width:16px;height:16px;"></i> Delete</button>` : ''}
+                ${!isOwner ? `<button class="dropdown-item" onclick="reportPost('${post.id}', event)"><i data-feather="flag" style="width:16px;height:16px;"></i> Report</button>` : ''}
             </div>
         </div>
         <div class="post-header">
@@ -1326,6 +1342,85 @@ function renderPost(post, prepend = false) {
     attachRealtimePostListeners(post.id);
     feather.replace();
 }
+
+// ── EDIT AND REPORT LOGIC ──
+window.openEditModal = (postId, event) => {
+    if (event) event.stopPropagation();
+    document.querySelectorAll('.post-dropdown').forEach(d => d.classList.remove('active'));
+    
+    const post = allPostsCache.find(p => p.id === postId);
+    if (!post) return;
+    
+    currentEditPostId = postId;
+    document.getElementById('edit-post-text').value = post.text || '';
+    
+    document.getElementById('edit-overlay').classList.add('active');
+    document.getElementById('edit-modal').classList.add('active');
+};
+
+window.closeEditModal = () => {
+    document.getElementById('edit-overlay').classList.remove('active');
+    document.getElementById('edit-modal').classList.remove('active');
+    currentEditPostId = null;
+};
+
+window.saveEdit = async () => {
+    if (!currentEditPostId) return;
+    
+    const newText = document.getElementById('edit-post-text').value.trim();
+    const btn = document.getElementById('save-edit-btn');
+    
+    btn.disabled = true;
+    btn.textContent = 'Saving...';
+    
+    try {
+        await update(ref(db, `posts/${currentEditPostId}`), { text: newText, editedAt: serverTimestamp() });
+        
+        // Update Local Cache
+        const postIdx = allPostsCache.findIndex(p => p.id === currentEditPostId);
+        if (postIdx > -1) allPostsCache[postIdx].text = newText;
+        
+        // Dynamically Update the DOM text avoiding full page reload
+        const oldTextNode = document.getElementById(`post-text-${currentEditPostId}`);
+        if (oldTextNode) {
+            const seeMoreBtn = document.getElementById(`see-more-${currentEditPostId}`);
+            if (seeMoreBtn) seeMoreBtn.remove();
+            
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = renderPostText(newText, currentEditPostId);
+            oldTextNode.replaceWith(...tempDiv.childNodes);
+        }
+        
+        showToast('Post updated successfully');
+        closeEditModal();
+    } catch (e) {
+        showToast('Failed to update post');
+        console.error(e);
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Save';
+    }
+};
+
+window.reportPost = async (postId, event) => {
+    if (event) event.stopPropagation();
+    document.querySelectorAll('.post-dropdown').forEach(d => d.classList.remove('active'));
+    
+    if (!currentUser) return showToast("Please login to report.");
+    
+    try {
+        await push(ref(db, 'reports'), {
+            postId: postId,
+            reporterUid: currentUser.uid,
+            timestamp: serverTimestamp()
+        });
+        showToast('Post reported. Thank you for keeping the community safe.');
+    } catch (e) {
+        showToast('Failed to send report');
+        console.error(e);
+    }
+};
+
 
 // ── AUTOPLAY INTERSECTION OBSERVER ──
 const feedVideoObserver = new IntersectionObserver((entries) => {
