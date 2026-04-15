@@ -88,7 +88,7 @@
             color:var(--text-primary);
             -webkit-font-smoothing:antialiased;
             transition:background 0.3s,color 0.3s;
-            position: relative; /* For visualViewport */
+            position: relative; 
         }
 
         @keyframes fadeUp{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:translateY(0);}}
@@ -218,7 +218,48 @@
         .chat-sub{font-size:12px;color:var(--text-secondary);margin-top:2px;}
         .chat-sub.online-text{color:var(--text-secondary);} 
         
-        .chat-actions{display:flex;gap:4px;align-items:center;}
+        .chat-actions{display:flex;gap:12px;align-items:center;}
+
+        /* AI Toggle Switch */
+        .ai-toggle-container {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: var(--surface2);
+            padding: 4px 10px;
+            border-radius: 999px;
+            border: 1px solid var(--border);
+        }
+        .ai-label {
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 32px;
+            height: 18px;
+        }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider {
+            position: absolute; cursor: pointer;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: var(--border);
+            transition: .3s; border-radius: 34px;
+        }
+        .slider:before {
+            position: absolute; content: "";
+            height: 12px; width: 12px; left: 3px; bottom: 3px;
+            background-color: white; transition: .3s; border-radius: 50%;
+        }
+        input:checked + .slider {
+            background-image: linear-gradient(135deg, #C5A059, #8E6E37);
+        }
+        input:checked + .slider:before { transform: translateX(14px); }
 
         /* Messages Area */
         .messages-area{
@@ -281,6 +322,38 @@
         .typing-dot{width:6px;height:6px;border-radius:50%;background:var(--text-secondary);animation:typingBounce 1.4s infinite ease-in-out both;}
         .typing-dot:nth-child(1){animation-delay:-0.32s;}
         .typing-dot:nth-child(2){animation-delay:-0.16s;}
+
+        /* ── AI SUGGESTIONS BAR ── */
+        .suggestions-bar {
+            display: flex;
+            gap: 8px;
+            padding: 0 20px 10px 20px;
+            overflow-x: auto;
+            white-space: nowrap;
+            scrollbar-width: none;
+        }
+        .suggestions-bar::-webkit-scrollbar { display: none; }
+        
+        .suggestion-pill {
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+            padding: 8px 14px;
+            border-radius: 999px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.2s;
+            animation: msgIn 0.3s ease-out;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .suggestion-pill:hover { background: var(--surface3); }
+        .suggestion-pill.generating {
+            pointer-events: none;
+            color: var(--text-secondary);
+        }
 
         /* ── STICKER PICKER ── */
         .input-area-wrapper { position: relative; width: 100%; display: flex; flex-direction: column; }
@@ -531,6 +604,25 @@
                     <div class="chat-sub" id="chat-last-seen">Active today</div>
                 </div>
                 <div class="chat-actions">
+                    <div class="ai-toggle-container" title="Let Ona AI reply for you">
+                        <span class="ai-label">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="url(#gemini-gradient)" stroke="none">
+                                <defs>
+                                    <linearGradient id="gemini-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                                        <stop offset="0%" stop-color="#C5A059" />
+                                        <stop offset="100%" stop-color="#8E6E37" />
+                                    </linearGradient>
+                                </defs>
+                                <path d="M11.5 2C11.5 7.24671 7.24671 11.5 2 11.5C7.24671 11.5 11.5 15.7533 11.5 21C11.5 15.7533 15.7533 11.5 21 11.5C15.7533 11.5 11.5 7.24671 11.5 2Z"></path>
+                                <path d="M20 4C20 5.65685 18.6569 7 17 7C18.6569 7 20 8.34315 20 10C20 8.34315 21.3431 7 23 7C21.3431 7 20 5.65685 20 4Z"></path>
+                            </svg>
+                            Auto
+                        </span>
+                        <label class="switch">
+                          <input type="checkbox" id="ai-toggle" onchange="toggleAImode()">
+                          <span class="slider"></span>
+                        </label>
+                    </div>
                     <button class="icon-btn" onclick="deleteCurrentChat()" title="Delete">
                         <i data-feather="info" style="width:24px;height:24px;"></i>
                     </button>
@@ -550,6 +642,10 @@
             </div>
 
             <div class="input-area-wrapper">
+                
+                <div class="suggestions-bar" id="ai-suggestions-container" style="display:none;">
+                    </div>
+
                 <div class="sticker-picker" id="sticker-picker">
                     <div class="sticker-picker-header">Stickers</div>
                     <div class="sticker-grid" id="sticker-grid"></div>
@@ -584,14 +680,42 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebas
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { getDatabase, ref, get, set, push, update, remove, onValue, onChildAdded, onChildChanged, onDisconnect, serverTimestamp, off }
     from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+import { getRemoteConfig, fetchAndActivate, getValue } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-remote-config.js";
 
 const CLOUDINARY_CLOUD='dqkujefxj', CLOUDINARY_PRESET='banter_box';
 const fbCfg={apiKey:"AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",authDomain:"fire-b-a8878.firebaseapp.com",databaseURL:"https://fire-b-a8878.firebaseio.com",projectId:"fire-b-a8878",storageBucket:"fire-b-a8878.appspot.com",messagingSenderId:"658673187627",appId:"1:658673187627:web:6e4c29af661785f0afa36e"};
 
 const app=initializeApp(fbCfg), auth=getAuth(app), db=getDatabase(app);
+const remoteConfig = getRemoteConfig(app);
+remoteConfig.settings.minimumFetchIntervalMillis = 0;
 
 const savedTheme = localStorage.getItem('vynix_theme') || 'light';
 document.documentElement.setAttribute('data-theme', savedTheme);
+
+// ── AI CONFIG & STATE ──
+let XAI_API_KEY = "";
+let isAIToggledOn = false;
+let isAIGenerating = false;
+
+async function loadAIKey() {
+    try {
+        await fetchAndActivate(remoteConfig);
+        XAI_API_KEY = getValue(remoteConfig, 'xai_api_key').asString();
+    } catch (e) { console.error("Key Load Error", e); }
+}
+loadAIKey();
+
+window.toggleAImode = () => {
+    isAIToggledOn = document.getElementById('ai-toggle').checked;
+    const suggContainer = document.getElementById('ai-suggestions-container');
+    
+    if (isAIToggledOn) {
+        suggContainer.style.display = 'none'; // Hide suggestions if auto-replying
+        showToast('Ona AI Auto-Reply Enabled');
+    } else {
+        showToast('Ona AI Auto-Reply Disabled');
+    }
+};
 
 // ── MOBILE KEYBOARD FIX ──
 if (window.visualViewport) {
@@ -951,6 +1075,7 @@ window.openChat=async(cid,uid)=>{
             <button class="btn" onclick="goToOtherProfile()">View Profile</button>
         </div>
     `;
+    document.getElementById('ai-suggestions-container').style.display = 'none';
 
     if(window.innerWidth<=768){
         document.getElementById('chat-pane').classList.add('open');
@@ -974,6 +1099,101 @@ window.closeChat=()=>{
     document.getElementById('chat-empty').style.display='flex';
     document.getElementById('chat-view').style.display='none';
 };
+
+// ── AI ASSISTANCE (Auto-Reply & Suggestions) ──
+
+function getRecentContext() {
+    const rows = Array.from(document.querySelectorAll('.msg-row')).slice(-6);
+    return rows.map(r => {
+        // If 'out', it means "me" (assistant context for AI proxy). If 'in', it means "them" (user context for AI proxy).
+        const role = r.classList.contains('out') ? 'assistant' : 'user';
+        const bubble = r.querySelector('.bubble');
+        const content = bubble ? bubble.textContent : '[Sent Media]';
+        return { role, content };
+    });
+}
+
+async function callAIApi(messages, systemPrompt) {
+    if (!XAI_API_KEY) return null;
+    const history = [ { role: "system", content: systemPrompt }, ...messages ];
+    
+    try {
+        const res = await fetch(`${API_BASE}/chat/completions`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${XAI_API_KEY}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ model: "grok-beta", messages: history })
+        });
+        if (!res.ok) throw new Error(await res.text());
+        const data = await res.json();
+        return data.choices[0].message.content;
+    } catch (e) {
+        console.error("AI Error:", e);
+        return null;
+    }
+}
+
+async function handleAIAutoReply() {
+    if (isAIGenerating) return;
+    isAIGenerating = true;
+    startTyping();
+    
+    const context = getRecentContext();
+    const systemPrompt = `You are an AI proxy auto-replying on behalf of the user in a casual chat app. The user you are chatting with is named ${otherData?.displayName || 'User'}. Keep your responses short, natural, conversational, and friendly. Continue the flow seamlessly. Do not use quotes or prefixes.`;
+    
+    const aiResponseText = await callAIApi(context, systemPrompt);
+    
+    stopTyping();
+    isAIGenerating = false;
+
+    if (aiResponseText) {
+        await window.sendMessage(aiResponseText);
+    }
+}
+
+async function handleAISuggestions() {
+    if (isAIGenerating) return;
+    isAIGenerating = true;
+    
+    const container = document.getElementById('ai-suggestions-container');
+    container.innerHTML = `<div class="suggestion-pill generating"><div class="spinner" style="width:14px;height:14px;border-width:2px;"></div> Generating...</div>`;
+    container.style.display = 'flex';
+    
+    const context = getRecentContext();
+    const systemPrompt = `You are an AI assisting a user in a chat application. Read the recent chat history and generate exactly 3 short, natural, distinct reply options for the user to send. Output ONLY a valid JSON array of 3 strings. Example: ["That sounds great!", "I can't make it", "Let me check and get back to you."]`;
+    
+    const aiResponseText = await callAIApi(context, systemPrompt);
+    isAIGenerating = false;
+
+    if (aiResponseText) {
+        try {
+            // Strip potential markdown formatting from LLM output
+            const cleanJson = aiResponseText.replace(/```json/g, '').replace(/```/g, '').trim();
+            const suggestions = JSON.parse(cleanJson);
+            
+            if (Array.isArray(suggestions) && suggestions.length > 0) {
+                container.innerHTML = suggestions.map(text => 
+                    `<div class="suggestion-pill" onclick="sendSuggestion(this, \`${window.escapeHtml(text)}\`)">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="none" style="color:var(--primary);">
+                            <path d="M11.5 2C11.5 7.24671 7.24671 11.5 2 11.5C7.24671 11.5 11.5 15.7533 11.5 21C11.5 15.7533 15.7533 11.5 21 11.5C15.7533 11.5 11.5 7.24671 11.5 2Z"></path>
+                        </svg>
+                        ${window.escapeHtml(text)}
+                    </div>`
+                ).join('');
+                return;
+            }
+        } catch (e) {
+            console.error("Failed to parse AI suggestions", e);
+        }
+    }
+    // Hide if failed
+    container.style.display = 'none';
+}
+
+window.sendSuggestion = (element, text) => {
+    document.getElementById('ai-suggestions-container').style.display = 'none';
+    window.sendMessage(text);
+}
+
 
 // ── MESSAGES ──
 function listenMsgs(cid){
@@ -1011,7 +1231,19 @@ function listenMsgs(cid){
         area.appendChild(row);
 
         // Async resolution
-        renderMsgContent(row, {id:snap.key,...msg}).then(() => scrollBot());
+        renderMsgContent(row, {id:snap.key,...msg}).then(() => {
+            scrollBot();
+            
+            // --- TRIGGER AI LOGIC AFTER DECRYPTION/RENDER ---
+            if (msg.senderId !== me.uid && chatId === cid) {
+                // If it's a new message from the other person
+                if (isAIToggledOn) {
+                    handleAIAutoReply();
+                } else {
+                    handleAISuggestions();
+                }
+            }
+        });
         
         if(msg.senderId !== me.uid && chatId === cid) {
             update(ref(db,`userChats/${me.uid}/${cid}`), {unreadCount:0}).catch(()=>{});
@@ -1105,8 +1337,9 @@ window.deleteMsg = (msgId) => {
 };
 
 // ── SEND MESSAGE & TYPING ──
-window.sendMessage=async()=>{
-    const input=document.getElementById('msg-input'),text=input.value.trim();
+window.sendMessage = async (textOverride = null) => {
+    const input = document.getElementById('msg-input');
+    const text = textOverride || input.value.trim();
     if(!text||!chatId)return;
     
     input.value=''; 
@@ -1115,6 +1348,7 @@ window.sendMessage=async()=>{
     btn.classList.remove('show'); 
     btn.disabled = true;
     stopTyping();
+    document.getElementById('ai-suggestions-container').style.display = 'none';
     
     const ts=Date.now();
     let msgData={senderId:me.uid, timestamp:ts, read: false};
@@ -1161,7 +1395,7 @@ window.onMsgInput=()=>{
     }
 };
 
-window.onMsgKeydown=e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMessage();}};
+window.onMsgKeydown=e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();window.sendMessage();}};
 function resizeInput(){const el=document.getElementById('msg-input');el.style.height='auto';el.style.height=Math.min(el.scrollHeight,120)+'px';}
 function startTyping(){if(!chatId)return;set(ref(db,`messages/${chatId}/typing/${me.uid}`),true);clearTimeout(typingTimer);typingTimer=setTimeout(stopTyping,3000);}
 function stopTyping(){if(!chatId)return;remove(ref(db,`messages/${chatId}/typing/${me.uid}`));clearTimeout(typingTimer);}
@@ -1172,7 +1406,7 @@ window.handleImgAttach = async (e) => {
     const file = e.target.files[0];
     if (!file || !chatId) return;
     
-    const attachBtn = document.querySelector('.attach-btn');
+    const attachBtn = document.querySelector('.icon-btn-input');
     attachBtn.style.opacity = '0.5'; 
     
     const fd = new FormData();
@@ -1209,9 +1443,10 @@ window.handleImgAttach = async (e) => {
 };
 
 window.goToOtherProfile = () => { if(otherData?.username) window.location.href=`profile.html?id=${otherUid}`; };
+window.escapeHtml = (s) => {const d=document.createElement('div');d.textContent=s||'';return d.innerHTML;}
 
 // Helpers
-function esc(s){const d=document.createElement('div');d.textContent=s||'';return d.innerHTML;}
+function esc(s){return window.escapeHtml(s);}
 function au(u){return`https://ui-avatars.com/api/?name=${encodeURIComponent((u&&(u.displayName||u.username||u.uid||'U')))}&background=random`;}
 function fmtTime(ts){
     if(!ts)return'';
