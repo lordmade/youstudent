@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Vynix</title>
     <script src="https://unpkg.com/feather-icons"></script>
+    <script src="https://open.spotify.com/embed/iframe-api/v1" async></script>
     <style>
         /* Exact Theme Variables from Settings */
         :root,[data-theme="light"]{--primary:#0095F6;--primary-rgb:0,149,246;--background:#FFFFFF;--surface:#FFFFFF;--surface2:#EFEFEF;--border:#DBDBDB;--text-primary:#000000;--text-secondary:#737373;--text-muted:#A8A8A8;--like:#FF3040;--toggle-on:#34C759;--toggle-off:#E9E9EB;--verified:#0095F6;--repost:#34C759;--story-gradient:linear-gradient(45deg,#f09433 0%,#e6683c 25%,#dc2743 50%,#cc2366 75%,#bc1888 100%);}
@@ -576,8 +577,8 @@
     <div id="compose-media-grid" class="compose-media-grid" style="display:none;"></div>
     
     <div style="margin-top: 12px; margin-bottom: 12px; border-top: 1px solid var(--border); padding-top: 12px;">
-        <input type="text" id="compose-spotify-link" placeholder="Paste Spotify Track Link (Optional)" oninput="updatePostButton()"
-               style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 8px; background: transparent; color: var(--text-primary); font-family: inherit; font-size: 14px; outline: none;">
+        <input type="text" id="compose-spotify-link" placeholder="Hold here to paste Spotify Link" oninput="updatePostButton()"
+               style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 8px; background: transparent; color: var(--text-primary); font-family: inherit; font-size: 14px; outline: none; cursor: pointer;">
     </div>
 
     <div class="upload-progress" id="upload-progress"><div class="progress-bar-fill" id="progress-fill"></div></div>
@@ -688,6 +689,41 @@ function extractSpotifyId(url) {
     const match = url.match(/spotify\.com\/track\/([a-zA-Z0-9]+)/);
     return match ? match[1] : null;
 }
+
+// ── SPOTIFY API INTEGRATION (Auto-Play/Pause) ──
+window.spotifyControllers = {};
+window.onSpotifyIframeApiReady = (IFrameAPI) => {
+    window.SpotifyAPI = IFrameAPI;
+    document.dispatchEvent(new Event('spotifyApiReady'));
+};
+
+function initSpotifyEmbed(trackId, targetId, wrapperId) {
+    const container = document.getElementById(targetId);
+    if (!container || !window.SpotifyAPI) return;
+    const options = { uri: 'spotify:track:' + trackId, width: '100%', height: '80', theme: '0' };
+    window.SpotifyAPI.createController(container, options, (controller) => {
+        window.spotifyControllers[wrapperId] = controller;
+        const wrapper = document.getElementById(wrapperId);
+        if (wrapper) spotifyObserver.observe(wrapper);
+    });
+}
+
+const spotifyObserver = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+        const wrapperId = entry.target.id;
+        const controller = window.spotifyControllers[wrapperId];
+        if (!controller) return;
+
+        if (entry.isIntersecting) {
+            // Note: Browser strictly requires user interaction before autoplaying audio.
+            // This will work seamlessly AFTER the user taps anywhere on the screen.
+            try { controller.play(); } catch(e){}
+        } else {
+            try { controller.pause(); } catch(e){}
+        }
+    });
+}, { threshold: 0.5 });
+
 
 /* ══ STORY GLOBAL PAUSE/RESUME ══ */
 let holdActive = false, storyElapsedMs = 0;
@@ -1134,19 +1170,24 @@ function renderPost(post, prepend = false) {
 
     let spotifyEmbed = '';
     if (post.spotifyTrackId) {
+        const wrapperId = `spotify-wrapper-${post.id}`;
+        const targetId = `spotify-target-${post.id}`;
         spotifyEmbed = `
-            <div class="spotify-embed-wrapper" style="margin: 12px 0; border-radius: 12px; overflow: hidden; border: 1px solid var(--border);">
-                <iframe style="border-radius:12px; display: block;" 
-                    src="https://open.spotify.com/embed/track/${post.spotifyTrackId}?utm_source=generator&theme=0" 
-                    width="100%" 
-                    height="80" 
-                    frameBorder="0" 
-                    allowfullscreen="" 
-                    allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" 
-                    loading="lazy">
-                </iframe>
+            <div class="spotify-embed-wrapper" id="${wrapperId}" style="margin: 12px 0; border-radius: 12px; overflow: hidden; border: 1px solid var(--border);">
+                <div id="${targetId}"></div>
             </div>
         `;
+        
+        // Initialize Spotify API once DOM updates
+        setTimeout(() => {
+            if (window.SpotifyAPI) {
+                initSpotifyEmbed(post.spotifyTrackId, targetId, wrapperId);
+            } else {
+                document.addEventListener('spotifyApiReady', () => {
+                    initSpotifyEmbed(post.spotifyTrackId, targetId, wrapperId);
+                }, {once: true});
+            }
+        }, 100);
     }
 
     const div = document.createElement('div');
@@ -1439,6 +1480,13 @@ window.closeVideoFeed = () => {
     document.querySelectorAll('#vf-scroller video').forEach(v => { v.pause(); v.src = ''; });
     if (vfProgTimer) { clearInterval(vfProgTimer); vfProgTimer = null; }
     
+    // Pause any Spotify track playing in the VF feed
+    Object.keys(window.spotifyControllers).forEach(id => {
+        if(id.startsWith('vf-spotify')) {
+            try { window.spotifyControllers[id].pause(); } catch(e){}
+        }
+    });
+
     document.querySelectorAll('.vynix-player video').forEach(vid => {
         const rect = vid.getBoundingClientRect();
         const inView = rect.top < window.innerHeight && rect.bottom > 0;
@@ -1462,14 +1510,27 @@ function buildVideoSlides(startIdx) {
         const userLiked    = !!(post.likes?.[currentUser?.uid] || vfLikeState[post.id]);
         const isBookmarked = !!(currentUserData?.bookmarks?.[post.id]);
         
-        // Spotify Logic
         const hasSpotify = !!post.spotifyTrackId;
-        const spotifyHtml = hasSpotify ? `
-            <div class="vf-spotify-wrapper" onclick="event.stopPropagation()">
-                <iframe src="https://open.spotify.com/embed/track/${post.spotifyTrackId}?utm_source=generator&theme=0" width="100%" height="80" frameBorder="0" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy" style="display:block;"></iframe>
-            </div>` : '';
+        let spotifyHtml = '';
+        if (hasSpotify) {
+            const wrapperId = `vf-spotify-wrapper-${i}`;
+            const targetId = `vf-spotify-target-${i}`;
+            spotifyHtml = `
+                <div class="vf-spotify-wrapper" id="${wrapperId}" onclick="event.stopPropagation()">
+                    <div id="${targetId}"></div>
+                </div>`;
+            
+            setTimeout(() => {
+                if (window.SpotifyAPI) {
+                    initSpotifyEmbed(post.spotifyTrackId, targetId, wrapperId);
+                } else {
+                    document.addEventListener('spotifyApiReady', () => {
+                        initSpotifyEmbed(post.spotifyTrackId, targetId, wrapperId);
+                    }, {once: true});
+                }
+            }, 100);
+        }
 
-        // Verified Badge & Follow Pill
         const verifiedBadge = displayUser.verified ? `<span class="verified-badge" style="margin-left: 4px; color: white;">${VERIFIED_BADGE_SVG}</span>` : '';
         const followBtn = displayUser.uid !== currentUser?.uid ? `<button class="vf-follow-btn" id="vffollow-${i}" onclick="vfToggleFollow('${displayUser.uid}', this, event)">Follow</button>` : '';
 
@@ -1550,7 +1611,7 @@ function buildVideoSlides(startIdx) {
         `;
 
         slide.addEventListener('click', e => {
-            if (e.target.closest('.vf-act-btn') || e.target.closest('.vf-close')) return;
+            if (e.target.closest('.vf-act-btn') || e.target.closest('.vf-close') || e.target.closest('.vf-spotify-wrapper')) return;
             const vid  = document.getElementById(`vfv-${i}`);
             const icon = document.getElementById(`vfti-${i}`);
             const ring = document.getElementById(`vftr-${i}`);
@@ -1589,6 +1650,14 @@ function buildVideoSlides(startIdx) {
 
 function vfPlaySlide(idx) {
     if (vfProgTimer) { clearInterval(vfProgTimer); vfProgTimer = null; }
+    
+    // Pause all Spotify tracks in the Video Feed when swiping
+    Object.keys(window.spotifyControllers).forEach(id => {
+        if(id.startsWith('vf-spotify')) {
+            try { window.spotifyControllers[id].pause(); } catch(e){}
+        }
+    });
+
     document.querySelectorAll('#vf-scroller video').forEach((v, i) => {
         if (i !== idx) {
             v.pause();
@@ -1608,6 +1677,12 @@ function vfPlaySlide(idx) {
     if (vid.paused) {
         const p = vid.play();
         if(p !== undefined) p.catch(()=>{});
+    }
+
+    // Play the specific Spotify track for this slide if it exists
+    const currentSpotifyId = `vf-spotify-wrapper-${idx}`;
+    if (window.spotifyControllers[currentSpotifyId]) {
+        try { window.spotifyControllers[currentSpotifyId].play(); } catch(e){}
     }
 
     [-1, 1].forEach(d => {
@@ -1981,7 +2056,42 @@ window.showAllComments = postId => {
     document.getElementById(`summary-${postId}`)?.remove();
 };
 
-// ── LONG PRESS ──
+// ── LONG PRESS TO PASTE FOR SPOTIFY LINK ──
+document.addEventListener("DOMContentLoaded", () => {
+    const spotifyInput = document.getElementById('compose-spotify-link');
+    let pasteTimer = null;
+
+    const startPasteTimer = () => {
+        pasteTimer = setTimeout(async () => {
+            try {
+                // Requires HTTPS context
+                const text = await navigator.clipboard.readText();
+                spotifyInput.value = text;
+                updatePostButton();
+                showToast('Pasted from clipboard');
+                if (navigator.vibrate) navigator.vibrate(50);
+            } catch (err) {
+                showToast('Clipboard access denied or empty');
+            }
+        }, 600); // 600ms hold
+    };
+
+    const clearPasteTimer = () => {
+        if (pasteTimer) {
+            clearTimeout(pasteTimer);
+            pasteTimer = null;
+        }
+    };
+
+    spotifyInput.addEventListener('touchstart', startPasteTimer, {passive: true});
+    spotifyInput.addEventListener('touchend', clearPasteTimer);
+    spotifyInput.addEventListener('touchcancel', clearPasteTimer);
+    spotifyInput.addEventListener('mousedown', startPasteTimer);
+    spotifyInput.addEventListener('mouseup', clearPasteTimer);
+    spotifyInput.addEventListener('mouseleave', clearPasteTimer);
+});
+
+// ── LONG PRESS FOR AI MODAL ──
 let lpTimer = null, lpStartX = 0, lpStartY = 0, lpProgressEl = null, lpFillEl = null, currentAIPost = null;
 const LP_DURATION = 600;
 
