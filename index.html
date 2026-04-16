@@ -546,8 +546,16 @@
             <div class="mention-dropdown" id="mention-dropdown"></div>
         </div>
     </div>
+    
     <div id="compose-media-grid" class="compose-media-grid" style="display:none;"></div>
+    
+    <div style="margin-top: 12px; margin-bottom: 12px; border-top: 1px solid var(--border); padding-top: 12px;">
+        <input type="text" id="compose-spotify-link" placeholder="Paste Spotify Track Link (Optional)" oninput="updatePostButton()"
+               style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 8px; background: transparent; color: var(--text-primary); font-family: inherit; font-size: 14px; outline: none;">
+    </div>
+
     <div class="upload-progress" id="upload-progress"><div class="progress-bar-fill" id="progress-fill"></div></div>
+    
     <div style="border-top:1px solid var(--border);padding-top:12px;display:flex;justify-content:space-between;align-items:center;">
         <div style="display:flex;gap:16px;align-items:center;">
             <input type="file" id="media-input" accept="image/*,video/*" multiple style="display:none;" onchange="handleMediaSelect(event)">
@@ -648,6 +656,13 @@ let pendingNewPosts = [], isUserAtTop = true;
 const postListeners        = new Map();
 const commentListeners     = new Map();
 const commentLikeListeners = new Map();
+
+// ── ADDED: SPOTIFY ID EXTRACTOR ──
+function extractSpotifyId(url) {
+    if (!url) return null;
+    const match = url.match(/spotify\.com\/track\/([a-zA-Z0-9]+)/);
+    return match ? match[1] : null;
+}
 
 /* ══ STORY GLOBAL PAUSE/RESUME ══ */
 let holdActive = false, storyElapsedMs = 0;
@@ -1080,6 +1095,24 @@ function renderPost(post, prepend = false) {
     const postTimeMs = post.timestamp || Date.now();
     const canEdit = isOwner && (Date.now() - postTimeMs < 3600000);
 
+    // ── ADDED: SPOTIFY EMBED INJECTION ──
+    let spotifyEmbed = '';
+    if (post.spotifyTrackId) {
+        spotifyEmbed = `
+            <div class="spotify-embed-wrapper" style="margin: 12px 0; border-radius: 12px; overflow: hidden; border: 1px solid var(--border);">
+                <iframe style="border-radius:12px; display: block;" 
+                    src="https://open.spotify.com/embed/track/${post.spotifyTrackId}?utm_source=generator&theme=0" 
+                    width="100%" 
+                    height="80" 
+                    frameBorder="0" 
+                    allowfullscreen="" 
+                    allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" 
+                    loading="lazy">
+                </iframe>
+            </div>
+        `;
+    }
+
     const div = document.createElement('div');
     div.className = 'post-card'; div.id = `post-${post.id}`;
     div.innerHTML = `
@@ -1108,6 +1141,7 @@ function renderPost(post, prepend = false) {
         </div>
         
         ${renderPostText(post.text || '', post.id)}
+        ${spotifyEmbed}
         ${renderPostMedia(post)}
         ${adCTA}
         
@@ -2332,10 +2366,24 @@ window.openCompose  = () => {
     document.getElementById('compose-overlay').classList.add('active');
     setTimeout(() => document.getElementById('compose-text').focus(), 100);
 };
-window.closeCompose = () => { document.getElementById('compose-overlay').classList.remove('active'); clearMedia(); document.getElementById('compose-text').value=''; updatePostButton(); };
+
+// ── ADDED: CLEAR SPOTIFY INPUT ON CLOSE ──
+window.closeCompose = () => { 
+    document.getElementById('compose-overlay').classList.remove('active'); 
+    clearMedia(); 
+    document.getElementById('compose-text').value=''; 
+    document.getElementById('compose-spotify-link').value=''; 
+    updatePostButton(); 
+};
+
+// ── ADDED: CHECK SPOTIFY INPUT FOR BUTTON STATE ──
 window.updatePostButton = () => {
-    const text = document.getElementById('compose-text').value; const btn = document.getElementById('post-btn');
-    const has = text.trim().length>0||selectedMediaFiles.length>0; btn.disabled=!has; btn.style.opacity=has?'1':'0.5';
+    const text = document.getElementById('compose-text').value; 
+    const spotifyUrl = document.getElementById('compose-spotify-link').value.trim();
+    const btn = document.getElementById('post-btn');
+    const has = text.trim().length>0 || selectedMediaFiles.length>0 || spotifyUrl.length>0; 
+    btn.disabled=!has; 
+    btn.style.opacity=has?'1':'0.5';
 };
 window.handleMediaSelect = e => {
     const files = Array.from(e.target.files); if (!files.length) return;
@@ -2354,8 +2402,14 @@ function renderComposeGrid() {
 }
 window.removeComposeMedia = idx => { URL.revokeObjectURL(selectedMediaFiles[idx].url); selectedMediaFiles.splice(idx,1); renderComposeGrid(); updatePostButton(); };
 window.clearMedia = () => { selectedMediaFiles.forEach(m=>URL.revokeObjectURL(m.url)); selectedMediaFiles=[]; selectedMedia=null; document.getElementById('media-input').value=''; renderComposeGrid(); updatePostButton(); };
+
+// ── ADDED: GRAB SPOTIFY ID AND SAVE IT ──
 window.createPost = async () => {
-    const text = document.getElementById('compose-text').value.trim(); if (!text&&!selectedMediaFiles.length) return;
+    const text = document.getElementById('compose-text').value.trim(); 
+    const spotifyUrl = document.getElementById('compose-spotify-link').value.trim();
+    const spotifyTrackId = extractSpotifyId(spotifyUrl);
+
+    if (!text && !selectedMediaFiles.length && !spotifyTrackId) return;
     const btn  = document.getElementById('post-btn'); btn.disabled=true; btn.textContent='Posting…';
     try {
         let mediaUrls = [];
@@ -2371,7 +2425,14 @@ window.createPost = async () => {
         const pd = {uid:currentUser.uid,text,timestamp:serverTimestamp(),likes:{},comments:{}};
         if (mediaUrls.length===1) { pd.mediaUrl=mediaUrls[0].url; pd.mediaType=mediaUrls[0].type; }
         else if (mediaUrls.length>1) { pd.mediaUrls=mediaUrls; pd.mediaType='gallery'; }
-        await push(ref(db,'posts'),pd); clearMedia(); closeCompose(); showToast('Posted!');
+        
+        if (spotifyTrackId) pd.spotifyTrackId = spotifyTrackId;
+
+        await push(ref(db,'posts'),pd); 
+        clearMedia(); 
+        document.getElementById('compose-spotify-link').value='';
+        closeCompose(); 
+        showToast('Posted!');
         window.scrollTo({top:0,behavior:'smooth'});
     } catch(e) { console.error(e); showToast('Upload failed'); }
     finally    { btn.textContent='Post'; btn.disabled=false; }
