@@ -226,7 +226,7 @@
         .vf-close { position: fixed; top: calc(16px + env(safe-area-inset-top)); left: 16px; z-index: 10001; background: rgba(255,255,255,0.15); border: none; color: white; width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; backdrop-filter: blur(8px); transition: background 0.2s; }
         .vf-close:hover { background: rgba(255,255,255,0.25); }
         .vf-info { position: absolute; bottom: calc(90px + env(safe-area-inset-bottom)); left: 16px; right: 72px; color: white; z-index: 5; }
-        .vf-author-row { font-size: 15px; font-weight: 600; margin-bottom: 6px; display: flex; align-items: center; gap: 8px; }
+        .vf-author-row { font-size: 15px; font-weight: 600; margin-bottom: 6px; display: flex; align-items: center; gap: 8px; cursor: pointer; }
         .vf-author-row img { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; border: 1px solid rgba(255,255,255,0.2); flex-shrink: 0; }
         .vf-author-name { font-weight: 600; font-size: 15px; }
         .vf-author-handle { font-size: 13px; opacity: 0.8; font-weight: 400; }
@@ -246,6 +246,32 @@
         .vf-scroll-hint { position: absolute; bottom: calc(20px + env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); color: rgba(255,255,255,0.6); font-size: 12px; display: flex; align-items: center; gap: 4px; animation: vf-bounce 2s infinite ease-in-out; pointer-events: none; }
         .vf-loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 8; pointer-events: none; }
         .vf-spinner { width: 36px; height: 36px; border: 3px solid rgba(255,255,255,0.2); border-top-color: #fff; border-radius: 50%; animation: spin 0.8s linear infinite; }
+
+        /* ══ FULLSCREEN VIDEO FEED ADDITIONS ══ */
+        .vf-follow-btn {
+            background: transparent;
+            color: white;
+            border: 1px solid white;
+            border-radius: 9999px;
+            padding: 4px 12px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-left: 8px;
+            transition: all 0.2s;
+            backdrop-filter: blur(4px);
+        }
+        .vf-follow-btn.following {
+            background: rgba(255, 255, 255, 0.2);
+            border-color: transparent;
+        }
+        .vf-spotify-wrapper {
+            margin-bottom: 12px;
+            border-radius: 12px;
+            overflow: hidden;
+            max-width: 300px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
 
         /* ══ COMMENTS ══ */
         .comments-section { margin-top: 12px; padding-top: 12px; display: none; }
@@ -1267,7 +1293,6 @@ window.reportPost = async (postId, event) => {
     }
 };
 
-
 // ── AUTOPLAY INTERSECTION OBSERVER ──
 const feedVideoObserver = new IntersectionObserver((entries) => {
     entries.forEach(entry => {
@@ -1429,14 +1454,24 @@ function buildVideoSlides(startIdx) {
     scroller.innerHTML = '';
 
     vfVideoPosts.forEach((post, i) => {
-        const user = (post.isRepost && post.originalUser) ? post.originalUser : (post.user || {});
-        const videoSrc = post.mediaType === 'video'
-            ? post.mediaUrl
-            : (post.mediaUrls?.find(m => m.type === 'video')?.url || '');
+        const displayUser = (post.isRepost && post.originalUser) ? post.originalUser : (post.user || {});
+        const videoSrc = post.mediaType === 'video' ? post.mediaUrl : (post.mediaUrls?.find(m => m.type === 'video')?.url || '');
         const likeCount    = Object.keys(post.likes   || {}).length;
         const commentCount = Object.keys(post.comments|| {}).length;
         const repostCount  = Object.keys(post.reposts || {}).length;
         const userLiked    = !!(post.likes?.[currentUser?.uid] || vfLikeState[post.id]);
+        const isBookmarked = !!(currentUserData?.bookmarks?.[post.id]);
+        
+        // Spotify Logic
+        const hasSpotify = !!post.spotifyTrackId;
+        const spotifyHtml = hasSpotify ? `
+            <div class="vf-spotify-wrapper" onclick="event.stopPropagation()">
+                <iframe src="https://open.spotify.com/embed/track/${post.spotifyTrackId}?utm_source=generator&theme=0" width="100%" height="80" frameBorder="0" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy" style="display:block;"></iframe>
+            </div>` : '';
+
+        // Verified Badge & Follow Pill
+        const verifiedBadge = displayUser.verified ? `<span class="verified-badge" style="margin-left: 4px; color: white;">${VERIFIED_BADGE_SVG}</span>` : '';
+        const followBtn = displayUser.uid !== currentUser?.uid ? `<button class="vf-follow-btn" id="vffollow-${i}" onclick="vfToggleFollow('${displayUser.uid}', this, event)">Follow</button>` : '';
 
         const slide = document.createElement('div');
         slide.className = 'vf-slide'; slide.id = `vfs-${i}`;
@@ -1444,6 +1479,7 @@ function buildVideoSlides(startIdx) {
             <video id="vfv-${i}" src="${i === startIdx ? videoSrc : ''}"
                 data-src="${videoSrc}"
                 playsinline loop preload="${i === startIdx ? 'auto' : 'none'}"
+                ${hasSpotify ? 'muted' : ''} 
                 style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;">
             </video>
             <div class="vf-gradient"></div>
@@ -1455,29 +1491,31 @@ function buildVideoSlides(startIdx) {
                     </svg>
                 </div>
             </div>
+            
             <div class="vf-info">
-                <div class="vf-author-row">
-                    <img src="${user.photoURL || DEFAULT_AVATAR}" onerror="this.src='${DEFAULT_AVATAR}'" alt="">
-                    <div>
-                        <div class="vf-author-name">${escapeHtml(user.username || 'User')}</div>
+                ${spotifyHtml}
+                <div class="vf-author-row" onclick="goToProfile('${displayUser.uid}'); event.stopPropagation();">
+                    <img src="${displayUser.photoURL || DEFAULT_AVATAR}" onerror="this.src='${DEFAULT_AVATAR}'" alt="">
+                    <div style="display: flex; align-items: center;">
+                        <span class="vf-author-name">${escapeHtml(displayUser.displayName || displayUser.username || 'User')}</span>
+                        ${verifiedBadge}
+                        ${followBtn}
                     </div>
                 </div>
-                ${post.text ? `<div class="vf-caption">${escapeHtml(post.text.slice(0,150))}${post.text.length>150?'…':''}</div>` : ''}
+                ${post.text ? `<div class="vf-caption">${escapeHtml(post.text.slice(0,100))}${post.text.length>100?'… <span style="font-weight:600;">more</span>':''}</div>` : ''}
             </div>
+            
             <div class="vf-actions">
                 <div class="vf-act">
-                    <button class="vf-act-btn ${userLiked ? 'liked' : ''}" id="vflike-${i}"
-                        onclick="vfToggleLike('${post.id}',${i})">
-                        <svg width="22" height="22" viewBox="0 0 24 24"
-                            fill="${userLiked ? 'currentColor' : 'none'}"
-                            stroke="currentColor" stroke-width="2">
+                    <button class="vf-act-btn ${userLiked ? 'liked' : ''}" id="vflike-${i}" onclick="vfToggleLike('${post.id}',${i}); event.stopPropagation();">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="${userLiked ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2">
                             <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
                         </svg>
                     </button>
                     <span id="vflike-ct-${i}">${likeCount}</span>
                 </div>
                 <div class="vf-act">
-                    <button class="vf-act-btn" onclick="vfOpenComments('${post.id}')">
+                    <button class="vf-act-btn" onclick="vfOpenComments('${post.id}'); event.stopPropagation();">
                         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
                         </svg>
@@ -1485,13 +1523,20 @@ function buildVideoSlides(startIdx) {
                     <span>${commentCount}</span>
                 </div>
                 <div class="vf-act">
-                    <button class="vf-act-btn" onclick="handleRepost('${post.id}')">
+                    <button class="vf-act-btn" onclick="handleRepost('${post.id}'); event.stopPropagation();">
                         ${REPOST_SVG}
                     </button>
                     <span>${repostCount > 0 ? repostCount : ''}</span>
                 </div>
                 <div class="vf-act">
-                    <button class="vf-act-btn" onclick="openAIFromPost('${post.id}',event)">
+                    <button class="vf-act-btn" id="vf-bookmark-btn-${i}" onclick="vfToggleBookmark('${post.id}', ${i}); event.stopPropagation();">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="${isBookmarked ? 'white' : 'none'}" stroke="white" stroke-width="2">
+                            <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>
+                        </svg>
+                    </button>
+                </div>
+                <div class="vf-act">
+                    <button class="vf-act-btn" onclick="openAIFromPost('${post.id}', event)">
                         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3"/>
                             <line x1="12" y1="17" x2="12.01" y2="17"/>
@@ -1641,6 +1686,32 @@ window.vfToggleLike = async (postId, slideIdx) => {
         }
         if (ct) ct.textContent = count;
     } catch {}
+};
+
+window.vfToggleBookmark = async (postId, idx) => {
+    await toggleBookmark(postId);
+    const btn = document.getElementById(`vf-bookmark-btn-${idx}`);
+    if (btn) {
+        const isBookmarked = !!(currentUserData?.bookmarks?.[postId]);
+        btn.querySelector('svg').setAttribute('fill', isBookmarked ? 'white' : 'none');
+    }
+};
+
+window.vfToggleFollow = (uid, btn, event) => {
+    event.stopPropagation();
+    const isFollowing = btn.classList.contains('following');
+    if (isFollowing) {
+        btn.classList.remove('following');
+        btn.textContent = 'Follow';
+        showToast('Unfollowed');
+        // TODO: Await actual remove(ref(db, `users/${currentUser.uid}/following/${uid}`)) here later
+    } else {
+        btn.classList.add('following');
+        btn.textContent = 'Following';
+        showToast('Following!');
+        if (navigator.vibrate) navigator.vibrate(30);
+        // TODO: Await actual set(ref(db, `users/${currentUser.uid}/following/${uid}`), true) here later
+    }
 };
 
 /* ══ VF COMMENTS HANDLERS ══ */
