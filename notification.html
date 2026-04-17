@@ -1,513 +1,612 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>BanterBox - Notifications</title>
-  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
-  <script src="https://cdn.tailwindcss.com"></script>
-  <style>
-    * {
-      user-select: none;
-      -webkit-user-select: none;
-      -moz-user-select: none;
-      -ms-user-select: none;
-    }
-    body {
-      font-family: 'Roboto', 'Segoe UI', sans-serif;
-      background: #f0f2f5 url('https://upload.wikimedia.org/wikipedia/commons/thumb/7/7a/WhatsApp_background_pattern.png/800px-WhatsApp_background_pattern.png') repeat;
-      background-size: 300px;
-      min-height: 100vh;
-      padding-bottom: 80px;
-      transition: background 0.3s ease;
-    }
-    body.dark {
-      background: #0a1c22;
-    }
-    .header {
-      background: #f0f2f5;
-      border-bottom: 1px solid #d1d5db;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 0.75rem 1rem;
-      position: sticky;
-      top: 0;
-      z-index: 10;
-      backdrop-filter: blur(8px);
-      -webkit-backdrop-filter: blur(8px);
-    }
-    .header.dark {
-      background: #0d252a;
-      border-bottom: 1px solid #1f2a30;
-      color: #e5e7eb;
-    }
-    .back-btn, .refresh-btn {
-      color: #ef4444;
-      width: 36px;
-      height: 36px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      transition: color 0.2s ease, transform 0.2s ease;
-    }
-    .back-btn:hover, .refresh-btn:hover {
-      color: #dc2626;
-      transform: scale(1.1);
-    }
-    .back-btn.dark, .refresh-btn.dark {
-      color: #dc2626;
-    }
-    .back-btn.dark:hover, .refresh-btn.dark:hover {
-      color: #b91c1c;
-    }
-    .refresh-btn.spinning {
-      animation: spin 1s linear infinite;
-    }
-    .notification-list {
-      padding: 0.75rem;
-      display: flex;
-      flex-direction: column;
-      gap: 0.5rem;
-      max-width: 800px;
-      margin: 0 auto;
-    }
-    .notification-card {
-      background: #ffffff;
-      border-radius: 12px;
-      padding: 0.75rem 1rem;
-      display: flex;
-      align-items: center;
-      transition: transform 0.3s ease, box-shadow 0.3s ease;
-      cursor: pointer;
-      position: relative;
-      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
-    }
-    .notification-card.dark {
-      background: #1f2a30;
-      color: #e5e7eb;
-    }
-    .notification-card:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
-    }
-    .notification-card.unread {
-      background: #fef2f2;
-      box-shadow: 0 2px 8px rgba(239, 68, 68, 0.2);
-    }
-    .notification-card.unread.dark {
-      background: #2e3b41;
-    }
-    .notification-avatar {
-      width: 40px;
-      height: 40px;
-      border-radius: 9999px;
-      object-fit: cover;
-      border: 2px solid #ef4444;
-      margin-right: 0.75rem;
-      transition: transform 0.2s ease;
-    }
-    .notification-avatar:hover {
-      transform: scale(1.05);
-    }
-    .notification-avatar.dark {
-      border-color: #dc2626;
-    }
-    .notification-info {
-      flex-grow: 1;
-    }
-    .notification-text {
-      font-size: 0.9rem;
-      font-weight: 500;
-      color: #111827;
-      display: -webkit-box;
-      -webkit-line-clamp: 2;
-      -webkit-box-orient: vertical;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    .notification-text.dark {
-      color: #e5e7eb;
-    }
-    .notification-time {
-      font-size: 0.75rem;
-      color: #6b7280;
-    }
-    .notification-time.dark {
-      color: #9ca3af;
-    }
-    .notification-action {
-      font-size: 0.75rem;
-      color: #ef4444;
-      font-weight: 600;
-      margin-left: 0.5rem;
-      transition: color 0.2s ease;
-    }
-    .notification-action:hover {
-      color: #dc2626;
-    }
-    .notification-action.dark {
-      color: #dc2626;
-    }
-    .notification-action.dark:hover {
-      color: #b91c1c;
-    }
-    .unread-badge {
-      background: #ef4444;
-      color: white;
-      font-size: 0.75rem;
-      font-weight: 600;
-      padding: 0.25rem 0.5rem;
-      border-radius: 9999px;
-      animation: pulseBadge 2s ease-in-out infinite;
-    }
-    .unread-badge.dark {
-      background: #dc2626;
-    }
-    #no-notifications-message {
-      color: #6b7280;
-      font-size: 0.9rem;
-      text-align: center;
-      margin-top: 1rem;
-    }
-    #no-notifications-message.dark {
-      color: #9ca3af;
-    }
-    #loading-overlay {
-      position: fixed;
-      inset: 0;
-      background: rgba(0, 0, 0, 0.5);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 50;
-      transition: opacity 0.3s ease;
-    }
-    #loading-overlay.hidden {
-      display: none;
-    }
-    @keyframes spin {
-      100% { transform: rotate(360deg); }
-    }
-    @keyframes slideIn {
-      from { opacity: 0; transform: translateY(10px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-    @keyframes pulseBadge {
-      0%, 100% { transform: scale(1); }
-      50% { transform: scale(1.1); }
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Vynix · Sign In</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        /* ══ THEME SYSTEM ══ */
+        :root,[data-theme="light"]{
+            --primary:#0095F6;--primary-dark:#1877F2;--primary-rgb:0,149,246;
+            --background:#FAFAFA;--surface:#FFFFFF;--surface2:#FAFAFA;
+            --border:#DBDBDB;--text-primary:#262626;--text-secondary:#737373;--text-muted:#8E8E8E;
+            --like:#ED4956;--shadow:0 0px 0px rgba(0,0,0,0);--shadow-lg:0 4px 12px rgba(0,0,0,0.05);
+        }
+        [data-theme="dark"]{
+            --primary:#0095F6;--primary-dark:#1877F2;--primary-rgb:0,149,246;
+            --background:#000000;--surface:#000000;--surface2:#121212;
+            --border:#262626;--text-primary:#F5F5F5;--text-secondary:#A8A8A8;--text-muted:#737373;
+            --like:#ED4956;--shadow:0 0px 0px rgba(0,0,0,0);--shadow-lg:0 4px 12px rgba(0,0,0,0.3);
+        }
+        [data-theme="midnight"]{
+            --primary:#C084FC;--primary-dark:#A855F7;--primary-rgb:192,132,252;
+            --background:#09090B;--surface:#09090B;--surface2:#18181B;
+            --border:#27272A;--text-primary:#FAFAFA;--text-secondary:#A1A1AA;--text-muted:#71717A;
+            --like:#F472B6;--shadow:0 0px 0px rgba(0,0,0,0);--shadow-lg:0 4px 12px rgba(0,0,0,0.5);
+        }
+        [data-theme="ocean"]{
+            --primary:#06B6D4;--primary-dark:#0891B2;--primary-rgb:6,182,212;
+            --background:#F0F9FF;--surface:#FFFFFF;--surface2:#E0F2FE;
+            --border:#BAE6FD;--text-primary:#0C4A6E;--text-secondary:#0369A1;--text-muted:#7DD3FC;
+            --like:#F43F5E;--shadow:0 0px 0px rgba(0,0,0,0);--shadow-lg:0 4px 12px rgba(6,182,212,0.1);
+        }
+        [data-theme="rose"]{
+            --primary:#E11D48;--primary-dark:#BE123C;--primary-rgb:225,29,72;
+            --background:#FFF1F2;--surface:#FFFFFF;--surface2:#FFE4E6;
+            --border:#FECDD3;--text-primary:#881337;--text-secondary:#9F1239;--text-muted:#FDA4AF;
+            --like:#E11D48;--shadow:0 0px 0px rgba(0,0,0,0);--shadow-lg:0 4px 12px rgba(225,29,72,0.1);
+        }
+
+        *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+
+        body{
+            font-family:'Inter',sans-serif;
+            background:var(--background);
+            color:var(--text-primary);
+            -webkit-font-smoothing:antialiased;
+            min-height:100vh;
+            display:flex;
+            flex-direction: column;
+            align-items:center;
+            justify-content:center;
+            padding:24px 16px calc(24px + env(safe-area-inset-bottom));
+            transition:background 0.3s,color 0.3s;
+            overflow-x:hidden;
+        }
+
+        body.fade-out{opacity:0;transition:opacity 0.4s ease;}
+
+        @keyframes fadeInUp{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:translateY(0);}}
+        @keyframes fadeIn{from{opacity:0;}to{opacity:1;}}
+        @keyframes shake{0%,100%{transform:translateX(0);}20%,60%{transform:translateX(-6px);}40%,80%{transform:translateX(6px);}}
+        @keyframes spin{to{transform:rotate(360deg);}}
+        @keyframes alertIn{from{opacity:0;transform:translate(-50%,-50%) scale(0.88);}to{opacity:1;transform:translate(-50%,-50%) scale(1);}}
+
+        /* ── App Container ── */
+        .app-container {
+            width: 100%;
+            max-width: 360px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            animation:fadeInUp 0.4s cubic-bezier(0.34,1.2,0.64,1) both;
+        }
+
+        /* ── Cards ── */
+        .card{
+            width:100%;
+            background:var(--surface);
+            border:1px solid var(--border);
+            border-radius:1px;
+            padding:36px 32px 24px;
+        }
+        .switch-card {
+            padding: 24px 32px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 14px;
+            color: var(--text-primary);
+        }
+
+        @media(max-width:450px){
+            .card{border:none; background: transparent; padding: 24px 16px;}
+            .switch-card { border-top: 1px solid var(--border); padding: 16px; margin-top: 10px; }
+        }
+
+        /* ── Logo ── */
+        .logo-wrap{
+            display:flex;align-items:center;justify-content:center;
+            margin-bottom:32px;
+        }
+        .logo-img {
+            height: 72px;
+            width: auto;
+            object-fit: contain;
+            filter: drop-shadow(0 2px 8px rgba(0,0,0,0.1));
+        }
+
+        /* ── Form Headings (for signup/forgot) ── */
+        .form-sub{
+            font-size:15px;color:var(--text-secondary);margin-bottom:24px;
+            line-height:1.4; text-align: center; font-weight: 600;
+        }
+
+        /* ── Fields (Pill Shaped) ── */
+        .field{margin-bottom:12px; position: relative;}
+        
+        .field input{
+            width:100%;
+            padding:14px 20px; /* Increased padding for pill shape */
+            background:var(--surface2);border:1px solid var(--border);
+            border-radius:9999px; /* Pill shape */
+            font-size:13px;font-family:inherit;
+            color:var(--text-primary);outline:none;
+            transition:border-color 0.2s, background 0.2s;
+        }
+        .field input::placeholder{color:var(--text-muted);}
+        .field input:focus{
+            border-color:var(--text-secondary);
+            background:var(--surface);
+        }
+
+        /* Password toggle eye */
+        .eye-btn{
+            position:absolute;right:16px;top:50%;transform:translateY(-50%);
+            background:none;border:none;color:var(--text-primary);cursor:pointer;
+            font-size: 13px; font-weight: 600; font-family: inherit;
+            padding:4px; display:flex;align-items:center;justify-content:center;
+            transition:opacity 0.2s;
+        }
+        .eye-btn:hover{opacity: 0.6;}
+        .field input.has-eye{padding-right:60px;}
+
+        .field-error{font-size:12px;color:var(--like);margin-top:6px;display:none;font-weight:500; text-align: center;}
+        .field.error input{border-color:var(--like);}
+        .field.error .field-error{display:block;}
+
+        /* ── Forgot link ── */
+        .forgot{
+            display:block;text-align:center;font-size:12px;font-weight:400;
+            color:var(--text-primary);cursor:pointer;margin-top:20px;
+            background:none;border:none;font-family:inherit;width: 100%;
+            transition:opacity 0.2s; text-decoration: none;
+        }
+        .forgot:hover{opacity:0.6;}
+
+        /* ── Submit btn (Pill Shaped) ── */
+        .submit-btn{
+            width:100%;padding:12px;
+            border-radius:9999px; /* Pill shape */
+            border:none;
+            background:var(--primary);color:white;
+            font-family:inherit;font-size:14px;font-weight:600;
+            cursor:pointer;transition:all 0.2s;
+            display:flex;align-items:center;justify-content:center;gap:8px;
+            margin-top: 16px;
+            position:relative;
+        }
+        .submit-btn:hover{background:var(--primary-dark);}
+        .submit-btn:active{opacity: 0.7;}
+        .submit-btn:disabled{opacity:0.5;cursor:not-allowed;}
+
+        .btn-spinner{width:16px;height:16px;border:2px solid rgba(255,255,255,0.4);border-top-color:white;border-radius:50%;animation:spin 0.7s linear infinite;display:none;}
+        .submit-btn.loading .btn-text{opacity:0;}
+        .submit-btn.loading .btn-spinner{display:block;position:absolute;}
+
+        /* ── Google Auth Button (Pill Shaped) ── */
+        .google-btn {
+            width: 100%; padding: 12px;
+            border-radius: 9999px; /* Pill shape */
+            border: 1px solid var(--border);
+            background: var(--surface); color: var(--text-primary);
+            font-family: inherit; font-size: 14px; font-weight: 600;
+            cursor: pointer; transition: all 0.2s;
+            display: flex; align-items: center; justify-content: center; gap: 8px;
+        }
+        .google-btn:hover { background: var(--surface2); border-color: var(--text-secondary); }
+        .google-btn:active { transform: scale(0.98); }
+        .google-btn svg { width: 18px; height: 18px; }
+
+        /* ── Divider ── */
+        .divider{
+            display:flex;align-items:center;gap:16px;margin:20px 0;
+            color:var(--text-secondary);font-size:12px;font-weight:700; text-transform: uppercase;
+        }
+        .divider::before,.divider::after{content:'';flex:1;height:1px;background:var(--border);}
+
+        /* ── Switch link ── */
+        .switch-link button{
+            background:none;border:none;color:var(--primary);font-weight:600;
+            cursor:pointer;font-family:inherit;font-size:14px;padding:0;
+            margin-left: 4px; transition:opacity 0.2s;
+        }
+        .switch-link button:hover{opacity:0.75;}
+
+        /* ── Terms ── */
+        .terms{font-size:12px;color:var(--text-secondary);text-align:center;margin-top:16px;line-height:1.5;}
+        .terms a{color:var(--text-primary);text-decoration:none;font-weight:600;}
+
+        /* ── Alert toast ── */
+        .alert-overlay{
+            position:fixed;inset:0;background:rgba(0,0,0,0.6);
+            backdrop-filter:blur(4px);z-index:900;
+            display:none;align-items:center;justify-content:center;
+        }
+        .alert-overlay.active{display:flex;}
+        .alert-box{
+            background:var(--surface);border:1px solid var(--border);
+            border-radius:24px;padding:24px 28px;
+            max-width:300px;width:90%;box-shadow:var(--shadow-lg);
+            animation:alertIn 0.3s cubic-bezier(0.34,1.3,0.64,1);
+            text-align:center;
+        }
+        .alert-title{font-size:16px;font-weight:700;margin-bottom:6px;color:var(--text-primary);}
+        .alert-msg{font-size:14px;color:var(--text-secondary);line-height:1.5;margin-bottom:18px;}
+        .alert-close{
+            width:100%;padding:12px;border-radius:9999px;border:none;
+            background:var(--primary);color:white;
+            font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;
+        }
+        .alert-close:hover{background:var(--primary-dark);}
+
+        /* ── Forms ── */
+        .form-view{animation:fadeIn 0.25s ease-out;}
+    </style>
 </head>
 <body>
-  <header class="header dark:header">
-    <a href="friends.html" class="back-btn dark:back-btn" aria-label="Back to friends">
-      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
-      </svg>
-    </a>
-    <span class="text-lg font-medium text-[#111827] dark:text-[#e5e7eb]">Notifications</span>
-    <div class="flex items-center gap-2">
-      <span id="unread-count" class="unread-badge dark:unread-badge hidden"></span>
-      <svg id="refresh-notifications" class="refresh-btn dark:refresh-btn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" role="button" aria-label="Refresh notifications">
-        <path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
-      </svg>
-    </div>
-  </header>
 
-  <div id="notification-list" class="notification-list" aria-live="polite" aria-relevant="additions"></div>
-  <p id="no-notifications-message" class="hidden dark:no-notifications-message">No notifications yet.</p>
+<div class="app-container">
 
-  <div id="loading-overlay" class="hidden">
-    <svg class="animate-spin h-8 w-8 text-[#ef4444] dark:text-[#dc2626]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4z"/>
-    </svg>
-  </div>
+    <div class="card">
+        
+        <div id="view-signin" class="form-view">
+            <div class="logo-wrap">
+                <img class="logo-img" src="https://i.postimg.cc/T3Nv0Szn/Gemini-Generated-Image-g7omg8g7omg8g7om-removebg-preview.png" alt="Vynix">
+            </div>
 
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
-    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
-    import { getDatabase, ref, onValue, get, update, off, set } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
+            <button type="button" class="google-btn" onclick="signInWithGoogle()">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+                    <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+                    <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+                    <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+                    <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+                </svg>
+                Continue with Google
+            </button>
 
-    const firebaseConfig = {
-      apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
-      authDomain: "fire-b-a8878.firebaseapp.com",
-      databaseURL: "https://fire-b-a8878.firebaseio.com",
-      projectId: "fire-b-a8878",
-      storageBucket: "fire-b-a8878.appspot.com",
-      messagingSenderId: "658673187627",
-      appId: "1:658673187627:web:6e4c29af661785f0afa36e"
-    };
+            <div class="divider">OR</div>
 
-    const app = initializeApp(firebaseConfig);
-    const auth = getAuth();
-    const db = getDatabase();
+            <form id="signin-form" novalidate>
+                <div class="field" id="f-signin-email">
+                    <input type="email" id="signin-email" placeholder="Phone number, username, or email" autocomplete="email">
+                    <div class="field-error" id="e-signin-email">Please enter a valid email.</div>
+                </div>
 
-    const notificationList = document.getElementById("notification-list");
-    const noNotificationsMessage = document.getElementById("no-notifications-message");
-    const loadingOverlay = document.getElementById("loading-overlay");
-    const refreshNotificationsBtn = document.getElementById("refresh-notifications");
-    const unreadCountBadge = document.getElementById("unread-count");
-    let currentUserUid = null;
-    let renderedNotifications = new Set();
-    let debounceTimeout = null;
+                <div class="field" id="f-signin-password">
+                    <input type="password" id="signin-password" placeholder="Password" autocomplete="current-password" class="has-eye">
+                    <button type="button" class="eye-btn" onclick="toggleEye('signin-password',this)">Show</button>
+                    <div class="field-error" id="e-signin-password">Password is required.</div>
+                </div>
 
-    function showLoading() { loadingOverlay.classList.remove("hidden"); }
-    function hideLoading() { loadingOverlay.classList.add("hidden"); }
+                <button type="submit" class="submit-btn" id="signin-btn">
+                    <span class="btn-text">Log in</span>
+                    <div class="btn-spinner"></div>
+                </button>
 
-    function applyTheme(themeValue) {
-      const isDark = themeValue === 'dark';
-      document.body.classList.toggle('dark', isDark);
-      document.querySelector('.header').classList.toggle('dark', isDark);
-      document.querySelectorAll('.notification-card').forEach(el => el.classList.toggle('dark', isDark));
-      document.querySelectorAll('.notification-text').forEach(el => el.classList.toggle('dark', isDark));
-      document.querySelectorAll('.notification-time').forEach(el => el.classList.toggle('dark', isDark));
-      document.querySelectorAll('.notification-action').forEach(el => el.classList.toggle('dark', isDark));
-      document.querySelector('#no-notifications-message').forEach(el => el.classList.toggle('dark', isDark));
-      document.querySelector('.back-btn').classList.toggle('dark', isDark);
-      document.querySelector('.refresh-btn').classList.toggle('dark', isDark);
-      unreadCountBadge.classList.toggle('dark', isDark);
-    }
-
-    function timeAgo(timestamp) {
-      if (!timestamp) return "just now";
-      const now = Date.now();
-      const diff = now - timestamp;
-      if (diff < 60000) return "just now";
-      if (diff < 3600000) return Math.floor(diff / 60000) + "m ago";
-      if (diff < 86400000) return Math.floor(diff / 3600000) + "h ago";
-      return Math.floor(diff / 86400000) + "d ago";
-    }
-
-    function renderNotification(notifId, notif, userData, statusId) {
-      if (renderedNotifications.has(notifId)) return null;
-      renderedNotifications.add(notifId);
-
-      const card = document.createElement("div");
-      card.className = `notification-card ${notif.read ? '' : 'unread'} dark:notification-card`;
-      card.dataset.nid = notifId;
-      card.dataset.sid = statusId;
-      card.dataset.uid = notif.userId;
-      card.style.animation = 'slideIn 0.3s ease-out';
-
-      const actionText = notif.type === 'reaction' ? 'reacted to your status' : 'commented on your status';
-      const commentPreview = notif.type === 'comment' && notif.text ? `: "${notif.text.length > 50 ? notif.text.substring(0, 47) + '...' : notif.text}"` : '';
-      card.innerHTML = `
-        <img src="${userData.photoURL || 'https://www.gravatar.com/avatar?d=mp'}" alt="${userData.name || 'User'} avatar" class="notification-avatar dark:notification-avatar"/>
-        <div class="notification-info">
-          <p class="notification-text dark:notification-text">${userData.name || 'User'} ${actionText}${commentPreview}</p>
-          <p class="notification-time dark:notification-time">${timeAgo(notif.timestamp)}</p>
+                <button type="button" class="forgot" onclick="showView('forgot')">Forgot password?</button>
+            </form>
         </div>
-        <span class="notification-action dark:notification-action" data-action="view">View</span>
-      `;
 
-      const actionBtn = card.querySelector('.notification-action');
-      card.addEventListener("click", async (e) => {
-        if (e.target === actionBtn) return;
-        if (debounceTimeout) return;
-        debounceTimeout = setTimeout(() => { debounceTimeout = null; }, 500);
-        showLoading();
-        try {
-          await update(ref(db, `notifications/${currentUserUid}/${statusId}/${notif.type}s/${notifId}`), { read: true });
-          window.location.href = `chat.html?uid=${notif.userId}`;
-        } catch (error) {
-          console.error("Error marking notification as read:", error);
-          alert("Failed to process notification.");
+        <div id="view-signup" class="form-view" style="display:none;">
+            <div class="logo-wrap" style="margin-bottom: 12px;">
+                <img class="logo-img" src="https://i.postimg.cc/T3Nv0Szn/Gemini-Generated-Image-g7omg8g7omg8g7om-removebg-preview.png" alt="Vynix">
+            </div>
+            <div class="form-sub">Sign up to see photos and videos from your friends.</div>
+
+            <button type="button" class="google-btn" onclick="signInWithGoogle()" style="margin-bottom: 20px;">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+                    <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+                    <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+                    <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+                    <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+                </svg>
+                Sign up with Google
+            </button>
+
+            <div class="divider">OR</div>
+
+            <form id="signup-form" novalidate>
+                <div class="field" id="f-signup-email">
+                    <input type="email" id="signup-email" placeholder="Email" autocomplete="email">
+                    <div class="field-error" id="e-signup-email">Please enter a valid email.</div>
+                </div>
+
+                <div class="field" id="f-signup-username">
+                    <input type="text" id="signup-username" placeholder="Username" autocomplete="username">
+                    <div class="field-error" id="e-signup-username">Username must be at least 3 characters.</div>
+                </div>
+
+                <div class="field" id="f-signup-password">
+                    <input type="password" id="signup-password" placeholder="Password" autocomplete="new-password" class="has-eye">
+                    <button type="button" class="eye-btn" onclick="toggleEye('signup-password',this)">Show</button>
+                    <div class="field-error" id="e-signup-password">Password must be at least 6 characters.</div>
+                </div>
+
+                <button type="submit" class="submit-btn" id="signup-btn">
+                    <span class="btn-text">Sign up</span>
+                    <div class="btn-spinner"></div>
+                </button>
+
+                <div class="terms">By signing up, you agree to our <a href="#">Terms</a> , <a href="#">Privacy Policy</a> and <a href="#">Cookies Policy</a> .</div>
+            </form>
+        </div>
+
+        <div id="view-forgot" class="form-view" style="display:none;">
+            <div class="form-sub" style="color: var(--text-primary); margin-top: 10px;">Trouble logging in?</div>
+            <div class="form-sub" style="font-size: 14px; font-weight: 400;">Enter your email, phone, or username and we'll send you a link to get back into your account.</div>
+
+            <form id="forgot-form" novalidate>
+                <div class="field" id="f-reset-email">
+                    <input type="email" id="reset-email" placeholder="Email, Phone, or Username" autocomplete="email">
+                    <div class="field-error" id="e-reset-email">Please enter a valid email.</div>
+                </div>
+
+                <button type="submit" class="submit-btn" id="forgot-btn">
+                    <span class="btn-text">Send login link</span>
+                    <div class="btn-spinner"></div>
+                </button>
+            </form>
+            
+            <div class="divider">OR</div>
+            
+            <button type="button" class="forgot" style="margin-top: 0; font-weight: 600;" onclick="showView('signup')">Create new account</button>
+            <button type="button" class="forgot" style="font-weight: 600;" onclick="showView('signin')">Back to login</button>
+        </div>
+
+    </div>
+
+    <div class="card switch-card" id="switch-card">
+        <span class="switch-link" id="switch-text">
+            Don't have an account? <button onclick="showView('signup')">Sign up</button>
+        </span>
+    </div>
+    
+    <div id="get-app-text" style="text-align: center; font-size: 14px; margin-top: 10px;">
+        Get the app.
+    </div>
+
+</div>
+
+<div class="alert-overlay" id="alert-overlay" onclick="closeAlert(event)">
+    <div class="alert-box" onclick="event.stopPropagation()">
+        <div class="alert-icon" id="alert-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        </div>
+        <div class="alert-title" id="alert-title">Error</div>
+        <div class="alert-msg" id="alert-msg">Something went wrong.</div>
+        <button class="alert-close" onclick="closeAlert()">Dismiss</button>
+    </div>
+</div>
+
+<script type="module">
+import { initializeApp }  from "https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js";
+import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, GoogleAuthProvider, signInWithPopup }
+    from "https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js";
+import { getDatabase, ref, set, get } from "https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js";
+
+const firebaseConfig = {
+    apiKey:"AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
+    authDomain:"fire-b-a8878.firebaseapp.com",
+    databaseURL:"https://fire-b-a8878.firebaseio.com",
+    projectId:"fire-b-a8878",
+    storageBucket:"fire-b-a8878.firebasestorage.app",
+    messagingSenderId:"658673187627",
+    appId:"1:658673187627:web:6e4c29af661785f0afa36e"
+};
+
+const app  = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db   = getDatabase(app);
+
+// Apply theme
+document.documentElement.setAttribute('data-theme', localStorage.getItem('vynix_theme') || 'light');
+
+// ── View management ──
+window.showView = (view) => {
+    ['signin','signup','forgot'].forEach(v => {
+        document.getElementById(`view-${v}`).style.display = v === view ? 'block' : 'none';
+    });
+    
+    // Toggle the separate card content based on the view
+    const switchCard = document.getElementById('switch-card');
+    const switchText = document.getElementById('switch-text');
+    const getAppText = document.getElementById('get-app-text');
+    
+    if (view === 'forgot') {
+        switchCard.style.display = 'none';
+        getAppText.style.display = 'none';
+    } else {
+        switchCard.style.display = 'flex';
+        getAppText.style.display = 'block';
+        if (view === 'signin') {
+            switchText.innerHTML = `Don't have an account? <button onclick="showView('signup')">Sign up</button>`;
+        } else {
+            switchText.innerHTML = `Have an account? <button onclick="showView('signin')">Log in</button>`;
         }
-        hideLoading();
-        navigator.vibrate?.([50]);
-      });
-
-      card.addEventListener("keydown", (e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          if (e.target === actionBtn) {
-            actionBtn.click();
-          } else {
-            card.click();
-          }
-        }
-      });
-
-      actionBtn.addEventListener("click", async (e) => {
-        e.stopPropagation();
-        showLoading();
-        try {
-          await update(ref(db, `notifications/${currentUserUid}/${statusId}/${notif.type}s/${notifId}`), { read: true });
-          window.location.href = `media.html?sid=${statusId}`;
-        } catch (error) {
-          console.error("Error viewing status:", error);
-          alert("Failed to view status.");
-        }
-        hideLoading();
-        navigator.vibrate?.([50]);
-      });
-
-      let startX = 0;
-      let isDragging = false;
-      card.addEventListener('touchstart', (e) => {
-        startX = e.touches[0].clientX;
-        isDragging = true;
-      });
-      card.addEventListener('touchmove', (e) => {
-        if (!isDragging) return;
-        const currentX = e.touches[0].clientX;
-        const diff = currentX - startX;
-        card.style.transform = `translateX(${diff}px)`;
-      });
-      card.addEventListener('touchend', async (e) => {
-        if (!isDragging) return;
-        const endX = e.changedTouches[0].clientX;
-        const diff = endX - startX;
-        card.style.transform = '';
-        isDragging = false;
-        if (diff > 50) {
-          showLoading();
-          try {
-            await update(ref(db, `notifications/${currentUserUid}/${statusId}/${notif.type}s/${notifId}`), { read: !notif.read });
-            navigator.vibrate?.([50]);
-          } catch (error) {
-            console.error("Error toggling read status:", error);
-            alert("Failed to toggle read status.");
-          }
-          hideLoading();
-        } else if (diff < -50) {
-          showLoading();
-          try {
-            await set(ref(db, `notifications/${currentUserUid}/${statusId}/${notif.type}s/${notifId}/archived`), true);
-            card.style.animation = 'slideOut 0.3s ease-out forwards';
-            setTimeout(() => card.remove(), 300);
-            navigator.vibrate?.([50]);
-          } catch (error) {
-            console.error("Error archiving notification:", error);
-            alert("Failed to archive notification.");
-          }
-          hideLoading();
-        }
-      });
-
-      return card;
     }
 
-    async function loadNotifications(uid) {
-      showLoading();
-      refreshNotificationsBtn.classList.add("spinning");
-      notificationList.innerHTML = "";
-      noNotificationsMessage.classList.add("hidden");
-      renderedNotifications.clear();
+    // Animate in
+    const el = document.getElementById(`view-${view}`);
+    el.style.animation = 'none';
+    void el.offsetWidth;
+    el.style.animation = 'fadeIn 0.25s ease-out';
+};
 
-      const notifRef = ref(db, `notifications/${uid}`);
-      off(notifRef);
+// ── Eye toggle ──
+window.toggleEye = (inputId, btn) => {
+    const input = document.getElementById(inputId);
+    const isPassword = input.type === 'password';
+    input.type = isPassword ? 'text' : 'password';
+    btn.innerHTML = isPassword ? 'Hide' : 'Show';
+};
 
-      try {
-        const usersRef = ref(db, "users");
-        const usersSnap = await get(usersRef);
-        const users = usersSnap.exists() ? usersSnap.val() : {};
+// ── Alert ──
+function showAlert(title, msg, type='error', autoClose=false) {
+    const overlay = document.getElementById('alert-overlay');
+    const iconEl  = document.getElementById('alert-icon');
+    document.getElementById('alert-title').textContent = title;
+    document.getElementById('alert-msg')  .textContent = msg;
+    iconEl.className = `alert-icon ${type}`;
+    iconEl.innerHTML = type === 'success'
+        ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>`
+        : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`;
+    overlay.classList.add('active');
+    if (autoClose) setTimeout(closeAlert, 3000);
+}
 
-        onValue(notifRef, (notifSnap) => {
-          notificationList.innerHTML = "";
-          renderedNotifications.clear();
-          if (!notifSnap.exists()) {
-            noNotificationsMessage.classList.remove("hidden");
-            unreadCountBadge.classList.add("hidden");
-            hideLoading();
-            refreshNotificationsBtn.classList.remove("spinning");
-            return;
-          }
+window.closeAlert = (e) => {
+    if (e && e.target !== document.getElementById('alert-overlay')) return;
+    document.getElementById('alert-overlay').classList.remove('active');
+};
 
-          const notifications = notifSnap.val();
-          let hasNotifications = false;
-          let unreadCount = 0;
+// ── Field validation helpers ──
+function setFieldError(fieldId, errorId, show) {
+    const f = document.getElementById(fieldId);
+    const e = document.getElementById(errorId);
+    if (show) { f.classList.add('error'); e.style.display = 'block'; }
+    else { f.classList.remove('error'); e.style.display = 'none'; }
+}
 
-          const sortedNotifications = [];
-          for (const statusId in notifications) {
-            const statusNotifs = notifications[statusId];
-            for (const type of ['reactions', 'comments']) {
-              if (statusNotifs[type]) {
-                for (const notifId in statusNotifs[type]) {
-                  if (!statusNotifs[type][notifId].archived) {
-                    sortedNotifications.push({ statusId, notifId, notif: statusNotifs[type][notifId], type });
-                  }
-                }
-              }
-            }
-          }
+function shakeForm(formId) {
+    const el = document.getElementById(formId);
+    el.style.animation = 'shake 0.4s ease';
+    setTimeout(() => el.style.animation = '', 400);
+}
 
-          sortedNotifications.sort((a, b) => (b.notif.timestamp || 0) - (a.notif.timestamp || 0));
+function setLoading(btnId, loading) {
+    const btn = document.getElementById(btnId);
+    btn.classList.toggle('loading', loading);
+    btn.disabled = loading;
+}
 
-          for (const { statusId, notifId, notif, type } of sortedNotifications) {
-            const userData = users[notif.userId] || {};
-            const card = renderNotification(notifId, { ...notif, type }, userData, statusId);
-            if (card) {
-              notificationList.appendChild(card);
-              hasNotifications = true;
-              if (!notif.read) unreadCount++;
-            }
-          }
+function navigate(url) {
+    document.body.classList.add('fade-out');
+    setTimeout(() => window.location.href = url, 400);
+}
 
-          if (!hasNotifications) {
-            noNotificationsMessage.classList.remove("hidden");
-          }
-          unreadCountBadge.textContent = unreadCount > 0 ? unreadCount : '';
-          unreadCountBadge.classList.toggle('hidden', unreadCount === 0);
-          hideLoading();
-          refreshNotificationsBtn.classList.remove("spinning");
-        }, { onlyOnce: false });
-      } catch (error) {
-        console.error("Error loading notifications:", error);
-        alert("Failed to load notifications.");
-        hideLoading();
-        refreshNotificationsBtn.classList.remove("spinning");
-      }
-    }
-
-    onAuthStateChanged(auth, async user => {
-      if (!user) {
-        location.href = "signup.html";
-        return;
-      }
-      currentUserUid = user.uid;
-      try {
-        const snap = await get(ref(db, `users/${user.uid}/settings`));
-        const settings = snap.val() || {};
-        applyTheme(settings.theme || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
-      } catch (error) {
-        console.error('Error loading theme:', error);
-        alert("Error loading settings.");
-      }
-      await loadNotifications(user.uid);
-    });
-
-    refreshNotificationsBtn.addEventListener("click", () => {
-      if (!refreshNotificationsBtn.classList.contains("spinning")) {
-        loadNotifications(currentUserUid);
-        navigator.vibrate?.([50]);
-      }
-    });
-
-    refreshNotificationsBtn.addEventListener("keydown", (e) => {
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        if (!refreshNotificationsBtn.classList.contains("spinning")) {
-          loadNotifications(currentUserUid);
-          navigator.vibrate?.([50]);
+// ── Google Auth ──
+window.signInWithGoogle = async () => {
+    const provider = new GoogleAuthProvider();
+    try {
+        const result = await signInWithPopup(auth, provider);
+        const user = result.user;
+        
+        // Ensure user is created in database
+        const userRef = ref(db, `users/${user.uid}`);
+        const snap = await get(userRef);
+        if (!snap.exists()) {
+            await set(userRef, {
+                username: user.email.split('@')[0] + Math.floor(Math.random() * 1000),
+                displayName: user.displayName || user.email.split('@')[0],
+                email: user.email,
+                photoURL: user.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.displayName || 'User')}&background=0095F6&color=fff`,
+                verified: false,
+                createdAt: Date.now()
+            });
         }
-      }
-    });
+        navigate('index.html');
+    } catch (err) {
+        showAlert('Google Sign-In Failed', err.message, 'error');
+    }
+};
 
-    let startY;
-    document.addEventListener('touchstart', (e) => {
-      startY = e.touches[0].clientY;
+// ── Sign In ──
+document.getElementById('signin-form').addEventListener('submit', async e => {
+    e.preventDefault();
+    const email    = document.getElementById('signin-email').value.trim();
+    const password = document.getElementById('signin-password').value;
+    let valid = true;
+
+    const emailOk = /\S+@\S+\.\S+/.test(email);
+    setFieldError('f-signin-email','e-signin-email', !emailOk);
+    if (!emailOk) valid = false;
+
+    setFieldError('f-signin-password','e-signin-password', !password);
+    if (!password) valid = false;
+
+    if (!valid) { shakeForm('signin-form'); return; }
+
+    setLoading('signin-btn', true);
+    try {
+        await signInWithEmailAndPassword(auth, email, password);
+        navigate('index.html');
+    } catch(err) {
+        setLoading('signin-btn', false);
+        let msg = 'Sign in failed. Please try again.';
+        if (['auth/user-not-found','auth/wrong-password','auth/invalid-credential'].includes(err.code)) msg = 'Sorry, your password was incorrect. Please double-check your password.';
+        else if (err.code === 'auth/too-many-requests') msg = 'Too many attempts. Please try again later.';
+        else if (err.code === 'auth/invalid-email') msg = 'That email address is invalid.';
+        showAlert('Sign In Failed', msg, 'error');
+        shakeForm('signin-form');
+    }
+});
+
+// ── Sign Up ──
+document.getElementById('signup-form').addEventListener('submit', async e => {
+    e.preventDefault();
+    const username = document.getElementById('signup-username').value.trim();
+    const email    = document.getElementById('signup-email').value.trim();
+    const password = document.getElementById('signup-password').value;
+    let valid = true;
+
+    setFieldError('f-signup-username','e-signup-username', username.length < 3);
+    if (username.length < 3) valid = false;
+
+    const emailOk = /\S+@\S+\.\S+/.test(email);
+    setFieldError('f-signup-email','e-signup-email', !emailOk);
+    if (!emailOk) valid = false;
+
+    setFieldError('f-signup-password','e-signup-password', password.length < 6);
+    if (password.length < 6) valid = false;
+
+    if (!valid) { shakeForm('signup-form'); return; }
+
+    setLoading('signup-btn', true);
+    try {
+        const cred = await createUserWithEmailAndPassword(auth, email, password);
+        await set(ref(db, `users/${cred.user.uid}`), {
+            username: username.toLowerCase().replace(/\s+/g,'_'),
+            displayName: username,
+            email,
+            photoURL: `https://ui-avatars.com/api/?name=${encodeURIComponent(username)}&background=0095F6&color=fff`,
+            verified: false,
+            createdAt: Date.now()
+        });
+        navigate('index.html');
+    } catch(err) {
+        setLoading('signup-btn', false);
+        let msg = 'Sign up failed. Please try again.';
+        if (err.code === 'auth/email-already-in-use') msg = 'An account with this email already exists.';
+        else if (err.code === 'auth/invalid-email') msg = 'That email address is invalid.';
+        else if (err.code === 'auth/weak-password') msg = 'Your password is too weak. Use at least 6 characters.';
+        showAlert('Sign Up Failed', msg, 'error');
+        shakeForm('signup-form');
+    }
+});
+
+// ── Forgot Password ──
+document.getElementById('forgot-form').addEventListener('submit', async e => {
+    e.preventDefault();
+    const email = document.getElementById('reset-email').value.trim();
+    const emailOk = /\S+@\S+\.\S+/.test(email);
+    setFieldError('f-reset-email','e-reset-email', !emailOk);
+    if (!emailOk) { shakeForm('forgot-form'); return; }
+
+    setLoading('forgot-btn', true);
+    try {
+        await sendPasswordResetEmail(auth, email);
+        setLoading('forgot-btn', false);
+        showAlert('Email Sent', `We sent an email to ${email} with a link to get back into your account.`, 'success', true);
+        setTimeout(() => showView('signin'), 3200);
+    } catch(err) {
+        setLoading('forgot-btn', false);
+        let msg = 'Failed to send reset email.';
+        if (err.code === 'auth/user-not-found') msg = 'No account found with this email address.';
+        else if (err.code === 'auth/invalid-email') msg = 'That email address is invalid.';
+        showAlert('Reset Failed', msg, 'error');
+        shakeForm('forgot-form');
+    }
+});
+
+// Clear field error on input
+document.querySelectorAll('input').forEach(input => {
+    input.addEventListener('input', () => {
+        const field = input.closest('.field');
+        if (field) { field.classList.remove('error'); }
     });
-    document.addEventListener('touchend', (e) => {
-      const endY = e.changedTouches[0].clientY;
-      if (endY - startY > 100 && window.scrollY === 0 && !refreshNotificationsBtn.classList.contains("spinning")) {
-        loadNotifications(currentUserUid);
-        navigator.vibrate?.([50]);
-      }
-    });
-  </script>
+});
+</script>
 </body>
 </html>
