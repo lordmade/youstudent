@@ -312,6 +312,17 @@
                     <div class="btn-spinner"></div>
                 </button>
 
+                <button type="button" class="google-btn" id="biometric-trigger-btn" onclick="openBiometricSheetManually()" style="margin-top: 12px; display: none;">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M2 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10S2 17.523 2 12z"></path>
+                        <path d="M17.5 14.5c-1.5-2.5-4-3.5-5.5-3.5s-4 1-5.5 3.5"></path>
+                        <path d="M12 16.5c-1 0-2-.5-3-1.5"></path>
+                        <path d="M14.5 11.5c-1.5-1.5-3-1.5-4.5 0"></path>
+                        <path d="M9 8.5c1.5-1.5 4.5-1.5 6 0"></path>
+                    </svg>
+                    Sign in with Biometrics
+                </button>
+
                 <button type="button" class="forgot" onclick="showView('forgot')">Forgot password?</button>
             </form>
         </div>
@@ -396,7 +407,6 @@
 
 </div>
 
-<!-- ── Biometric Bottom Sheet ── -->
 <div class="sheet-overlay" id="biometric-sheet" onclick="closeBiometricSheet(event)">
     <div class="bottom-sheet" onclick="event.stopPropagation()">
         <div class="sheet-icon">
@@ -411,12 +421,10 @@
         <div class="sheet-title">Sign in faster</div>
         <div class="sheet-msg">Use your device's fingerprint or face scan to sign in securely without a password.</div>
         <button class="sheet-btn" onclick="startBiometricAuth()">Continue with Biometrics</button>
-        <!-- dismissBiometrics() — saves the skip flag, hides sheet -->
-        <button class="sheet-cancel" onclick="dismissBiometrics()">Use Password Instead</button>
+        <button class="sheet-cancel" onclick="closeBiometricSheet()">Use Password Instead</button>
     </div>
 </div>
 
-<!-- ── Alert Modal ── -->
 <div class="alert-overlay" id="alert-overlay" onclick="closeAlert(event)">
     <div class="alert-box" onclick="event.stopPropagation()">
         <div class="alert-icon" id="alert-icon">
@@ -448,17 +456,16 @@ const app  = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db   = getDatabase(app);
 
-// Apply saved theme
+// Apply theme
 document.documentElement.setAttribute('data-theme', localStorage.getItem('vynix_theme') || 'light');
 
-// ══════════════════════════════════════════
-// ── View management
-// ══════════════════════════════════════════
+// ── View management ──
 window.showView = (view) => {
     ['signin','signup','forgot'].forEach(v => {
         document.getElementById(`view-${v}`).style.display = v === view ? 'block' : 'none';
     });
     
+    // Toggle the separate card content based on the view
     const switchCard = document.getElementById('switch-card');
     const switchText = document.getElementById('switch-text');
     const getAppText = document.getElementById('get-app-text');
@@ -476,15 +483,14 @@ window.showView = (view) => {
         }
     }
 
+    // Animate in
     const el = document.getElementById(`view-${view}`);
     el.style.animation = 'none';
     void el.offsetWidth;
     el.style.animation = 'fadeIn 0.25s ease-out';
 };
 
-// ══════════════════════════════════════════
-// ── UI helpers
-// ══════════════════════════════════════════
+// ── Eye toggle ──
 window.toggleEye = (inputId, btn) => {
     const input = document.getElementById(inputId);
     const isPassword = input.type === 'password';
@@ -492,11 +498,12 @@ window.toggleEye = (inputId, btn) => {
     btn.innerHTML = isPassword ? 'Hide' : 'Show';
 };
 
-function showAlert(title, msg, type = 'error', autoClose = false) {
+// ── Alert ──
+function showAlert(title, msg, type='error', autoClose=false) {
     const overlay = document.getElementById('alert-overlay');
     const iconEl  = document.getElementById('alert-icon');
     document.getElementById('alert-title').textContent = title;
-    document.getElementById('alert-msg').textContent   = msg;
+    document.getElementById('alert-msg')  .textContent = msg;
     iconEl.className = `alert-icon ${type}`;
     iconEl.innerHTML = type === 'success'
         ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>`
@@ -510,6 +517,7 @@ window.closeAlert = (e) => {
     document.getElementById('alert-overlay').classList.remove('active');
 };
 
+// ── Field validation helpers ──
 function setFieldError(fieldId, errorId, show) {
     const f = document.getElementById(fieldId);
     const e = document.getElementById(errorId);
@@ -534,22 +542,14 @@ function navigate(url) {
     setTimeout(() => window.location.href = url, 400);
 }
 
-// Clear field error on input
-document.querySelectorAll('input').forEach(input => {
-    input.addEventListener('input', () => {
-        const field = input.closest('.field');
-        if (field) field.classList.remove('error');
-    });
-});
-
-// ══════════════════════════════════════════
-// ── Google Auth
-// ══════════════════════════════════════════
+// ── Google Auth ──
 window.signInWithGoogle = async () => {
     const provider = new GoogleAuthProvider();
     try {
         const result = await signInWithPopup(auth, provider);
         const user = result.user;
+        
+        // Ensure user is created in database
         const userRef = ref(db, `users/${user.uid}`);
         const snap = await get(userRef);
         if (!snap.exists()) {
@@ -568,9 +568,7 @@ window.signInWithGoogle = async () => {
     }
 };
 
-// ══════════════════════════════════════════
-// ── Sign In
-// ══════════════════════════════════════════
+// ── Sign In ──
 document.getElementById('signin-form').addEventListener('submit', async e => {
     e.preventDefault();
     const email    = document.getElementById('signin-email').value.trim();
@@ -578,10 +576,10 @@ document.getElementById('signin-form').addEventListener('submit', async e => {
     let valid = true;
 
     const emailOk = /\S+@\S+\.\S+/.test(email);
-    setFieldError('f-signin-email', 'e-signin-email', !emailOk);
+    setFieldError('f-signin-email','e-signin-email', !emailOk);
     if (!emailOk) valid = false;
 
-    setFieldError('f-signin-password', 'e-signin-password', !password);
+    setFieldError('f-signin-password','e-signin-password', !password);
     if (!password) valid = false;
 
     if (!valid) { shakeForm('signin-form'); return; }
@@ -593,18 +591,15 @@ document.getElementById('signin-form').addEventListener('submit', async e => {
     } catch(err) {
         setLoading('signin-btn', false);
         let msg = 'Sign in failed. Please try again.';
-        if (['auth/user-not-found','auth/wrong-password','auth/invalid-credential'].includes(err.code))
-            msg = 'Sorry, your password was incorrect. Please double-check your password.';
+        if (['auth/user-not-found','auth/wrong-password','auth/invalid-credential'].includes(err.code)) msg = 'Sorry, your password was incorrect. Please double-check your password.';
         else if (err.code === 'auth/too-many-requests') msg = 'Too many attempts. Please try again later.';
-        else if (err.code === 'auth/invalid-email')     msg = 'That email address is invalid.';
+        else if (err.code === 'auth/invalid-email') msg = 'That email address is invalid.';
         showAlert('Sign In Failed', msg, 'error');
         shakeForm('signin-form');
     }
 });
 
-// ══════════════════════════════════════════
-// ── Sign Up
-// ══════════════════════════════════════════
+// ── Sign Up ──
 document.getElementById('signup-form').addEventListener('submit', async e => {
     e.preventDefault();
     const username = document.getElementById('signup-username').value.trim();
@@ -612,14 +607,14 @@ document.getElementById('signup-form').addEventListener('submit', async e => {
     const password = document.getElementById('signup-password').value;
     let valid = true;
 
-    setFieldError('f-signup-username', 'e-signup-username', username.length < 3);
+    setFieldError('f-signup-username','e-signup-username', username.length < 3);
     if (username.length < 3) valid = false;
 
     const emailOk = /\S+@\S+\.\S+/.test(email);
-    setFieldError('f-signup-email', 'e-signup-email', !emailOk);
+    setFieldError('f-signup-email','e-signup-email', !emailOk);
     if (!emailOk) valid = false;
 
-    setFieldError('f-signup-password', 'e-signup-password', password.length < 6);
+    setFieldError('f-signup-password','e-signup-password', password.length < 6);
     if (password.length < 6) valid = false;
 
     if (!valid) { shakeForm('signup-form'); return; }
@@ -628,7 +623,7 @@ document.getElementById('signup-form').addEventListener('submit', async e => {
     try {
         const cred = await createUserWithEmailAndPassword(auth, email, password);
         await set(ref(db, `users/${cred.user.uid}`), {
-            username: username.toLowerCase().replace(/\s+/g, '_'),
+            username: username.toLowerCase().replace(/\s+/g,'_'),
             displayName: username,
             email,
             photoURL: `https://ui-avatars.com/api/?name=${encodeURIComponent(username)}&background=0095F6&color=fff`,
@@ -640,21 +635,19 @@ document.getElementById('signup-form').addEventListener('submit', async e => {
         setLoading('signup-btn', false);
         let msg = 'Sign up failed. Please try again.';
         if (err.code === 'auth/email-already-in-use') msg = 'An account with this email already exists.';
-        else if (err.code === 'auth/invalid-email')   msg = 'That email address is invalid.';
-        else if (err.code === 'auth/weak-password')   msg = 'Your password is too weak. Use at least 6 characters.';
+        else if (err.code === 'auth/invalid-email') msg = 'That email address is invalid.';
+        else if (err.code === 'auth/weak-password') msg = 'Your password is too weak. Use at least 6 characters.';
         showAlert('Sign Up Failed', msg, 'error');
         shakeForm('signup-form');
     }
 });
 
-// ══════════════════════════════════════════
-// ── Forgot Password
-// ══════════════════════════════════════════
+// ── Forgot Password ──
 document.getElementById('forgot-form').addEventListener('submit', async e => {
     e.preventDefault();
     const email = document.getElementById('reset-email').value.trim();
     const emailOk = /\S+@\S+\.\S+/.test(email);
-    setFieldError('f-reset-email', 'e-reset-email', !emailOk);
+    setFieldError('f-reset-email','e-reset-email', !emailOk);
     if (!emailOk) { shakeForm('forgot-form'); return; }
 
     setLoading('forgot-btn', true);
@@ -673,73 +666,87 @@ document.getElementById('forgot-form').addEventListener('submit', async e => {
     }
 });
 
-// ══════════════════════════════════════════
-// ── Biometric (WebAuthn) Flow
-// ══════════════════════════════════════════
+// Clear field error on input
+document.querySelectorAll('input').forEach(input => {
+    input.addEventListener('input', () => {
+        const field = input.closest('.field');
+        if (field) { field.classList.remove('error'); }
+    });
+});
+
+// ── Biometric (WebAuthn) Flow ──
 const biometricSheet = document.getElementById('biometric-sheet');
 
-// Internal helper — just hides the sheet, never touches localStorage
-function hideBiometricSheet() {
+window.closeBiometricSheet = (e) => {
+    // Save to local storage so we don't annoy the user every single time they visit the page
+    localStorage.setItem('vynix_skip_biometrics', 'true');
+    
+    if (e && e.target !== biometricSheet && e.target.className !== 'sheet-cancel') return;
     biometricSheet.classList.remove('active');
     setTimeout(() => { biometricSheet.style.display = 'none'; }, 300);
-}
-
-// Called when user taps the backdrop overlay
-window.closeBiometricSheet = (e) => {
-    if (e && e.target !== biometricSheet) return;
-    hideBiometricSheet();
 };
 
-// Called when user explicitly taps "Use Password Instead"
-// This is the ONLY place we save the skip flag
-window.dismissBiometrics = () => {
-    localStorage.setItem('vynix_skip_biometrics', 'true');
-    hideBiometricSheet();
-};
-
-// Show the sheet on load if device supports platform auth and user hasn't dismissed before
+// Check if device supports platform authenticators
 async function checkAndPromptBiometrics() {
-    if (localStorage.getItem('vynix_skip_biometrics') === 'true') return;
-
     if (!window.PublicKeyCredential) return;
 
     try {
         const available = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+        
         if (available) {
-            biometricSheet.style.display = 'flex';
-            // Tiny delay so display:flex registers before opacity transition fires
-            setTimeout(() => biometricSheet.classList.add('active'), 10);
+            // 1. ALWAYS show the manual button if the device has a scanner
+            document.getElementById('biometric-trigger-btn').style.display = 'flex';
+
+            // 2. ONLY show the automatic pop-up if they haven't explicitly skipped it before
+            if (localStorage.getItem('vynix_skip_biometrics') !== 'true') {
+                biometricSheet.style.display = 'flex';
+                void biometricSheet.offsetWidth; 
+                biometricSheet.classList.add('active');
+            }
         }
     } catch (err) {
-        console.log('Biometrics check failed:', err);
+        console.error("Biometrics check error:", err);
     }
 }
 
+// Function attached to the new manual button
+window.openBiometricSheetManually = () => {
+    biometricSheet.style.display = 'flex';
+    void biometricSheet.offsetWidth;
+    biometricSheet.classList.add('active');
+};
+
+// Trigger the check when the script loads
 checkAndPromptBiometrics();
 
 window.startBiometricAuth = async () => {
-    setLoading('signin-btn', true);
+    setLoading('signin-btn', true); 
+    
     try {
+        const publicKeyCredentialRequestOptions = {
+            challenge: new Uint8Array([1,2,3,4,5,6]), 
+            rpId: window.location.hostname, 
+            userVerification: "required",
+            timeout: 60000
+        };
+
         const credential = await navigator.credentials.get({
-            publicKey: {
-                challenge: crypto.getRandomValues(new Uint8Array(32)), // random challenge each time
-                rpId: window.location.hostname,
-                userVerification: 'required',
-                timeout: 60000
-            }
+            publicKey: publicKeyCredentialRequestOptions
         });
 
-        console.log('Biometric auth success!', credential);
-        hideBiometricSheet(); // just hide — don't set the skip flag on success
-        showAlert('Signed In', 'Biometric authentication successful!', 'success', true);
-        setTimeout(() => navigate('index.html'), 1500);
-
+        console.log("Biometric auth success!", credential);
+        
+        closeBiometricSheet();
+        showAlert('Success', 'Biometric authentication verified!', 'success', true);
+        
     } catch (err) {
-        console.error('Biometric error:', err);
-        hideBiometricSheet();
-        if (err.name !== 'NotAllowedError') {
-            // NotAllowedError = user cancelled — no need to show an error
-            showAlert('Error', 'Biometric login failed or is not set up on this device yet.', 'error');
+        console.error("Biometric error:", err);
+        closeBiometricSheet();
+        
+        if(err.name === 'NotAllowedError') {
+            console.log('User cancelled biometric prompt');
+        } else {
+            showAlert('Error', 'Biometric login failed or is not configured properly yet.', 'error');
         }
     } finally {
         setLoading('signin-btn', false);
