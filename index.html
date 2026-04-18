@@ -299,6 +299,40 @@
         .mention-item-info { display: flex; flex-direction: column; }
         .mention-item-name { font-weight: 600; font-size: 14px; color: var(--text-primary); }
         .mention-item-handle { font-size: 12px; color: var(--text-secondary); }
+
+        /* Search Tab Styles */
+        .search-header { position: sticky; top: 0; z-index: 50; background: var(--background); padding: 12px 16px; border-bottom: 1px solid var(--border); }
+        .search-bar { display: flex; align-items: center; background: var(--surface2); border-radius: 12px; padding: 8px 12px; gap: 8px; }
+        .search-bar input { flex: 1; border: none; background: transparent; outline: none; font-size: 15px; color: var(--text-primary); }
+        .search-result-item { display: flex; align-items: center; gap: 12px; padding: 12px 16px; cursor: pointer; border-bottom: 1px solid var(--border); transition: background 0.2s; }
+        .search-result-item:active { background: var(--surface2); }
+        
+        /* Notifications Tab Styles */
+        .notification-item { display: flex; align-items: center; gap: 12px; padding: 12px 16px; cursor: pointer; border-bottom: 1px solid var(--border); transition: background 0.2s; }
+        .notification-item:active { background: var(--surface2); }
+        .notification-item.unread { background: rgba(var(--primary-rgb), 0.08); }
+        .notif-icon-wrap { position: relative; flex-shrink: 0; }
+        .notif-badge { position: absolute; bottom: -4px; right: -4px; background: var(--surface); border-radius: 50%; padding: 2px; display: flex; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .notif-content { flex: 1; font-size: 14px; line-height: 1.4; color: var(--text-primary); word-break: break-word;}
+        .notif-time { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+
+        /* Profile Tab Styles */
+        .profile-header-card { padding: 20px 16px; display: flex; flex-direction: column; align-items: center; text-align: center; border-bottom: 1px solid var(--border); }
+        .profile-avatar-large { width: 86px; height: 86px; border-radius: 50%; object-fit: cover; border: 2px solid var(--border); margin-bottom: 12px; }
+        .profile-stats { display: flex; gap: 32px; margin: 16px 0; justify-content: center; width: 100%; }
+        .profile-stats .stat { display: flex; flex-direction: column; font-size: 13px; color: var(--text-secondary); align-items: center;}
+        .profile-stats .stat strong { font-size: 18px; color: var(--text-primary); margin-bottom: 2px;}
+        .profile-action-btn { width: 100%; max-width: 250px; padding: 8px; border-radius: 8px; font-weight: 600; font-size: 14px; cursor: pointer; border: none; font-family: inherit; transition: opacity 0.2s;}
+        .profile-action-btn:active { opacity: 0.7; }
+        .profile-action-btn.edit { background: var(--surface2); color: var(--text-primary); }
+        .profile-action-btn.primary { background: var(--primary); color: white; }
+        .profile-action-btn.following { background: transparent; border: 1px solid var(--border); color: var(--text-primary); }
+        
+        .profile-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; }
+        .grid-item { aspect-ratio: 1; background: var(--surface2); position: relative; cursor: pointer; overflow: hidden; display: flex; align-items: center; justify-content: center;}
+        .grid-item img, .grid-item video { width: 100%; height: 100%; object-fit: cover; }
+        .grid-icon { position: absolute; top: 6px; right: 6px; color: white; filter: drop-shadow(0 1px 3px rgba(0,0,0,0.6)); }
+        .grid-text { padding: 8px; font-size: 11px; color: var(--text-primary); word-break: break-word; text-align: center; line-height: 1.3;}
     </style>
 </head>
 <body>
@@ -438,12 +472,14 @@
     </div>
 
     <div id="view-search" class="view-container">
-        <header class="header">
-            <h3 style="margin: 0; font-size: 18px; font-weight: 700;">Search</h3>
-        </header>
-        <div class="empty-state">
-            Search functionality will go here.
-            <br><span style="font-size:12px; opacity: 0.6">(Swipe left/right to change tabs)</span>
+        <div class="search-header">
+            <div class="search-bar">
+                <i data-feather="search" style="color:var(--text-secondary); width:18px; height:18px;"></i>
+                <input type="text" id="main-search-input" placeholder="Search Vynix..." oninput="handleMainSearch(this.value)">
+            </div>
+        </div>
+        <div id="search-results-container">
+            <div class="empty-state">Find your friends on Vynix.</div>
         </div>
     </div>
 
@@ -451,20 +487,16 @@
         <header class="header">
             <h3 style="margin: 0; font-size: 18px; font-weight: 700;">Notifications</h3>
         </header>
-        <div class="empty-state">
-            Notifications list will go here.
-            <br><span style="font-size:12px; opacity: 0.6">(Swipe left/right to change tabs)</span>
-        </div>
+        <div id="notifications-list"></div>
     </div>
 
     <div id="view-profile" class="view-container">
         <header class="header">
-            <h3 style="margin: 0; font-size: 18px; font-weight: 700;">Profile</h3>
-        </header>
-        <div class="empty-state">
-            User profile will go here.
-            <br><span style="font-size:12px; opacity: 0.6">(Swipe left/right to change tabs)</span>
-        </div>
+            <button onclick="goToHome()" style="background:none;border:none;cursor:pointer;color:var(--text-primary);"><i data-feather="arrow-left"></i></button>
+            <h3 id="profile-header-username" style="margin: 0; font-size: 16px; font-weight: 700;">Profile</h3>
+            <div style="width:24px;"></div> </header>
+        <div id="profile-content">
+            </div>
     </div>
 
 </div>
@@ -475,7 +507,7 @@
         <svg class="nav-icon-outline" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 10v11h6v-7h6v7h6V10L12 3l-9 7z"/></svg>
     </button>
     
-    <button class="nav-item" id="nav-search" onclick="goToSearch()">
+    <button class="nav-item" id="nav-search" onclick="switchMainTab('search')">
         <svg class="nav-icon-filled" width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
         <svg class="nav-icon-outline" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
     </button>
@@ -484,7 +516,7 @@
         <svg class="nav-icon-outline" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="18" height="18" rx="4" ry="4"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
     </button>
     
-    <button class="nav-item" id="nav-notifications" onclick="goToNotifications()" style="position:relative;">
+    <button class="nav-item" id="nav-notifications" onclick="switchMainTab('notifications')" style="position:relative;">
         <svg class="nav-icon-filled" width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
         <svg class="nav-icon-outline" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
         <span class="nav-badge" id="badge-notifications"></span>
@@ -643,34 +675,32 @@ window.setNavActive = (name) => {
     if (target) target.classList.add('active');
 };
 
-window.switchMainTab = (tabId) => {
+window.switchMainTab = (tabId, args = null) => {
     document.querySelectorAll('.view-container').forEach(v => v.classList.remove('active'));
     document.getElementById(`view-${tabId}`).classList.add('active');
     setNavActive(tabId);
     currentMainTabIdx = mainTabsList.indexOf(tabId);
     window.scrollTo(0,0);
+    
+    // Load specific tab data
+    if (tabId === 'profile') loadProfile(args || currentUser?.uid);
+    if (tabId === 'notifications') loadNotifications();
+    if (tabId === 'search') setTimeout(() => document.getElementById('main-search-input')?.focus(), 100);
 };
 
 window.goToHome = () => { 
     if(currentMainTabIdx === 0) window.scrollTo({top:0, behavior:'smooth'}); 
     else switchMainTab('home'); 
 };
-window.goToSearch = () => switchMainTab('search');
-window.goToNotifications = () => switchMainTab('notifications');
-window.goToProfile = (uid) => switchMainTab('profile'); // Modified to act as a tab switch
+window.goToProfile = (uid) => {
+    switchMainTab('profile', uid || currentUser?.uid);
+};
 
 // Swipe Detection Logic
 let appTouchStartX = 0;
 let appTouchStartY = 0;
 document.addEventListener('touchstart', e => {
-    // Ignore horizontal scrollable areas and overlays
-    if(e.target.closest('.stories-container') || 
-       e.target.closest('.carousel') || 
-       e.target.closest('.vynix-player') || 
-       e.target.closest('.vf-overlay') || 
-       e.target.closest('.story-viewer') || 
-       e.target.closest('.bottom-sheet')) return;
-       
+    if(e.target.closest('.stories-container') || e.target.closest('.carousel') || e.target.closest('.vynix-player') || e.target.closest('.vf-overlay') || e.target.closest('.story-viewer') || e.target.closest('.bottom-sheet')) return;
     appTouchStartX = e.touches[0].clientX;
     appTouchStartY = e.touches[0].clientY;
 }, {passive: true});
@@ -682,17 +712,197 @@ document.addEventListener('touchend', e => {
     const dx = appTouchEndX - appTouchStartX;
     const dy = appTouchEndY - appTouchStartY;
 
-    // Detect solid horizontal swipe
     if (Math.abs(dx) > 60 && Math.abs(dy) < 50) {
-        if (dx < 0 && currentMainTabIdx < mainTabsList.length - 1) {
-            switchMainTab(mainTabsList[currentMainTabIdx + 1]);
-        } else if (dx > 0 && currentMainTabIdx > 0) {
-            switchMainTab(mainTabsList[currentMainTabIdx - 1]);
-        }
+        if (dx < 0 && currentMainTabIdx < mainTabsList.length - 1) switchMainTab(mainTabsList[currentMainTabIdx + 1]);
+        else if (dx > 0 && currentMainTabIdx > 0) switchMainTab(mainTabsList[currentMainTabIdx - 1]);
     }
     appTouchStartX = 0;
 }, {passive: true});
 /* ═════════════════════════════════ */
+
+/* ══ SEARCH LOGIC ══ */
+window.handleMainSearch = async (query) => {
+    const container = document.getElementById('search-results-container');
+    if(!query.trim()) { 
+        container.innerHTML = '<div class="empty-state">Find your friends on Vynix.</div>'; 
+        return; 
+    }
+    
+    const q = query.toLowerCase();
+    const users = await getAllUsers();
+    const results = users.filter(u => u.username?.toLowerCase().includes(q) || u.displayName?.toLowerCase().includes(q)).slice(0, 20);
+    
+    if(results.length === 0) {
+        container.innerHTML = '<div class="empty-state">No results found.</div>';
+        return;
+    }
+    
+    container.innerHTML = results.map(u => `
+        <div class="search-result-item" onclick="goToProfile('${u.uid}')">
+            <img src="${u.photoURL || DEFAULT_AVATAR}" class="avatar">
+            <div style="flex:1;">
+                <div style="font-weight:600;font-size:15px;display:flex;align-items:center;gap:4px;">
+                    ${escapeHtml(u.displayName || u.username)} ${u.verified ? VERIFIED_BADGE_SVG : ''}
+                </div>
+                <div style="font-size:13px;color:var(--text-secondary);">@${escapeHtml(u.username)}</div>
+            </div>
+        </div>
+    `).join('');
+};
+
+/* ══ NOTIFICATIONS LOGIC ══ */
+window.loadNotifications = async () => {
+    const list = document.getElementById('notifications-list');
+    list.innerHTML = '<div class="loading-more active"><div class="vynix-spinner"></div></div>';
+    
+    try {
+        const snap = await get(ref(db, `notifications/${currentUser.uid}`));
+        if (!snap.exists()) {
+            list.innerHTML = '<div class="empty-state">No notifications yet.</div>';
+            return;
+        }
+        
+        const notifs = [];
+        snap.forEach(child => { notifs.push({ id: child.key, ...child.val() }); });
+        notifs.sort((a, b) => b.timestamp - a.timestamp);
+        
+        // Use the user cache to avoid hundreds of fetch calls
+        const usersCache = await getAllUsers();
+        
+        list.innerHTML = '';
+        for (const n of notifs) {
+            let actor = usersCache.find(u => u.uid === n.actorId) || { username: 'Someone', photoURL: DEFAULT_AVATAR };
+            if (!actor.uid) { // Fallback if not in cache
+                try { const asnap = await get(ref(db, `users/${n.actorId}`)); if(asnap.exists()) actor = asnap.val(); } catch(e) {}
+            }
+            
+            let text = ''; let icon = '';
+            if (n.type === 'like') { text = 'liked your post.'; icon = '<i data-feather="heart" style="color:var(--like);width:14px;height:14px;fill:var(--like);"></i>'; }
+            else if (n.type === 'comment') { text = 'commented on your post.'; icon = '<i data-feather="message-circle" style="width:14px;height:14px;color:var(--primary);fill:var(--primary);"></i>'; }
+            else if (n.type === 'follow') { text = 'started following you.'; icon = '<i data-feather="user-plus" style="color:var(--primary);width:14px;height:14px;"></i>'; }
+            
+            const el = document.createElement('div');
+            el.className = `notification-item ${!n.read ? 'unread' : ''}`;
+            el.innerHTML = `
+                <div class="notif-icon-wrap">
+                    <img src="${actor.photoURL || DEFAULT_AVATAR}" class="avatar">
+                    <div class="notif-badge">${icon}</div>
+                </div>
+                <div class="notif-content">
+                    <span style="font-weight:600;">${escapeHtml(actor.username)}</span> ${text}
+                    <div class="notif-time">${formatTime(n.timestamp)}</div>
+                </div>
+            `;
+            el.onclick = () => {
+                update(ref(db, `notifications/${currentUser.uid}/${n.id}`), { read: true });
+                el.classList.remove('unread');
+                if(n.postId) { 
+                    goToHome(); 
+                    setTimeout(() => {
+                        const target = document.getElementById(`post-${n.postId}`);
+                        if(target) {
+                            target.scrollIntoView({behavior:'smooth', block:'center'});
+                            target.style.background = 'rgba(var(--primary-rgb),0.1)';
+                            setTimeout(() => target.style.background = '', 2000);
+                        }
+                    }, 300);
+                }
+                else if(n.type === 'follow') goToProfile(n.actorId);
+            };
+            list.appendChild(el);
+        }
+        feather.replace();
+    } catch (e) {
+        list.innerHTML = '<div class="empty-state">Error loading notifications.</div>';
+    }
+};
+
+/* ══ PROFILE LOGIC ══ */
+window.loadProfile = async (uid) => {
+    const content = document.getElementById('profile-content');
+    content.innerHTML = '<div class="loading-more active"><div class="vynix-spinner"></div></div>';
+    document.getElementById('profile-header-username').textContent = 'Loading...';
+    
+    try {
+        const isOwn = uid === currentUser?.uid;
+        let uData = isOwn ? currentUserData : null;
+        if (!uData) {
+            const snap = await get(ref(db, `users/${uid}`));
+            if (!snap.exists()) throw new Error('User not found');
+            uData = snap.val();
+        }
+        
+        document.getElementById('profile-header-username').textContent = uData.username || 'User';
+        
+        const followersCount = Object.keys(uData.followers || {}).length;
+        const followingCount = Object.keys(uData.following || {}).length;
+        const isFollowing = !!currentUserData?.following?.[uid];
+        
+        let actionBtn = '';
+        if (isOwn) {
+            actionBtn = `<button class="profile-action-btn edit" onclick="window.location.href='settings.html'">Edit Profile</button>`;
+        } else {
+            actionBtn = `<button class="profile-action-btn ${isFollowing?'following':'primary'} follow-btn-${uid}" onclick="toggleFollow('${uid}', event)">${isFollowing?'Following':'Follow'}</button>`;
+        }
+
+        let html = `
+            <div class="profile-header-card">
+                <img src="${uData.photoURL || DEFAULT_AVATAR}" class="profile-avatar-large">
+                <div style="font-weight:700;font-size:20px;display:flex;align-items:center;justify-content:center;gap:4px;">
+                    ${escapeHtml(uData.displayName || uData.username)} ${uData.verified ? VERIFIED_BADGE_SVG : ''}
+                </div>
+                <div style="color:var(--text-secondary);font-size:14px;margin-top:2px;">@${escapeHtml(uData.username)}</div>
+                
+                <div class="profile-stats">
+                    <div class="stat"><strong id="profile-post-count">0</strong> Posts</div>
+                    <div class="stat"><strong>${followersCount}</strong> Followers</div>
+                    <div class="stat"><strong>${followingCount}</strong> Following</div>
+                </div>
+                ${actionBtn}
+            </div>
+            <div class="profile-grid" id="profile-grid"></div>
+        `;
+        content.innerHTML = html;
+        
+        // Fetch user's posts from the loaded cache
+        const userPosts = allPostsCache.filter(p => p.uid === uid).sort((a,b) => b.timestamp - a.timestamp);
+        const grid = document.getElementById('profile-grid');
+        document.getElementById('profile-post-count').textContent = userPosts.length;
+        
+        if (userPosts.length === 0) {
+            grid.style.display = 'block';
+            grid.innerHTML = '<div class="empty-state" style="padding-top: 40px;">No posts yet.</div>';
+        } else {
+            userPosts.forEach(post => {
+                const thumb = post.mediaUrls ? post.mediaUrls[0].url : (post.mediaUrl || null);
+                const isVideo = post.mediaType === 'video' || (post.mediaUrls && post.mediaUrls[0].type === 'video');
+                
+                const el = document.createElement('div');
+                el.className = 'grid-item';
+                el.onclick = () => { 
+                    goToHome(); 
+                    setTimeout(() => {
+                        const target = document.getElementById(`post-${post.id}`);
+                        if(target) target.scrollIntoView({behavior:'smooth', block:'center'});
+                    }, 300); 
+                };
+                
+                if (thumb) {
+                    el.innerHTML = isVideo 
+                        ? `<video src="${thumb}" muted></video><div class="grid-icon"><i data-feather="play" style="width:16px;height:16px;"></i></div>` 
+                        : `<img src="${thumb}" loading="lazy">`;
+                } else {
+                    el.innerHTML = `<div class="grid-text">${escapeHtml(post.text).substring(0, 50)}...</div>`;
+                }
+                grid.appendChild(el);
+            });
+            feather.replace();
+        }
+    } catch (e) {
+        content.innerHTML = '<div class="empty-state">User not found or error loading profile.</div>';
+        document.getElementById('profile-header-username').textContent = 'Error';
+    }
+};
 
 /* ══ STORY GLOBAL PAUSE/RESUME ══ */
 let holdActive = false, storyElapsedMs = 0;
@@ -2662,7 +2872,7 @@ function enrichText(esc) {
     return esc
         .replace(/(https?:\/\/[^\s<]+)/g,'<a class="post-link" href="$1" target="_blank" rel="noopener">$1</a>')
         .replace(/@([a-zA-Z0-9_]+)/g,'<span class="mention" onclick="goToProfileByUsername(\'$1\')">@$1</span>')
-        .replace(/#([a-zA-Z0-9_]+)/g,'<span class="hashtag" onclick="goToSearch(\'$1\')">#$1</span>');
+        .replace(/#([a-zA-Z0-9_]+)/g,'<span class="hashtag" onclick="switchMainTab(\'search\')">#$1</span>');
 }
 window.goToProfileByUsername = async username => {
     try { const s=await get(ref(db,'users')); if(s.exists()) s.forEach(c=>{if(c.val().username===username)window.goToProfile(c.key);}); }
@@ -2723,8 +2933,7 @@ document.addEventListener('click', e => {
     if (uid && storyGroups.has(uid)) {
         openStoryViewer(uid);
     } else {
-        if (!uid||uid==='self') window.goToProfile(currentUser?.uid);
-        else window.goToProfile(uid);
+        window.goToProfile(uid || currentUser?.uid);
     }
 }, true);
 
