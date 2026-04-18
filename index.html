@@ -71,7 +71,8 @@
         
         .post-header { display: flex; gap: 10px; margin-bottom: 8px; padding-right: 32px; align-items: center; }
         .avatar { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; cursor: pointer; border: 1px solid var(--border); }
-        .avatar.story-ring-active { border: 2px solid transparent; background: var(--story-gradient) border-box; -webkit-mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0); -webkit-mask-composite: xor; mask-composite: exclude; padding: 2px; }
+        .avatar.story-ring-active { padding: 2px; background: linear-gradient(var(--background), var(--background)) padding-box, var(--story-gradient) border-box; border: 2px solid transparent; border-radius: 50%; object-fit: cover;}
+        
         .post-meta { flex: 1; min-width: 0; }
         .post-author-row { display: flex; align-items: center; gap: 4px; font-weight: 600; font-size: 14px; }
         .post-author { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-primary); }
@@ -322,6 +323,37 @@
         .grid-item img, .grid-item video { width: 100%; height: 100%; object-fit: cover; }
         .grid-icon { position: absolute; top: 6px; right: 6px; color: white; filter: drop-shadow(0 1px 3px rgba(0,0,0,0.6)); }
         .grid-text { padding: 8px; font-size: 11px; color: var(--text-primary); word-break: break-word; text-align: center; line-height: 1.3;}
+        
+        /* Edit Profile Specific Styles */
+        .edit-profile-pic-wrapper {
+            position: relative;
+            width: 86px;
+            height: 86px;
+            margin: 0 auto 16px;
+            cursor: pointer;
+        }
+        .edit-profile-pic {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 2px solid var(--border);
+        }
+        .edit-profile-pic-overlay {
+            position: absolute;
+            bottom: 0;
+            right: 0;
+            background: var(--primary);
+            color: white;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 2px solid var(--surface);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
     </style>
 </head>
 <body>
@@ -385,19 +417,24 @@
 
 <div class="modal-overlay" id="edit-profile-overlay" onclick="closeEditProfile()"></div>
 <div class="bottom-sheet" id="edit-profile-sheet">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;">
         <button onclick="closeEditProfile()" style="background:none;border:none;color:var(--text-primary);font-size:15px;cursor:pointer;font-family:inherit;">Cancel</button>
         <h3 style="font-size:16px;font-weight:600;color:var(--text-primary);">Edit Profile</h3>
         <button id="save-profile-btn" onclick="saveProfile()" style="background:none;color:var(--primary);border:none;font-weight:600;font-size:15px;cursor:pointer;font-family:inherit;">Save</button>
     </div>
+    
     <div style="display:flex; flex-direction:column; gap:16px;">
-        <div>
-            <label style="font-size:12px; color:var(--text-secondary); margin-bottom:4px; display:block;">Username</label>
-            <input type="text" id="edit-profile-username" style="width:100%; border:1px solid var(--border); border-radius:8px; padding:10px 12px; font-size:14px; background:transparent; color:var(--text-primary); font-family:inherit; outline:none;">
+        <div class="edit-profile-pic-wrapper" onclick="document.getElementById('edit-profile-pic-input').click()">
+            <img id="edit-profile-img-preview" src="" class="edit-profile-pic">
+            <div class="edit-profile-pic-overlay">
+                <i data-feather="camera" style="width:14px;height:14px;"></i>
+            </div>
         </div>
+        <input type="file" id="edit-profile-pic-input" accept="image/*" style="display:none;" onchange="handleProfilePicSelect(event)">
+
         <div>
-            <label style="font-size:12px; color:var(--text-secondary); margin-bottom:4px; display:block;">Display Name</label>
-            <input type="text" id="edit-profile-displayname" style="width:100%; border:1px solid var(--border); border-radius:8px; padding:10px 12px; font-size:14px; background:transparent; color:var(--text-primary); font-family:inherit; outline:none;">
+            <label style="font-size:12px; color:var(--text-secondary); margin-bottom:6px; display:block; font-weight: 600;">Username</label>
+            <input type="text" id="edit-profile-username" style="width:100%; border:1px solid var(--border); border-radius:10px; padding:12px 14px; font-size:15px; background:var(--surface2); color:var(--text-primary); font-family:inherit; outline:none; transition: border-color 0.2s;">
         </div>
     </div>
 </div>
@@ -788,37 +825,74 @@ window.closeImageViewer = () => {
 };
 
 /* ══ EDIT PROFILE ══ */
+let newProfilePicFile = null;
+
 window.openEditProfile = () => {
     document.getElementById('edit-profile-username').value = currentUserData.username || '';
-    document.getElementById('edit-profile-displayname').value = currentUserData.displayName || '';
+    document.getElementById('edit-profile-img-preview').src = currentUserData.photoURL || DEFAULT_AVATAR;
+    newProfilePicFile = null; // Reset selection
     document.getElementById('edit-profile-overlay').classList.add('active');
+    feather.replace(); // Render camera icon
 };
-window.closeEditProfile = () => document.getElementById('edit-profile-overlay').classList.remove('active');
+
+window.closeEditProfile = () => {
+    document.getElementById('edit-profile-overlay').classList.remove('active');
+};
+
+window.handleProfilePicSelect = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    newProfilePicFile = file;
+    document.getElementById('edit-profile-img-preview').src = URL.createObjectURL(file);
+};
+
 window.saveProfile = async () => {
     const un = document.getElementById('edit-profile-username').value.trim();
-    const dn = document.getElementById('edit-profile-displayname').value.trim();
     if(!un) return showToast('Username required');
     
-    document.getElementById('save-profile-btn').textContent = 'Saving...';
+    const btn = document.getElementById('save-profile-btn');
+    btn.textContent = 'Saving...';
+    btn.disabled = true;
+
     try {
-        await update(ref(db, `users/${currentUser.uid}`), { username: un, displayName: dn });
+        let photoURL = currentUserData.photoURL;
+
+        // Upload new picture if one was selected
+        if (newProfilePicFile) {
+            const r = await uploadToCloudinary(newProfilePicFile, 'avatars');
+            photoURL = r.secure_url;
+        }
+
+        // Save to Firebase (Display Name removed)
+        await update(ref(db, `users/${currentUser.uid}`), { username: un, photoURL: photoURL });
+        
+        // Update local app state
         currentUserData.username = un;
-        currentUserData.displayName = dn;
+        currentUserData.photoURL = photoURL;
+        document.getElementById('compose-avatar').src = photoURL || DEFAULT_AVATAR;
+        document.getElementById('my-story-img').src = photoURL || DEFAULT_AVATAR;
+        document.getElementById('nav-profile-avatar').src = photoURL || DEFAULT_AVATAR;
+        
         showToast('Profile updated');
         closeEditProfile();
         loadProfile(currentUser.uid);
         
-        // Update local cache posts to reflect new name instantly
+        // Reflect new data instantly in local cache posts
         allPostsCache.forEach(p => {
-            if(p.uid === currentUser.uid) {
-                if(p.user) { p.user.username = un; p.user.displayName = dn; }
+            if(p.uid === currentUser.uid && p.user) { 
+                p.user.username = un; 
+                p.user.photoURL = photoURL;
             }
         });
         rerenderFeed();
         saveOfflineData();
-    } catch(e) { showToast('Error saving profile'); }
-    document.getElementById('save-profile-btn').textContent = 'Save';
-}
+    } catch(e) { 
+        showToast('Error saving profile'); 
+    }
+    
+    btn.textContent = 'Save';
+    btn.disabled = false;
+};
 
 /* ══ SEARCH LOGIC ══ */
 window.showRecentSearchPosts = () => {
@@ -982,9 +1056,8 @@ window.loadProfile = async (uid) => {
             <div class="profile-header-card">
                 <img src="${uData.photoURL || DEFAULT_AVATAR}" class="profile-avatar-large" onclick="openImageViewer(this.src)">
                 <div style="font-weight:700;font-size:20px;display:flex;align-items:center;justify-content:center;gap:4px;">
-                    ${escapeHtml(uData.displayName || uData.username)} ${uData.verified ? VERIFIED_BADGE_SVG : ''}
+                    @${escapeHtml(uData.username)} ${uData.verified ? VERIFIED_BADGE_SVG : ''}
                 </div>
-                <div style="color:var(--text-secondary);font-size:14px;margin-top:2px;">@${escapeHtml(uData.username)}</div>
                 
                 <div class="profile-stats">
                     <div class="stat"><strong id="profile-post-count">0</strong> Posts</div>
