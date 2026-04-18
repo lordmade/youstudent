@@ -220,7 +220,8 @@
         .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 200; opacity: 0; pointer-events: none; transition: opacity 0.3s; }
         .modal-overlay.active { opacity: 1; pointer-events: auto; }
         .bottom-sheet { position: fixed; bottom: 0; left: 0; right: 0; background: var(--surface); border-radius: 16px 16px 0 0; padding: 20px; padding-bottom: calc(20px + env(safe-area-inset-bottom)); transform: translateY(100%); transition: transform 0.3s cubic-bezier(0.4,0,0.2,1); z-index: 201; max-height: 90vh; overflow-y: auto; }
-        .modal-overlay.active ~ .bottom-sheet { transform: translateY(0); }
+        /* Using adjacent sibling selector (+) so it doesn't trigger unrelated bottom sheets */
+        .modal-overlay.active + .bottom-sheet { transform: translateY(0); }
         
         .confirm-modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%) scale(0.9); background: var(--surface); border-radius: 16px; width: 85%; max-width: 300px; z-index: 500; opacity: 0; pointer-events: none; transition: all 0.3s; text-align:center; display:flex; flex-direction:column; overflow:hidden;}
         .confirm-modal.active { opacity: 1; pointer-events: auto; transform: translate(-50%,-50%) scale(1); }
@@ -1071,10 +1072,6 @@ const vfCommentListeners = new Map();
 let shuffleSeed = Date.now() % 9999;
 setInterval(() => {
     shuffleSeed = Date.now() % 9999;
-    if (currentTab === 'foryou' && allPostsCache.length > 0) {
-        pendingNewPosts = [...allPostsCache.slice(0, 3)];
-        showPill('Refreshed for you');
-    }
 }, 90000);
 
 window.addEventListener('scroll', () => {
@@ -2612,8 +2609,15 @@ window.submitReply = async (postId, commentId) => {
     catch { showToast('Failed to post reply'); }
 };
 
-window.confirmDeletePost    = postId => { deleteType='post'; deleteData=postId; confirmCallback=null; showConfirmModal('Delete Post?','This action cannot be undone.','Delete',false); };
-window.confirmDeleteComment = (postId,commentId) => { deleteType='comment'; deleteData={postId,commentId}; confirmCallback=null; showConfirmModal('Delete Comment?','This comment will be permanently removed.','Delete',false); };
+window.confirmDeletePost = postId => { 
+    document.querySelectorAll('.post-dropdown').forEach(d => d.classList.remove('active'));
+    deleteType='post'; deleteData=postId; confirmCallback=null; 
+    showConfirmModal('Delete Post?','This action cannot be undone.','Delete',false); 
+};
+window.confirmDeleteComment = (postId,commentId) => { 
+    deleteType='comment'; deleteData={postId,commentId}; confirmCallback=null; 
+    showConfirmModal('Delete Comment?','This comment will be permanently removed.','Delete',false); 
+};
 
 function showConfirmModal(title, text, confirmText, isRepost=false) {
     document.getElementById('confirm-title').textContent = title;
@@ -2634,12 +2638,16 @@ window.closeConfirmModal = () => {
 window.executeConfirmAction = async () => {
     if (confirmCallback) { const cb=confirmCallback; closeConfirmModal(); await cb(); return; }
     if (!deleteType||!deleteData) { closeConfirmModal(); return; }
+    
+    const type = deleteType;
+    const data = deleteData;
+    closeConfirmModal(); // Hide modal immediately
+    
     try {
-        if (deleteType==='post')    { await remove(ref(db,`posts/${deleteData}`)); showToast('Post deleted'); }
-        else if (deleteType==='comment') { await remove(ref(db,`posts/${deleteData.postId}/comments/${deleteData.commentId}`)); showToast('Comment deleted'); }
-        else if (deleteType==='story')   { await remove(ref(db,`stories/${deleteData}`)); closeStoryViewer(); showToast('Story deleted'); }
+        if (type==='post')    { await remove(ref(db,`posts/${data}`)); showToast('Post deleted'); }
+        else if (type==='comment') { await remove(ref(db,`posts/${data.postId}/comments/${data.commentId}`)); showToast('Comment deleted'); }
+        else if (type==='story')   { await remove(ref(db,`stories/${data}`)); closeStoryViewer(); showToast('Story deleted'); }
     } catch { showToast('Delete failed'); }
-    closeConfirmModal();
 };
 
 /* ══ STORIES ══ */
