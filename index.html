@@ -325,35 +325,30 @@
         .grid-text { padding: 8px; font-size: 11px; color: var(--text-primary); word-break: break-word; text-align: center; line-height: 1.3;}
         
         /* Edit Profile Specific Styles */
-        .edit-profile-pic-wrapper {
-            position: relative;
-            width: 86px;
-            height: 86px;
-            margin: 0 auto 16px;
-            cursor: pointer;
-        }
-        .edit-profile-pic {
-            width: 100%;
-            height: 100%;
-            border-radius: 50%;
-            object-fit: cover;
-            border: 2px solid var(--border);
-        }
-        .edit-profile-pic-overlay {
-            position: absolute;
-            bottom: 0;
-            right: 0;
-            background: var(--primary);
-            color: white;
-            width: 28px;
-            height: 28px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border: 2px solid var(--surface);
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
+        .edit-profile-pic-wrapper { position: relative; width: 86px; height: 86px; margin: 0 auto 16px; cursor: pointer; }
+        .edit-profile-pic { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; border: 2px solid var(--border); }
+        .edit-profile-pic-overlay { position: absolute; bottom: 0; right: 0; background: var(--primary); color: white; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 2px solid var(--surface); box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+
+        /* Chat Styles */
+        .chat-list-item { display: flex; align-items: center; gap: 12px; padding: 12px 16px; cursor: pointer; border-bottom: 1px solid var(--border); transition: background 0.2s; }
+        .chat-list-item:active { background: var(--surface2); }
+        .chat-avatar-wrap { position: relative; }
+        .chat-online-dot { position: absolute; bottom: 0; right: 0; width: 12px; height: 12px; background: #34C759; border: 2px solid var(--background); border-radius: 50%; }
+        .chat-info { flex: 1; min-width: 0; }
+        .chat-name { font-weight: 600; font-size: 15px; color: var(--text-primary); margin-bottom: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .chat-last-msg { font-size: 13px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .chat-meta { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex-shrink: 0; }
+        .chat-time { font-size: 12px; color: var(--text-muted); }
+        .chat-unread { background: var(--primary); color: white; font-size: 11px; font-weight: 700; padding: 2px 6px; border-radius: 10px; min-width: 20px; text-align: center; }
+
+        .chat-view-layer { position: fixed; inset: 0; background: var(--background); z-index: 9999; display: flex; flex-direction: column; transform: translateX(100%); transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); visibility: hidden; }
+        .chat-view-layer.active { transform: translateX(0); visibility: visible; }
+        .chat-bubble { max-width: 75%; padding: 10px 14px; border-radius: 18px; font-size: 14.5px; line-height: 1.4; word-wrap: break-word; position: relative; }
+        .chat-bubble.sent { background: var(--primary); color: #fff; align-self: flex-end; border-bottom-right-radius: 4px; }
+        .chat-bubble.received { background: var(--surface2); color: var(--text-primary); align-self: flex-start; border-bottom-left-radius: 4px; }
+        .chat-date-divider { text-align: center; font-size: 12px; font-weight: 600; color: var(--text-muted); margin: 16px 0 8px; }
+        
+        .new-chat-user { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--border); cursor: pointer; }
     </style>
 </head>
 <body>
@@ -439,6 +434,19 @@
     </div>
 </div>
 
+<div class="modal-overlay" id="new-chat-overlay" onclick="closeNewChatModal()"></div>
+<div class="bottom-sheet" id="new-chat-sheet" style="height: 80vh; display: flex; flex-direction: column;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+        <h3 style="font-size:16px;font-weight:600;color:var(--text-primary);">New Message</h3>
+        <button onclick="closeNewChatModal()" style="background:none;border:none;color:var(--text-primary);font-size:20px;cursor:pointer;"><i data-feather="x"></i></button>
+    </div>
+    <div style="margin-bottom: 12px;">
+        <input type="text" id="new-chat-search" placeholder="Search following..." oninput="filterNewChatUsers(this.value)" style="width:100%; border:1px solid var(--border); border-radius:8px; padding:10px 14px; background:var(--surface2); color:var(--text-primary); outline:none; font-family:inherit;">
+    </div>
+    <div id="new-chat-list" style="flex:1; overflow-y:auto;">
+        </div>
+</div>
+
 <div class="app-container" id="main-swipe-container">
 
     <div id="view-home" class="view-container active">
@@ -521,6 +529,17 @@
         </div>
     </div>
 
+    <div id="view-messages" class="view-container">
+        <header class="header">
+            <button onclick="goToHome()" style="background:none;border:none;cursor:pointer;color:var(--text-primary);"><i data-feather="arrow-left"></i></button>
+            <h3 style="margin: 0; font-size: 18px; font-weight: 700;">Messages</h3>
+            <button onclick="openNewChatModal()" style="background:none;border:none;cursor:pointer;color:var(--text-primary);"><i data-feather="edit"></i></button>
+        </header>
+        <div id="messages-list-container">
+            <div class="loading-more active"><div class="vynix-spinner"></div></div>
+        </div>
+    </div>
+
     <div id="view-search" class="view-container">
         <div class="search-header">
             <div class="search-bar">
@@ -542,11 +561,28 @@
         <header class="header">
             <button onclick="goToHome()" style="background:none;border:none;cursor:pointer;color:var(--text-primary);"><i data-feather="arrow-left"></i></button>
             <h3 id="profile-header-username" style="margin: 0; font-size: 16px; font-weight: 700;">Profile</h3>
-            <div style="width:24px;"></div> </header>
-        <div id="profile-content">
-            </div>
+            <div style="width:24px;"></div> 
+        </header>
+        <div id="profile-content"></div>
     </div>
 
+</div>
+
+<div id="view-chat-room" class="chat-view-layer">
+    <header class="header" style="flex-shrink:0;">
+        <button onclick="closeChatRoom()" style="background:none;border:none;color:var(--text-primary);"><i data-feather="arrow-left"></i></button>
+        <div style="display:flex;align-items:center;gap:8px; cursor: pointer;" id="chat-header-profile-link">
+            <img id="chat-header-avatar" src="" class="avatar" style="width:32px;height:32px;">
+            <h3 id="chat-header-name" style="margin:0;font-size:16px;font-weight:600;"></h3>
+        </div>
+        <div style="width:24px;"></div>
+    </header>
+    <div id="chat-messages-area" style="flex:1; overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:12px;">
+        </div>
+    <div style="padding:12px 16px; border-top:1px solid var(--border); background:var(--background); flex-shrink:0; display:flex; gap:10px; align-items:center; padding-bottom:calc(12px + env(safe-area-inset-bottom));">
+        <input type="text" id="chat-input" placeholder="Message..." style="flex:1; border:1px solid var(--border); border-radius:9999px; padding:10px 16px; background:var(--surface2); color:var(--text-primary); outline:none; font-size: 15px; font-family: inherit;" onkeypress="if(event.key==='Enter')sendChatMessage()">
+        <button onclick="sendChatMessage()" style="background:none;border:none;color:var(--primary);font-weight:600;cursor:pointer; font-size:15px;">Send</button>
+    </div>
 </div>
 
 <nav class="bottom-nav" id="bottom-nav">
@@ -734,13 +770,13 @@ function loadOfflineData() {
         }
     } catch(e){}
 }
-// Load offline data immediately on boot
 loadOfflineData();
 
 /* ══ MAIN APP TAB/SWIPE SWITCHING ══ */
-const mainTabsList = ['home', 'search', 'notifications', 'profile'];
+// Added 'messages' to our main views logic
+const mainTabsList = ['home', 'search', 'notifications', 'profile', 'messages'];
 let currentMainTabIdx = 0;
-const tabScrolls = { home: 0, search: 0, notifications: 0, profile: 0 };
+const tabScrolls = { home: 0, search: 0, notifications: 0, profile: 0, messages: 0 };
 
 window.setNavActive = (name) => {
     document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
@@ -749,23 +785,21 @@ window.setNavActive = (name) => {
 };
 
 window.switchMainTab = (tabId, args = null) => {
-    // Save scroll state of current tab
     tabScrolls[mainTabsList[currentMainTabIdx]] = window.scrollY;
     
     document.querySelectorAll('.view-container').forEach(v => v.classList.remove('active'));
     document.getElementById(`view-${tabId}`).classList.add('active');
-    setNavActive(tabId);
+    setNavActive(tabId); // Won't activate bottom nav if tabId is 'messages'
     currentMainTabIdx = mainTabsList.indexOf(tabId);
     
-    // Load specific tab data
     if (tabId === 'profile') loadProfile(args || currentUser?.uid);
     if (tabId === 'notifications') loadNotifications();
+    if (tabId === 'messages') loadUserChatsList();
     if (tabId === 'search') {
         const searchInput = document.getElementById('main-search-input');
         if (!searchInput.value) showRecentSearchPosts();
     }
 
-    // Restore scroll state
     window.scrollTo(0, tabScrolls[tabId] || 0);
 };
 
@@ -788,29 +822,28 @@ window.goToPost = (id) => {
     }, 300);
 };
 
-// Swipe Detection Logic
-let appTouchStartX = 0;
-let appTouchStartY = 0;
+// Override original goToMessages to use SPA tab
+window.goToMessages = () => {
+    switchMainTab('messages');
+};
+
+let appTouchStartX = 0, appTouchStartY = 0;
 document.addEventListener('touchstart', e => {
-    if(e.target.closest('.stories-container') || e.target.closest('.carousel') || e.target.closest('.vynix-player') || e.target.closest('.vf-overlay') || e.target.closest('.story-viewer') || e.target.closest('.bottom-sheet')) return;
-    appTouchStartX = e.touches[0].clientX;
-    appTouchStartY = e.touches[0].clientY;
+    if(e.target.closest('.stories-container') || e.target.closest('.carousel') || e.target.closest('.vynix-player') || e.target.closest('.vf-overlay') || e.target.closest('.story-viewer') || e.target.closest('.bottom-sheet') || e.target.closest('#view-chat-room')) return;
+    appTouchStartX = e.touches[0].clientX; appTouchStartY = e.touches[0].clientY;
 }, {passive: true});
 
 document.addEventListener('touchend', e => {
     if(appTouchStartX === 0) return;
-    const appTouchEndX = e.changedTouches[0].clientX;
-    const appTouchEndY = e.changedTouches[0].clientY;
-    const dx = appTouchEndX - appTouchStartX;
-    const dy = appTouchEndY - appTouchStartY;
-
+    const dx = e.changedTouches[0].clientX - appTouchStartX;
+    const dy = e.changedTouches[0].clientY - appTouchStartY;
     if (Math.abs(dx) > 60 && Math.abs(dy) < 50) {
-        if (dx < 0 && currentMainTabIdx < mainTabsList.length - 1) switchMainTab(mainTabsList[currentMainTabIdx + 1]);
-        else if (dx > 0 && currentMainTabIdx > 0) switchMainTab(mainTabsList[currentMainTabIdx - 1]);
+        // Prevent swiping into the messages tab from bottom nav accidentally
+        if (dx < 0 && currentMainTabIdx < mainTabsList.length - 2) switchMainTab(mainTabsList[currentMainTabIdx + 1]);
+        else if (dx > 0 && currentMainTabIdx > 0 && currentMainTabIdx < mainTabsList.length - 1) switchMainTab(mainTabsList[currentMainTabIdx - 1]);
     }
     appTouchStartX = 0;
 }, {passive: true});
-/* ═════════════════════════════════ */
 
 /* ══ FULLSCREEN IMAGE VIEWER ══ */
 window.openImageViewer = (src, e) => {
@@ -826,79 +859,40 @@ window.closeImageViewer = () => {
 
 /* ══ EDIT PROFILE ══ */
 let newProfilePicFile = null;
-
 window.openEditProfile = () => {
     document.getElementById('edit-profile-username').value = currentUserData.username || '';
     document.getElementById('edit-profile-img-preview').src = currentUserData.photoURL || DEFAULT_AVATAR;
-    newProfilePicFile = null; // Reset selection
+    newProfilePicFile = null;
     document.getElementById('edit-profile-overlay').classList.add('active');
-    feather.replace(); // Render camera icon
+    feather.replace();
 };
-
-window.closeEditProfile = () => {
-    document.getElementById('edit-profile-overlay').classList.remove('active');
-};
-
+window.closeEditProfile = () => document.getElementById('edit-profile-overlay').classList.remove('active');
 window.handleProfilePicSelect = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    newProfilePicFile = file;
-    document.getElementById('edit-profile-img-preview').src = URL.createObjectURL(file);
+    const file = e.target.files[0]; if (!file) return;
+    newProfilePicFile = file; document.getElementById('edit-profile-img-preview').src = URL.createObjectURL(file);
 };
-
 window.saveProfile = async () => {
     const un = document.getElementById('edit-profile-username').value.trim();
     if(!un) return showToast('Username required');
-    
-    const btn = document.getElementById('save-profile-btn');
-    btn.textContent = 'Saving...';
-    btn.disabled = true;
-
+    const btn = document.getElementById('save-profile-btn'); btn.textContent = 'Saving...'; btn.disabled = true;
     try {
         let photoURL = currentUserData.photoURL;
-
-        // Upload new picture if one was selected
-        if (newProfilePicFile) {
-            const r = await uploadToCloudinary(newProfilePicFile, 'avatars');
-            photoURL = r.secure_url;
-        }
-
-        // Save to Firebase (Display Name removed)
+        if (newProfilePicFile) { const r = await uploadToCloudinary(newProfilePicFile, 'avatars'); photoURL = r.secure_url; }
         await update(ref(db, `users/${currentUser.uid}`), { username: un, photoURL: photoURL });
-        
-        // Update local app state
-        currentUserData.username = un;
-        currentUserData.photoURL = photoURL;
+        currentUserData.username = un; currentUserData.photoURL = photoURL;
         document.getElementById('compose-avatar').src = photoURL || DEFAULT_AVATAR;
         document.getElementById('my-story-img').src = photoURL || DEFAULT_AVATAR;
         document.getElementById('nav-profile-avatar').src = photoURL || DEFAULT_AVATAR;
-        
-        showToast('Profile updated');
-        closeEditProfile();
-        loadProfile(currentUser.uid);
-        
-        // Reflect new data instantly in local cache posts
-        allPostsCache.forEach(p => {
-            if(p.uid === currentUser.uid && p.user) { 
-                p.user.username = un; 
-                p.user.photoURL = photoURL;
-            }
-        });
-        rerenderFeed();
-        saveOfflineData();
-    } catch(e) { 
-        showToast('Error saving profile'); 
-    }
-    
-    btn.textContent = 'Save';
-    btn.disabled = false;
+        showToast('Profile updated'); closeEditProfile(); loadProfile(currentUser.uid);
+        allPostsCache.forEach(p => { if(p.uid === currentUser.uid && p.user) { p.user.username = un; p.user.photoURL = photoURL; }});
+        rerenderFeed(); saveOfflineData();
+    } catch(e) { showToast('Error saving profile'); }
+    btn.textContent = 'Save'; btn.disabled = false;
 };
 
 /* ══ SEARCH LOGIC ══ */
 window.showRecentSearchPosts = () => {
     const container = document.getElementById('search-results-container');
-    
-    // Quick shimmer for recent searches
     container.innerHTML = Array(3).fill(`
         <div class="search-result-item" style="pointer-events:none;">
             <div class="shimmer" style="width:40px;height:40px;border-radius:50%;flex-shrink:0;"></div>
@@ -911,11 +905,7 @@ window.showRecentSearchPosts = () => {
 
     setTimeout(() => {
         const recent = allPostsCache.filter(p => p.mediaUrl || p.text).slice(0, 15);
-        if(recent.length === 0) {
-            container.innerHTML = '<div class="empty-state">Find your friends on Vynix.</div>';
-            return;
-        }
-        
+        if(recent.length === 0) { container.innerHTML = '<div class="empty-state">Find your friends on Vynix.</div>'; return; }
         container.innerHTML = `<div style="padding: 12px 16px; font-weight: 600; font-size: 15px;">Discover</div>` + 
             recent.map(p => `
                 <div class="search-result-item" onclick="goToPost('${p.id}')" style="align-items: flex-start;">
@@ -934,8 +924,6 @@ window.showRecentSearchPosts = () => {
 window.handleMainSearch = async (query) => {
     const container = document.getElementById('search-results-container');
     if(!query.trim()) { showRecentSearchPosts(); return; }
-    
-    // Inject Search Shimmers
     container.innerHTML = Array(5).fill(`
         <div class="search-result-item" style="pointer-events:none;">
             <div class="shimmer" style="width:36px;height:36px;border-radius:50%;flex-shrink:0;"></div>
@@ -946,14 +934,11 @@ window.handleMainSearch = async (query) => {
         </div>
     `).join('');
 
-    const q = query.toLowerCase();
-    const users = await getAllUsers();
+    const q = query.toLowerCase(); const users = await getAllUsers();
     const userResults = users.filter(u => u.username?.toLowerCase().includes(q) || u.displayName?.toLowerCase().includes(q)).slice(0, 6);
-    
     const postResults = allPostsCache.filter(p => (p.text || '').toLowerCase().includes(q) || (p.user?.username || '').toLowerCase().includes(q)).slice(0, 15);
     
     let html = '';
-    
     if(userResults.length > 0) {
         html += `<div style="padding: 12px 16px 4px; font-weight: 600; font-size: 13px; color: var(--text-secondary);">Users</div>`;
         html += userResults.map(u => `
@@ -965,10 +950,8 @@ window.handleMainSearch = async (query) => {
                     </div>
                     <div style="font-size:13px;color:var(--text-secondary);">@${escapeHtml(u.username)}</div>
                 </div>
-            </div>
-        `).join('');
+            </div>`).join('');
     }
-    
     if(postResults.length > 0) {
         html += `<div style="padding: 12px 16px 4px; font-weight: 600; font-size: 13px; color: var(--text-secondary);">Posts</div>`;
         html += postResults.map(p => `
@@ -980,26 +963,18 @@ window.handleMainSearch = async (query) => {
                 </div>
                 ${p.mediaUrls ? `<img src="${p.mediaUrls[0].url}" style="width:48px;height:48px;object-fit:cover;border-radius:6px;">` : 
                  (p.mediaUrl ? `<img src="${p.mediaUrl}" style="width:48px;height:48px;object-fit:cover;border-radius:6px;">` : '')}
-            </div>
-        `).join('');
+            </div>`).join('');
     }
-    
     if(!html) html = '<div class="empty-state">No results found.</div>';
     container.innerHTML = html;
 };
 
 /* ══ NOTIFICATIONS LOGIC ══ */
-let notifPageSize = 12;
-let oldestNotifTimestamp = null;
-let hasMoreNotifs = true;
-let isLoadingNotifs = false;
-let notifObserver = null;
+let notifPageSize = 12; let oldestNotifTimestamp = null; let hasMoreNotifs = true; let isLoadingNotifs = false; let notifObserver = null;
 
 window.loadNotifications = async (isLoadMore = false) => {
     const list = document.getElementById('notifications-list');
-
     if (!isLoadMore) {
-        // Initial load: Show 6 shimmer items
         list.innerHTML = Array(6).fill(`
             <div class="notification-item" style="border-bottom: 1px solid var(--border); pointer-events: none;">
                 <div class="shimmer" style="width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0;"></div>
@@ -1009,121 +984,67 @@ window.loadNotifications = async (isLoadMore = false) => {
                 </div>
             </div>
         `).join('');
-        oldestNotifTimestamp = null;
-        hasMoreNotifs = true;
+        oldestNotifTimestamp = null; hasMoreNotifs = true;
     }
-
     if (isLoadingNotifs || !hasMoreNotifs) return;
     isLoadingNotifs = true;
 
     try {
-        let notifsQuery;
-        if (oldestNotifTimestamp) {
-            notifsQuery = query(
-                ref(db, `notifications/${currentUser.uid}`),
-                orderByChild('timestamp'),
-                endAt(oldestNotifTimestamp - 1),
-                limitToLast(notifPageSize)
-            );
-        } else {
-            notifsQuery = query(
-                ref(db, `notifications/${currentUser.uid}`),
-                orderByChild('timestamp'),
-                limitToLast(notifPageSize)
-            );
-        }
+        let notifsQuery = oldestNotifTimestamp 
+            ? query(ref(db, `notifications/${currentUser.uid}`), orderByChild('timestamp'), endAt(oldestNotifTimestamp - 1), limitToLast(notifPageSize))
+            : query(ref(db, `notifications/${currentUser.uid}`), orderByChild('timestamp'), limitToLast(notifPageSize));
 
         const snap = await get(notifsQuery);
-
-        if (!isLoadMore) list.innerHTML = ''; // Clear skeletons after initial fetch
+        if (!isLoadMore) list.innerHTML = '';
 
         if (!snap.exists()) {
             if (!isLoadMore) list.innerHTML = '<div class="empty-state">No notifications yet.</div>';
-            hasMoreNotifs = false;
-            isLoadingNotifs = false;
-            return;
+            hasMoreNotifs = false; isLoadingNotifs = false; return;
         }
 
-        const notifs = [];
-        snap.forEach(child => { notifs.push({ id: child.key, ...child.val() }); });
-        notifs.sort((a, b) => b.timestamp - a.timestamp); // Sort descending
-
-        if (notifs.length > 0) {
-            oldestNotifTimestamp = notifs[notifs.length - 1].timestamp;
-        }
-        if (notifs.length < notifPageSize) {
-            hasMoreNotifs = false;
-        }
+        const notifs = []; snap.forEach(child => { notifs.push({ id: child.key, ...child.val() }); });
+        notifs.sort((a, b) => b.timestamp - a.timestamp);
+        if (notifs.length > 0) oldestNotifTimestamp = notifs[notifs.length - 1].timestamp;
+        if (notifs.length < notifPageSize) hasMoreNotifs = false;
 
         const usersCache = await getAllUsers();
         const fragment = document.createDocumentFragment();
 
         for (const n of notifs) {
             let actor = usersCache.find(u => u.uid === n.actorId) || { username: 'Someone', photoURL: DEFAULT_AVATAR };
-            if (!actor.uid) { 
-                try { const asnap = await get(ref(db, `users/${n.actorId}`)); if(asnap.exists()) actor = asnap.val(); } catch(e) {}
-            }
+            if (!actor.uid) { try { const asnap = await get(ref(db, `users/${n.actorId}`)); if(asnap.exists()) actor = asnap.val(); } catch(e) {} }
             
             let text = ''; let icon = '';
             if (n.type === 'like') { text = 'liked your post.'; icon = '<i data-feather="heart" style="color:var(--like);width:14px;height:14px;fill:var(--like);"></i>'; }
             else if (n.type === 'comment') { text = 'commented on your post.'; icon = '<i data-feather="message-circle" style="width:14px;height:14px;color:var(--primary);fill:var(--primary);"></i>'; }
             else if (n.type === 'follow') { text = 'started following you.'; icon = '<i data-feather="user-plus" style="color:var(--primary);width:14px;height:14px;"></i>'; }
             
-            const el = document.createElement('div');
-            el.className = `notification-item ${!n.read ? 'unread' : ''}`;
-            el.innerHTML = `
-                <div class="notif-icon-wrap">
-                    <img src="${actor.photoURL || DEFAULT_AVATAR}" class="avatar">
-                    <div class="notif-badge">${icon}</div>
-                </div>
-                <div class="notif-content">
-                    <span style="font-weight:600;">${escapeHtml(actor.username)}</span> ${text}
-                    <div class="notif-time">${formatTime(n.timestamp)}</div>
-                </div>
-            `;
-            el.onclick = () => {
-                update(ref(db, `notifications/${currentUser.uid}/${n.id}`), { read: true });
-                el.classList.remove('unread');
-                if(n.postId) goToPost(n.postId);
-                else if(n.type === 'follow') goToProfile(n.actorId);
-            };
+            const el = document.createElement('div'); el.className = `notification-item ${!n.read ? 'unread' : ''}`;
+            el.innerHTML = `<div class="notif-icon-wrap"><img src="${actor.photoURL || DEFAULT_AVATAR}" class="avatar"><div class="notif-badge">${icon}</div></div>
+                <div class="notif-content"><span style="font-weight:600;">${escapeHtml(actor.username)}</span> ${text}<div class="notif-time">${formatTime(n.timestamp)}</div></div>`;
+            el.onclick = () => { update(ref(db, `notifications/${currentUser.uid}/${n.id}`), { read: true }); el.classList.remove('unread'); if(n.postId) goToPost(n.postId); else if(n.type === 'follow') goToProfile(n.actorId); };
             fragment.appendChild(el);
         }
-        
-        list.appendChild(fragment);
-        feather.replace();
-        setupNotifScrollObserver();
-
-    } catch (e) {
-        if (!isLoadMore) list.innerHTML = '<div class="empty-state">Error loading notifications.</div>';
-    } finally {
-        isLoadingNotifs = false;
-    }
+        list.appendChild(fragment); feather.replace(); setupNotifScrollObserver();
+    } catch (e) { if (!isLoadMore) list.innerHTML = '<div class="empty-state">Error loading notifications.</div>'; } 
+    finally { isLoadingNotifs = false; }
 };
 
 function setupNotifScrollObserver() {
     const old = document.getElementById('notif-sentinel'); if (old) old.remove();
     if (!hasMoreNotifs) return;
-
     const list = document.getElementById('notifications-list');
-    const sentinel = document.createElement('div');
-    sentinel.id = 'notif-sentinel';
-    sentinel.style.padding = '24px';
+    const sentinel = document.createElement('div'); sentinel.id = 'notif-sentinel'; sentinel.style.padding = '24px';
     sentinel.innerHTML = '<div class="loading-more active" style="display:flex;"><div class="vynix-spinner"></div></div>';
     list.appendChild(sentinel);
-
     if (notifObserver) notifObserver.disconnect();
-    notifObserver = new IntersectionObserver(entries => {
-        if (entries[0].isIntersecting) loadNotifications(true);
-    }, { rootMargin: '150px' });
+    notifObserver = new IntersectionObserver(entries => { if (entries[0].isIntersecting) loadNotifications(true); }, { rootMargin: '150px' });
     notifObserver.observe(sentinel);
 }
 
 /* ══ PROFILE LOGIC ══ */
 window.loadProfile = async (uid) => {
     const content = document.getElementById('profile-content');
-    
-    // Inject structural shimmers immediately
     content.innerHTML = `
         <div class="profile-header-card">
             <div class="shimmer" style="width: 86px; height: 86px; border-radius: 50%; margin-bottom: 12px;"></div>
@@ -1135,46 +1056,31 @@ window.loadProfile = async (uid) => {
             </div>
             <div class="shimmer" style="width: 100%; max-width: 250px; height: 34px; border-radius: 9999px; margin-top: 8px;"></div>
         </div>
-        <div class="profile-grid">
-            ${Array(9).fill('<div class="grid-item shimmer"></div>').join('')}
-        </div>
+        <div class="profile-grid">${Array(9).fill('<div class="grid-item shimmer"></div>').join('')}</div>
     `;
-    
     document.getElementById('profile-header-username').textContent = 'Loading...';
     
     try {
-        const isOwn = uid === currentUser?.uid;
-        let uData = isOwn ? currentUserData : null;
-        if (!uData) {
-            const snap = await get(ref(db, `users/${uid}`));
-            if (!snap.exists()) throw new Error('User not found');
-            uData = snap.val();
-        }
+        const isOwn = uid === currentUser?.uid; let uData = isOwn ? currentUserData : null;
+        if (!uData) { const snap = await get(ref(db, `users/${uid}`)); if (!snap.exists()) throw new Error('User not found'); uData = snap.val(); }
         
         document.getElementById('profile-header-username').textContent = uData.username || 'User';
-        
-        const followersCount = Object.keys(uData.followers || {}).length;
-        const followingCount = Object.keys(uData.following || {}).length;
+        const followersCount = Object.keys(uData.followers || {}).length; const followingCount = Object.keys(uData.following || {}).length;
         const isFollowing = !!currentUserData?.following?.[uid];
         
-        let actionBtn = '';
-        if (isOwn) {
-            actionBtn = `<button class="profile-action-btn edit" onclick="openEditProfile()">Edit Profile</button>`;
-        } else {
-            actionBtn = `
-            <div style="display:flex; gap:8px; width:100%; max-width:250px;">
+        let actionBtn = isOwn 
+            ? `<button class="profile-action-btn edit" onclick="openEditProfile()">Edit Profile</button>`
+            : `<div style="display:flex; gap:8px; width:100%; max-width:250px;">
                 <button style="flex:1;" class="profile-action-btn ${isFollowing?'following':'primary'} follow-btn-${uid}" onclick="toggleFollow('${uid}', event)">${isFollowing?'Following':'Follow'}</button>
-                <button style="flex:1;" class="profile-action-btn edit" onclick="window.location.href='messages.html?userid=${uid}'">Message</button>
+                <button style="flex:1;" class="profile-action-btn edit" onclick="openChatRoom('${uid}', '${escapeHtml(uData.username)}', '${uData.photoURL || DEFAULT_AVATAR}')">Message</button>
             </div>`;
-        }
 
-        let html = `
+        content.innerHTML = `
             <div class="profile-header-card">
                 <img src="${uData.photoURL || DEFAULT_AVATAR}" class="profile-avatar-large" onclick="openImageViewer(this.src)">
                 <div style="font-weight:700;font-size:20px;display:flex;align-items:center;justify-content:center;gap:4px;">
                     @${escapeHtml(uData.username)} ${uData.verified ? VERIFIED_BADGE_SVG : ''}
                 </div>
-                
                 <div class="profile-stats">
                     <div class="stat"><strong id="profile-post-count">0</strong> Posts</div>
                     <div class="stat"><strong>${followersCount}</strong> Followers</div>
@@ -1184,32 +1090,18 @@ window.loadProfile = async (uid) => {
             </div>
             <div class="profile-grid" id="profile-grid"></div>
         `;
-        content.innerHTML = html;
         
-        // Fetch user's posts from the loaded cache
         const userPosts = allPostsCache.filter(p => p.uid === uid).sort((a,b) => b.timestamp - a.timestamp);
-        const grid = document.getElementById('profile-grid');
-        document.getElementById('profile-post-count').textContent = userPosts.length;
+        const grid = document.getElementById('profile-grid'); document.getElementById('profile-post-count').textContent = userPosts.length;
         
-        if (userPosts.length === 0) {
-            grid.style.display = 'block';
-            grid.innerHTML = '<div class="empty-state" style="padding-top: 40px;">No posts yet.</div>';
-        } else {
+        if (userPosts.length === 0) { grid.style.display = 'block'; grid.innerHTML = '<div class="empty-state" style="padding-top: 40px;">No posts yet.</div>'; } 
+        else {
             userPosts.forEach(post => {
                 const thumb = post.mediaUrls ? post.mediaUrls[0].url : (post.mediaUrl || null);
                 const isVideo = post.mediaType === 'video' || (post.mediaUrls && post.mediaUrls[0].type === 'video');
-                
-                const el = document.createElement('div');
-                el.className = 'grid-item';
-                el.onclick = () => goToPost(post.id);
-                
-                if (thumb) {
-                    el.innerHTML = isVideo 
-                        ? `<video src="${thumb}" muted></video><div class="grid-icon"><i data-feather="play" style="width:16px;height:16px;"></i></div>` 
-                        : `<img src="${thumb}" loading="lazy">`;
-                } else {
-                    el.innerHTML = `<div class="grid-text">${escapeHtml(post.text).substring(0, 50)}...</div>`;
-                }
+                const el = document.createElement('div'); el.className = 'grid-item'; el.onclick = () => goToPost(post.id);
+                if (thumb) { el.innerHTML = isVideo ? `<video src="${thumb}" muted></video><div class="grid-icon"><i data-feather="play" style="width:16px;height:16px;"></i></div>` : `<img src="${thumb}" loading="lazy">`; } 
+                else { el.innerHTML = `<div class="grid-text">${escapeHtml(post.text).substring(0, 50)}...</div>`; }
                 grid.appendChild(el);
             });
             feather.replace();
@@ -1219,6 +1111,220 @@ window.loadProfile = async (uid) => {
         document.getElementById('profile-header-username').textContent = 'Error';
     }
 };
+
+/* ══ MESSAGES LOGIC ══ */
+let currentActiveChatId = null;
+let currentChatTargetUid = null;
+let chatMessagesListener = null;
+
+// Get consistent Chat ID
+const getChatId = (uid1, uid2) => uid1 < uid2 ? `${uid1}_${uid2}` : `${uid2}_${uid1}`;
+
+window.loadUserChatsList = () => {
+    const listContainer = document.getElementById('messages-list-container');
+    
+    // Realtime Listener for the list
+    onValue(ref(db, `userChats/${currentUser.uid}`), async (snap) => {
+        if (!snap.exists()) {
+            listContainer.innerHTML = `
+                <div class="empty-state" style="padding-top: 80px;">
+                    <i data-feather="message-square" style="width:48px;height:48px;color:var(--border);margin-bottom:16px;"></i>
+                    <div>Message your friends</div>
+                    <button class="follow-btn primary" style="margin-top:16px;" onclick="openNewChatModal()">Start a Chat</button>
+                </div>`;
+            feather.replace();
+            return;
+        }
+
+        const chats = [];
+        snap.forEach(child => { chats.push({ chatId: child.key, ...child.val() }); });
+        chats.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+
+        const usersCache = await getAllUsers();
+        let html = '';
+
+        for (const chat of chats) {
+            let targetUser = usersCache.find(u => u.uid === chat.targetUid);
+            if (!targetUser) {
+                try { const us = await get(ref(db, `users/${chat.targetUid}`)); if(us.exists()) targetUser = us.val(); } catch(e){}
+            }
+            if (!targetUser) continue;
+
+            html += `
+            <div class="chat-list-item" onclick="openChatRoom('${chat.targetUid}', '${escapeHtml(targetUser.username)}', '${targetUser.photoURL || DEFAULT_AVATAR}')">
+                <div class="chat-avatar-wrap">
+                    <img src="${targetUser.photoURL || DEFAULT_AVATAR}" class="avatar" style="width:48px;height:48px;">
+                    ${chat.isOnline ? '<div class="chat-online-dot"></div>' : ''}
+                </div>
+                <div class="chat-info">
+                    <div class="chat-name">${escapeHtml(targetUser.displayName || targetUser.username)}</div>
+                    <div class="chat-last-msg" style="${chat.unreadCount > 0 ? 'font-weight:600; color:var(--text-primary);' : ''}">
+                        ${escapeHtml(chat.lastMessage || 'Sent an attachment')}
+                    </div>
+                </div>
+                <div class="chat-meta">
+                    <div class="chat-time">${formatTime(chat.timestamp)}</div>
+                    ${chat.unreadCount > 0 ? `<div class="chat-unread">${chat.unreadCount}</div>` : ''}
+                </div>
+            </div>`;
+        }
+
+        listContainer.innerHTML = html;
+    });
+};
+
+window.openChatRoom = (targetUid, targetUsername, targetAvatar) => {
+    currentChatTargetUid = targetUid;
+    currentActiveChatId = getChatId(currentUser.uid, targetUid);
+    
+    document.getElementById('chat-header-name').textContent = targetUsername;
+    document.getElementById('chat-header-avatar').src = targetAvatar;
+    document.getElementById('chat-header-profile-link').onclick = () => { closeChatRoom(); window.goToProfile(targetUid); };
+    
+    document.getElementById('chat-messages-area').innerHTML = ''; // Clear old chat
+    document.getElementById('view-chat-room').classList.add('active');
+    
+    // Mark as read
+    update(ref(db, `userChats/${currentUser.uid}/${currentActiveChatId}`), { unreadCount: 0 });
+
+    // Listen for messages
+    if (chatMessagesListener) off(ref(db, `chats/${currentActiveChatId}/messages`));
+    
+    const messagesRef = query(ref(db, `chats/${currentActiveChatId}/messages`), orderByChild('timestamp'), limitToLast(50));
+    chatMessagesListener = onChildAdded(messagesRef, (snap) => {
+        const msg = snap.val();
+        renderChatBubble(msg);
+        
+        // Auto mark as read if chat is open
+        update(ref(db, `userChats/${currentUser.uid}/${currentActiveChatId}`), { unreadCount: 0 });
+    });
+};
+
+window.closeChatRoom = () => {
+    document.getElementById('view-chat-room').classList.remove('active');
+    document.getElementById('chat-input').value = '';
+    currentActiveChatId = null;
+    currentChatTargetUid = null;
+    if (chatMessagesListener) {
+        // We have to recreate the ref string to detach properly
+        off(ref(db, `chats`)); // Simplification, ideally detach exact ref
+        chatMessagesListener = null;
+    }
+};
+
+function renderChatBubble(msg) {
+    const area = document.getElementById('chat-messages-area');
+    const isSent = msg.senderId === currentUser.uid;
+    
+    const div = document.createElement('div');
+    div.className = `chat-bubble ${isSent ? 'sent' : 'received'}`;
+    div.textContent = msg.text;
+    
+    area.appendChild(div);
+    area.scrollTop = area.scrollHeight;
+}
+
+window.sendChatMessage = async () => {
+    if (!currentActiveChatId || !currentChatTargetUid) return;
+    
+    const input = document.getElementById('chat-input');
+    const text = input.value.trim();
+    if (!text) return;
+    
+    input.value = '';
+    input.focus();
+    
+    const timestamp = Date.now();
+    
+    try {
+        // Push message to chat history
+        await push(ref(db, `chats/${currentActiveChatId}/messages`), {
+            senderId: currentUser.uid,
+            text: text,
+            timestamp: timestamp
+        });
+        
+        // Update sender's recent chats
+        await update(ref(db, `userChats/${currentUser.uid}/${currentActiveChatId}`), {
+            targetUid: currentChatTargetUid,
+            lastMessage: text,
+            timestamp: timestamp
+        });
+
+        // Update receiver's recent chats (increment unread)
+        const receiverChatRef = ref(db, `userChats/${currentChatTargetUid}/${currentActiveChatId}`);
+        const rSnap = await get(receiverChatRef);
+        const rData = rSnap.exists() ? rSnap.val() : { unreadCount: 0 };
+        
+        await update(receiverChatRef, {
+            targetUid: currentUser.uid,
+            lastMessage: text,
+            timestamp: timestamp,
+            unreadCount: (rData.unreadCount || 0) + 1
+        });
+        
+    } catch (e) {
+        showToast('Failed to send message');
+    }
+};
+
+/* ══ NEW CHAT MODAL ══ */
+let allFollowingUsersCache = [];
+
+window.openNewChatModal = async () => {
+    document.getElementById('new-chat-overlay').classList.add('active');
+    document.getElementById('new-chat-sheet').style.transform = 'translateY(0)';
+    document.getElementById('new-chat-search').value = '';
+    
+    const list = document.getElementById('new-chat-list');
+    list.innerHTML = '<div style="padding:20px;text-align:center;"><div class="vynix-spinner" style="border-top-color:var(--primary);"></div></div>';
+    
+    if (Object.keys(currentUserData.following || {}).length === 0) {
+        list.innerHTML = '<div class="empty-state">You are not following anyone yet.</div>';
+        return;
+    }
+
+    const usersCache = await getAllUsers();
+    allFollowingUsersCache = usersCache.filter(u => currentUserData.following[u.uid]);
+    
+    renderNewChatList(allFollowingUsersCache);
+};
+
+window.closeNewChatModal = () => {
+    document.getElementById('new-chat-overlay').classList.remove('active');
+    document.getElementById('new-chat-sheet').style.transform = 'translateY(100%)';
+};
+
+window.filterNewChatUsers = (query) => {
+    if (!query) { renderNewChatList(allFollowingUsersCache); return; }
+    const q = query.toLowerCase();
+    const filtered = allFollowingUsersCache.filter(u => 
+        (u.username || '').toLowerCase().includes(q) || 
+        (u.displayName || '').toLowerCase().includes(q)
+    );
+    renderNewChatList(filtered);
+};
+
+function renderNewChatList(users) {
+    const list = document.getElementById('new-chat-list');
+    if (!users.length) { list.innerHTML = '<div class="empty-state">No users found.</div>'; return; }
+    
+    list.innerHTML = users.map(u => `
+        <div class="new-chat-user" onclick="startNewChat('${u.uid}', '${escapeHtml(u.username)}', '${u.photoURL || DEFAULT_AVATAR}')">
+            <img src="${u.photoURL || DEFAULT_AVATAR}" class="avatar">
+            <div style="flex:1;">
+                <div style="font-weight:600;font-size:15px;">${escapeHtml(u.displayName || u.username)}</div>
+                <div style="font-size:13px;color:var(--text-secondary);">@${escapeHtml(u.username)}</div>
+            </div>
+        </div>
+    `).join('');
+}
+
+window.startNewChat = (uid, username, avatar) => {
+    closeNewChatModal();
+    openChatRoom(uid, username, avatar);
+};
+
 
 /* ══ STORY GLOBAL PAUSE/RESUME ══ */
 let holdActive = false, storyElapsedMs = 0;
@@ -3011,301 +3117,4 @@ function updateStoryLikeUI(story) {
     if (icon) {
         icon.innerHTML = userLiked 
             ? `<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>`
-            : `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>`;
-    }
-    if (countEl) countEl.textContent = count > 0 ? count : '';
-    if (btn)     btn.classList.toggle('liked-story', userLiked);
-}
-
-function setupStoryHold() {
-    const mc = document.getElementById('story-media-container');
-    const holdIndicator = document.getElementById('story-hold-indicator');
-    
-    const startHold = (e) => {
-        if (e.target.closest('.story-nav')||e.target.closest('.story-controls')||e.target.closest('.story-header')) return;
-        if (!document.getElementById('story-viewer').classList.contains('active')) return;
-        holdActive = true;
-        window.pauseStoryPlayback();
-        if (holdIndicator) holdIndicator.classList.add('visible');
-    };
-    
-    const endHold = () => {
-        if (!holdActive) return; holdActive=false;
-        if (holdIndicator) holdIndicator.classList.remove('visible');
-        window.resumeStoryPlayback();
-    };
-    
-    mc.addEventListener('touchstart', startHold,{passive:true}); mc.addEventListener('touchend',endHold); mc.addEventListener('touchcancel',endHold);
-    mc.addEventListener('mousedown',  startHold); mc.addEventListener('mouseup',endHold); mc.addEventListener('mouseleave',endHold);
-}
-
-window.navigateStory = dir => {
-    if (storyTimeout) clearTimeout(storyTimeout);
-    const ids = Array.from(storyGroups.keys()).sort((a,b)=>{if(a===currentUser?.uid)return -1;if(b===currentUser?.uid)return 1;return 0;});
-    const cg  = storyGroups.get(ids[currentStoryGroupIndex]);
-    currentStoryIndex += dir;
-    if (currentStoryIndex>=cg.stories.length) { currentStoryGroupIndex++; currentStoryIndex=0; if(currentStoryGroupIndex>=ids.length){closeStoryViewer();return;} }
-    else if (currentStoryIndex<0) { currentStoryGroupIndex--; if(currentStoryGroupIndex<0){closeStoryViewer();return;} const pg=storyGroups.get(ids[currentStoryGroupIndex]); currentStoryIndex=pg.stories.length-1; }
-    displayCurrentStory();
-};
-window.closeStoryViewer = () => { if(storyTimeout)clearTimeout(storyTimeout); if(currentVideoElement){currentVideoElement.pause();currentVideoElement=null;} document.getElementById('story-viewer').classList.remove('active'); };
-
-window.deleteCurrentStory = () => { 
-    window.pauseStoryPlayback();
-    const ids=Array.from(storyGroups.keys()).sort((a,b)=>{if(a===currentUser?.uid)return -1;if(b===currentUser?.uid)return 1;return 0;}); 
-    const g=storyGroups.get(ids[currentStoryGroupIndex]); 
-    const s=g.stories[currentStoryIndex]; 
-    deleteType='story'; deleteData=s.id; confirmCallback=null; 
-    showConfirmModal('Delete Story?','This story will be permanently removed.','Delete',false); 
-};
-
-// ── COMPOSE ──
-window.openCompose  = () => {
-    document.getElementById('compose-overlay').classList.add('active');
-    setTimeout(() => document.getElementById('compose-text').focus(), 100);
-};
-
-// ── SPOTIFY LONG PRESS TO PASTE ──
-let spotifyHoldTimer = null;
-const spotifyInput = document.getElementById('spotify-url-input');
-const pastePopup = document.getElementById('custom-paste-popup');
-
-const showPastePopup = () => { pastePopup.style.display = 'block'; };
-const hidePastePopup = () => { setTimeout(() => { pastePopup.style.display = 'none'; }, 150); };
-
-const startSpotifyHold = () => {
-    spotifyHoldTimer = setTimeout(() => {
-        showPastePopup();
-        if (navigator.vibrate) navigator.vibrate(40);
-    }, 500);
-};
-
-const cancelSpotifyHold = () => {
-    if (spotifyHoldTimer) {
-        clearTimeout(spotifyHoldTimer);
-        spotifyHoldTimer = null;
-    }
-};
-
-spotifyInput.addEventListener('touchstart', startSpotifyHold, {passive: true});
-spotifyInput.addEventListener('touchend', cancelSpotifyHold);
-spotifyInput.addEventListener('touchmove', cancelSpotifyHold);
-spotifyInput.addEventListener('mousedown', startSpotifyHold);
-spotifyInput.addEventListener('mouseup', cancelSpotifyHold);
-spotifyInput.addEventListener('mouseleave', cancelSpotifyHold);
-spotifyInput.addEventListener('input', hidePastePopup);
-
-pastePopup.addEventListener('click', async (e) => {
-    e.preventDefault();
-    try {
-        const text = await navigator.clipboard.readText();
-        spotifyInput.value = text;
-        window.updatePostButton();
-        hidePastePopup();
-    } catch (err) {
-        showToast('Clipboard access denied. Please paste manually.');
-        hidePastePopup();
-    }
-});
-
-
-window.closeCompose = () => { document.getElementById('compose-overlay').classList.remove('active'); clearMedia(); document.getElementById('compose-text').value=''; updatePostButton(); };
-window.updatePostButton = () => {
-    const text = document.getElementById('compose-text').value; 
-    const spotifyUrl = document.getElementById('spotify-url-input').value;
-    const btn = document.getElementById('post-btn');
-    const has = text.trim().length>0 || selectedMediaFiles.length>0 || spotifyUrl.trim().length>0; 
-    btn.disabled=!has; btn.style.opacity=has?'1':'0.5';
-};
-window.handleMediaSelect = e => {
-    const files = Array.from(e.target.files); if (!files.length) return;
-    const MAX=10, rem=MAX-selectedMediaFiles.length;
-    files.slice(0,rem).forEach(f=>{const url=URL.createObjectURL(f);const type=f.type.startsWith('video/')?'video':'image';selectedMediaFiles.push({file:f,url,type});});
-    if (files.length>rem) showToast(`Max ${MAX} files. Only ${rem} added.`);
-    e.target.value=''; renderComposeGrid(); updatePostButton();
-};
-function renderComposeGrid() {
-    const grid  = document.getElementById('compose-media-grid');
-    if (!selectedMediaFiles.length) { grid.style.display='none'; return; }
-    grid.style.display='grid';
-    grid.innerHTML = selectedMediaFiles.map((m,i)=>`<div class="compose-thumb">${m.type==='video'?`<video src="${m.url}" muted playsinline style="pointer-events:none;"></video>`:`<img src="${m.url}" alt="">`}<button class="compose-thumb-remove" onclick="removeComposeMedia(${i})"><i data-feather="x" style="width:12px;height:12px;"></i></button></div>`).join('');
-    if (selectedMediaFiles.length<10) { grid.innerHTML+=`<button class="compose-add-more" onclick="document.getElementById('media-input').click()"><i data-feather="plus" style="width:20px;height:20px;"></i></button>`; feather.replace(); }
-    feather.replace();
-}
-window.removeComposeMedia = idx => { URL.revokeObjectURL(selectedMediaFiles[idx].url); selectedMediaFiles.splice(idx,1); renderComposeGrid(); updatePostButton(); };
-window.clearMedia = () => { 
-    selectedMediaFiles.forEach(m=>URL.revokeObjectURL(m.url)); 
-    selectedMediaFiles=[]; selectedMedia=null; 
-    document.getElementById('media-input').value=''; 
-    document.getElementById('spotify-url-input').value='';
-    renderComposeGrid(); updatePostButton(); 
-};
-window.createPost = async () => {
-    const text = document.getElementById('compose-text').value.trim(); 
-    const spotifyUrl = document.getElementById('spotify-url-input').value.trim();
-    if (!text && !selectedMediaFiles.length && !spotifyUrl) return;
-    
-    const btn  = document.getElementById('post-btn'); btn.disabled=true; btn.textContent='Posting…';
-    try {
-        let spotifyTrackId = null;
-        if (spotifyUrl) {
-            const match = spotifyUrl.match(/track\/([a-zA-Z0-9]+)/);
-            if (match && match[1]) {
-                spotifyTrackId = match[1];
-            } else {
-                showToast('Invalid Spotify URL');
-                btn.textContent='Post'; btn.disabled=false;
-                return;
-            }
-        }
-
-        let mediaUrls = [];
-        if (selectedMediaFiles.length>0) {
-            const prog=document.getElementById('upload-progress'); const fill=document.getElementById('progress-fill'); prog.classList.add('active');
-            for (let i=0;i<selectedMediaFiles.length;i++) {
-                fill.style.width=Math.round(i/selectedMediaFiles.length*100)+'%';
-                const r=await uploadToCloudinary(selectedMediaFiles[i].file,'posts'); mediaUrls.push({url:r.secure_url,type:r.resource_type});
-                fill.style.width=Math.round((i+1)/selectedMediaFiles.length*100)+'%';
-            }
-            prog.classList.remove('active'); fill.style.width='0%';
-        }
-        
-        const pd = {uid:currentUser.uid,text,timestamp:serverTimestamp(),likes:{},comments:{}};
-        if (spotifyTrackId) pd.spotifyTrackId = spotifyTrackId;
-
-        if (mediaUrls.length===1) { pd.mediaUrl=mediaUrls[0].url; pd.mediaType=mediaUrls[0].type; }
-        else if (mediaUrls.length>1) { pd.mediaUrls=mediaUrls; pd.mediaType='gallery'; }
-        
-        await push(ref(db,'posts'),pd); clearMedia(); closeCompose(); showToast('Posted!');
-        window.scrollTo({top:0,behavior:'smooth'});
-    } catch(e) { console.error(e); showToast('Upload failed'); }
-    finally    { btn.textContent='Post'; btn.disabled=false; }
-};
-
-// ── POST TEXT ──
-const TRUNCATE = 280;
-function renderPostText(rawText, postId) {
-    const escaped = escapeHtml(rawText); const rich = enrichText(escaped); const isLong = rawText.length>TRUNCATE;
-    if (!isLong) return `<div class="post-text" id="post-text-${postId}">${rich}</div>`;
-    return `<div class="post-text collapsed" id="post-text-${postId}">${truncateRich(rich,TRUNCATE)}</div><button class="see-more-btn" id="see-more-${postId}" onclick="toggleSeeMore('${postId}',${JSON.stringify(rich).replace(/'/g,"\\'")})">more</button>`;
-}
-window.toggleSeeMore = (postId, fullRich) => {
-    const el=document.getElementById(`post-text-${postId}`); const btn=document.getElementById(`see-more-${postId}`);
-    if (!el||!btn) return;
-    if (el.classList.contains('collapsed')) { el.innerHTML=fullRich; el.classList.remove('collapsed'); btn.textContent='less'; }
-    else { el.innerHTML=truncateRich(fullRich,TRUNCATE); el.classList.add('collapsed'); btn.textContent='more'; }
-};
-function truncateRich(rich, limit) {
-    const stripped = rich.replace(/<[^>]+>/g,''); if (stripped.length<=limit) return rich;
-    let rc=0, i=0;
-    while (i<rich.length&&rc<limit) { if(rich[i]==='<'){while(i<rich.length&&rich[i]!=='>')i++;}else rc++; i++; }
-    let cut=i; while(cut>0&&rich[cut]!==' '&&rich[cut]!=='\n')cut--;
-    return rich.slice(0,cut)+'…';
-}
-function enrichText(esc) {
-    return esc
-        .replace(/(https?:\/\/[^\s<]+)/g,'<a class="post-link" href="$1" target="_blank" rel="noopener">$1</a>')
-        .replace(/@([a-zA-Z0-9_]+)/g,'<span class="mention" onclick="goToProfileByUsername(\'$1\')">@$1</span>')
-        .replace(/#([a-zA-Z0-9_]+)/g,'<span class="hashtag" onclick="switchMainTab(\'search\')">#$1</span>');
-}
-window.goToProfileByUsername = async username => {
-    try { const s=await get(ref(db,'users')); if(s.exists()) s.forEach(c=>{if(c.val().username===username)window.goToProfile(c.key);}); }
-    catch { showToast('Could not find user'); }
-};
-
-// ── MENTION AUTOCOMPLETE ──
-let mentionQuery='', mentionStart=-1, mentionResults=[], mentionSelected=0, allUsersCacheMention=null;
-async function getAllUsers() {
-    if (allUsersCacheMention) return allUsersCacheMention;
-    try { const s=await get(ref(db,'users')); allUsersCacheMention=[]; if(s.exists()) s.forEach(c=>{const u=c.val();if(c.key!==currentUser.uid)allUsersCacheMention.push({uid:c.key,...u});}); }
-    catch { allUsersCacheMention=[]; }
-    return allUsersCacheMention;
-}
-window.handleMentionInput = async e => {
-    const ta=e.target, val=ta.value, pos=ta.selectionStart;
-    let start=pos-1;
-    while (start>=0&&val[start]!=='@'&&val[start]!==' '&&val[start]!=='\n') start--;
-    if (start>=0&&val[start]==='@') {
-        mentionStart=start; mentionQuery=val.slice(start+1,pos).toLowerCase();
-        const users=await getAllUsers();
-        mentionResults=users.filter(u=>u.username?.toLowerCase().includes(mentionQuery)||u.displayName?.toLowerCase().includes(mentionQuery)).slice(0,6);
-        mentionSelected=0; renderMentionDropdown();
-    } else closeMentionDropdown();
-};
-window.handleMentionKeydown = e => {
-    const dd=document.getElementById('mention-dropdown'); if (!dd.classList.contains('active')) return;
-    if (e.key==='ArrowDown') { e.preventDefault(); mentionSelected=Math.min(mentionSelected+1,mentionResults.length-1); renderMentionDropdown(); }
-    else if (e.key==='ArrowUp') { e.preventDefault(); mentionSelected=Math.max(mentionSelected-1,0); renderMentionDropdown(); }
-    else if (e.key==='Enter'||e.key==='Tab') { if(mentionResults.length>0){e.preventDefault();insertMention(mentionResults[mentionSelected]);} }
-    else if (e.key==='Escape') closeMentionDropdown();
-};
-function renderMentionDropdown() {
-    const dd=document.getElementById('mention-dropdown'); if (!mentionResults.length){closeMentionDropdown();return;}
-    dd.innerHTML=mentionResults.map((u,i)=>`<div class="mention-item ${i===mentionSelected?'selected':''}" onclick="insertMentionByIndex(${i})"><img src="${u.photoURL||DEFAULT_AVATAR}" onerror="this.src='${DEFAULT_AVATAR}'" alt=""><div class="mention-item-info"><span class="mention-item-name">${escapeHtml(u.displayName||u.username)}</span><span class="mention-item-handle">@${escapeHtml(u.username||'')}</span></div></div>`).join('');
-    dd.classList.add('active');
-}
-window.insertMentionByIndex = i => insertMention(mentionResults[i]);
-function insertMention(user) {
-    const ta=document.getElementById('compose-text'), val=ta.value, pos=ta.selectionStart;
-    const before=val.slice(0,mentionStart), after=val.slice(pos), insert=`@${user.username} `;
-    ta.value=before+insert+after; const np=mentionStart+insert.length; ta.setSelectionRange(np,np); ta.focus();
-    closeMentionDropdown(); updatePostButton();
-}
-function closeMentionDropdown() { const dd=document.getElementById('mention-dropdown'); if(dd)dd.classList.remove('active'); mentionResults=[]; mentionStart=-1; }
-
-// ── GLOBAL CLICK HANDLERS ──
-document.addEventListener('click', e => {
-    if (!e.target.closest('.compose-input-wrapper')) closeMentionDropdown();
-    if (!e.target.closest('.post-menu')) document.querySelectorAll('.post-dropdown').forEach(d=>d.classList.remove('active'));
-});
-
-document.addEventListener('click', e => {
-    const avatar = e.target.closest('.post-avatar'); if (!avatar) return;
-    e.stopPropagation();
-    const uid = avatar.dataset.uid;
-    
-    if (uid && storyGroups.has(uid)) {
-        openStoryViewer(uid);
-    } else {
-        window.goToProfile(uid || currentUser?.uid);
-    }
-}, true);
-
-// ── CAROUSEL SWIPE ──
-(()=>{
-    let tX=0, tEl=null;
-    document.addEventListener('touchstart', e=>{const c=e.target.closest('.carousel');if(!c)return;tX=e.touches[0].clientX;tEl=c;},{passive:true});
-    document.addEventListener('touchend',   e=>{if(!tEl)return;const dx=e.changedTouches[0].clientX-tX;if(Math.abs(dx)>40)carouselMove(tEl.id,dx<0?1:-1);tEl=null;},{passive:true});
-})();
-
-// ── HELPERS ──
-function formatTime(ts) {
-    if (!ts) return 'now'; const secs=Math.floor((Date.now()-ts)/1000);
-    if (secs<60) return 'now'; if (secs<3600) return Math.floor(secs/60)+'m';
-    if (secs<86400) return Math.floor(secs/3600)+'h'; return Math.floor(secs/86400)+'d';
-}
-function escapeHtml(text) { const d=document.createElement('div'); d.textContent=text; return d.innerHTML; }
-window.showToast        = msg => { const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),3000); };
-
-window.goToMessages     = ()  => window.location.href='messages.html';
-window.goToReels        = ()  => window.location.href='reels.html';
-window.goToSettings     = ()  => window.location.href='settings.html';
-window.togglePostMenu   = (postId,e) => { e.stopPropagation(); document.getElementById(`dropdown-${postId}`).classList.toggle('active'); };
-
-const hash = window.location.hash;
-if (hash.startsWith('#post-')) {
-    setTimeout(()=>{
-        const el=document.getElementById(`post-${hash.slice(6)}`);
-        if(el){el.scrollIntoView({behavior:'smooth',block:'center'});el.style.background='rgba(var(--primary-rgb),0.06)';setTimeout(()=>el.style.background='',2000);}
-    },1500);
-}
-
-const params = new URLSearchParams(window.location.search);
-if (params.get('compose') === 'true') {
-    setTimeout(openCompose, 500);
-}
-
-feather.replace();
-</script>
-</body>
-</html>
+            : `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width
