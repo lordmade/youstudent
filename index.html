@@ -5,6 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Vynix</title>
     <script src="https://unpkg.com/feather-icons"></script>
+    
+    <script type="text/javascript">
+        window._mNHandle = window._mNHandle || {};
+        window._mNHandle.queue = window._mNHandle.queue || [];
+        medianet_versionId = "3121199"; 
+    </script>
+    <script src="https://contextual.media.net/dmedianet.js?cid=YOUR_CID" async="async"></script>
     <style>
         /* Exact Theme Variables from Settings */
         :root,[data-theme="light"]{--primary:#0095F6;--primary-rgb:0,149,246;--background:#FFFFFF;--surface:#FFFFFF;--surface2:#EFEFEF;--border:#DBDBDB;--text-primary:#000000;--text-secondary:#737373;--text-muted:#A8A8A8;--like:#FF3040;--toggle-on:#34C759;--toggle-off:#E9E9EB;--verified:#0095F6;--repost:#34C759;--story-gradient:linear-gradient(45deg,#f09433 0%,#e6683c 25%,#dc2743 50%,#cc2366 75%,#bc1888 100%);}
@@ -221,7 +228,6 @@
         .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 200; opacity: 0; pointer-events: none; transition: opacity 0.3s; }
         .modal-overlay.active { opacity: 1; pointer-events: auto; }
         .bottom-sheet { position: fixed; bottom: 0; left: 0; right: 0; background: var(--surface); border-radius: 16px 16px 0 0; padding: 20px; padding-bottom: calc(20px + env(safe-area-inset-bottom)); transform: translateY(100%); transition: transform 0.3s cubic-bezier(0.4,0,0.2,1); z-index: 201; max-height: 90vh; overflow-y: auto; }
-        /* Using adjacent sibling selector (+) so it doesn't trigger unrelated bottom sheets */
         .modal-overlay.active + .bottom-sheet { transform: translateY(0); }
         
         .confirm-modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%) scale(0.9); background: var(--surface); border-radius: 16px; width: 85%; max-width: 300px; z-index: 500; opacity: 0; pointer-events: none; transition: all 0.3s; text-align:center; display:flex; flex-direction:column; overflow:hidden;}
@@ -710,6 +716,37 @@ let pendingNewPosts = [], isUserAtTop = true;
 const postListeners        = new Map();
 const commentListeners     = new Map();
 const commentLikeListeners = new Map();
+
+// --- MEDIA.NET AD LOGIC ---
+let postRenderCount = 0; // Tracks posts rendered to know when to show an ad
+
+function renderMediaNetAd(container) {
+    // Create a unique ID for this specific ad unit on the page
+    const adId = 'medianet-ad-' + Date.now() + '-' + Math.floor(Math.random() * 1000);
+
+    const adWrapper = document.createElement('div');
+    // Wrap it in your exact Vynix post-card class so it blends perfectly
+    adWrapper.className = 'post-card'; 
+    adWrapper.style.display = 'flex';
+    adWrapper.style.justifyContent = 'center'; // Centers the ad banner
+    adWrapper.style.padding = '16px 0'; // Matches your feed spacing
+    
+    // Create the target div for Media.net
+    adWrapper.innerHTML = `<div id="${adId}"></div>`;
+    container.appendChild(adWrapper);
+
+    // Tell the Media.net engine to fill this specific div
+    try {
+        window._mNHandle.queue.push(function () {
+            // "300x250" is the standard size for mobile/in-feed native ads. 
+            // Replace "YOUR_CID" with your actual ID.
+            window._mNDetails.loadTag("YOUR_CID", "300x250", adId); 
+        });
+    } catch (error) {
+        console.error("Ad load failed", error);
+    }
+}
+// --------------------------
 
 /* ══ OFFLINE DB CACHING ══ */
 function saveOfflineData() {
@@ -1239,7 +1276,6 @@ window.switchTab = (tab) => {
     rerenderFeed();
 };
 
-
 const PAGE_SIZE = 8;
 let allPostKeys = [], pageIndex = 0, isLoadingPage = false, hasMorePages = true, scrollObserver = null;
 
@@ -1695,6 +1731,17 @@ function renderPost(post, prepend = false) {
     setupCommentsListener(post.id);
     attachRealtimePostListeners(post.id);
     feather.replace();
+
+    // --- ADD THIS BLOCK FOR ADS ---
+    if (!prepend) { 
+        postRenderCount++;
+        // Trigger an ad every 5 posts
+        if (postRenderCount >= 5) { 
+            renderMediaNetAd(feed);
+            postRenderCount = 0; // Reset counter
+        }
+    }
+    // ------------------------------
 }
 
 window.triggerDoubleTapLike = async (postId) => {
