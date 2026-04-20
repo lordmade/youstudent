@@ -302,6 +302,19 @@
         .search-bar input { flex: 1; border: none; background: transparent; outline: none; font-size: 15px; color: var(--text-primary); font-family: inherit;}
         .search-result-item { display: flex; align-items: center; gap: 12px; padding: 12px 16px; cursor: pointer; border-bottom: 1px solid var(--border); transition: background 0.2s; }
         .search-result-item:active { background: var(--surface2); }
+
+        /* Rectangular Story Styles for Search Tab */
+        .search-stories-wrapper {
+            background: var(--background);
+            border-bottom: 1px solid var(--border);
+            padding: 12px 0;
+            overflow: hidden;
+        }
+        #search-stories-container .story-group { gap: 8px; }
+        #search-stories-container .story-ring-group { width: 85px; height: 120px; border-radius: 12px; padding: 2px; }
+        #search-stories-container .story-img-group { border-radius: 10px; height: 100%; }
+        #search-stories-container .story-label { font-weight: 600; font-size: 11px; max-width: 85px; }
+        #search-stories-container .story-add-btn { bottom: 5px; right: 5px; }
         
         /* Notifications Tab Styles */
         .notification-item { display: flex; align-items: center; gap: 12px; padding: 12px 16px; cursor: pointer; border-bottom: 1px solid var(--border); transition: background 0.2s; }
@@ -360,42 +373,6 @@
             border: 2px solid var(--surface);
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
-
-        /* Rectangular Story Styles for Search Tab */
-.search-stories-wrapper {
-    background: var(--background);
-    border-bottom: 1px solid var(--border);
-    padding: 12px 0;
-    overflow: hidden;
-}
-
-#search-stories-container .story-group {
-    gap: 8px;
-}
-
-#search-stories-container .story-ring-group {
-    width: 85px; /* Wider for rectangle */
-    height: 120px; /* Tall rectangle */
-    border-radius: 12px; /* Rectangular corners */
-    padding: 2px;
-}
-
-#search-stories-container .story-img-group {
-    border-radius: 10px;
-    height: 100%;
-}
-
-#search-stories-container .story-label {
-    font-weight: 600;
-    font-size: 11px;
-    max-width: 85px;
-}
-
-/* Ensure the "Add Story" button inside the rectangle looks right */
-#search-stories-container .story-add-btn {
-    bottom: 5px;
-    right: 5px;
-}
     </style>
 </head>
 <body>
@@ -563,21 +540,28 @@
         </div>
     </div>
 
-   <div id="view-search" class="view-container">
-    <div class="search-header">
-        <div class="search-bar">
-            <i data-feather="search" style="color:var(--text-secondary); width:18px; height:18px;"></i>
-            <input type="text" id="main-search-input" placeholder="Search users and posts..." oninput="handleMainSearch(this.value)">
-        </div>
-    </div>
-    
-    <div class="search-stories-wrapper" id="search-stories-wrapper">
-        <div class="stories-container" id="search-stories-container">
+    <div id="view-search" class="view-container">
+        <div class="search-header">
+            <div class="search-bar">
+                <i data-feather="search" style="color:var(--text-secondary); width:18px; height:18px;"></i>
+                <input type="text" id="main-search-input" placeholder="Search users and posts..." oninput="handleMainSearch(this.value)">
             </div>
-    </div>
+        </div>
+        
+        <div class="search-stories-wrapper" id="search-stories-wrapper">
+            <div class="stories-container" id="search-stories-container">
+                <div class="story-group" onclick="triggerStoryUpload()">
+                    <div class="story-ring-group" style="background:var(--border);">
+                        <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23A8A8A8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' style='background-color:%23EFEFEF'%3E%3Cpath d='M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2'/%3E%3Ccircle cx='12' cy='7' r='4'/%3E%3C/svg%3E" id="search-my-story-img" class="story-img-group">
+                        <div class="story-add-btn"><i data-feather="plus" style="width:12px;height:12px;"></i></div>
+                    </div>
+                    <span class="story-label">Your Story</span>
+                </div>
+            </div>
+        </div>
 
-    <div id="search-results-container"></div>
-</div>
+        <div id="search-results-container"></div>
+    </div>
 
     <div id="view-notifications" class="view-container">
         <header class="header">
@@ -714,7 +698,7 @@
 import {
     getDatabase, ref, onValue, onChildAdded, onChildChanged, onChildRemoved,
     push, set, get, update, remove, serverTimestamp, off,
-    query, orderByChild, limitToLast
+    query, orderByChild, limitToLast, endAt
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
@@ -758,6 +742,11 @@ let pendingNewPosts = [], isUserAtTop = true;
 const postListeners        = new Map();
 const commentListeners     = new Map();
 const commentLikeListeners = new Map();
+
+// Notifications Pagination State
+let notifLastTimestamp = null;
+let notifHasMore = true;
+const NOTIF_PAGE_SIZE = 15;
 
 // --- MEDIA.NET AD LOGIC ---
 let postRenderCount = 0; // Tracks posts rendered to know when to show an ad
@@ -809,6 +798,7 @@ function loadOfflineData() {
             currentUserData = JSON.parse(savedUser);
             document.getElementById('compose-avatar').src      = currentUserData.photoURL || DEFAULT_AVATAR;
             document.getElementById('my-story-img').src        = currentUserData.photoURL || DEFAULT_AVATAR;
+            document.getElementById('search-my-story-img').src = currentUserData.photoURL || DEFAULT_AVATAR;
             document.getElementById('nav-profile-avatar').src  = currentUserData.photoURL || DEFAULT_AVATAR;
         }
     } catch(e){}
@@ -838,7 +828,7 @@ window.switchMainTab = (tabId, args = null) => {
     
     // Load specific tab data
     if (tabId === 'profile') loadProfile(args || currentUser?.uid);
-    if (tabId === 'notifications') loadNotifications();
+    if (tabId === 'notifications') loadNotifications(); // Resets and loads fresh
     if (tabId === 'search') {
         const searchInput = document.getElementById('main-search-input');
         if (!searchInput.value) showRecentSearchPosts();
@@ -950,6 +940,7 @@ window.saveProfile = async () => {
         currentUserData.photoURL = photoURL;
         document.getElementById('compose-avatar').src = photoURL || DEFAULT_AVATAR;
         document.getElementById('my-story-img').src = photoURL || DEFAULT_AVATAR;
+        document.getElementById('search-my-story-img').src = photoURL || DEFAULT_AVATAR;
         document.getElementById('nav-profile-avatar').src = photoURL || DEFAULT_AVATAR;
         
         showToast('Profile updated');
@@ -1042,26 +1033,65 @@ window.handleMainSearch = async (query) => {
     container.innerHTML = html;
 };
 
-/* ══ NOTIFICATIONS LOGIC ══ */
-window.loadNotifications = async () => {
+/* ══ PAGINATED NOTIFICATIONS LOGIC ══ */
+window.loadNotifications = async (isLoadMore = false) => {
     const list = document.getElementById('notifications-list');
-    list.innerHTML = '<div class="loading-more active"><div class="vynix-spinner"></div></div>';
+    
+    if (!isLoadMore) {
+        list.innerHTML = '<div class="loading-more active"><div class="vynix-spinner"></div></div>';
+        notifLastTimestamp = null;
+        notifHasMore = true;
+    } else {
+        const btn = document.getElementById('notif-see-more-btn');
+        if (btn) btn.style.display = 'none';
+        list.insertAdjacentHTML('beforeend', '<div id="notif-loading" class="loading-more active" style="padding:16px;"><div class="vynix-spinner"></div></div>');
+    }
     
     try {
-        const snap = await get(ref(db, `notifications/${currentUser.uid}`));
+        let notifQuery;
+        if (notifLastTimestamp) {
+            notifQuery = query(
+                ref(db, `notifications/${currentUser.uid}`), 
+                orderByChild('timestamp'), 
+                endAt(notifLastTimestamp - 1), 
+                limitToLast(NOTIF_PAGE_SIZE)
+            );
+        } else {
+            notifQuery = query(
+                ref(db, `notifications/${currentUser.uid}`), 
+                orderByChild('timestamp'), 
+                limitToLast(NOTIF_PAGE_SIZE)
+            );
+        }
+
+        const snap = await get(notifQuery);
+        
+        if (!isLoadMore) list.innerHTML = '';
+        document.getElementById('notif-loading')?.remove();
+
         if (!snap.exists()) {
-            list.innerHTML = '<div class="empty-state">No notifications yet.</div>';
+            if (!isLoadMore) list.innerHTML = '<div class="empty-state">No notifications yet.</div>';
+            notifHasMore = false;
             return;
         }
         
         const notifs = [];
         snap.forEach(child => { notifs.push({ id: child.key, ...child.val() }); });
+        
+        // RTDB limitToLast returns oldest to newest, sort descending for feed
         notifs.sort((a, b) => b.timestamp - a.timestamp);
+        
+        if (notifs.length > 0) {
+            notifLastTimestamp = notifs[notifs.length - 1].timestamp;
+        }
+        
+        if (notifs.length < NOTIF_PAGE_SIZE) {
+            notifHasMore = false; // Reached end of data
+        }
         
         // Use the user cache to avoid hundreds of fetch calls
         const usersCache = await getAllUsers();
         
-        list.innerHTML = '';
         for (const n of notifs) {
             let actor = usersCache.find(u => u.uid === n.actorId) || { username: 'Someone', photoURL: DEFAULT_AVATAR };
             if (!actor.uid) { // Fallback if not in cache
@@ -1094,8 +1124,23 @@ window.loadNotifications = async () => {
             list.appendChild(el);
         }
         feather.replace();
+
+        if (notifHasMore) {
+            const seeMoreBtn = document.createElement('button');
+            seeMoreBtn.id = 'notif-see-more-btn';
+            seeMoreBtn.className = 'profile-action-btn edit';
+            seeMoreBtn.style.margin = '16px auto';
+            seeMoreBtn.style.display = 'block';
+            seeMoreBtn.style.width = 'calc(100% - 32px)';
+            seeMoreBtn.textContent = 'See older notifications';
+            seeMoreBtn.onclick = () => loadNotifications(true);
+            list.appendChild(seeMoreBtn);
+        }
+
     } catch (e) {
-        list.innerHTML = '<div class="empty-state">Error loading notifications.</div>';
+        document.getElementById('notif-loading')?.remove();
+        if (!isLoadMore) list.innerHTML = '<div class="empty-state">Error loading notifications.</div>';
+        console.error(e);
     }
 };
 
@@ -1389,6 +1434,7 @@ async function loadUserData() {
 
     document.getElementById('compose-avatar').src      = currentUserData.photoURL || DEFAULT_AVATAR;
     document.getElementById('my-story-img').src        = currentUserData.photoURL || DEFAULT_AVATAR;
+    document.getElementById('search-my-story-img').src = currentUserData.photoURL || DEFAULT_AVATAR;
     document.getElementById('nav-profile-avatar').src  = currentUserData.photoURL || DEFAULT_AVATAR;
 }
 
@@ -2835,7 +2881,6 @@ function removeStoryFromGroup(storyId) {
     }
 }
 function renderStoryGroups() {
-    // Select both containers
     const containers = [
         document.getElementById('stories-container'),
         document.getElementById('search-stories-container')
@@ -3239,71 +3284,4 @@ window.handleMentionKeydown = e => {
 };
 function renderMentionDropdown() {
     const dd=document.getElementById('mention-dropdown'); if (!mentionResults.length){closeMentionDropdown();return;}
-    dd.innerHTML=mentionResults.map((u,i)=>`<div class="mention-item ${i===mentionSelected?'selected':''}" onclick="insertMentionByIndex(${i})"><img src="${u.photoURL||DEFAULT_AVATAR}" onerror="this.src='${DEFAULT_AVATAR}'" alt=""><div class="mention-item-info"><span class="mention-item-name">${escapeHtml(u.displayName||u.username)}</span><span class="mention-item-handle">@${escapeHtml(u.username||'')}</span></div></div>`).join('');
-    dd.classList.add('active');
-}
-window.insertMentionByIndex = i => insertMention(mentionResults[i]);
-function insertMention(user) {
-    const ta=document.getElementById('compose-text'), val=ta.value, pos=ta.selectionStart;
-    const before=val.slice(0,mentionStart), after=val.slice(pos), insert=`@${user.username} `;
-    ta.value=before+insert+after; const np=mentionStart+insert.length; ta.setSelectionRange(np,np); ta.focus();
-    closeMentionDropdown(); updatePostButton();
-}
-function closeMentionDropdown() { const dd=document.getElementById('mention-dropdown'); if(dd)dd.classList.remove('active'); mentionResults=[]; mentionStart=-1; }
-
-// ── GLOBAL CLICK HANDLERS ──
-document.addEventListener('click', e => {
-    if (!e.target.closest('.compose-input-wrapper')) closeMentionDropdown();
-    if (!e.target.closest('.post-menu')) document.querySelectorAll('.post-dropdown').forEach(d=>d.classList.remove('active'));
-});
-
-document.addEventListener('click', e => {
-    const avatar = e.target.closest('.post-avatar'); if (!avatar) return;
-    e.stopPropagation();
-    const uid = avatar.dataset.uid;
-    
-    if (uid && storyGroups.has(uid)) {
-        openStoryViewer(uid);
-    } else {
-        window.goToProfile(uid || currentUser?.uid);
-    }
-}, true);
-
-// ── CAROUSEL SWIPE ──
-(()=>{
-    let tX=0, tEl=null;
-    document.addEventListener('touchstart', e=>{const c=e.target.closest('.carousel');if(!c)return;tX=e.touches[0].clientX;tEl=c;},{passive:true});
-    document.addEventListener('touchend',   e=>{if(!tEl)return;const dx=e.changedTouches[0].clientX-tX;if(Math.abs(dx)>40)carouselMove(tEl.id,dx<0?1:-1);tEl=null;},{passive:true});
-})();
-
-// ── HELPERS ──
-function formatTime(ts) {
-    if (!ts) return 'now'; const secs=Math.floor((Date.now()-ts)/1000);
-    if (secs<60) return 'now'; if (secs<3600) return Math.floor(secs/60)+'m';
-    if (secs<86400) return Math.floor(secs/3600)+'h'; return Math.floor(secs/86400)+'d';
-}
-function escapeHtml(text) { const d=document.createElement('div'); d.textContent=text; return d.innerHTML; }
-window.showToast        = msg => { const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),3000); };
-
-window.goToMessages     = ()  => window.location.href='messages.html';
-window.goToReels        = ()  => window.location.href='reels.html';
-window.goToSettings     = ()  => window.location.href='settings.html';
-window.togglePostMenu   = (postId,e) => { e.stopPropagation(); document.getElementById(`dropdown-${postId}`).classList.toggle('active'); };
-
-const hash = window.location.hash;
-if (hash.startsWith('#post-')) {
-    setTimeout(()=>{
-        const el=document.getElementById(`post-${hash.slice(6)}`);
-        if(el){el.scrollIntoView({behavior:'smooth',block:'center'});el.style.background='rgba(var(--primary-rgb),0.06)';setTimeout(()=>el.style.background='',2000);}
-    },1500);
-}
-
-const params = new URLSearchParams(window.location.search);
-if (params.get('compose') === 'true') {
-    setTimeout(openCompose, 500);
-}
-
-feather.replace();
-</script>
-</body>
-</html>
+    dd.innerHTML=mentionResults.map((u,i)=>`<div class="mention-item ${i===mentionSelected?'selected':''}" onclick="insertMentionByIndex(${i})"><img src="${u.photoURL||DEFAULT_AVATAR}" onerror="this.src='${DEFAULT_AVATAR}'" alt=""><div class="mention-item-info"><span class="mention-item-name">${escapeHtml(u.
