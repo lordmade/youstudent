@@ -360,6 +360,42 @@
             border: 2px solid var(--surface);
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
+
+        /* Rectangular Story Styles for Search Tab */
+.search-stories-wrapper {
+    background: var(--background);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 0;
+    overflow: hidden;
+}
+
+#search-stories-container .story-group {
+    gap: 8px;
+}
+
+#search-stories-container .story-ring-group {
+    width: 85px; /* Wider for rectangle */
+    height: 120px; /* Tall rectangle */
+    border-radius: 12px; /* Rectangular corners */
+    padding: 2px;
+}
+
+#search-stories-container .story-img-group {
+    border-radius: 10px;
+    height: 100%;
+}
+
+#search-stories-container .story-label {
+    font-weight: 600;
+    font-size: 11px;
+    max-width: 85px;
+}
+
+/* Ensure the "Add Story" button inside the rectangle looks right */
+#search-stories-container .story-add-btn {
+    bottom: 5px;
+    right: 5px;
+}
     </style>
 </head>
 <body>
@@ -527,15 +563,21 @@
         </div>
     </div>
 
-    <div id="view-search" class="view-container">
-        <div class="search-header">
-            <div class="search-bar">
-                <i data-feather="search" style="color:var(--text-secondary); width:18px; height:18px;"></i>
-                <input type="text" id="main-search-input" placeholder="Search users and posts..." oninput="handleMainSearch(this.value)">
-            </div>
+   <div id="view-search" class="view-container">
+    <div class="search-header">
+        <div class="search-bar">
+            <i data-feather="search" style="color:var(--text-secondary); width:18px; height:18px;"></i>
+            <input type="text" id="main-search-input" placeholder="Search users and posts..." oninput="handleMainSearch(this.value)">
         </div>
-        <div id="search-results-container"></div>
     </div>
+    
+    <div class="search-stories-wrapper" id="search-stories-wrapper">
+        <div class="stories-container" id="search-stories-container">
+            </div>
+    </div>
+
+    <div id="search-results-container"></div>
+</div>
 
     <div id="view-notifications" class="view-container">
         <header class="header">
@@ -2793,24 +2835,48 @@ function removeStoryFromGroup(storyId) {
     }
 }
 function renderStoryGroups() {
-    const container=document.getElementById('stories-container'); const addBtn=container.firstElementChild;
-    container.innerHTML=''; container.appendChild(addBtn);
-    const sortedEntries = Array.from(storyGroups.entries()).sort(([uidA,groupA],[uidB,groupB]) => {
-        if (uidA===currentUser?.uid) return -1; if (uidB===currentUser?.uid) return 1;
-        const hasUnseenA = groupA.stories.some(s=>!s.viewed?.[currentUser?.uid]);
-        const hasUnseenB = groupB.stories.some(s=>!s.viewed?.[currentUser?.uid]);
-        if (hasUnseenA&&!hasUnseenB) return -1; if (!hasUnseenA&&hasUnseenB) return 1;
-        const latestA = Math.max(...groupA.stories.map(s=>s.timestamp||0));
-        const latestB = Math.max(...groupB.stories.map(s=>s.timestamp||0));
-        return latestB-latestA;
+    // Select both containers
+    const containers = [
+        document.getElementById('stories-container'),
+        document.getElementById('search-stories-container')
+    ];
+
+    containers.forEach(container => {
+        if (!container) return;
+        
+        // Save the "Add Story" button (first child)
+        const addBtn = container.firstElementChild;
+        container.innerHTML = '';
+        container.appendChild(addBtn);
+
+        const sortedEntries = Array.from(storyGroups.entries()).sort(([uidA, groupA], [uidB, groupB]) => {
+            if (uidA === currentUser?.uid) return -1;
+            if (uidB === currentUser?.uid) return 1;
+            const hasUnseenA = groupA.stories.some(s => !s.viewed?.[currentUser?.uid]);
+            const hasUnseenB = groupB.stories.some(s => !s.viewed?.[currentUser?.uid]);
+            if (hasUnseenA && !hasUnseenB) return -1;
+            if (!hasUnseenA && hasUnseenB) return 1;
+            return Math.max(...groupB.stories.map(s => s.timestamp || 0)) - Math.max(...groupA.stories.map(s => s.timestamp || 0));
+        });
+
+        for (const [uid, group] of sortedEntries) {
+            const hasUnseen = group.stories.some(s => !s.viewed?.[currentUser?.uid]);
+            const isOwn = uid === currentUser?.uid;
+            
+            const el = document.createElement('div');
+            el.className = 'story-group';
+            el.onclick = () => openStoryViewer(uid);
+            
+            el.innerHTML = `
+                <div class="story-ring-group ${hasUnseen ? '' : 'all-seen'}">
+                    <img src="${group.user.photoURL || DEFAULT_AVATAR}" onerror="this.src='${DEFAULT_AVATAR}'" class="story-img-group">
+                    ${group.stories.length > 1 ? `<div class="story-count">${group.stories.length}</div>` : ''}
+                </div>
+                <span class="story-label">${isOwn ? 'Your Story' : group.user.username}</span>
+            `;
+            container.appendChild(el);
+        }
     });
-    for (const [uid,group] of sortedEntries) {
-        const hasUnseen = group.stories.some(s=>!s.viewed?.[currentUser?.uid]);
-        const isOwn     = uid===currentUser?.uid;
-        const el = document.createElement('div'); el.className='story-group'; el.onclick=()=>openStoryViewer(uid);
-        el.innerHTML=`<div class="story-ring-group ${hasUnseen?'':'all-seen'}"><img src="${group.user.photoURL||DEFAULT_AVATAR}" onerror="this.src='${DEFAULT_AVATAR}'" class="story-img-group">${group.stories.length>1?`<div class="story-count">${group.stories.length}</div>`:''}</div><span class="story-label">${isOwn?'Your Story':group.user.username}</span>`;
-        container.appendChild(el);
-    }
 }
 
 window.triggerStoryUpload = () => document.getElementById('story-input').click();
